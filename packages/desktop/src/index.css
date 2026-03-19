@@ -921,6 +921,7 @@ button {
   color: var(--text-subtle);
 }
 
+
 .model-selector__models {
   padding: 0 0 4px;
 }
@@ -975,6 +976,55 @@ button {
   font-size: 12px;
   color: var(--text-subtle);
   text-align: center;
+}
+
+.model-selector__key-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 5px;
+  border: none;
+  background: transparent;
+  color: var(--text-subtle);
+  cursor: pointer;
+  transition: all 0.12s ease;
+  flex-shrink: 0;
+}
+
+.model-selector__key-btn:hover {
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--text);
+}
+
+.model-selector__key-btn--active {
+  color: var(--success);
+}
+
+.model-selector__key-btn--active:hover {
+  color: var(--success);
+}
+
+.model-selector__no-models {
+  padding: 8px 10px 8px 30px;
+  font-size: 11px;
+  color: var(--text-subtle);
+}
+
+.model-selector__no-models-link {
+  color: var(--text-muted);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  cursor: pointer;
+  border: none;
+  background: none;
+  font: inherit;
+  padding: 0;
+}
+
+.model-selector__no-models-link:hover {
+  color: var(--text);
 }
 
 /* ═══════════════════════════════════════════════════════════════════
@@ -2163,21 +2213,379 @@ button {
 .modal-backdrop {
   position: fixed;
   inset: 0;
-  z-index: 50;
-  background: rgba(0, 0, 0, 0.6);
+  z-index: 200;
   display: flex;
   align-items: center;
   justify-content: center;
 }
 
+.modal-backdrop__overlay {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.6);
+  backdrop-filter: blur(4px);
+}
+
 .modal-content {
+  position: relative;
   width: 100%;
   max-width: 520px;
-  border-radius: 24px;
-  border: 1px solid var(--border);
-  background: linear-gradient(180deg, rgba(34, 34, 34, 0.98), rgba(26, 26, 26, 0.98));
+  margin: 0 16px;
+  border-radius: var(--radius-xl);
+  border: 1px solid var(--border-strong);
+  background: var(--bg-elevated);
   box-shadow: var(--shadow-lg);
+  overflow: hidden;
 }
+
+.modal-content__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--border);
+}
+
+.modal-content__title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.modal-content__close {
+  color: var(--text-subtle);
+  cursor: pointer;
+  transition: color 0.15s ease;
+}
+
+.modal-content__close:hover {
+  color: var(--text);
+}
+
+.modal-content__close-icon {
+  width: 16px;
+  height: 16px;
+}
+
+.modal-content__body {
+  padding: 20px;
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   PROVIDER SETTINGS MODAL
+   ═══════════════════════════════════════════════════════════════════ */
+
+.prov-modal {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+/* ── Title bar ── */
+
+.prov-modal__titlebar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding-bottom: 16px;
+  margin-bottom: 16px;
+  border-bottom: 1px solid var(--border);
+}
+
+.prov-modal__titlebar-left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.prov-modal__provider-icon {
+  width: 20px;
+  height: 20px;
+  border-radius: 4px;
+  flex-shrink: 0;
+}
+
+.prov-modal__provider-icon-fallback {
+  width: 20px;
+  height: 20px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.08);
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--text-subtle);
+  flex-shrink: 0;
+}
+
+.prov-modal__provider-name {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.prov-modal__provider-url {
+  font-size: 11px;
+  font-family: var(--font-mono);
+  color: var(--text-subtle);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.prov-modal__connected-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--success);
+  flex-shrink: 0;
+}
+
+.prov-modal__connected-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--success);
+}
+
+/* ── Sections ── */
+
+.prov-modal__section {
+  margin-bottom: 16px;
+}
+
+.prov-modal__field-label {
+  display: block;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-subtle);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-bottom: 8px;
+}
+
+.prov-modal__field-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+
+.prov-modal__field-header .prov-modal__field-label {
+  margin-bottom: 0;
+}
+
+/* ── API Key ── */
+
+.prov-modal__key-row {
+  display: flex;
+  gap: 8px;
+}
+
+.prov-modal__key-input {
+  flex: 1;
+  min-width: 0;
+  padding: 9px 12px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--text);
+  font-size: 13px;
+  font-family: var(--font-mono);
+  outline: none;
+  transition: border-color 0.15s ease;
+}
+
+.prov-modal__key-input:focus {
+  border-color: var(--text-subtle);
+}
+
+.prov-modal__key-input::placeholder {
+  color: var(--text-subtle);
+}
+
+.prov-modal__key-btn {
+  padding: 9px 14px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--text-muted);
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 0.12s ease;
+}
+
+.prov-modal__key-btn:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.1);
+  color: var(--text);
+  border-color: var(--border-strong);
+}
+
+.prov-modal__key-btn:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+
+.prov-modal__key-btn--saved {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--success);
+  border-color: rgba(34, 197, 94, 0.25);
+  background: rgba(34, 197, 94, 0.08);
+}
+
+/* ── Reset button ── */
+
+.prov-modal__reset {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  color: var(--text-subtle);
+  cursor: pointer;
+  transition: color 0.12s ease;
+}
+
+.prov-modal__reset:hover {
+  color: var(--text);
+}
+
+/* ── Models list ── */
+
+.prov-modal__models {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  overflow: hidden;
+  background: var(--bg);
+}
+
+.prov-modal__models-empty {
+  padding: 20px 12px;
+  text-align: center;
+  font-size: 12px;
+  color: var(--text-subtle);
+  line-height: 1.5;
+}
+
+.prov-modal__model-row {
+  display: flex;
+  align-items: center;
+  padding: 0 12px;
+  height: 34px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+  transition: background 0.08s ease;
+}
+
+.prov-modal__model-row:hover {
+  background: rgba(255, 255, 255, 0.025);
+}
+
+.prov-modal__model-id {
+  flex: 1;
+  min-width: 0;
+  font-size: 12px;
+  font-family: var(--font-mono);
+  color: var(--text-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  background: none;
+}
+
+.prov-modal__model-delete {
+  opacity: 0;
+  color: var(--text-subtle);
+  cursor: pointer;
+  padding: 3px;
+  border-radius: 4px;
+  transition: all 0.1s ease;
+  flex-shrink: 0;
+}
+
+.prov-modal__model-row:hover .prov-modal__model-delete {
+  opacity: 1;
+}
+
+.prov-modal__model-delete:hover {
+  color: var(--danger);
+  background: rgba(239, 68, 68, 0.1);
+}
+
+/* ── Add model row ── */
+
+.prov-modal__model-add-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 34px;
+  padding: 0 12px;
+  border-top: 1px solid var(--border);
+}
+
+.prov-modal__model-add-plus {
+  color: var(--text-subtle);
+  flex-shrink: 0;
+}
+
+.prov-modal__model-add-input {
+  flex: 1;
+  min-width: 0;
+  background: transparent;
+  border: none;
+  outline: none;
+  font-size: 12px;
+  font-family: var(--font-mono);
+  color: var(--text-muted);
+}
+
+.prov-modal__model-add-input::placeholder {
+  color: var(--text-subtle);
+}
+
+/* ── Footer / save ── */
+
+.prov-modal__footer {
+  padding-top: 12px;
+}
+
+.prov-modal__save-btn {
+  width: 100%;
+  padding: 10px;
+  border-radius: 8px;
+  border: 1px solid var(--border-strong);
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.12s ease;
+}
+
+.prov-modal__save-btn:hover {
+  background: rgba(255, 255, 255, 0.1);
+  border-color: var(--text-subtle);
+}
+
+.prov-modal__save-btn--saved {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  color: var(--success);
+  border-color: rgba(34, 197, 94, 0.25);
+  background: rgba(34, 197, 94, 0.06);
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   SKILL DIALOG
+   ═══════════════════════════════════════════════════════════════════ */
 
 .skill-dialog {
   padding: 28px;
@@ -2225,6 +2633,56 @@ button {
   margin-bottom: 20px;
 }
 
+.skill-dialog__command {
+  font-size: 11px;
+  font-family: var(--font-mono);
+  color: var(--text-subtle);
+  margin-top: 4px;
+}
+
+.skill-dialog__param {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.skill-dialog__param-label {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-muted);
+}
+
+.skill-dialog__param-required {
+  color: var(--danger);
+  margin-left: 2px;
+}
+
+.skill-dialog__select,
+.skill-dialog__input {
+  width: 100%;
+  padding: 8px 12px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--text);
+  font-size: 13px;
+  outline: none;
+  transition: border-color 0.15s ease;
+}
+
+.skill-dialog__input {
+  font-family: var(--font-mono);
+}
+
+.skill-dialog__select:focus,
+.skill-dialog__input:focus {
+  border-color: var(--text-subtle);
+}
+
+.skill-dialog__input::placeholder {
+  color: var(--text-subtle);
+}
+
 .skill-dialog__params {
   display: flex;
   flex-direction: column;
@@ -2236,6 +2694,29 @@ button {
   display: flex;
   justify-content: flex-end;
   gap: 10px;
+}
+
+.skill-dialog__run-btn {
+  width: 100%;
+  padding: 10px;
+  border-radius: 10px;
+  border: none;
+  background: #f4f4f4;
+  color: #161616;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.12s ease;
+}
+
+.skill-dialog__run-btn:hover:not(:disabled) {
+  background: #ffffff;
+}
+
+.skill-dialog__run-btn:disabled {
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--text-subtle);
+  cursor: default;
 }
 
 /* ═══════════════════════════════════════════════════════════════════

@@ -303,12 +303,38 @@ function createDefaultConfig(): AgentConfig {
 // ── Provider management ─────────────────────────────────────────────
 
 export function setProviderKey(config: AgentConfig, provider: string, apiKey: string): void {
+  const defaults = DEFAULT_PROVIDERS[provider]
   if (!config.providers[provider]) {
-    // New provider — seed with default models if known
-    const defaultModels = DEFAULT_PROVIDERS[provider]?.models || []
-    config.providers[provider] = { apiKey, models: defaultModels }
+    // New provider — seed with default models and baseUrl if known
+    config.providers[provider] = {
+      apiKey,
+      models: defaults?.models || [],
+      ...(defaults?.baseUrl ? { baseUrl: defaults.baseUrl } : {}),
+    }
   } else {
     config.providers[provider].apiKey = apiKey
+    // Restore default models if empty (e.g. broken config)
+    if (!config.providers[provider].models || config.providers[provider].models.length === 0) {
+      config.providers[provider].models = defaults?.models || []
+    }
+    // Restore baseUrl if missing
+    if (!config.providers[provider].baseUrl && defaults?.baseUrl) {
+      config.providers[provider].baseUrl = defaults.baseUrl
+    }
+  }
+  saveConfig(config)
+}
+
+export function setProviderModels(config: AgentConfig, provider: string, models: string[]): void {
+  const defaults = DEFAULT_PROVIDERS[provider]
+  if (!config.providers[provider]) {
+    config.providers[provider] = {
+      apiKey: '',
+      models,
+      ...(defaults?.baseUrl ? { baseUrl: defaults.baseUrl } : {}),
+    }
+  } else {
+    config.providers[provider].models = models
   }
   saveConfig(config)
 }
@@ -338,16 +364,28 @@ export function providerHasKey(provider: string, config: AgentConfig): boolean {
 }
 
 export function getProvidersList(config: AgentConfig) {
-  return Object.entries(config.providers).map(([name, p]) => {
-    // If provider has no models listed, fall back to defaults
-    const defaultModels = DEFAULT_PROVIDERS[name]?.models || []
-    const models = p.models && p.models.length > 0 ? p.models : defaultModels
+  // Merge config providers with all defaults so nothing is missing
+  const allProviderNames = new Set([
+    ...Object.keys(DEFAULT_PROVIDERS),
+    ...Object.keys(config.providers),
+  ])
+
+  return Array.from(allProviderNames).map((name) => {
+    const configEntry = config.providers[name]
+    const defaults = DEFAULT_PROVIDERS[name]
+
+    // Models: prefer config if non-empty, else defaults
+    const models =
+      configEntry?.models && configEntry.models.length > 0
+        ? configEntry.models
+        : defaults?.models || []
 
     return {
       name,
       models,
+      defaultModels: defaults?.models || [],
       hasApiKey: providerHasKey(name, config),
-      baseUrl: p.baseUrl,
+      baseUrl: configEntry?.baseUrl || defaults?.baseUrl,
     }
   })
 }

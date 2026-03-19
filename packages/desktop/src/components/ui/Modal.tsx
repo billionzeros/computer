@@ -14,36 +14,36 @@ export function Modal({ open, onClose, title, children }: Props) {
     <AnimatePresence>
       {open && (
         <motion.div
-          className="fixed inset-0 z-50 flex items-center justify-center"
+          className="modal-backdrop"
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
           transition={{ duration: 0.15 }}
         >
-          {/* Backdrop */}
-          <motion.div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onClose} />
+          {/* Backdrop click to close */}
+          <div className="modal-backdrop__overlay" onClick={onClose} />
 
           {/* Content */}
           <motion.div
-            className="relative bg-zinc-900 border border-zinc-800 rounded-2xl shadow-2xl w-full max-w-lg mx-4 overflow-hidden"
+            className="modal-content"
             initial={{ scale: 0.95, opacity: 0 }}
             animate={{ scale: 1, opacity: 1 }}
             exit={{ scale: 0.95, opacity: 0 }}
             transition={{ duration: 0.15 }}
           >
             {title && (
-              <div className="flex items-center justify-between px-5 py-4 border-b border-zinc-800">
-                <h2 className="text-sm font-semibold text-zinc-100">{title}</h2>
+              <div className="modal-content__header">
+                <h2 className="modal-content__title">{title}</h2>
                 <button
                   type="button"
                   onClick={onClose}
-                  className="text-zinc-500 hover:text-zinc-300 transition-colors"
+                  className="modal-content__close"
                 >
-                  <X className="w-4 h-4" />
+                  <X className="modal-content__close-icon" />
                 </button>
               </div>
             )}
-            <div className="p-5">{children}</div>
+            <div className="modal-content__body">{children}</div>
           </motion.div>
         </motion.div>
       )}

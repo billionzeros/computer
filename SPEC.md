@@ -1,6 +1,6 @@
 # anton.computer — Connection Spec
 
-> **Spec Version: 0.3.0**
+> **Spec Version: 0.4.0**
 >
 > Single source of truth for ports, protocols, and connection behavior.
 > All clients (desktop, CLI) and the agent server MUST honor this spec.
@@ -49,7 +49,7 @@ Frame: [1 byte channel] [N bytes JSON payload]
 | CONTROL | 0x00 | Auth, ping/pong, lifecycle, config management |
 | TERMINAL | 0x01 | PTY data (base64-encoded) |
 | AI | 0x02 | Chat, sessions, providers, tool calls, confirmations, compaction |
-| FILESYNC | 0x03 | File sync (reserved, v0.4) |
+| FILESYNC | 0x03 | Remote filesystem browsing |
 | EVENTS | 0x04 | Status updates, notifications |
 
 ## Session Management (v0.2.0+)
@@ -234,11 +234,17 @@ Providers are managed via AI channel messages. API keys are stored in `~/.anton/
 | Agent → Client | AI | `{ type: "provider_set_key_response", success, provider }` |
 | Client → Agent | AI | `{ type: "provider_set_default", provider, model }` |
 | Agent → Client | AI | `{ type: "provider_set_default_response", success, provider, model }` |
+| Client → Agent | AI | `{ type: "provider_set_models", provider, models }` |
+| Agent → Client | AI | `{ type: "provider_set_models_response", success, provider }` |
 
 Provider list entries:
 ```typescript
-{ name: string, models: string[], hasApiKey: boolean, baseUrl?: string }
+{ name: string, models: string[], defaultModels: string[], hasApiKey: boolean, baseUrl?: string }
 ```
+
+- `models` — currently configured model IDs (may differ from defaults if user customized)
+- `defaultModels` — hardcoded defaults for "reset to defaults" action
+- `provider_set_models` allows clients to update the model list for a provider (add custom models, remove unused ones)
 
 ### API Key Resolution (Priority Order)
 
@@ -247,6 +253,22 @@ When the agent needs an API key for an LLM call, it resolves in this order:
 1. **Client-provided key** — passed in `session_create.apiKey` (temporary, never persisted)
 2. **Config file key** — from `~/.anton/config.yaml` providers section
 3. **Environment variable** — `ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, `GOOGLE_API_KEY`, etc.
+
+## Filesystem Browsing (v0.4.0)
+
+Remote filesystem access via the FILESYNC channel. Allows clients to browse directories and read files on the agent VM.
+
+| Direction | Channel | Message |
+|-----------|---------|---------|
+| Client → Agent | FILESYNC | `{ type: "fs_list", path }` |
+| Agent → Client | FILESYNC | `{ type: "fs_list_response", entries, error? }` |
+| Client → Agent | FILESYNC | `{ type: "fs_read", path }` |
+| Agent → Client | FILESYNC | `{ type: "fs_read_response", path, content, truncated, error? }` |
+
+- `path` supports `~` for home directory
+- Dotfiles are hidden by default in `fs_list`
+- Files are truncated at 100KB in `fs_read`
+- See [API.md](./API.md) for full message schemas
 
 ## Config Management (v0.2.0+)
 
@@ -339,6 +361,16 @@ providers:
       - gpt-4o-mini
       - o3
       - o4-mini
+  openrouter:
+    apiKey: ""
+    baseUrl: "https://openrouter.ai/api/v1"
+    models:
+      - anthropic/claude-sonnet-4.6
+      - anthropic/claude-opus-4.6
+      - openai/gpt-4o
+      - google/gemini-2.5-pro-preview
+      - minimax/minimax-m2.5
+      - meta-llama/llama-4-maverick
   ollama:
     baseUrl: "http://localhost:11434"
     models:
@@ -395,9 +427,10 @@ defaults:
 
 ## Backward Compatibility
 
-- v0.3.0 clients work with v0.2.0 agents (history/compaction messages will be ignored)
-- v0.2.0 clients work with v0.3.0 agents (messages without `sessionId` use "default" session)
-- v0.1.0 clients work with v0.3.0 agents (session/provider/history messages ignored)
+- v0.4.0 clients work with v0.3.0 agents (`provider_set_models` and filesync messages will be ignored)
+- v0.3.0 clients work with v0.4.0 agents (`defaultModels` field ignored, filesync not used)
+- v0.2.0 clients work with v0.4.0 agents (messages without `sessionId` use "default" session)
+- v0.1.0 clients work with v0.4.0 agents (session/provider/history messages ignored)
 - Legacy config auto-migrates on agent startup
 
 ## Changelog
@@ -407,3 +440,4 @@ defaults:
 | 2026-03-19 | 0.1.0 | Initial spec. Plain WS on 9876 as default, TLS on 9877. |
 | 2026-03-19 | 0.2.0 | Multi-provider registry, per-session models, session persistence, config management protocol. |
 | 2026-03-19 | 0.3.0 | Session history API, context compaction protocol, text streaming delta spec, token usage on `done`, scheduler protocol, client connection flow, API key resolution order. Full API reference in API.md. |
+| 2026-03-19 | 0.4.0 | Provider model management (`provider_set_models`), `defaultModels` in provider list, FILESYNC channel with `fs_list` / `fs_read`, OpenRouter provider with default models. |

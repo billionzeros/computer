@@ -93,7 +93,11 @@ export class Connection {
   }
 
   send(channel: number, message: object) {
-    if (!this.ws || this.ws.readyState !== WebSocket.OPEN) return
+    if (!this.ws || this.ws.readyState !== WebSocket.OPEN) {
+      console.warn(`[WS SEND] Dropped (not connected): ch=${channel}`, message)
+      return
+    }
+    console.log(`[WS SEND] ch=${channel}`, message)
     this.ws.send(encodeFrame(channel, message))
   }
 
@@ -151,6 +155,10 @@ export class Connection {
 
   sendProviderSetKey(provider: string, apiKey: string) {
     this.send(Channel.AI, { type: 'provider_set_key', provider, apiKey })
+  }
+
+  sendProviderSetModels(provider: string, models: string[]) {
+    this.send(Channel.AI, { type: 'provider_set_models', provider, models })
   }
 
   sendProviderSetDefault(provider: string, model: string) {
@@ -213,6 +221,7 @@ export class Connection {
     this.ws.onmessage = (event) => {
       try {
         const { channel, payload } = decodeFrame(event.data)
+        console.log(`[WS RAW] channel=${channel} payload.type=${payload.type}`, payload)
 
         // Handle auth response
         if (channel === Channel.CONTROL && payload.type === 'auth_ok') {
@@ -234,14 +243,16 @@ export class Connection {
       }
     }
 
-    this.ws.onclose = (_event) => {
+    this.ws.onclose = (event) => {
+      console.log(`[WS] Closed: code=${event.code} reason=${event.reason} wasClean=${event.wasClean}`)
       if (this._status === 'connected') {
         this.setStatus('disconnected', 'Connection lost')
         this.scheduleReconnect()
       }
     }
 
-    this.ws.onerror = () => {
+    this.ws.onerror = (err) => {
+      console.error('[WS] Error:', err)
       this.setStatus('error', 'Connection failed')
       this.scheduleReconnect()
     }

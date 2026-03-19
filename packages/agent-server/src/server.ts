@@ -24,6 +24,7 @@ import {
   saveConfig,
   setDefault,
   setProviderKey,
+  setProviderModels,
 } from '@anton/agent-config'
 import { GIT_HASH, SPEC_VERSION, VERSION } from '@anton/agent-config'
 import { type Session, createSession, resumeSession } from '@anton/agent-core'
@@ -386,6 +387,10 @@ export class AgentServer {
         this.handleProviderSetDefault(msg)
         break
 
+      case 'provider_set_models':
+        this.handleProviderSetModels(msg)
+        break
+
       // ── Scheduler ──
       case 'scheduler_list':
         this.handleSchedulerList()
@@ -606,6 +611,24 @@ export class AgentServer {
         success: false,
         provider: msg.provider,
         model: msg.model,
+      })
+    }
+  }
+
+  private handleProviderSetModels(msg: { provider: string; models: string[] }) {
+    try {
+      setProviderModels(this.config, msg.provider, msg.models)
+      this.sendToClient(Channel.AI, {
+        type: 'provider_set_models_response',
+        success: true,
+        provider: msg.provider,
+      })
+      console.log(`Models updated for provider: ${msg.provider} (${msg.models.length} models)`)
+    } catch {
+      this.sendToClient(Channel.AI, {
+        type: 'provider_set_models_response',
+        success: false,
+        provider: msg.provider,
       })
     }
   }

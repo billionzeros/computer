@@ -24,6 +24,7 @@ export interface ChatMessage {
 export interface ProviderInfo {
   name: string
   models: string[]
+  defaultModels?: string[]
   hasApiKey: boolean
   baseUrl?: string
 }
@@ -338,7 +339,11 @@ connection.onStatusChange((status) => {
 connection.onMessage((channel, msg) => {
   const store = useStore.getState()
 
+  // Debug logging for all messages
+  console.log(`[WS] ch=${channel} type=${msg.type}`, msg)
+
   if (channel === Channel.EVENTS && msg.type === 'agent_status') {
+    console.log(`[WS] Agent status: ${msg.status}`, msg.detail || '')
     store.setAgentStatus(msg.status)
     store.setAgentStatusDetail(msg.detail || null)
     if (msg.status === 'idle') {
@@ -347,11 +352,15 @@ connection.onMessage((channel, msg) => {
     return
   }
 
-  if (channel !== Channel.AI) return
+  if (channel !== Channel.AI) {
+    console.log(`[WS] Ignoring non-AI channel: ${channel}`)
+    return
+  }
 
   switch (msg.type) {
     // ── Chat messages ──────────────────────────────────────────
     case 'text':
+      console.log(`[WS] AI text chunk: "${msg.content?.slice(0, 80)}..."`)
       store.appendAssistantText(msg.content)
       break
 
@@ -423,7 +432,34 @@ connection.onMessage((channel, msg) => {
       }
       break
 
-    case 'done':
+    case 'done': {
+      // Detect silent failures: server says "done" but never sent any text/tool events
+      const conv = store.getActiveConversation()
+      const lastMsg = conv?.messages[conv.messages.length - 1]
+      const wasWorking = store.agentStatus === 'working'
+      const noResponse = wasWorking && lastMsg?.role === 'user'
+      const zeroTokens = msg.usage && msg.usage.inputTokens === 0 && msg.usage.outputTokens === 0
+
+      if (noResponse && zeroTokens) {
+        console.error('[WS] Silent failure: "done" with zero tokens and no response. Likely missing API key on server.')
+        store.addMessage({
+          id: `err_silent_${Date.now()}`,
+          role: 'system',
+          content: 'No response from the agent. The LLM was never called (0 tokens used). Check that a valid API key is configured on the server.',
+          isError: true,
+          timestamp: Date.now(),
+        })
+      } else if (noResponse) {
+        console.warn('[WS] Agent completed with no visible response.')
+        store.addMessage({
+          id: `err_empty_${Date.now()}`,
+          role: 'system',
+          content: 'Agent finished but produced no response.',
+          isError: true,
+          timestamp: Date.now(),
+        })
+      }
+
       store.setAgentStatus('idle')
       store.clearAgentSteps()
       store.setAgentStatusDetail(null)
@@ -431,6 +467,7 @@ connection.onMessage((channel, msg) => {
         store.setUsage(msg.usage, msg.cumulativeUsage || null)
       }
       break
+    }
 
     // ── Session responses ──────────────────────────────────────
     case 'session_created':
@@ -487,6 +524,10 @@ connection.onMessage((channel, msg) => {
       break
 
     case 'provider_set_key_response':
+      if (msg.success) connection.sendProvidersList()
+      break
+
+    case 'provider_set_models_response':
       if (msg.success) connection.sendProvidersList()
       break
 

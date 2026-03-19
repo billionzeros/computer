@@ -2,6 +2,7 @@ import { Check, ChevronDown, ChevronRight, Key } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 import { connection } from '../../lib/connection.js'
 import { type ProviderInfo, useStore } from '../../lib/store.js'
+import { ProviderSettingsModal } from './ProviderSettingsModal.js'
 
 // Provider icon imports (dark theme variants)
 import anthropicIcon from '../../assets/llm/anthropic_light.svg'
@@ -44,7 +45,6 @@ function formatModelName(model: string): string {
   name = name.replace(/^claude-/, '').replace(/^gpt-/, 'GPT-').replace(/^o(\d)/, 'O$1')
 
   // Convert version dashes to dots: "4-6" → "4.6", "4-5" → "4.5"
-  // Match pattern: word boundary + digit-digit at end or before another dash
   name = name.replace(/(\d+)-(\d+)(?=$|-)/g, '$1.$2')
 
   // Remove "-latest" suffix
@@ -65,6 +65,7 @@ export function ModelSelector() {
   const providers = useStore((s) => s.providers)
   const [open, setOpen] = useState(false)
   const [expandedProvider, setExpandedProvider] = useState<string | null>(null)
+  const [settingsProvider, setSettingsProvider] = useState<ProviderInfo | null>(null)
   const ref = useRef<HTMLDivElement>(null)
 
   // Auto-expand the current provider when dropdown opens
@@ -107,6 +108,18 @@ export function ModelSelector() {
     setExpandedProvider(expandedProvider === name ? null : name)
   }
 
+  const handleKeyClick = (e: React.MouseEvent, provider: ProviderInfo) => {
+    e.stopPropagation()
+    setOpen(false) // close dropdown so modal is unobstructed
+    setSettingsProvider(provider)
+  }
+
+  const handleSettingsClose = () => {
+    setSettingsProvider(null)
+    // Refresh providers after modal closes in case changes were made
+    connection.sendProvidersList()
+  }
+
   const hasAnyKey = providers.some((p: ProviderInfo) => p.hasApiKey)
   const displayModel = hasAnyKey ? formatModelName(currentModel) : 'Select a model'
 
@@ -142,7 +155,14 @@ export function ModelSelector() {
                 >
                   <ProviderIcon provider={provider.name} size={16} />
                   <span className="model-selector__group-label">{provider.name}</span>
-                  {!provider.hasApiKey && <Key size={12} className="model-selector__key-icon" />}
+                  <button
+                    type="button"
+                    className={`model-selector__key-btn ${provider.hasApiKey ? 'model-selector__key-btn--active' : ''}`}
+                    onClick={(e) => handleKeyClick(e, provider)}
+                    title={provider.hasApiKey ? 'Provider settings' : 'Add API key'}
+                  >
+                    <Key size={12} />
+                  </button>
                   <ChevronRight
                     size={12}
                     className={`model-selector__group-chevron ${isExpanded ? 'model-selector__group-chevron--open' : ''}`}
@@ -151,20 +171,33 @@ export function ModelSelector() {
 
                 {isExpanded && (
                   <div className="model-selector__models">
-                    {provider.models.map((model: string) => {
-                      const isActive = currentProvider === provider.name && currentModel === model
-                      return (
+                    {provider.models.length === 0 ? (
+                      <div className="model-selector__no-models">
+                        No models available.{' '}
                         <button
                           type="button"
-                          key={`${provider.name}/${model}`}
-                          className={`model-selector__option ${isActive ? 'model-selector__option--active' : ''}`}
-                          onClick={() => handleSelect(provider.name, model)}
+                          className="model-selector__no-models-link"
+                          onClick={(e) => handleKeyClick(e, provider)}
                         >
-                          <span className="model-selector__option-name">{formatModelName(model)}</span>
-                          {isActive && <Check size={14} className="model-selector__check" />}
+                          Configure provider
                         </button>
-                      )
-                    })}
+                      </div>
+                    ) : (
+                      provider.models.map((model: string) => {
+                        const isActive = currentProvider === provider.name && currentModel === model
+                        return (
+                          <button
+                            type="button"
+                            key={`${provider.name}/${model}`}
+                            className={`model-selector__option ${isActive ? 'model-selector__option--active' : ''}`}
+                            onClick={() => handleSelect(provider.name, model)}
+                          >
+                            <span className="model-selector__option-name">{formatModelName(model)}</span>
+                            {isActive && <Check size={14} className="model-selector__check" />}
+                          </button>
+                        )
+                      })
+                    )}
                   </div>
                 )}
               </div>
@@ -178,6 +211,12 @@ export function ModelSelector() {
           )}
         </div>
       )}
+
+      {/* Provider settings modal */}
+      <ProviderSettingsModal
+        provider={settingsProvider}
+        onClose={handleSettingsClose}
+      />
     </div>
   )
 }

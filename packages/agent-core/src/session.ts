@@ -145,7 +145,13 @@ export class Session {
       },
       // Dynamic API key resolution — called on every LLM call
       getApiKey: async (provider: string) => {
-        return this.resolveApiKey(provider, this.clientApiKey, this.config)
+        const key = this.resolveApiKey(provider, this.clientApiKey, this.config)
+        if (!key) {
+          console.error(`[session ${this.id}] No API key found for provider "${provider}". Check config or env vars.`)
+        } else {
+          console.log(`[session ${this.id}] Resolved API key for "${provider}" (${key.slice(0, 8)}...)`)
+        }
+        return key
       },
       transformContext: async (messages) => {
         try {
@@ -251,10 +257,15 @@ export class Session {
     const events: SessionEvent[] = []
     let resolveNext: (() => void) | null = null
     let done = false
+    let eventCount = 0
+    let textEventCount = 0
 
     const unsub = this.piAgent.subscribe((event: PiAgentEvent) => {
+      console.log(`[session ${this.id}] pi event: ${event.type}`)
       const translated = this.translateEvent(event)
       if (translated) {
+        eventCount++
+        if (translated.type === 'text') textEventCount++
         events.push(translated)
         resolveNext?.()
       }
@@ -299,6 +310,11 @@ export class Session {
         this.title = aiTitle
         yield { type: 'title_update', title: aiTitle }
       }
+    }
+
+    console.log(`[session ${this.id}] processMessage complete: ${eventCount} events, ${textEventCount} text chunks`)
+    if (eventCount === 0) {
+      console.error(`[session ${this.id}] WARNING: No events produced! The LLM may not have been called. Check API key.`)
     }
 
     // Persist after each turn

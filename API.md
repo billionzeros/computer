@@ -1,6 +1,6 @@
 # anton.computer — WebSocket API Reference
 
-> **Version 0.3.0** — Single source of truth for every message that flows over the wire.
+> **Version 0.4.0** — Single source of truth for every message that flows over the wire.
 >
 > This file is the contract. If the code and this doc disagree, one of them has a bug.
 > TypeScript types live in `packages/protocol/src/messages.ts`.
@@ -20,7 +20,7 @@ All payloads are UTF-8 JSON. Channel byte determines routing.
 | CONTROL | `0x00` | Bidirectional | Auth, ping/pong, config |
 | TERMINAL | `0x01` | Bidirectional | PTY stdin/stdout (base64) |
 | AI | `0x02` | Bidirectional | Sessions, chat, providers, scheduler |
-| FILESYNC | `0x03` | Reserved | File sync (v0.4) |
+| FILESYNC | `0x03` | Bidirectional | Remote filesystem browsing |
 | EVENTS | `0x04` | Server → Client | Status updates, notifications |
 
 ---
@@ -588,7 +588,8 @@ Agent returns all configured providers and the current defaults.
   type: "providers_list_response",
   providers: [{
     name: string,          // e.g. "anthropic", "openai"
-    models: string[],      // available model IDs
+    models: string[],      // currently configured model IDs
+    defaultModels: string[], // hardcoded defaults (for "reset to defaults")
     hasApiKey: boolean,    // true if API key is configured
     baseUrl?: string       // for self-hosted (e.g. Ollama)
   }],
@@ -598,6 +599,8 @@ Agent returns all configured providers and the current defaults.
   }
 }
 ```
+
+The `defaultModels` field contains the hardcoded default model list for each provider. Clients can use this to offer a "reset to defaults" action when the user has customized their model list. `models` reflects the current state (which may differ from defaults if the user has added/removed models).
 
 ### `provider_set_key`
 
@@ -645,6 +648,107 @@ Client changes the default provider/model.
 
 ```typescript
 { type: "provider_set_default_response", success: boolean, provider: string, model: string }
+```
+
+### `provider_set_models`
+
+Client updates the model list for a provider.
+
+| | |
+|---|---|
+| Direction | Client → Agent |
+| Response | `provider_set_models_response` |
+| Side effect | Persists to `~/.anton/config.yaml` |
+
+```typescript
+{ type: "provider_set_models", provider: string, models: string[] }
+```
+
+If the provider doesn't exist in config, it is created with an empty API key and the given models. This allows clients to configure model lists before setting an API key.
+
+### `provider_set_models_response`
+
+| | |
+|---|---|
+| Direction | Agent → Client |
+
+```typescript
+{ type: "provider_set_models_response", success: boolean, provider: string }
+```
+
+After a successful response, clients SHOULD send `providers_list` to refresh the full provider state.
+
+---
+
+## FILESYNC Channel (0x03)
+
+### `fs_list`
+
+Client requests a directory listing.
+
+| | |
+|---|---|
+| Direction | Client → Agent |
+| Response | `fs_list_response` |
+
+```typescript
+{
+  type: "fs_list",
+  path: string           // directory path; "~" resolved to home dir
+}
+```
+
+### `fs_list_response`
+
+Agent returns directory entries.
+
+| | |
+|---|---|
+| Direction | Agent → Client |
+
+```typescript
+{
+  type: "fs_list_response",
+  entries: [{
+    name: string,        // filename
+    type: "file" | "dir" | "link",
+    size: string         // human-readable, e.g. "4.2K", "1.3M"
+  }],
+  error?: string         // set if path doesn't exist or no permissions
+}
+```
+
+Dotfiles are hidden by default (entries starting with `.` are filtered out).
+
+### `fs_read`
+
+Client requests file contents.
+
+| | |
+|---|---|
+| Direction | Client → Agent |
+| Response | `fs_read_response` |
+
+```typescript
+{ type: "fs_read", path: string }
+```
+
+### `fs_read_response`
+
+Agent returns file contents (truncated at 100KB).
+
+| | |
+|---|---|
+| Direction | Agent → Client |
+
+```typescript
+{
+  type: "fs_read_response",
+  path: string,
+  content: string,       // file contents (UTF-8)
+  truncated: boolean,    // true if file was larger than 100KB
+  error?: string
+}
 ```
 
 ---
