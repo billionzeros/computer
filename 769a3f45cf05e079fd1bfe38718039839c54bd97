@@ -1,0 +1,121 @@
+deploy/install.sh
+  ca040c1e8069f890 1-247
+packages/desktop/index.html
+  ca040c1e8069f890 1-22
+packages/protocol/src/pipes.ts
+  ca040c1e8069f890 1-10
+packages/agent/src/config.ts
+  ca040c1e8069f890 1-100
+packages/desktop/src/components/AgentChat.tsx
+  ca040c1e8069f890 1-448
+packages/desktop/src/components/Terminal.tsx
+  ca040c1e8069f890 1-114
+packages/desktop/src/App.tsx
+  ca040c1e8069f890 1-227
+packages/agent/src/tools/network.ts
+  ca040c1e8069f890 1-107
+packages/desktop/src-tauri/tauri.conf.json
+  ca040c1e8069f890 1-41
+packages/desktop/src/main.tsx
+  ca040c1e8069f890 1-9
+packages/desktop/src-tauri/Cargo.toml
+  ca040c1e8069f890 1-18
+packages/agent/src/skills.ts
+  ca040c1e8069f890 1-120
+packages/desktop/src-tauri/src/main.rs
+  ca040c1e8069f890 1-10
+README.md
+  ca040c1e8069f890 1-263
+GOALS.md
+  ca040c1e8069f890 1-154
+package.json
+  ca040c1e8069f890 1-12,19,23-29
+  e0ad3b98218613eb 13-18,20-22
+packages/protocol/src/index.ts
+  ca040c1e8069f890 1-3
+packages/protocol/tsconfig.json
+  ca040c1e8069f890 1-14
+packages/agent/src/tools/filesystem.ts
+  ca040c1e8069f890 1-125
+packages/agent/src/agent.ts
+  ca040c1e8069f890 1-348
+packages/agent/src/tools/browser.ts
+  ca040c1e8069f890 1-75
+packages/desktop/vite.config.ts
+  ca040c1e8069f890 1-19
+packages/agent/src/tools/shell.ts
+  ca040c1e8069f890 1-48
+packages/desktop/package.json
+  ca040c1e8069f890 1-31
+packages/protocol/package.json
+  ca040c1e8069f890 1-14
+packages/desktop/src/lib/store.ts
+  ca040c1e8069f890 1-76
+packages/desktop/src/components/Connect.tsx
+  ca040c1e8069f890 1-317
+packages/protocol/src/codec.ts
+  ca040c1e8069f890 1-49
+pnpm-workspace.yaml
+  ca040c1e8069f890 1-2
+packages/agent/tsconfig.json
+  ca040c1e8069f890 1-14
+packages/agent/src/server.ts
+  ca040c1e8069f890 1-225
+ARCHITECTURE.md
+  ca040c1e8069f890 1,3,5,7,10-23,25-26,29,32-91,94,96,98,100-139,142-158,160,162,164,167-196,199-205,209,211,214-217,220,222-230,232-236,238-258,263-269,271,274-279,281-291
+packages/agent/src/scheduler.ts
+  ca040c1e8069f890 1-157
+biome.json
+  e0ad3b98218613eb 1-48
+packages/protocol/src/messages.ts
+  ca040c1e8069f890 1-162
+deploy/Dockerfile
+  ca040c1e8069f890 1-30
+packages/agent/src/tools/process.ts
+  ca040c1e8069f890 1-70
+packages/agent/src/index.ts
+  ca040c1e8069f890 1-68
+packages/agent/package.json
+  ca040c1e8069f890 1-32
+SHIPPING.md
+  ca040c1e8069f890 1,3-4,6,10-50,54,56-126,130-196,202,206-216,218-227
+packages/desktop/src-tauri/build.rs
+  ca040c1e8069f890 1-3
+packages/desktop/src/lib/connection.ts
+  ca040c1e8069f890 1-190
+packages/desktop/tsconfig.json
+  ca040c1e8069f890 1-14
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.1.15",
+  "base_commit_sha": "769a3f45cf05e079fd1bfe38718039839c54bd97",
+  "prompts": {
+    "ca040c1e8069f890": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "a0307273-4b1b-4d0c-9f7d-ddc81dc28bee",
+        "model": "claude-opus-4-6"
+      },
+      "human_author": "Om Gupta <omgupta0720@gmail.com>",
+      "messages": [],
+      "total_additions": 4911,
+      "total_deletions": 708,
+      "accepted_lines": 4463,
+      "overriden_lines": 0
+    },
+    "e0ad3b98218613eb": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "601bdf3c-7660-4f69-a0b2-ff9a135da48a",
+        "model": "claude-opus-4-6"
+      },
+      "human_author": "Om Gupta <omgupta0720@gmail.com>",
+      "messages": [],
+      "total_additions": 57,
+      "total_deletions": 1,
+      "accepted_lines": 57,
+      "overriden_lines": 0
+    }
+  }
+}
