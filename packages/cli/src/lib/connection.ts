@@ -1,6 +1,10 @@
 /**
  * WebSocket connection manager for Node.js CLI.
  * Same protocol as desktop but using `ws` package.
+ *
+ * Connection spec: see /SPEC.md
+ *   Port 9876 → plain ws:// (primary, default)
+ *   Port 9877 → wss:// with --tls flag
  */
 
 import WebSocket from "ws";

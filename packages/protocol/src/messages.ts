@@ -9,6 +9,8 @@ export interface AuthOkMessage {
   type: "auth_ok";
   agentId: string;
   version: string;
+  gitHash: string;
+  specVersion: string;
 }
 
 export interface AuthErrorMessage {

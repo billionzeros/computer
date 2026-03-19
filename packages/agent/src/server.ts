@@ -1,17 +1,22 @@
 /**
  * WebSocket server — the pipe between desktop app and agent.
  * Handles auth, multiplexed channels, and message routing.
+ *
+ * Connection spec (see /SPEC.md):
+ *   Port 9876 (config.port)     → plain ws:// (primary, default)
+ *   Port 9877 (config.port + 1) → wss:// with self-signed TLS
  */
 
 import { WebSocketServer, WebSocket } from "ws";
 import { createServer as createHttpsServer } from "node:https";
 import { createServer as createHttpServer } from "node:http";
-import { readFileSync, existsSync, writeFileSync } from "node:fs";
+import { readFileSync, existsSync } from "node:fs";
 import { join } from "node:path";
 import { execSync } from "node:child_process";
 import type { AgentConfig } from "./config.js";
 import { getAntonDir } from "./config.js";
 import { Agent } from "./agent.js";
+import { VERSION, GIT_HASH, SPEC_VERSION } from "./version.js";
 import { Channel, encodeFrame, decodeFrame, parseJsonPayload } from "@anton/protocol";
 import type {
   ControlMessage,
@@ -37,7 +42,6 @@ export class AgentServer {
       return new Promise((resolve) => {
         const confirmId = `c_${Date.now()}`;
 
-        // Send confirm request to desktop
         this.sendToClient(Channel.AI, {
           type: "confirm",
           id: confirmId,
@@ -45,7 +49,6 @@ export class AgentServer {
           reason,
         });
 
-        // Wait for response (with timeout)
         const timeout = setTimeout(() => resolve(false), 60_000);
 
         const handler = (data: Buffer) => {
@@ -69,45 +72,45 @@ export class AgentServer {
 
   async start(): Promise<void> {
     const { port } = this.config;
-    const certDir = join(getAntonDir(), "certs");
+    const tlsPort = port + 1;
 
-    // Try TLS first, fall back to plain HTTP
-    let server: ReturnType<typeof createHttpServer>;
+    // ── Primary: plain WS on config.port (default 9876) ──
+    const plainServer = createHttpServer();
+    const plainWss = new WebSocketServer({ server: plainServer });
+    plainWss.on("connection", (ws) => this.handleConnection(ws));
+
+    plainServer.listen(port, () => {
+      console.log(`  ws://0.0.0.0:${port}  (primary, plain)`);
+    });
+
+    this.wss = plainWss;
+
+    // ── Secondary: TLS on config.port + 1 (default 9877) ──
+    const certDir = join(getAntonDir(), "certs");
+    ensureCerts(certDir);
+
     const certPath = join(certDir, "cert.pem");
     const keyPath = join(certDir, "key.pem");
 
-    ensureCerts(certDir);
-
     if (existsSync(certPath) && existsSync(keyPath)) {
-      // TLS server on main port
-      const tlsServer = createHttpsServer({
-        cert: readFileSync(certPath),
-        key: readFileSync(keyPath),
-      });
-      server = tlsServer as any;
+      try {
+        const tlsServer = createHttpsServer({
+          cert: readFileSync(certPath),
+          key: readFileSync(keyPath),
+        });
+        const tlsWss = new WebSocketServer({ server: tlsServer });
+        tlsWss.on("connection", (ws) => this.handleConnection(ws));
 
-      // Also start a plain HTTP server on port+1 for clients that can't handle self-signed certs
-      const plainServer = createHttpServer();
-      const plainWss = new WebSocketServer({ server: plainServer });
-      plainWss.on("connection", (ws) => this.handleConnection(ws));
-      plainServer.listen(port + 1, () => {
-        console.log(`  Plain WS fallback on ws://0.0.0.0:${port + 1}`);
-      });
-    } else {
-      // No certs available — plain HTTP only
-      server = createHttpServer();
+        tlsServer.listen(tlsPort, () => {
+          console.log(`  wss://0.0.0.0:${tlsPort} (TLS, self-signed)`);
+        });
+      } catch (err: any) {
+        console.error(`  TLS server failed to start: ${err.message}`);
+      }
     }
 
-    this.wss = new WebSocketServer({ server });
-
-    this.wss.on("connection", (ws) => this.handleConnection(ws));
-
-    server.listen(port, () => {
-      const proto = existsSync(certPath) ? "wss" : "ws";
-      console.log(`\n  anton.computer agent running on ${proto}://0.0.0.0:${port}`);
-      console.log(`  Agent ID: ${this.config.agentId}`);
-      console.log(`  Token: ${this.config.token}\n`);
-    });
+    console.log(`\n  Agent ID: ${this.config.agentId}`);
+    console.log(`  Token:    ${this.config.token}\n`);
   }
 
   private handleConnection(ws: WebSocket) {
@@ -124,7 +127,6 @@ export class AgentServer {
       try {
         const frame = decodeFrame(new Uint8Array(data));
 
-        // Must authenticate first
         if (!authenticated) {
           if (frame.channel === Channel.CONTROL) {
             const msg = parseJsonPayload<ControlMessage>(frame.payload);
@@ -135,11 +137,12 @@ export class AgentServer {
               this.sendToClient(Channel.CONTROL, {
                 type: "auth_ok",
                 agentId: this.config.agentId,
-                version: "0.1.0",
+                version: VERSION,
+                gitHash: GIT_HASH,
+                specVersion: SPEC_VERSION,
               });
               console.log("Client authenticated");
 
-              // Send initial status
               this.sendToClient(Channel.EVENTS, {
                 type: "agent_status",
                 status: "idle",
@@ -157,7 +160,6 @@ export class AgentServer {
           return;
         }
 
-        // Route by channel
         await this.handleMessage(frame.channel as any, frame.payload);
       } catch (err: any) {
         console.error("Message error:", err.message);
@@ -185,20 +187,16 @@ export class AgentServer {
       case Channel.AI: {
         const msg = parseJsonPayload<AiMessage>(payload);
         if (msg.type === "message") {
-          // Status: working
           this.sendToClient(Channel.EVENTS, {
             type: "agent_status",
             status: "working",
             detail: "Processing your request...",
           });
 
-          // Process through pi SDK agent loop
-          // pi handles: tool calling cycle, context windowing, streaming, error recovery
           for await (const event of this.agent.processMessage(msg.content, "desktop")) {
             this.sendToClient(Channel.AI, event);
           }
 
-          // Status: idle
           this.sendToClient(Channel.EVENTS, {
             type: "agent_status",
             status: "idle",
@@ -209,7 +207,6 @@ export class AgentServer {
 
       case Channel.TERMINAL: {
         const msg = parseJsonPayload<TerminalMessage>(payload);
-        // TODO: Route to PTY manager
         console.log("Terminal message:", msg.type);
         break;
       }
@@ -243,6 +240,5 @@ function ensureCerts(certDir: string) {
     );
   } catch (err: any) {
     console.error("Failed to generate certs:", err.message);
-    console.error("TLS will not be available. Generate certs manually.");
   }
 }

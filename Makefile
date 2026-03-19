@@ -1,18 +1,12 @@
 # ──────────────────────────────────────────────────────────────────
 # Anton Agent - Deployment Makefile
 # ──────────────────────────────────────────────────────────────────
-#
-# Setup:
-#   1. Edit inventory.ini — add your VPS IPs, SSH key, and user
-#   2. Run: make deploy
-#
-# That's it.
-# ──────────────────────────────────────────────────────────────────
 
-PLAYBOOK   := playbook.yml
-INVENTORY  := inventory.ini
+ANSIBLE_DIR := deploy/ansible
+PLAYBOOK   := $(ANSIBLE_DIR)/playbook.yml
+INVENTORY  := $(ANSIBLE_DIR)/inventory.ini
 EXTRA_ARGS ?=
-REPO_ROOT  := $(shell cd ../.. && pwd)
+REPO_ROOT  := $(shell pwd)
 
 # Pass API key:        make deploy API_KEY=sk-ant-...
 # Deploy a branch:     make deploy BRANCH=dev

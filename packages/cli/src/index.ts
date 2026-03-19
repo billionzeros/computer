@@ -3,9 +3,13 @@
 /**
  * anton — CLI for anton.computer
  *
+ * Connection spec: see /SPEC.md
+ *   Port 9876 → ws://  (default)
+ *   Port 9877 → wss:// (--tls)
+ *
  * Usage:
  *   anton                           Interactive REPL
- *   anton connect <host>            Connect to an agent and save
+ *   anton connect [host]            Connect to an agent (interactive)
  *   anton machines                  List saved machines
  *   anton chat "message"            One-shot chat
  *   anton shell                     Remote shell
@@ -42,14 +46,10 @@ function hasFlag(flag: string): boolean {
 async function main() {
   switch (command) {
     case "connect": {
-      const host = args[1];
-      if (!host) {
-        console.log(`\n  Usage: anton connect <host> [--port 9876] [--token <tok>] [--name <name>] [--tls]\n`);
-        process.exit(1);
-      }
+      // Host is optional — will prompt interactively if not provided
+      const host = args[1] && !args[1].startsWith("--") ? args[1] : undefined;
       await connectCommand({
         host,
-        port: parseInt(parseFlag("--port") ?? "9876", 10),
         token: parseFlag("--token"),
         name: parseFlag("--name"),
         tls: hasFlag("--tls"),
@@ -104,9 +104,7 @@ async function main() {
       if (!machine) {
         console.log(LOGO);
         console.log(`  ${theme.warning("No machines configured.")}`);
-        console.log(`  Run ${theme.bold("anton connect <host> --token <tok>")} to connect to an agent.\n`);
-        console.log(`  ${theme.dim("Example:")}`);
-        console.log(`  ${theme.dim("  anton connect 192.168.1.100 --token ak_abc123...")}\n`);
+        console.log(`  Run ${theme.bold("anton connect")} to get started.\n`);
         process.exit(0);
       }
 
@@ -127,17 +125,20 @@ function showHelp() {
   console.log(`  ${theme.bold("Usage:")}`);
   console.log();
   console.log(`  ${theme.brand("anton")}                              Interactive REPL`);
-  console.log(`  ${theme.brand("anton connect")} <host>               Connect & save a machine`);
-  console.log(`    --port <n>                        Port (default: 9876)`);
+  console.log(`  ${theme.brand("anton connect")} [host]               Connect to an agent`);
   console.log(`    --token <tok>                     Auth token`);
   console.log(`    --name <name>                     Friendly name`);
-  console.log(`    --tls                             Use TLS`);
+  console.log(`    --tls                             Use TLS (port 9877)`);
   console.log(`  ${theme.brand("anton machines")}                      List saved machines`);
   console.log(`  ${theme.brand("anton chat")} "message"                One-shot chat`);
   console.log(`  ${theme.brand("anton shell")}                         Remote shell`);
   console.log(`  ${theme.brand("anton skills")} [list|run <name>]      Manage skills`);
   console.log(`  ${theme.brand("anton status")}                        Check agent status`);
   console.log(`  ${theme.brand("anton help")}                          Show this help`);
+  console.log();
+  console.log(`  ${theme.dim("Ports (from SPEC.md):")}`);
+  console.log(`    ${theme.dim("9876")}  ws://   ${theme.dim("plain (default)")}`);
+  console.log(`    ${theme.dim("9877")}  wss://  ${theme.dim("TLS (--tls flag)")}`);
   console.log();
 }
 

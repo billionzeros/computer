@@ -138,6 +138,48 @@
   changed_when: true
   notify: restart anton-agent
 
+# ── Version manifest ──────────────────────────────────────────────
+
+- name: Get git commit hash
+  command: git rev-parse --short HEAD
+  args:
+    chdir: "{{ anton_repo_dir }}"
+  become_user: "{{ anton_user }}"
+  register: git_hash
+  changed_when: false
+
+- name: Get package version
+  shell: "node -e \"console.log(JSON.parse(require('fs').readFileSync('packages/agent/package.json','utf8')).version)\""
+  args:
+    chdir: "{{ anton_repo_dir }}"
+  become_user: "{{ anton_user }}"
+  register: pkg_version
+  changed_when: false
+
+- name: Get spec version
+  shell: "grep 'Spec Version:' SPEC.md | head -1 | sed 's/.*Spec Version: //;s/\\*\\*.*//' | tr -d ' '"
+  args:
+    chdir: "{{ anton_repo_dir }}"
+  become_user: "{{ anton_user }}"
+  register: spec_version
+  changed_when: false
+
+- name: Write version manifest
+  copy:
+    content: |
+      {
+        "version": "{{ pkg_version.stdout }}",
+        "gitHash": "{{ git_hash.stdout }}",
+        "specVersion": "{{ spec_version.stdout }}",
+        "branch": "{{ anton_branch }}",
+        "deployedAt": "{{ ansible_date_time.iso8601 }}",
+        "deployedBy": "ansible"
+      }
+    dest: "{{ anton_install_dir }}/version.json"
+    owner: "{{ anton_user }}"
+    group: "{{ anton_user }}"
+    mode: "0644"
+
 # ── Environment file for API keys ────────────────────────────────
 
 - name: Create environment file
@@ -184,6 +226,14 @@
   when: anton_configure_firewall and ansible_os_family == "Debian"
   ignore_errors: true
 
+- name: Open agent plain WS fallback port (UFW)
+  ufw:
+    rule: allow
+    port: "{{ anton_port + 1 }}"
+    proto: tcp
+  when: anton_configure_firewall and ansible_os_family == "Debian"
+  ignore_errors: true
+
 - name: Open agent port (firewalld)
   firewalld:
     port: "{{ anton_port }}/tcp"
@@ -207,12 +257,18 @@
     msg: |
       ✓ Anton Agent deployed successfully!
 
+      Version: {{ pkg_version.stdout }} ({{ git_hash.stdout }})
+      Spec:    {{ spec_version.stdout }}
+      Branch:  {{ anton_branch }}
+
       Host:  {{ ansible_host | default(inventory_hostname) }}
       Port:  {{ anton_port }}
       Token: {{ anton_token.stdout | default('will be generated on first run') }}
 
       Connect from desktop app:
         Host: {{ ansible_host | default(inventory_hostname) }}:{{ anton_port }}
+
+      Version manifest: {{ anton_install_dir }}/version.json
 
       Service commands:
         sudo systemctl status anton-agent

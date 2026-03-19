@@ -1,7 +1,11 @@
 /**
- * WebSocket connection manager.
+ * WebSocket connection manager for Tauri desktop app.
  * Handles connecting to the agent, auth handshake, multiplexed pipes,
  * and reconnection.
+ *
+ * Connection spec: see /SPEC.md
+ *   Port 9876 → plain ws:// (primary, default)
+ *   Port 9877 → wss:// when "Use TLS" is checked
  */
 
 import { Channel } from "@anton/protocol";

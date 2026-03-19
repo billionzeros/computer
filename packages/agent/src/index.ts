@@ -16,14 +16,15 @@ import { loadSkills } from "./skills.js";
 import { AgentServer } from "./server.js";
 import { Agent } from "./agent.js";
 import { Scheduler } from "./scheduler.js";
-
-const VERSION = "0.1.0";
+import { VERSION, GIT_HASH, SPEC_VERSION } from "./version.js";
 
 async function main() {
   console.log(`
    ┌─────────────────────────────────────┐
    │  anton.computer agent v${VERSION}         │
    │  Your personal cloud computer.      │
+   │  commit: ${GIT_HASH.padEnd(28)}│
+   │  spec:   ${SPEC_VERSION.padEnd(28)}│
    └─────────────────────────────────────┘
   `);
 

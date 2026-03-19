@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import { motion } from "framer-motion";
-import { Server, Wifi, ArrowRight } from "lucide-react";
+import { Server, Wifi, ArrowRight, Lock, Unlock } from "lucide-react";
 import { connection, type ConnectionConfig } from "../lib/connection.js";
 import {
   loadMachines,
@@ -9,15 +9,25 @@ import {
   useConnectionStatus,
 } from "../lib/store.js";
 
+/**
+ * Connection spec (see /SPEC.md):
+ *   Port 9876 → ws://  (plain, default)
+ *   Port 9877 → wss:// (TLS)
+ */
+const PORT_PLAIN = 9876;
+const PORT_TLS = 9877;
+
 export function Connect({ onConnected }: { onConnected: () => void }) {
   const status = useConnectionStatus();
   const [machines] = useState(loadMachines);
   const [host, setHost] = useState("");
-  const [port, setPort] = useState("9876");
   const [token, setToken] = useState("");
   const [name, setName] = useState("");
   const [useTLS, setUseTLS] = useState(false);
   const [error, setError] = useState("");
+
+  // Port derived from TLS toggle per spec
+  const port = useTLS ? PORT_TLS : PORT_PLAIN;
 
   const handleConnect = (
     config: ConnectionConfig,
@@ -54,7 +64,7 @@ export function Connect({ onConnected }: { onConnected: () => void }) {
 
   const connectFromForm = () => {
     if (!host || !token) return;
-    handleConnect({ host, port: parseInt(port) || 9876, token, useTLS });
+    handleConnect({ host, port, token, useTLS });
   };
 
   const connectSaved = (machine: SavedMachine) => {
@@ -113,9 +123,12 @@ export function Connect({ onConnected }: { onConnected: () => void }) {
                       {m.name}
                     </span>
                   </div>
-                  <span className="text-xs text-zinc-600 font-mono">
-                    {m.host}:{m.port}
-                  </span>
+                  <div className="flex items-center gap-1.5">
+                    {m.useTLS && <Lock className="w-3 h-3 text-zinc-600" />}
+                    <span className="text-xs text-zinc-600 font-mono">
+                      {m.host}
+                    </span>
+                  </div>
                 </button>
               ))}
             </div>
@@ -131,39 +144,14 @@ export function Connect({ onConnected }: { onConnected: () => void }) {
           <div className="space-y-3">
             <div>
               <label className="block text-xs text-zinc-400 mb-1 font-medium">
-                Name (optional)
+                Host
               </label>
               <input
-                className="w-full px-3 py-2 bg-zinc-950 border border-zinc-800 rounded-lg text-sm text-zinc-200 placeholder-zinc-600 outline-none focus:border-zinc-600 transition-colors"
-                placeholder="My VPS"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
+                className="w-full px-3 py-2 bg-zinc-950 border border-zinc-800 rounded-lg text-sm text-zinc-200 font-mono placeholder-zinc-600 outline-none focus:border-zinc-600 transition-colors"
+                placeholder="148.113.4.94 or my-vps.com"
+                value={host}
+                onChange={(e) => setHost(e.target.value)}
               />
-            </div>
-
-            <div className="flex gap-2.5">
-              <div className="flex-[2]">
-                <label className="block text-xs text-zinc-400 mb-1 font-medium">
-                  Host
-                </label>
-                <input
-                  className="w-full px-3 py-2 bg-zinc-950 border border-zinc-800 rounded-lg text-sm text-zinc-200 font-mono placeholder-zinc-600 outline-none focus:border-zinc-600 transition-colors"
-                  placeholder="192.168.1.100"
-                  value={host}
-                  onChange={(e) => setHost(e.target.value)}
-                />
-              </div>
-              <div className="w-20">
-                <label className="block text-xs text-zinc-400 mb-1 font-medium">
-                  Port
-                </label>
-                <input
-                  className="w-full px-3 py-2 bg-zinc-950 border border-zinc-800 rounded-lg text-sm text-zinc-200 font-mono placeholder-zinc-600 outline-none focus:border-zinc-600 transition-colors"
-                  placeholder="9876"
-                  value={port}
-                  onChange={(e) => setPort(e.target.value)}
-                />
-              </div>
             </div>
 
             <div>
@@ -180,6 +168,18 @@ export function Connect({ onConnected }: { onConnected: () => void }) {
               />
             </div>
 
+            <div>
+              <label className="block text-xs text-zinc-400 mb-1 font-medium">
+                Name <span className="text-zinc-600">(optional)</span>
+              </label>
+              <input
+                className="w-full px-3 py-2 bg-zinc-950 border border-zinc-800 rounded-lg text-sm text-zinc-200 placeholder-zinc-600 outline-none focus:border-zinc-600 transition-colors"
+                placeholder="My VPS"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+              />
+            </div>
+
             <label className="flex items-center gap-2 cursor-pointer">
               <input
                 type="checkbox"
@@ -187,7 +187,10 @@ export function Connect({ onConnected }: { onConnected: () => void }) {
                 onChange={(e) => setUseTLS(e.target.checked)}
                 className="accent-green-500"
               />
-              <span className="text-xs text-zinc-400">Use TLS (wss://)</span>
+              <span className="text-xs text-zinc-400 flex items-center gap-1.5">
+                {useTLS ? <Lock className="w-3 h-3" /> : <Unlock className="w-3 h-3" />}
+                {useTLS ? `TLS enabled (wss://, port ${PORT_TLS})` : `Plain connection (ws://, port ${PORT_PLAIN})`}
+              </span>
             </label>
           </div>
 
