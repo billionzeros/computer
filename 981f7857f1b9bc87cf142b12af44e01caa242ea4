@@ -1,0 +1,59 @@
+agent/pkg/ai/openclaw.go
+  ca040c1e8069f890 1-85
+agent/cmd/antonagent/main.go
+  ca040c1e8069f890 1-37
+ARCHITECTURE.md
+  ca040c1e8069f890 1-188
+agent/pkg/ai/engine.go
+  ca040c1e8069f890 1-48
+server/pkg/broker/relay.go
+  ca040c1e8069f890 1-126
+deploy/docker-compose.yml
+  ca040c1e8069f890 1-22
+agent/pkg/tools/filesystem.go
+  ca040c1e8069f890 1-99
+server/cmd/antonbroker/main.go
+  ca040c1e8069f890 1-51
+agent/pkg/ai/builtin.go
+  ca040c1e8069f890 1-72
+agent/pkg/pty/pty.go
+  ca040c1e8069f890 1-36
+agent/pkg/events/bus.go
+  ca040c1e8069f890 1-73
+agent/pkg/portfwd/scanner.go
+  ca040c1e8069f890 1-107
+server/go.mod
+  ca040c1e8069f890 1-7
+agent/pkg/tools/shell.go
+  ca040c1e8069f890 1-65
+agent/go.mod
+  ca040c1e8069f890 1-10
+agent/config.example.yaml
+  ca040c1e8069f890 1-43
+deploy/install-agent.sh
+  ca040c1e8069f890 1-88
+agent/pkg/filesync/watcher.go
+  ca040c1e8069f890 1-166
+agent/pkg/tools/registry.go
+  ca040c1e8069f890 1-54
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.1.15",
+  "base_commit_sha": "981f7857f1b9bc87cf142b12af44e01caa242ea4",
+  "prompts": {
+    "ca040c1e8069f890": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "a0307273-4b1b-4d0c-9f7d-ddc81dc28bee",
+        "model": "claude-opus-4-6"
+      },
+      "human_author": "Om Gupta <omgupta0720@gmail.com>",
+      "messages": [],
+      "total_additions": 1377,
+      "total_deletions": 0,
+      "accepted_lines": 1377,
+      "overriden_lines": 0
+    }
+  }
+}
