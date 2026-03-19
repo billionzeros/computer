@@ -1,0 +1,25 @@
+deploy/ansible/roles/anton-agent/tasks/main.yml
+  a779eb46d9c04b36 107-111,116,118-121,131,143-151
+packages/protocol/src/messages.ts
+  a779eb46d9c04b36 215-226,360-361
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.1.15",
+  "base_commit_sha": "a7772d1b849722cb57dadaf6e3a93841144af5ff",
+  "prompts": {
+    "a779eb46d9c04b36": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "68971b3e-4582-4be0-83b5-4a5f8ba58fab",
+        "model": "claude-opus-4-6"
+      },
+      "human_author": "Om Gupta <omgupta0720@gmail.com>",
+      "messages": [],
+      "total_additions": 35,
+      "total_deletions": 16,
+      "accepted_lines": 35,
+      "overriden_lines": 0
+    }
+  }
+}
