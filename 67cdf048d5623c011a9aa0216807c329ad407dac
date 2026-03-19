@@ -1,0 +1,182 @@
+SESSIONS.md
+  df8d068fdf935b58 1,3-4,6-11,17,24,28,34-37,50-51,61-62,71-72,78-80,88-89,96-112,114,116-130,132,134,136-146,149,151-179,181,183-206,208,210,212-223,225,227,229-235,238,240-251,253-269,274,276-280,284,286-290,294,296-301,304-305,307-310,313,316-320,324,328,333-335,337,339-343,345-359,361,363,365-376,378,380,389,402
+packages/desktop/src/components/chat/EmptyState.tsx
+  b4aa4fec0e0baf25 60
+packages/desktop/src/components/chat/MessageList.tsx
+  b4aa4fec0e0baf25 21,60
+packages/agent-core/src/tools/shell.ts
+  0888c7ca4c3d4a30 1-45
+packages/desktop/src/lib/conversations.ts
+  df8d068fdf935b58 27,30-31
+ARCHITECTURE.md
+  df8d068fdf935b58 5,13-33,43-44,46-47,51-59,61-65,67-83,85-106,109,111,113,115-129,131-135,137,139,142-152,154-156,158-161,164,166,168-185,187,190-207,210-211,213-222,225-234,237-243,245,247,250-272,274,277-284,286-300
+packages/cli/src/commands/status.ts
+  b4aa4fec0e0baf25 44-45
+packages/agent-server/src/server.ts
+  0888c7ca4c3d4a30 1-747
+packages/agent-config/tsconfig.json
+  0888c7ca4c3d4a30 1-14
+packages/cli/src/commands/connect.ts
+  b4aa4fec0e0baf25 116,118,173,175
+packages/agent-core/tsconfig.json
+  0888c7ca4c3d4a30 1-14
+packages/desktop/src/lib/store.ts
+  0888c7ca4c3d4a30 1,93-95,121-122,145-146,256-257,337-339
+  df8d068fdf935b58 24-38,77-83,85,105-109,112,116,118-119,135-140,154-163,165,167-168,209-233,241-253,279,281,340-356,367-402,405
+  b4aa4fec0e0baf25 357-366,407-408,411-413,416-417,419-422
+packages/agent-config/src/version.ts
+  0888c7ca4c3d4a30 1-32
+packages/agent-core/src/tools/network.ts
+  0888c7ca4c3d4a30 1-107
+packages/agent-server/package.json
+  0888c7ca4c3d4a30 1-32
+packages/agent-core/src/index.ts
+  0888c7ca4c3d4a30 1-26
+packages/desktop/src/components/Connect.tsx
+  b4aa4fec0e0baf25 138,211,236
+package.json
+  b4aa4fec0e0baf25 21-26
+packages/agent-core/src/compaction.ts
+  0888c7ca4c3d4a30 1-351
+packages/agent-core/src/tools/filesystem.ts
+  0888c7ca4c3d4a30 1-125
+packages/agent-core/src/agent.ts
+  b4aa4fec0e0baf25 55-56
+  0888c7ca4c3d4a30 1-54,57-160
+packages/desktop/src/App.tsx
+  b4aa4fec0e0baf25 64,134
+  df8d068fdf935b58 17-19,21-45
+packages/cli/src/ui/App.tsx
+  b4aa4fec0e0baf25 64-65,166,169,171,173-175
+packages/desktop/src/components/chat/ToolCallBlock.tsx
+  0888c7ca4c3d4a30 7-8,10,12,22-31,42-44,60,62,64,67,69-71,75,77,83,103-105,110-111,114-115
+  b4aa4fec0e0baf25 56
+packages/desktop/package.json
+  b4aa4fec0e0baf25 9
+packages/desktop/src/components/AgentChat.tsx
+  df8d068fdf935b58 30,35-37,46-47,50-52,55,62-63,65,67,93-94,103-104
+  0888c7ca4c3d4a30 12-16,95-102
+packages/agent-server/src/scheduler.ts
+  0888c7ca4c3d4a30 1-258
+packages/agent-config/src/config.ts
+  0888c7ca4c3d4a30 1-684
+packages/agent-core/package.json
+  0888c7ca4c3d4a30 1-22
+packages/desktop/src/components/chat/ModelSelector.tsx
+  b4aa4fec0e0baf25 36,50
+  df8d068fdf935b58 4-19,22-26,28-31,33-35,37-49,51,57-76
+packages/agent-core/src/session.ts
+  0888c7ca4c3d4a30 1-610
+packages/desktop/src/components/skills/SkillCard.tsx
+  b4aa4fec0e0baf25 26
+packages/desktop/src/components/ui/Modal.tsx
+  b4aa4fec0e0baf25 38
+packages/agent-config/src/index.ts
+  0888c7ca4c3d4a30 1-3
+packages/desktop/src/components/skills/SkillDialog.tsx
+  b4aa4fec0e0baf25 55,58,87
+packages/agent-server/src/index.ts
+  0888c7ca4c3d4a30 1-76
+packages/desktop/src/index.css
+  df8d068fdf935b58 578-584,599-698
+  0888c7ca4c3d4a30 589-598,1158-1162,1165-1173,1178-1180,1183,1185-1186,1192-1209,1213-1215,1222-1227,1229,1232-1237,1240-1242,1245-1247,1251,1253,1256-1260
+packages/agent-server/tsconfig.json
+  0888c7ca4c3d4a30 1-14
+packages/cli/package.json
+  b4aa4fec0e0baf25 11
+packages/desktop/src/components/Sidebar.tsx
+  df8d068fdf935b58 56-64,136,138-141
+  b4aa4fec0e0baf25 49,55,98,134,174,177,181,209
+packages/cli/src/commands/chat.ts
+  b4aa4fec0e0baf25 6,28-29,68
+packages/desktop/src/components/chat/MarkdownRenderer.tsx
+  b4aa4fec0e0baf25 12,90,108
+  0888c7ca4c3d4a30 58
+packages/protocol/src/messages.ts
+  b4aa4fec0e0baf25 285-286,288-291,293-297,358-360
+  0888c7ca4c3d4a30 264-269,275-276,298-326,361-365
+  df8d068fdf935b58 152-171,339-340
+packages/agent-config/src/skills.ts
+  0888c7ca4c3d4a30 1-120
+packages/agent/package.json
+  0888c7ca4c3d4a30 5-6,8,11-12,15-17
+packages/agent-core/src/compaction-prompt.ts
+  0888c7ca4c3d4a30 1-42
+packages/cli/src/lib/connection.ts
+  b4aa4fec0e0baf25 10-12,16-19,28,36-38,40-48,53,60,69,71,78-79,84-86,89,92,95,98,100-101,109,116-118,122-123,131,134,137,143,147,151,155,159,163,170,177,181,185,189,195,199,203,208-209
+packages/desktop/src/lib/connection.ts
+  b4aa4fec0e0baf25 24,47-48,178-179
+  df8d068fdf935b58 120-122,124-126,128-130,132-134,136-138,140-142,144-148,150-152,154-156,158-161
+packages/agent-core/src/tools/process.ts
+  0888c7ca4c3d4a30 1-70
+SPEC.md
+  df8d068fdf935b58 3,10-11,51-52,55,57,69-70,78-113,121,130-190,192-195,197-220,238,240-246,259-263,265-283,336,354-356,361-365,381,393-395,404
+packages/protocol/package.json
+  b4aa4fec0e0baf25 9
+packages/agent-config/package.json
+  0888c7ca4c3d4a30 1-19
+API.md
+  df8d068fdf935b58 1-860
+packages/agent/src/index.ts
+  0888c7ca4c3d4a30 1-3
+packages/cli/src/commands/shell.ts
+  b4aa4fec0e0baf25 29-30
+packages/desktop/src/components/chat/SlashCommandMenu.tsx
+  b4aa4fec0e0baf25 33,78
+packages/desktop/src/lib/shiki.ts
+  b4aa4fec0e0baf25 6,40-41
+packages/desktop/src/components/chat/ConfirmDialog.tsx
+  b4aa4fec0e0baf25 29,32
+packages/agent-core/src/tools/browser.ts
+  0888c7ca4c3d4a30 1-75
+packages/desktop/src/components/ui/SearchInput.tsx
+  b4aa4fec0e0baf25 21
+packages/desktop/src/components/chat/ChatInput.tsx
+  b4aa4fec0e0baf25 22,94,104,108
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.1.15",
+  "base_commit_sha": "67cdf048d5623c011a9aa0216807c329ad407dac",
+  "prompts": {
+    "0888c7ca4c3d4a30": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "2ca08acb-e3d8-4aa2-a6ed-bdc28f0f3834",
+        "model": "claude-opus-4-6"
+      },
+      "human_author": "Om Gupta <omgupta0720@gmail.com>",
+      "messages": [],
+      "total_additions": 4118,
+      "total_deletions": 203,
+      "accepted_lines": 4068,
+      "overriden_lines": 49
+    },
+    "b4aa4fec0e0baf25": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "abdf02c9-7e66-46aa-8964-7d9cd2376fa7",
+        "model": "claude-opus-4-6"
+      },
+      "human_author": "Om Gupta <omgupta0720@gmail.com>",
+      "messages": [],
+      "total_additions": 919,
+      "total_deletions": 230,
+      "accepted_lines": 741,
+      "overriden_lines": 89
+    },
+    "df8d068fdf935b58": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "7fcd463f-0c68-454d-887f-600838b81e39",
+        "model": "claude-opus-4-6"
+      },
+      "human_author": "Om Gupta <omgupta0720@gmail.com>",
+      "messages": [],
+      "total_additions": 2194,
+      "total_deletions": 452,
+      "accepted_lines": 2135,
+      "overriden_lines": 41
+    }
+  }
+}
