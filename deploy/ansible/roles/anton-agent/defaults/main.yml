@@ -1,0 +1,28 @@
+# Anton Agent - Default Variables
+# Override these in your playbook, inventory, or via --extra-vars
+
+# Where to install the agent
+anton_install_dir: "/home/{{ anton_user }}/.anton"
+anton_repo_dir: "{{ anton_install_dir }}/agent"
+
+# Git repo
+anton_repo_url: "https://github.com/OmGuptaIND/computer.git"
+anton_branch: "main"
+
+# User to run the agent as (created if doesn't exist)
+anton_user: "anton"
+
+# Node.js version
+node_major_version: "22"
+
+# Agent port
+anton_port: 9876
+
+# AI provider config (set via --extra-vars or environment)
+anthropic_api_key: ""
+
+# Whether to start the agent immediately after deploy
+anton_start_on_deploy: true
+
+# Firewall: open the agent port
+anton_configure_firewall: true

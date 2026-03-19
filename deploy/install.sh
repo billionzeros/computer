@@ -5,7 +5,7 @@
 
 set -euo pipefail
 
-REPO_URL="https://github.com/anthropics/anton.computer"
+REPO_URL="https://github.com/OmGuptaIND/computer.git"
 BRANCH="${ANTON_BRANCH:-main}"
 INSTALL_DIR="${ANTON_DIR:-$HOME/.anton}"
 AGENT_DIR="$INSTALL_DIR/agent"

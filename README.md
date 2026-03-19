@@ -6,6 +6,62 @@
 
 ---
 
+## Current Status (Last verified: 2026-03-19)
+
+### What's working
+
+- **Agent builds and runs** on Ubuntu VM (OrbStack, tested on `arm64`)
+- **WebSocket auth works** — desktop sends token, agent responds `auth_ok`
+- **pi SDK integrated** — uses `@mariozechner/pi-agent-core@0.60.0` (the engine behind OpenClaw) with TypeBox schemas, `beforeToolCall` for dangerous command confirmation
+- **5 tools built** — shell, filesystem, browser, process, network
+- **Skills system** — YAML-based skill loader + cron scheduler for 24/7 autonomous work
+- **Self-signed TLS** — auto-generated on first run
+- **Deploy script** — `deploy/install.sh` handles full VPS setup (Node.js, pnpm, build, systemd)
+
+### Verified test flow
+
+```
+1. OrbStack Ubuntu VM "anton" running at anton.orb.local
+2. Agent installed at ~/.anton/agent/ on VM
+3. Built with: pnpm install && pnpm --filter @anton/protocol build && pnpm --filter @anton/agent build
+4. Started: node packages/agent/dist/index.js
+5. Agent listens on wss://0.0.0.0:9876
+6. WebSocket connection from Mac → VM authenticated successfully
+```
+
+### Last known config (on VM)
+
+```
+Agent ID: anton-anton-40324587
+Token:    ak_3cf9197a3b567a3941ca4edf914e35902c8e3b54a6dd8bf1
+Port:     9876
+Host:     anton.orb.local (OrbStack) or VM IP for real VPS
+Config:   /home/omg/.anton/config.yaml
+Certs:    /home/omg/.anton/certs/{cert,key}.pem
+```
+
+### What's NOT working yet
+
+- **Desktop app** — code exists but not connected to a running agent yet
+- **Terminal pipe** — PTY channel defined in protocol but not wired up in server
+- **File sync** — channel defined, not implemented
+- **pi SDK session persistence** — agent creates session dir but pi Agent doesn't persist across restarts yet (need to wire state save/load)
+- **npm publish** — `@anton/agent` not published, install is from source only
+
+### Dependencies (pinned versions that work)
+
+```
+Node.js:                   v22.22.1 (on VM)
+pnpm:                      10.32.1
+@mariozechner/pi-ai:       0.60.0
+@mariozechner/pi-agent-core: 0.60.0
+@sinclair/typebox:         0.34.x
+ws:                        8.19.0
+node-pty:                  1.1.0 (needs make, g++, python3)
+```
+
+---
+
 ## What is this?
 
 Install an agent on any VPS. Connect from a native desktop app. Give it tasks. It executes them.
@@ -19,44 +75,40 @@ Agent: [installs nginx] → [generates certbot config] → [runs certbot] → [a
 
 The agent has full access to your server — filesystem, shell, network, processes. It breaks tasks into steps, executes each one, verifies the result, and reports back. If something fails, it tries to fix it before asking you.
 
-## Why?
-
-**Claude Projects is amazing. But it can't DO anything.** It chats. anton.computer acts.
-
-| | Claude Projects | anton.computer |
-|---|---|---|
-| Execute commands | No | Yes — full shell access |
-| Manage files | No | Yes — read, write, search |
-| Run 24/7 | No — close the tab, it stops | Yes — scheduled skills run autonomously |
-| Your data stays yours | On Anthropic's servers | On YOUR server |
-| Add custom skills | System prompts only | Drop a YAML, get a new AI worker |
-| Share with team | Can't | Open source, self-host |
-| Cost | $20/mo subscription | Your VPS cost (~$5/mo) + API usage |
-
 ## Quick Start
 
 ### 1. Install the agent on your server
 
 ```bash
-# On any Ubuntu/Debian VPS (Hetzner, DigitalOcean, AWS, OrbStack, anything)
-curl -fsSL https://get.anton.computer | bash
-```
+# On any Ubuntu/Debian VPS
+ssh root@your-vps
 
-This installs Node 22, the agent, generates a config and auth token, and optionally sets up a systemd service.
+# Install Node.js 22
+curl -fsSL https://deb.nodesource.com/setup_22.x | sudo -E bash -
+sudo apt-get install -y nodejs
+sudo npm install -g pnpm
+
+# Clone and build
+git clone https://github.com/anthropics/anton.computer ~/.anton/agent
+cd ~/.anton/agent
+pnpm install --no-frozen-lockfile
+pnpm --filter @anton/protocol build
+pnpm --filter @anton/agent build
+```
 
 ### 2. Set your AI API key
 
 ```bash
 export ANTHROPIC_API_KEY=sk-ant-...   # Claude (default)
 # or
-export OPENAI_API_KEY=sk-...          # GPT
-# or configure Ollama for local models
+export OPENAI_API_KEY=sk-...          # GPT-4o
+# or configure Ollama for local models in ~/.anton/config.yaml
 ```
 
 ### 3. Start the agent
 
 ```bash
-anton-agent
+node ~/.anton/agent/packages/agent/dist/index.js
 ```
 
 ```
@@ -65,72 +117,62 @@ anton-agent
 │  Your personal cloud computer.      │
 └─────────────────────────────────────┘
 
-  Loaded 3 skill(s):
-    - AI Content Writer: Writes blog posts, social media content, and newsletters
-    - Server Monitor: Monitors server health and alerts on issues
-    - AI Deployer: Deploys code from git repos with zero-downtime
+  Config created: ~/.anton/config.yaml
+  Token: ak_7f3a2b...
 
   anton.computer agent running on wss://0.0.0.0:9876
   Agent ID: anton-myserver-a1b2c3d4
   Token: ak_7f3a2b...
-
-  Scheduler started with 1 job(s)
-    Scheduled: Server Monitor (every 6h, next: 15:00:00)
 ```
 
 ### 4. Connect from the desktop app
 
-Open the anton.computer desktop app → enter your server IP + token → connected.
+Open the anton.computer desktop app, enter your server IP + token, connected.
 
-You get:
-- **Agent tab** — give tasks, watch them execute in real-time
-- **Terminal tab** — direct shell access when you need it
+### Local dev with OrbStack
+
+```bash
+# Create Ubuntu VM
+orb create ubuntu anton
+
+# Install inside VM
+orb run -m anton bash -c "
+  curl -fsSL https://deb.nodesource.com/setup_22.x | sudo -E bash -
+  sudo apt-get install -y nodejs make g++ python3
+  sudo npm install -g pnpm
+"
+
+# Copy source to VM (OrbStack mounts Mac FS at /mnt/mac)
+orb run -m anton bash -c "
+  mkdir -p ~/.anton/agent
+  cp -r /mnt/mac/path/to/anton.computer/{package.json,pnpm-workspace.yaml,packages} ~/.anton/agent/
+  cd ~/.anton/agent
+  pnpm install --no-frozen-lockfile
+  pnpm --filter @anton/protocol build
+  pnpm --filter @anton/agent build
+  node packages/agent/dist/index.js
+"
+
+# Connect from Mac at: wss://anton.orb.local:9876
+```
 
 ## Skills — AI Workers in a YAML File
 
 Skills turn the agent into specialized workers. Drop a file in `~/.anton/skills/`:
 
 ```yaml
-# ~/.anton/skills/content-writer.yaml
-name: AI Content Writer
-description: Writes blog posts and social media content
-schedule: "0 9 * * 1"   # Every Monday at 9am
+# ~/.anton/skills/server-monitor.yaml
+name: Server Monitor
+description: Monitors server health and alerts on issues
+schedule: "0 */6 * * *"  # Every 6 hours
 
 prompt: |
-  You are a content writer. When activated:
-  1. Check ~/content/briefs/ for content briefs
-  2. Research the topic using the browser
-  3. Write in markdown, save to ~/content/published/
-  4. Report what you wrote
+  Check disk, memory, CPU, failed services, error logs.
+  Report any issues found. If healthy, give brief "all clear".
 
 tools:
   - shell
   - filesystem
-  - browser
-```
-
-That's it. The agent now writes content every Monday morning, autonomously, on your server.
-
-**More examples:**
-
-```yaml
-# AI CMO — monitors social, drafts campaigns
-name: AI CMO
-schedule: "0 8 * * *"   # Daily at 8am
-prompt: |
-  Check analytics, draft social posts, update campaign tracker...
-
-# AI DevOps — watches servers, handles incidents
-name: Server Monitor
-schedule: "0 */6 * * *"  # Every 6 hours
-prompt: |
-  Check disk, memory, CPU, failed services, error logs...
-
-# AI Researcher — daily industry scan
-name: AI Researcher
-schedule: "0 7 * * 1-5"  # Weekdays at 7am
-prompt: |
-  Search for industry news, summarize findings, save report...
 ```
 
 ## Architecture
@@ -148,40 +190,27 @@ YOUR DESKTOP                              YOUR VPS
                                           └──────────────────────┘
 ```
 
-**Agent brain:** [pi SDK](https://github.com/mariozechner/pi) — the engine inside OpenClaw (250k+ stars). Gives us the agentic tool-calling loop, context management, multi-model support, session persistence. We don't reinvent the wheel.
+**Agent brain:** [pi SDK](https://github.com/badlogic/pi-mono) (`@mariozechner/pi-agent-core`) — the engine inside OpenClaw. Agentic tool-calling loop, context management, multi-model support. We don't reinvent the wheel.
 
-**Desktop app:** Tauri v2 (Rust + React). Native, fast, cross-platform.
+**Protocol:** Single WebSocket, 5 multiplexed channels:
 
-**Protocol:** Single WebSocket, 4 multiplexed channels (control, terminal, AI, events). Binary framing.
+| Channel | ID | Purpose |
+|---------|-----|---------|
+| CONTROL | 0x00 | Auth, ping/pong, lifecycle |
+| TERMINAL | 0x01 | PTY data (shell access) |
+| AI | 0x02 | Agent chat, tool calls, confirmations |
+| FILESYNC | 0x03 | Bidirectional file sync (v0.2) |
+| EVENTS | 0x04 | Status updates, notifications |
 
 ## Built-in Tools
 
 | Tool | What it does |
 |------|-------------|
-| `shell` | Execute any command. Timeout, streaming output. Dangerous patterns need desktop approval. |
-| `filesystem` | Read, write, search, list, tree files. |
-| `browser` | Fetch web pages, extract content. (Playwright for full automation in v0.2) |
-| `process` | List, inspect, kill processes. |
-| `network` | Scan ports, HTTP requests, DNS lookup, ping. |
-
-## Local Development (OrbStack)
-
-Test everything locally without a real VPS:
-
-```bash
-# 1. Create Ubuntu VM
-orb create ubuntu anton-test
-
-# 2. Install agent in VM
-orb shell anton-test
-curl -fsSL https://deb.nodesource.com/setup_22.x | sudo -E bash -
-sudo apt-get install -y nodejs
-# ... clone, build, run
-
-# 3. Connect desktop app
-cd packages/desktop && pnpm dev
-# Enter: anton-test.orb.local:9876 + token
-```
+| `shell` | Execute any command. Timeout, 10MB buffer. Dangerous patterns need desktop approval. |
+| `filesystem` | Read, write, search, list, tree files. 100KB read limit with truncation. |
+| `browser` | Fetch web pages via curl, extract content. Playwright for full automation in v0.2. |
+| `process` | List (`ps aux`), inspect, kill processes. |
+| `network` | Scan ports (`ss`), HTTP requests (`curl`), DNS lookup, ping. |
 
 ## Project Structure
 
@@ -190,73 +219,70 @@ anton.computer/
 ├── packages/
 │   ├── agent/          # Node.js daemon (runs on VPS)
 │   │   ├── src/
-│   │   │   ├── agent.ts       # pi SDK integration
-│   │   │   ├── server.ts      # WebSocket server
+│   │   │   ├── agent.ts       # pi SDK agent with custom tools
+│   │   │   ├── server.ts      # WebSocket server + auth
+│   │   │   ├── config.ts      # YAML config loader
 │   │   │   ├── skills.ts      # YAML skill loader
-│   │   │   ├── scheduler.ts   # 24/7 cron runner
-│   │   │   └── tools/         # shell, fs, browser, process, network
-│   ├── desktop/        # Tauri v2 native app
+│   │   │   ├── scheduler.ts   # Cron-based skill runner
+│   │   │   └── tools/         # shell, filesystem, browser, process, network
+│   │   └── package.json
+│   ├── desktop/        # Tauri v2 native app (WIP)
 │   │   ├── src/
 │   │   │   ├── components/    # Connect, AgentChat, Terminal
 │   │   │   └── lib/           # WebSocket client, state
 │   │   └── src-tauri/         # Rust backend
-│   └── protocol/       # Shared types & codec
-├── deploy/             # Dockerfile, install script, docker-compose
-├── SHIPPING.md         # Task tracker
+│   └── protocol/       # Shared types & binary codec
+│       └── src/
+│           ├── codec.ts       # encodeFrame / decodeFrame
+│           ├── messages.ts    # All message types per channel
+│           └── pipes.ts       # Channel ID constants
+├── deploy/
+│   ├── install.sh      # One-command VPS setup
+│   └── Dockerfile      # Container deployment
+├── SHIPPING.md         # Milestone tracker
 ├── ARCHITECTURE.md     # System design
-└── GOALS.md            # Product vision & roadmap
+└── GOALS.md            # Product vision
 ```
 
 ## Configuration
 
-Agent config lives at `~/.anton/config.yaml`:
+Agent config at `~/.anton/config.yaml` (auto-generated on first run):
 
 ```yaml
-agent_id: anton-myserver-a1b2c3d4
-token: ak_7f3a2b...
+agentId: anton-myserver-a1b2c3d4
+token: ak_... # random, used by desktop app to authenticate
 port: 9876
 
 ai:
-  provider: claude       # claude | openai | ollama
+  provider: anthropic    # anthropic | openai | ollama | google | bedrock
   model: claude-sonnet-4-6
-  # api_key set via env var
+  apiKey: ""             # or set ANTHROPIC_API_KEY env var
 
 security:
-  confirm_patterns:      # Commands that need desktop approval
+  confirmPatterns:       # commands that need desktop approval
     - rm -rf
     - sudo
     - shutdown
     - reboot
-  forbidden_paths:       # AI can't read these
+    - mkfs
+    - "dd if="
+  forbiddenPaths:        # AI can't read these
     - /etc/shadow
     - ~/.ssh/id_*
+    - ~/.anton/config.yaml
 ```
 
 ## Security
 
-- **Token auth** — agent generates a random token on install. Desktop must present it to connect.
-- **TLS** — self-signed cert generated on first run. Desktop pins the fingerprint.
-- **Dangerous command approval** — patterns like `rm -rf`, `sudo` trigger a confirmation dialog in the desktop app.
-- **Audit log** — every AI action logged to `~/.anton/audit.log`.
-- **No root by default** — agent runs as your user.
+- **Token auth** — random token generated on install, required for WebSocket connection
+- **TLS** — self-signed cert auto-generated, desktop pins fingerprint
+- **Dangerous command approval** — configurable patterns trigger desktop confirmation dialog
+- **Forbidden paths** — AI cannot read sensitive files (SSH keys, config with token)
+- **No root by default** — agent runs as your user
 
 ## Roadmap
 
-See [GOALS.md](./GOALS.md) for the full product vision and milestone roadmap.
-
-**Now:** v0.1 — agent + desktop app + skills, works end-to-end on any VPS.
-**Next:** v0.2 — 10+ pre-built skills, file browser, port forwarding, Ollama.
-**Then:** v1.0 — polished open source release, plugin SDK, skill marketplace.
-**Vision:** Every professional has an AI team running on their own server.
-
-## Contributing
-
-This is early. Very early. But if you want to help:
-
-1. Try it on your VPS and report what breaks
-2. Write a skill YAML for your use case
-3. Build a custom tool
-4. Open issues for what you'd want this to do
+See [GOALS.md](./GOALS.md) and [SHIPPING.md](./SHIPPING.md).
 
 ## License
 
