@@ -1,0 +1,60 @@
+deploy/ansible/Makefile
+  7c6eeaa08772ea3f 1-115
+deploy/ansible/roles/anton-agent/templates/anton-agent.service.j2
+  7c6eeaa08772ea3f 1-28
+deploy/ansible/inventory.ini
+  7c6eeaa08772ea3f 1-19
+README.md
+  ca040c1e8069f890 9-64,84,86-97,104-105,111,120-121,130,132,134-157,164-167,170-171,193,195,197-203,209-213,222-224,226-229,234-242,244,249,252-253,257,259,262,267-269,272,277-281,285
+deploy/ansible/roles/anton-agent/handlers/main.yml
+  7c6eeaa08772ea3f 1-10
+deploy/ansible/roles/anton-agent/defaults/main.yml
+  7c6eeaa08772ea3f 1-28
+deploy/ansible/playbook.yml
+  7c6eeaa08772ea3f 1-22
+deploy/ansible/roles/anton-agent/tasks/main.yml
+  7c6eeaa08772ea3f 1-220
+deploy/ansible/README.md
+  7c6eeaa08772ea3f 1-319
+deploy/ansible/ansible.cfg
+  7c6eeaa08772ea3f 1-11
+deploy/ansible/deploy.sh
+  7c6eeaa08772ea3f 1-92
+deploy/install.sh
+  7c6eeaa08772ea3f 8
+deploy/ansible/roles/anton-agent/templates/anton-agent.env.j2
+  7c6eeaa08772ea3f 1-8
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.1.15",
+  "base_commit_sha": "a1f803c606eed18a5f044824c67dcdbd1a02f4c7",
+  "prompts": {
+    "7c6eeaa08772ea3f": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "5721b2d8-4964-4339-8fa2-e51fe969b72f",
+        "model": "claude-opus-4-6"
+      },
+      "human_author": "Om Gupta <omgupta0720@gmail.com>",
+      "messages": [],
+      "total_additions": 985,
+      "total_deletions": 113,
+      "accepted_lines": 873,
+      "overriden_lines": 0
+    },
+    "ca040c1e8069f890": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "a0307273-4b1b-4d0c-9f7d-ddc81dc28bee",
+        "model": "claude-opus-4-6"
+      },
+      "human_author": "Om Gupta <omgupta0720@gmail.com>",
+      "messages": [],
+      "total_additions": 155,
+      "total_deletions": 129,
+      "accepted_lines": 154,
+      "overriden_lines": 0
+    }
+  }
+}
