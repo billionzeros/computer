@@ -212,6 +212,18 @@ export interface ProviderSetDefaultResponse {
   model: string
 }
 
+export interface ProviderSetModelsMessage {
+  type: 'provider_set_models'
+  provider: string
+  models: string[]
+}
+
+export interface ProviderSetModelsResponse {
+  type: 'provider_set_models_response'
+  success: boolean
+  provider: string
+}
+
 // Chat messages
 export interface AiUserMessage {
   type: 'message'
@@ -345,6 +357,8 @@ export type AiMessage =
   | ProviderSetKeyResponse
   | ProviderSetDefaultMessage
   | ProviderSetDefaultResponse
+  | ProviderSetModelsMessage
+  | ProviderSetModelsResponse
   // Chat
   | AiUserMessage
   | AiThinkingMessage

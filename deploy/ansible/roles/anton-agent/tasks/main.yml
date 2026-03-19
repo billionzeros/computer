@@ -104,16 +104,21 @@
     group: "{{ anton_user }}"
     mode: "0755"
 
+- name: Check if repo dir exists
+  stat:
+    path: "{{ anton_repo_dir }}/package.json"
+  register: repo_exists
+
 - name: Check if repo dir is a git repo
   stat:
     path: "{{ anton_repo_dir }}/.git"
   register: repo_git_dir
+  when: repo_exists.stat.exists
 
-- name: Remove non-git repo dir (left by rsync)
-  file:
-    path: "{{ anton_repo_dir }}"
-    state: absent
-  when: not repo_git_dir.stat.exists
+- name: Mark repo as git safe directory
+  command: git config --global --add safe.directory {{ anton_repo_dir }}
+  changed_when: false
+  when: repo_git_dir.stat.exists | default(false)
 
 - name: Clone or update anton.computer repo
   git:
@@ -123,6 +128,7 @@
     depth: 1
     force: true
   notify: restart anton-agent
+  when: not repo_exists.stat.exists
 
 - name: Set repo ownership
   file:
@@ -134,16 +140,15 @@
 # ── Build ────────────────────────────────────────────────────────
 
 - name: Install dependencies and build all packages
-  shell: |
-    cd {{ anton_repo_dir }} && \
-    pnpm install --no-frozen-lockfile && \
-    pnpm --filter @anton/protocol build && \
-    pnpm --filter @anton/agent-config build && \
-    pnpm --filter @anton/agent-core build && \
-    pnpm --filter @anton/agent-server build && \
-    pnpm --filter @anton/agent build
-  become_user: "{{ anton_user }}"
-  become_method: su
+  shell: >
+    sudo -u {{ anton_user }} bash -c '
+    cd {{ anton_repo_dir }} &&
+    pnpm install --no-frozen-lockfile &&
+    pnpm --filter @anton/protocol build &&
+    pnpm --filter @anton/agent-config build &&
+    pnpm --filter @anton/agent-core build &&
+    pnpm --filter @anton/agent-server build &&
+    pnpm --filter @anton/agent build'
   changed_when: true
   notify: restart anton-agent
 

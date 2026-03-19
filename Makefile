@@ -74,6 +74,9 @@ sync: _check-ansible
 				cd $$REMOTE_DIR && \
 				pnpm install --no-frozen-lockfile 2>&1 | tail -3 && \
 				pnpm --filter @anton/protocol build && \
+				pnpm --filter @anton/agent-config build && \
+				pnpm --filter @anton/agent-core build && \
+				pnpm --filter @anton/agent-server build && \
 				pnpm --filter @anton/agent build && \
 				echo $$GIT_HASH build done'"; \
 		echo "  → Writing version.json..."; \
