@@ -120,6 +120,12 @@
   changed_when: false
   when: repo_git_dir.stat.exists | default(false)
 
+- name: Remove non-git dir (left by rsync/sync)
+  file:
+    path: "{{ anton_repo_dir }}"
+    state: absent
+  when: repo_exists.stat.exists and not (repo_git_dir.stat.exists | default(false))
+
 - name: Clone or update anton.computer repo
   git:
     repo: "{{ anton_repo_url }}"
@@ -128,7 +134,6 @@
     depth: 1
     force: true
   notify: restart anton-agent
-  when: not repo_exists.stat.exists
 
 - name: Set repo ownership
   file:
