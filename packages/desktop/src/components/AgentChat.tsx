@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { connection } from '../lib/connection.js'
 import type { Skill } from '../lib/skills.js'
 import { useStore } from '../lib/store.js'
+import { AskUserDialog } from './chat/AskUserDialog.js'
 import { ChatInput } from './chat/ChatInput.js'
 import { ConfirmDialog } from './chat/ConfirmDialog.js'
 import { EmptyState } from './chat/EmptyState.js'
@@ -14,23 +15,29 @@ export function AgentChat() {
   const newConversation = useStore((s) => s.newConversation)
   const pendingConfirm = useStore((s) => s.pendingConfirm)
   const setPendingConfirm = useStore((s) => s.setPendingConfirm)
+  const pendingAskUser = useStore((s) => s.pendingAskUser)
+  const setPendingAskUser = useStore((s) => s.setPendingAskUser)
   const currentProvider = useStore((s) => s.currentProvider)
-  const currentModel = useStore((s) => s.currentModel)
   const [selectedSkill, setSelectedSkill] = useState<Skill | null>(null)
 
-  // Auto-create a conversation + session on mount if none exists
+  // On mount: resume existing conversation's session, or create a new one
   useEffect(() => {
     if (!activeConv) {
+      // No conversation — create a fresh one
+      const store = useStore.getState()
       const sessionId = `sess_${Date.now().toString(36)}`
       newConversation(undefined, sessionId)
-      const store = useStore.getState()
       store.registerPendingSession(sessionId)
       connection.sendSessionCreate(sessionId, {
-        provider: currentProvider,
-        model: currentModel,
+        provider: store.currentProvider,
+        model: store.currentModel,
       })
+    } else if (activeConv.sessionId && !useStore.getState().currentSessionId) {
+      // Restored conversation — resume its server session
+      connection.sendSessionResume(activeConv.sessionId)
     }
-  }, [activeConv, newConversation, currentProvider, currentModel])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeConv, newConversation])
 
   const handleSend = useCallback(
     async (text: string) => {
@@ -101,6 +108,25 @@ export function AgentChat() {
     [pendingConfirm, addMessage, setPendingConfirm],
   )
 
+  const handleAskUserSubmit = useCallback(
+    (answers: Record<string, string>) => {
+      if (!pendingAskUser) return
+      connection.sendAskUserResponse(pendingAskUser.id, answers)
+      // Show a summary of answers in the chat
+      const summary = Object.entries(answers)
+        .map(([q, a]) => `**${q}** → ${a}`)
+        .join('\n')
+      addMessage({
+        id: `askuser_${Date.now()}`,
+        role: 'system',
+        content: summary,
+        timestamp: Date.now(),
+      })
+      setPendingAskUser(null)
+    },
+    [pendingAskUser, addMessage, setPendingAskUser],
+  )
+
   const messages = activeConv?.messages || []
 
   return (
@@ -109,7 +135,6 @@ export function AgentChat() {
         <EmptyState
           onSend={handleSend}
           onSkillSelect={setSelectedSkill}
-          onSelectExample={(text) => handleSend(text)}
         />
       ) : (
         <MessageList messages={messages} />
@@ -122,6 +147,15 @@ export function AgentChat() {
             reason={pendingConfirm.reason}
             onApprove={() => handleConfirm(true)}
             onDeny={() => handleConfirm(false)}
+          />
+        </div>
+      )}
+
+      {pendingAskUser && (
+        <div className="chat-shell__confirm">
+          <AskUserDialog
+            questions={pendingAskUser.questions}
+            onSubmit={handleAskUserSubmit}
           />
         </div>
       )}

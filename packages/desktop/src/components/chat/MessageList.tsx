@@ -1,7 +1,9 @@
 import { AnimatePresence } from 'framer-motion'
 import { ArrowDown } from 'lucide-react'
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useAgentStatus, type ChatMessage } from '../../lib/store.js'
+import { ActionsGroup } from './ActionsGroup.js'
+import { groupMessages } from './groupMessages.js'
 import { MessageBubble } from './MessageBubble.js'
 import { ThinkingIndicator } from './ThinkingIndicator.js'
 
@@ -14,6 +16,7 @@ export function MessageList({ messages }: Props) {
   const bottomRef = useRef<HTMLDivElement>(null)
   const [showScrollBtn, setShowScrollBtn] = useState(false)
   const agentStatus = useAgentStatus()
+  const grouped = useMemo(() => groupMessages(messages), [messages])
 
   const scrollToBottom = useCallback(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
@@ -50,9 +53,19 @@ export function MessageList({ messages }: Props) {
     <div ref={containerRef} className="message-list">
       <div className="message-list__inner">
         <AnimatePresence mode="popLayout">
-          {messages.map((msg) => (
-            <MessageBubble key={msg.id} message={msg} />
-          ))}
+          {grouped.map((item, idx) =>
+            item.type === 'message' ? (
+              <MessageBubble key={item.message.id} message={item.message} />
+            ) : (
+              <ActionsGroup
+                key={item.id}
+                actions={item.actions}
+                defaultExpanded={
+                  idx === grouped.length - 1 && agentStatus === 'working'
+                }
+              />
+            ),
+          )}
         </AnimatePresence>
         {agentStatus === 'working' && <ThinkingIndicator />}
         <div ref={bottomRef} />

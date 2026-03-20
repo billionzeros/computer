@@ -121,6 +121,14 @@ export class Connection {
     this.send(Channel.AI, { type: 'confirm_response', id, approved })
   }
 
+  sendPlanResponse(id: string, approved: boolean, feedback?: string) {
+    this.send(Channel.AI, { type: 'plan_confirm_response', id, approved, feedback })
+  }
+
+  sendAskUserResponse(id: string, answers: Record<string, string>) {
+    this.send(Channel.AI, { type: 'ask_user_response', id, answers })
+  }
+
   // ── Session management ──────────────────────────────────────────
 
   sendSessionCreate(id: string, opts?: { provider?: string; model?: string; apiKey?: string }) {

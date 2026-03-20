@@ -89,9 +89,9 @@ function ArtifactContent({ artifact, viewMode }: { artifact: Artifact; viewMode:
   }
 }
 
-// ── Main panel ─────────────────────────────────────────────────────
+// ── Artifact panel content (used inside SidePanel) ────────────────
 
-export function ArtifactPanel() {
+export function ArtifactPanelContent() {
   const artifacts = useStore((s) => s.artifacts)
   const activeArtifactId = useStore((s) => s.activeArtifactId)
   const setActiveArtifact = useStore((s) => s.setActiveArtifact)
@@ -115,14 +115,8 @@ export function ArtifactPanel() {
   if (!activeArtifact) return null
 
   return (
-    <motion.div
-      className="artifact-panel"
-      initial={{ width: 0, opacity: 0 }}
-      animate={{ width: 480, opacity: 1 }}
-      exit={{ width: 0, opacity: 0 }}
-      transition={{ duration: 0.2, ease: 'easeOut' }}
-    >
-      {/* Header with tabs */}
+    <>
+      {/* Header with artifact tabs and close button */}
       <div className="artifact-panel__header">
         <div className="artifact-panel__tabs">
           {artifacts.map((artifact) => (
@@ -145,9 +139,9 @@ export function ArtifactPanel() {
           type="button"
           className="artifact-panel__close"
           onClick={() => setArtifactPanelOpen(false)}
-          aria-label="Close panel"
+          aria-label="Close artifacts"
         >
-          <X size={14} />
+          <X size={16} />
         </button>
       </div>
 
@@ -200,6 +194,6 @@ export function ArtifactPanel() {
           </motion.div>
         </AnimatePresence>
       </div>
-    </motion.div>
+    </>
   )
 }

@@ -1,7 +1,7 @@
 import { AnimatePresence, motion } from 'framer-motion'
-import { Loader2 } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { useStore } from '../../lib/store.js'
+import { AntonLogo } from '../AntonLogo.js'
 
 const STATUS_PHRASES = [
   'Thinking',
@@ -43,7 +43,7 @@ export function ThinkingIndicator() {
         className="thinking-indicator"
       >
         <div className="thinking-indicator__header">
-          <Loader2 size={16} className="thinking-indicator__spinner" />
+          <AntonLogo size={20} thinking className="thinking-indicator__anton" />
           <span className="thinking-indicator__status">
             {statusText}
             <span className="thinking-indicator__dots">

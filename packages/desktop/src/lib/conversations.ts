@@ -66,34 +66,34 @@ function generateTitle(text: string): string {
   // Common action verbs that make good title starts
   const actionVerbs = /^(build|create|make|set up|setup|deploy|fix|debug|write|add|remove|delete|update|install|configure|analyze|track|design|implement|refactor|migrate|optimize|test|check|find|search|list|show|explain|generate|convert|merge|split|run|start|stop|monitor|connect|schedule|automate|scrape|fetch|download|upload|compare|review|plan|organize|sort|filter|clean|format|validate|import|export|parse|render|compile|package)/i
 
+  const MAX_TITLE = 40
+
   if (actionVerbs.test(cleaned)) {
-    // Already starts with action verb — great title
-    return capitalize(truncateSmart(cleaned, 45))
+    return capitalize(truncateSmart(cleaned, MAX_TITLE))
   }
 
   // If it's a question, extract the topic
   const questionMatch = cleaned.match(/^(?:what|how|why|where|when|which|who|is|are|can|do|does|will|should|would)\s+(.+)/i)
   if (questionMatch) {
     const topic = questionMatch[1].replace(/^(?:the|a|an|i|we|you)\s+/i, '').trim()
-    return capitalize(truncateSmart(topic, 45))
+    return capitalize(truncateSmart(topic, MAX_TITLE))
   }
 
-  // For short messages (greetings, simple phrases), use as-is
+  // For short messages, use as-is
   if (cleaned.length <= 30) {
     return capitalize(cleaned)
   }
 
   // For longer messages, try to extract the first meaningful clause
-  // Split on common clause separators
   const clauses = cleaned.split(/[,;:\-–—]/)
   const firstClause = clauses[0].trim()
 
-  if (firstClause.length >= 10 && firstClause.length <= 50) {
+  if (firstClause.length >= 10 && firstClause.length <= MAX_TITLE) {
     return capitalize(firstClause)
   }
 
   // Fallback: smart truncate at word boundary
-  return capitalize(truncateSmart(cleaned, 40))
+  return capitalize(truncateSmart(cleaned, MAX_TITLE))
 }
 
 function truncateSmart(text: string, maxLen: number): string {

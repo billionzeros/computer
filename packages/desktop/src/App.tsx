@@ -1,8 +1,8 @@
 import { AnimatePresence } from 'framer-motion'
-import { PanelRight, Settings, Share2, Ticket } from 'lucide-react'
+import { PanelLeft, Settings, Share2, Ticket } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { AgentChat } from './components/AgentChat.js'
-import { ArtifactPanel } from './components/artifacts/ArtifactPanel.js'
+import { SidePanel } from './components/SidePanel.js'
 import { Connect } from './components/Connect.js'
 import { Sidebar } from './components/Sidebar.js'
 import { Terminal } from './components/Terminal.js'
@@ -19,8 +19,10 @@ export function App() {
   const activeConv = useStore((s) => s.getActiveConversation())
   const hasMessages = (activeConv?.messages?.length || 0) > 0
   const artifactPanelOpen = useStore((s) => s.artifactPanelOpen)
-  const artifacts = useStore((s) => s.artifacts)
-  const setArtifactPanelOpen = useStore((s) => s.setArtifactPanelOpen)
+  const pendingPlan = useStore((s) => s.pendingPlan)
+  const sidebarCollapsed = useStore((s) => s.sidebarCollapsed)
+  const toggleSidebar = useStore((s) => s.toggleSidebar)
+  const sidePanelOpen = artifactPanelOpen || pendingPlan !== null
 
   // Dynamic page title
   useEffect(() => {
@@ -103,6 +105,16 @@ export function App() {
         {hasMessages && activeView === 'agent' && (
           <header className="workspace-topbar" data-tauri-drag-region>
             <div className="workspace-topbar__title-area">
+              {sidebarCollapsed && (
+                <button
+                  type="button"
+                  className="workspace-topbar__sidebarToggle"
+                  onClick={toggleSidebar}
+                  aria-label="Open sidebar"
+                >
+                  <PanelLeft size={18} />
+                </button>
+              )}
               <h2 className="workspace-topbar__title">{activeConv?.title || 'New conversation'}</h2>
             </div>
 
@@ -117,16 +129,6 @@ export function App() {
                   <span>{formatTokens(sessionUsage.totalTokens)}</span>
                 </div>
               )}
-              {artifacts.length > 0 && (
-                <button
-                  type="button"
-                  className={`workspace-topbar__panelToggle ${artifactPanelOpen ? 'workspace-topbar__panelToggle--active' : ''}`}
-                  onClick={() => setArtifactPanelOpen(!artifactPanelOpen)}
-                  aria-label="Toggle artifact panel"
-                >
-                  <PanelRight size={16} />
-                </button>
-              )}
               <button type="button" className="topbar-share-btn">
                 <Share2 className="topbar-share-btn__icon" />
                 <span>Share</span>
@@ -138,7 +140,18 @@ export function App() {
         {/* Empty state top bar — minimal with just connection status + settings */}
         {(!hasMessages || activeView === 'terminal') && (
           <header className="workspace-topbar workspace-topbar--minimal" data-tauri-drag-region>
-            <div className="workspace-topbar__spacer" />
+            <div className="workspace-topbar__spacer">
+              {sidebarCollapsed && (
+                <button
+                  type="button"
+                  className="workspace-topbar__sidebarToggle"
+                  onClick={toggleSidebar}
+                  aria-label="Open sidebar"
+                >
+                  <PanelLeft size={18} />
+                </button>
+              )}
+            </div>
             <div className="workspace-topbar__actions">
               <div className="workspace-topbar__connection">
                 <span className="workspace-topbar__connectionDot" />
@@ -161,7 +174,7 @@ export function App() {
           {activeView === 'agent' && <AgentChat />}
           {activeView === 'terminal' && <Terminal />}
           <AnimatePresence>
-            {activeView === 'agent' && artifactPanelOpen && <ArtifactPanel />}
+            {activeView === 'agent' && sidePanelOpen && <SidePanel />}
           </AnimatePresence>
         </div>
       </div>

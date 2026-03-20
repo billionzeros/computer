@@ -20,7 +20,7 @@ import type {
 } from '@mariozechner/pi-agent-core'
 import { completeSimple, getModel } from '@mariozechner/pi-ai'
 import type { Api, Model, TextContent } from '@mariozechner/pi-ai'
-import { SYSTEM_PROMPT, buildTools } from './agent.js'
+import { type AskUserHandler, SYSTEM_PROMPT, buildTools } from './agent.js'
 import {
   type CompactionConfig,
   type CompactionState,
@@ -30,16 +30,20 @@ import {
 } from './compaction.js'
 
 export type ConfirmHandler = (command: string, reason: string) => Promise<boolean>
+export type PlanConfirmHandler = (title: string, content: string) => Promise<{ approved: boolean; feedback?: string }>
+
+export type ArtifactRenderType = 'code' | 'markdown' | 'html' | 'svg' | 'mermaid'
 
 export type SessionEvent =
   | { type: 'thinking'; text: string }
   | { type: 'text'; content: string }
   | { type: 'tool_call'; id: string; name: string; input: Record<string, unknown> }
   | { type: 'tool_result'; id: string; output: string; isError?: boolean }
+  | { type: 'artifact'; id: string; toolCallId: string; artifactType: 'file' | 'output' | 'artifact'; renderType: ArtifactRenderType; title?: string; filename?: string; filepath?: string; language: string; content: string }
   | { type: 'confirm'; id: string; command: string; reason: string }
   | { type: 'compaction'; compactedMessages: number; totalCompactions: number }
   | { type: 'title_update'; title: string }
-  | { type: 'done'; usage?: TokenUsage; cumulativeUsage?: TokenUsage }
+  | { type: 'done'; usage?: TokenUsage; cumulativeUsage?: TokenUsage; provider?: string; model?: string }
   | { type: 'error'; message: string }
 
 export interface SessionInfo {
@@ -64,10 +68,14 @@ export class Session {
   private piAgent: PiAgent
   private config: AgentConfig
   private confirmHandler?: ConfirmHandler
+  private planConfirmHandler?: PlanConfirmHandler
+  private askUserHandler?: AskUserHandler
   private title = ''
   private lastActiveAt: number
   private clientApiKey?: string // client-provided, never persisted
   private lastEmittedTextLength = 0 // track delta for streaming
+  // Pending tool calls for artifact detection
+  private pendingToolCalls = new Map<string, { name: string; input: Record<string, unknown> }>()
 
   // Token usage tracking
   private lastTurnUsage: TokenUsage | undefined
@@ -217,6 +225,23 @@ export class Session {
             }
           }
         }
+        if (ctx.toolCall.name === 'plan') {
+          const args = ctx.args as { title: string; content: string }
+          if (this.planConfirmHandler) {
+            const result = await this.planConfirmHandler(args.title, args.content)
+            if (!result.approved) {
+              return {
+                block: true,
+                reason: `Plan rejected by user.${result.feedback ? ` Feedback: ${result.feedback}` : ''} Please revise the plan based on the feedback and resubmit.`,
+              }
+            }
+          } else {
+            return {
+              block: true,
+              reason: 'Plan requires user approval but no handler available.',
+            }
+          }
+        }
         return undefined
       },
     })
@@ -224,6 +249,14 @@ export class Session {
 
   setConfirmHandler(handler: ConfirmHandler) {
     this.confirmHandler = handler
+  }
+
+  setPlanConfirmHandler(handler: PlanConfirmHandler) {
+    this.planConfirmHandler = handler
+  }
+
+  setAskUserHandler(handler: AskUserHandler) {
+    this.askUserHandler = handler
   }
 
   /**
@@ -263,12 +296,12 @@ export class Session {
     const unsub = this.piAgent.subscribe((event: PiAgentEvent) => {
       console.log(`[session ${this.id}] pi event: ${event.type}`)
       const translated = this.translateEvent(event)
-      if (translated) {
+      for (const ev of translated) {
         eventCount++
-        if (translated.type === 'text') textEventCount++
-        events.push(translated)
-        resolveNext?.()
+        if (ev.type === 'text') textEventCount++
+        events.push(ev)
       }
+      if (translated.length > 0) resolveNext?.()
     })
 
     try {
@@ -320,7 +353,13 @@ export class Session {
     // Persist after each turn
     this.persist()
 
-    yield { type: 'done', usage: this.lastTurnUsage, cumulativeUsage: this.getCumulativeUsage() }
+    yield {
+      type: 'done',
+      usage: this.lastTurnUsage,
+      cumulativeUsage: this.getCumulativeUsage(),
+      provider: (this.resolvedModel as unknown as { provider: string }).provider,
+      model: (this.resolvedModel as unknown as { id: string }).id,
+    }
   }
 
   /**
@@ -373,8 +412,7 @@ export class Session {
   switchModel(provider: string, model: string): void {
     const newModel = (getModel as (p: string, m: string) => Model<Api>)(provider, model)
     this.piAgent.setModel(newModel)
-    // Note: we don't update this.provider/this.model since they're readonly
-    // The persisted session will track the latest model used
+    this.resolvedModel = newModel
     this.persist()
   }
 
@@ -493,7 +531,7 @@ export class Session {
     saveSession(persisted)
   }
 
-  private translateEvent(piEvent: PiAgentEvent): SessionEvent | null {
+  private translateEvent(piEvent: PiAgentEvent): SessionEvent[] {
     switch (piEvent.type) {
       case 'message_update': {
         const msg = piEvent.message
@@ -501,40 +539,53 @@ export class Session {
           const textParts = msg.content.filter((c): c is TextContent => c.type === 'text')
           if (textParts.length > 0) {
             const fullText = textParts.map((c) => c.text).join('')
-            // pi SDK sends full accumulated text on each update.
-            // We emit only the delta (new chars since last emit).
             if (fullText.length > this.lastEmittedTextLength) {
               const delta = fullText.slice(this.lastEmittedTextLength)
               this.lastEmittedTextLength = fullText.length
-              return { type: 'text', content: delta }
+              return [{ type: 'text', content: delta }]
             }
           }
         }
-        return null
+        return []
       }
 
       case 'tool_execution_start':
-        return {
+        this.pendingToolCalls.set(piEvent.toolCallId, {
+          name: piEvent.toolName,
+          input: piEvent.args || {},
+        })
+        return [{
           type: 'tool_call',
           id: piEvent.toolCallId,
           name: piEvent.toolName,
           input: piEvent.args || {},
-        }
+        }]
 
       case 'tool_execution_end': {
         const resultContent = piEvent.result?.content as
           | { type: string; text?: string }[]
           | undefined
-        return {
+        const output = resultContent
+          ?.filter((c) => c.type === 'text')
+          ?.map((c) => c.text ?? '')
+          ?.join('\n') ?? ''
+
+        const result: SessionEvent[] = [{
           type: 'tool_result',
           id: piEvent.toolCallId,
-          output:
-            resultContent
-              ?.filter((c) => c.type === 'text')
-              ?.map((c) => c.text ?? '')
-              ?.join('\n') ?? '',
+          output,
           isError: piEvent.isError,
+        }]
+
+        // Detect and emit artifact event after tool_result
+        const toolCall = this.pendingToolCalls.get(piEvent.toolCallId)
+        this.pendingToolCalls.delete(piEvent.toolCallId)
+        if (toolCall && !piEvent.isError) {
+          const artifact = this.detectArtifact(piEvent.toolCallId, toolCall.name, toolCall.input, output)
+          if (artifact) result.push(artifact)
         }
+
+        return result
       }
 
       case 'turn_end': {
@@ -554,15 +605,148 @@ export class Session {
           this.cumulativeUsage.cacheReadTokens += this.lastTurnUsage.cacheReadTokens
           this.cumulativeUsage.cacheWriteTokens += this.lastTurnUsage.cacheWriteTokens
         }
-        return null
+        return []
       }
 
-      case 'agent_end':
-        return null
+      case 'agent_end': {
+        const endMessages = (piEvent as unknown as { messages?: Array<{ errorMessage?: string }> })
+          .messages
+        const errorMessage = endMessages?.[0]?.errorMessage
+        if (errorMessage) {
+          return [{ type: 'error', message: errorMessage }]
+        }
+        return []
+      }
 
       default:
-        return null
+        return []
     }
+  }
+
+  /** Detect if a tool call produced an artifact. */
+  private detectArtifact(
+    toolCallId: string,
+    toolName: string,
+    toolInput: Record<string, unknown>,
+    output: string,
+  ): SessionEvent | null {
+    const EXT_MAP: Record<string, string> = {
+      md: 'markdown', mdx: 'markdown', ts: 'typescript', tsx: 'tsx',
+      js: 'javascript', jsx: 'jsx', json: 'json', py: 'python',
+      rb: 'ruby', rs: 'rust', go: 'go', java: 'java', c: 'c', cpp: 'cpp',
+      html: 'html', css: 'css', svg: 'xml', sql: 'sql', sh: 'bash',
+      yml: 'yaml', yaml: 'yaml', xml: 'xml', txt: 'text',
+    }
+
+    function langFromPath(path: string): string {
+      const ext = path.split('.').pop()?.toLowerCase() || ''
+      return EXT_MAP[ext] || 'text'
+    }
+
+    function langToRenderType(lang: string): ArtifactRenderType {
+      if (lang === 'markdown') return 'markdown'
+      if (lang === 'html') return 'html'
+      return 'code'
+    }
+
+    // Explicit artifact tool
+    if (toolName === 'artifact') {
+      const artType = (toolInput.type as string) || 'code'
+      const language = artType === 'code'
+        ? (toolInput.language as string) || 'text'
+        : artType
+      return {
+        type: 'artifact',
+        id: `artifact_${toolCallId}_${Date.now()}`,
+        toolCallId,
+        artifactType: 'artifact',
+        renderType: artType as ArtifactRenderType,
+        title: toolInput.title as string,
+        filename: toolInput.filename as string | undefined,
+        filepath: toolInput.filename as string | undefined,
+        language,
+        content: toolInput.content as string,
+      }
+    }
+
+    // File writes
+    if (toolName === 'filesystem' && toolInput.operation === 'write' && toolInput.content) {
+      const filepath = toolInput.path as string
+      const filename = filepath?.split('/').pop() || 'untitled'
+      const language = langFromPath(filepath || '')
+      return {
+        type: 'artifact',
+        id: `artifact_${toolCallId}_${Date.now()}`,
+        toolCallId,
+        artifactType: 'file',
+        renderType: langToRenderType(language),
+        filename,
+        filepath,
+        language,
+        content: toolInput.content as string,
+      }
+    }
+
+    // Large shell outputs — only show when genuinely useful, not routine commands
+    if (toolName === 'shell' && output.length > 500) {
+      const cmd = (toolInput.command as string) || 'output'
+
+      // Skip routine/exploratory commands whose output isn't artifact-worthy
+      const SKIP_PATTERNS = [
+        /^\s*ls\b/,           // directory listings
+        /^\s*find\b/,         // file search results
+        /^\s*cat\b/,          // file dumps (already readable inline or via filesystem)
+        /^\s*head\b/,         // partial file reads
+        /^\s*tail\b/,         // partial file reads
+        /^\s*echo\b/,         // echo output
+        /^\s*pwd\b/,          // working directory
+        /^\s*whoami\b/,       // user info
+        /^\s*env\b/,          // environment dump
+        /^\s*printenv\b/,     // environment dump
+        /^\s*set\b/,          // shell variables
+        /^\s*df\b/,           // disk usage
+        /^\s*du\b/,           // directory sizes
+        /^\s*free\b/,         // memory info
+        /^\s*top\b/,          // process list
+        /^\s*ps\b/,           // process list
+        /^\s*uname\b/,       // system info
+        /^\s*which\b/,       // command location
+        /^\s*whereis\b/,     // command location
+        /^\s*file\b/,        // file type info
+        /^\s*wc\b/,          // word/line count
+        /^\s*grep\b/,        // search results
+        /^\s*rg\b/,          // search results
+        /^\s*tree\b/,        // directory tree
+        /^\s*stat\b/,        // file stats
+        /^\s*mount\b/,       // mount points
+        /^\s*ip\b/,          // network config
+        /^\s*ifconfig\b/,    // network config
+        /^\s*netstat\b/,     // network stats
+        /^\s*ss\b/,          // socket stats
+        /^\s*systemctl\s+(status|list)/,  // service status
+        /^\s*apt\s+list/,    // package listing
+        /^\s*dpkg\s+-l/,     // package listing
+        /^\s*brew\s+list/,   // package listing
+        /^\s*pip\s+list/,    // package listing
+        /^\s*npm\s+list/,    // package listing
+        /^\s*docker\s+(ps|images|container\s+ls)/, // docker listings
+      ]
+      if (SKIP_PATTERNS.some(p => p.test(cmd))) return null
+
+      const shortCmd = cmd.length > 40 ? `${cmd.slice(0, 37)}...` : cmd
+      return {
+        type: 'artifact',
+        id: `artifact_${toolCallId}_${Date.now()}`,
+        toolCallId,
+        artifactType: 'output',
+        renderType: 'code',
+        filename: shortCmd,
+        language: 'text',
+        content: output,
+      }
+    }
+
+    return null
   }
 
   /**
@@ -619,14 +803,23 @@ export function createSession(
   const provider = opts?.provider || config.defaults.provider
   const model = opts?.model || config.defaults.model
 
-  return new Session({
+  // Holder lets the ask_user tool call the handler set later via setAskUserHandler
+  const handlerRef: { askUser?: AskUserHandler } = {}
+  const session = new Session({
     id,
     provider,
     model,
     config,
-    tools: buildTools(config),
+    tools: buildTools(config, { getAskUserHandler: () => handlerRef.askUser }),
     apiKey: opts?.apiKey,
   })
+  // Wire: when setAskUserHandler is called on session, update the holder
+  const origSet = session.setAskUserHandler.bind(session)
+  session.setAskUserHandler = (handler: AskUserHandler) => {
+    handlerRef.askUser = handler
+    origSet(handler)
+  }
+  return session
 }
 
 /**
@@ -637,17 +830,24 @@ export function resumeSession(id: string, config: AgentConfig): Session | null {
   const persisted = loadSession(id)
   if (!persisted) return null
 
-  return new Session({
+  const handlerRef: { askUser?: AskUserHandler } = {}
+  const session = new Session({
     id: persisted.id,
     provider: persisted.provider,
     model: persisted.model,
     config,
-    tools: buildTools(config),
+    tools: buildTools(config, { getAskUserHandler: () => handlerRef.askUser }),
     existingMessages: persisted.messages,
     title: persisted.title,
     createdAt: persisted.createdAt,
     compactionState: persisted.compactionState || undefined,
   })
+  const origSet = session.setAskUserHandler.bind(session)
+  session.setAskUserHandler = (handler: AskUserHandler) => {
+    handlerRef.askUser = handler
+    origSet(handler)
+  }
+  return session
 }
 
 /**
@@ -672,11 +872,11 @@ function generateSmartTitle(text: string): string {
   const qMatch = cleaned.match(/^(?:what|how|why|where|when|which|who|is|are|can|do|does|will|should|would)\s+(.+)/i)
   if (qMatch) {
     const topic = qMatch[1].replace(/^(?:the|a|an|i|we|you)\s+/i, '').trim()
-    return smartCap(smartTruncate(topic, 50))
+    return smartCap(smartTruncate(topic, 40))
   }
 
   // Capitalize and truncate
-  return smartCap(smartTruncate(cleaned, 50))
+  return smartCap(smartTruncate(cleaned, 40))
 }
 
 function smartTruncate(text: string, max: number): string {
@@ -690,11 +890,14 @@ function smartCap(text: string): string {
   return text ? text.charAt(0).toUpperCase() + text.slice(1) : text
 }
 
-const TITLE_SYSTEM_PROMPT = `You generate short conversation titles. Given a user's first message, output a concise title (3-6 words) that captures their intent. Rules:
-- No quotes, no trailing punctuation
+const TITLE_MAX_LENGTH = 40
+
+const TITLE_SYSTEM_PROMPT = `Generate a short conversation title from the user's first message. Output ONLY the title, nothing else. Rules:
+- Maximum 5 words and 40 characters
+- No quotes, no punctuation at the end
 - Capitalize like a headline
-- If it's just a greeting with no real content, output "New Conversation"
-- Be specific about the topic, not generic`
+- If it's just a greeting, output "New Conversation"
+- Be specific but brief`
 
 /**
  * Use the LLM to generate a meaningful conversation title from the first message.
@@ -716,7 +919,7 @@ async function generateAITitle(
     { apiKey },
   )
 
-  const title = result.content
+  let title = result.content
     .filter((b): b is TextContent => b.type === 'text')
     .map((b) => b.text)
     .join('')
@@ -725,6 +928,13 @@ async function generateAITitle(
     .replace(/^["']|["']$/g, '')
     .replace(/[.!?]+$/, '')
     .trim()
+
+  // Hard cap: truncate at word boundary
+  if (title.length > TITLE_MAX_LENGTH) {
+    const truncated = title.slice(0, TITLE_MAX_LENGTH)
+    const lastSpace = truncated.lastIndexOf(' ')
+    title = lastSpace > TITLE_MAX_LENGTH * 0.5 ? truncated.slice(0, lastSpace) : truncated
+  }
 
   return title || 'New Conversation'
 }

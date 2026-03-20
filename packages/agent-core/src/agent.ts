@@ -23,6 +23,7 @@ import { executeBrowser } from './tools/browser.js'
 import { executeClipboard } from './tools/clipboard.js'
 import { executeCodeSearch } from './tools/code-search.js'
 import { executeDatabase } from './tools/database.js'
+import type { AskUserQuestion } from '@anton/protocol'
 import { executeDiff } from './tools/diff.js'
 import { executeFilesystem } from './tools/filesystem.js'
 import { executeGit } from './tools/git.js'
@@ -33,10 +34,13 @@ import { executeNetwork } from './tools/network.js'
 import { executeNotification } from './tools/notification.js'
 import { executeProcess } from './tools/process.js'
 import { executeShell } from './tools/shell.js'
+import { executePlan } from './tools/plan.js'
 import { executeTodo } from './tools/todo.js'
 
 // Re-export for session.ts
 export { needsConfirmation } from './tools/shell.js'
+
+export type AskUserHandler = (questions: AskUserQuestion[]) => Promise<Record<string, string>>
 
 /**
  * System prompt — loaded from ~/.anton/prompts/system.md at startup.
@@ -63,8 +67,12 @@ function toolResult(output: string, isError = false) {
  * Build the tool set. Shared across all sessions — tools are stateless,
  * only the config (security rules) matters.
  */
+export interface ToolCallbacks {
+  getAskUserHandler?: () => AskUserHandler | undefined
+}
+
 // biome-ignore lint/suspicious/noExplicitAny: heterogeneous tool array requires any
-export function buildTools(config: AgentConfig): AgentTool<any>[] {
+export function buildTools(config: AgentConfig, callbacks?: ToolCallbacks): AgentTool<any>[] {
   return [
     // ── Core tools ──────────────────────────────────────────────────
     {
@@ -115,7 +123,9 @@ export function buildTools(config: AgentConfig): AgentTool<any>[] {
     {
       name: 'browser',
       label: 'Browser',
-      description: 'Fetch web pages or extract content. Operations: fetch, extract, screenshot.',
+      description:
+        'Fetch remote web pages or extract content from URLs. Operations: fetch, extract, screenshot. ' +
+        'Only use for remote URLs (http/https). For local files, use the filesystem tool to read them and the artifact tool to display them.',
       parameters: Type.Object({
         operation: Type.Union(
           [Type.Literal('fetch'), Type.Literal('screenshot'), Type.Literal('extract')],
@@ -177,7 +187,9 @@ export function buildTools(config: AgentConfig): AgentTool<any>[] {
         'Create a visual artifact displayed in the desktop side panel. ' +
         'Use for HTML pages/apps, rendered markdown, code files, SVG graphics, or mermaid diagrams. ' +
         'The content renders live in a preview panel next to the chat. ' +
-        'Always use this for visual content the user should see rendered, not as raw text.',
+        'Always use this for visual content the user should see rendered, not as raw text. ' +
+        'When the user asks to "open", "view", or "show" a local file (.html, .svg, .md, .css, .js, .ts, etc.), ' +
+        'read the file with the filesystem tool first, then display it here as an artifact — do NOT use the browser tool for local files.',
       parameters: Type.Object({
         title: Type.String({ description: 'Display title (e.g. "Landing Page", "README.md")' }),
         type: Type.Union(
@@ -474,6 +486,65 @@ export function buildTools(config: AgentConfig): AgentTool<any>[] {
       }),
       async execute(_toolCallId, params) {
         const output = executeDiff(params)
+        return toolResult(output)
+      },
+    },
+
+    // ── Ask User ─────────────────────────────────────────────────────
+    {
+      name: 'ask_user',
+      label: 'Ask User',
+      description:
+        'Ask the user clarifying questions with optional multiple-choice options. ' +
+        'Use when you need specific information before proceeding — e.g., technology choices, preferences, project details. ' +
+        'Maximum 4 questions. Each question can have selectable options and/or allow free-text input. ' +
+        'The user sees an interactive questionnaire in the chat UI.',
+      parameters: Type.Object({
+        questions: Type.Array(
+          Type.Object({
+            question: Type.String({ description: 'The question to ask' }),
+            options: Type.Optional(
+              Type.Array(Type.String(), { description: 'Selectable options (max 5)' }),
+            ),
+            allowFreeText: Type.Optional(
+              Type.Boolean({ description: 'Allow custom text input (default: true)' }),
+            ),
+          }),
+          { description: 'Questions to ask (max 4)' },
+        ),
+      }),
+      async execute(_toolCallId, params) {
+        const handler = callbacks?.getAskUserHandler?.()
+        if (!handler) {
+          return toolResult('Ask user requires an interactive handler but none is available.', true)
+        }
+        const questions: AskUserQuestion[] = params.questions.map(
+          (q: { question: string; options?: string[]; allowFreeText?: boolean }) => ({
+            question: q.question,
+            options: q.options,
+            allowFreeText: q.allowFreeText,
+          }),
+        )
+        const answers = await handler(questions)
+        return toolResult(JSON.stringify(answers, null, 2))
+      },
+    },
+
+    // ── Planning ──────────────────────────────────────────────────────
+    {
+      name: 'plan',
+      label: 'Plan',
+      description:
+        'Submit an implementation plan for user review before executing. ' +
+        'The plan is displayed as rendered markdown in a side panel. ' +
+        'Execution pauses until the user approves or rejects with optional feedback. ' +
+        'Use this for complex multi-step tasks, architectural changes, or when the user asks you to plan first.',
+      parameters: Type.Object({
+        title: Type.String({ description: 'Short plan title' }),
+        content: Type.String({ description: 'Full plan in markdown format' }),
+      }),
+      async execute(_toolCallId, params) {
+        const output = executePlan(params)
         return toolResult(output)
       },
     },

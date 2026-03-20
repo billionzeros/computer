@@ -1,4 +1,4 @@
-import { Channel, type TokenUsage } from '@anton/protocol'
+import { Channel, type AskUserQuestion, type TokenUsage } from '@anton/protocol'
 import { create } from 'zustand'
 import { type Artifact, extractArtifact } from './artifacts.js'
 import { type ConnectionStatus, connection } from './connection.js'
@@ -142,6 +142,18 @@ interface AppState {
   // Pending confirmation
   pendingConfirm: { id: string; command: string; reason: string } | null
 
+  // Plan review
+  pendingPlan: { id: string; title: string; content: string } | null
+  sidePanelView: 'artifacts' | 'plan'
+
+  // Ask-user questionnaire
+  pendingAskUser: { id: string; questions: AskUserQuestion[] } | null
+
+  // Sidebar
+  sidebarCollapsed: boolean
+  setSidebarCollapsed: (collapsed: boolean) => void
+  toggleSidebar: () => void
+
   // Actions
   setConnectionStatus: (status: ConnectionStatus) => void
   setAgentStatus: (status: AgentStatus) => void
@@ -188,6 +200,13 @@ interface AppState {
 
   // Confirm actions
   setPendingConfirm: (confirm: { id: string; command: string; reason: string } | null) => void
+
+  // Plan actions
+  setPendingPlan: (plan: { id: string; title: string; content: string } | null) => void
+  setSidePanelView: (view: 'artifacts' | 'plan') => void
+
+  // Ask-user actions
+  setPendingAskUser: (ask: { id: string; questions: AskUserQuestion[] } | null) => void
 }
 
 export const useStore = create<AppState>((set, get) => {
@@ -225,6 +244,12 @@ export const useStore = create<AppState>((set, get) => {
     activeArtifactId: null,
     artifactPanelOpen: false,
     pendingConfirm: null,
+    pendingPlan: null,
+    sidePanelView: 'artifacts' as const,
+    pendingAskUser: null,
+    sidebarCollapsed: false,
+    setSidebarCollapsed: (collapsed) => set({ sidebarCollapsed: collapsed }),
+    toggleSidebar: () => set((s) => ({ sidebarCollapsed: !s.sidebarCollapsed })),
 
     setConnectionStatus: (status) => set({ connectionStatus: status }),
     setAgentStatus: (status) => set({ agentStatus: status }),
@@ -435,6 +460,10 @@ export const useStore = create<AppState>((set, get) => {
       set({ artifacts: [], activeArtifactId: null, artifactPanelOpen: false }),
 
     setPendingConfirm: (confirm) => set({ pendingConfirm: confirm }),
+
+    setPendingPlan: (plan) => set({ pendingPlan: plan }),
+    setSidePanelView: (view) => set({ sidePanelView: view }),
+    setPendingAskUser: (ask) => set({ pendingAskUser: ask }),
   }
 })
 
@@ -483,6 +512,9 @@ connection.onMessage((channel, msg) => {
       break
 
     case 'tool_call':
+      // Reset assistant message tracking so any text AFTER this tool call
+      // creates a new assistant bubble (shows reasoning between tool groups)
+      useStore.setState({ _currentAssistantMsgId: null })
       store.addMessage({
         id: `tc_${msg.id}`,
         role: 'tool',
@@ -515,7 +547,7 @@ connection.onMessage((channel, msg) => {
         status: msg.isError ? 'error' : 'complete',
       })
 
-      // Extract artifact from tool call + result pair
+      // Legacy client-side artifact extraction (fallback if server doesn't emit artifact events)
       if (!msg.isError) {
         const conv = store.getActiveConversation()
         const toolCallMsg = conv?.messages.find((m) => m.id === `tc_${msg.id}`)
@@ -527,11 +559,44 @@ connection.onMessage((channel, msg) => {
       break
     }
 
+    case 'artifact':
+      // Server-side artifact detection — add directly to store
+      store.addArtifact({
+        id: msg.id,
+        type: msg.artifactType,
+        renderType: msg.renderType,
+        title: msg.title,
+        filename: msg.filename,
+        filepath: msg.filepath,
+        language: msg.language,
+        content: msg.content,
+        toolCallId: `tc_${msg.toolCallId}`,
+        timestamp: Date.now(),
+      })
+      break
+
     case 'confirm':
       store.setPendingConfirm({
         id: msg.id,
         command: msg.command,
         reason: msg.reason,
+      })
+      break
+
+    case 'plan_confirm':
+      store.setPendingPlan({
+        id: msg.id,
+        title: msg.title,
+        content: msg.content,
+      })
+      store.setSidePanelView('plan')
+      store.setArtifactPanelOpen(true)
+      break
+
+    case 'ask_user':
+      store.setPendingAskUser({
+        id: msg.id,
+        questions: msg.questions,
       })
       break
 

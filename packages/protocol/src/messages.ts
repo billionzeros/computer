@@ -273,12 +273,64 @@ export interface AiConfirmResponseMessage {
   approved: boolean
 }
 
+export interface AiPlanConfirmMessage {
+  type: 'plan_confirm'
+  id: string
+  title: string
+  content: string // markdown
+  sessionId?: string
+}
+
+export interface AiPlanConfirmResponseMessage {
+  type: 'plan_confirm_response'
+  id: string
+  approved: boolean
+  feedback?: string
+}
+
+// Ask-user questionnaire (interactive clarification)
+export interface AskUserQuestion {
+  question: string
+  options?: string[]
+  allowFreeText?: boolean
+}
+
+export interface AiAskUserMessage {
+  type: 'ask_user'
+  id: string
+  questions: AskUserQuestion[]
+  sessionId?: string
+}
+
+export interface AiAskUserResponseMessage {
+  type: 'ask_user_response'
+  id: string
+  answers: Record<string, string>
+}
+
 export interface TokenUsage {
   inputTokens: number
   outputTokens: number
   totalTokens: number
   cacheReadTokens: number
   cacheWriteTokens: number
+}
+
+// Artifact events — emitted by session when a tool produces viewable content
+export type ArtifactRenderType = 'code' | 'markdown' | 'html' | 'svg' | 'mermaid'
+
+export interface AiArtifactMessage {
+  type: 'artifact'
+  id: string
+  toolCallId: string
+  artifactType: 'file' | 'output' | 'artifact'
+  renderType: ArtifactRenderType
+  title?: string
+  filename?: string
+  filepath?: string
+  language: string
+  content: string
+  sessionId?: string
 }
 
 export interface AiDoneMessage {
@@ -367,6 +419,11 @@ export type AiMessage =
   | AiToolResultMessage
   | AiConfirmMessage
   | AiConfirmResponseMessage
+  | AiPlanConfirmMessage
+  | AiPlanConfirmResponseMessage
+  | AiAskUserMessage
+  | AiAskUserResponseMessage
+  | AiArtifactMessage
   | AiDoneMessage
   | AiErrorMessage
   // Compaction

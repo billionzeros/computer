@@ -409,6 +409,11 @@ export class AgentServer {
       case 'confirm_response':
         // Handled inline by the confirm handler Promise in session
         break
+
+      // ── Ask-user response (forwarded to active session) ──
+      case 'ask_user_response':
+        // Handled inline by the ask_user handler Promise in session
+        break
     }
   }
 
@@ -428,6 +433,8 @@ export class AgentServer {
       })
 
       this.wireSessionConfirmHandler(session)
+      this.wirePlanConfirmHandler(session)
+      this.wireAskUserHandler(session)
       this.sessions.set(msg.id, session)
 
       this.sendToClient(Channel.AI, {
@@ -463,6 +470,8 @@ export class AgentServer {
           return
         }
         this.wireSessionConfirmHandler(session)
+        this.wirePlanConfirmHandler(session)
+        this.wireAskUserHandler(session)
         this.sessions.set(msg.id, session)
       }
 
@@ -551,6 +560,8 @@ export class AgentServer {
           return
         }
         this.wireSessionConfirmHandler(session)
+        this.wirePlanConfirmHandler(session)
+        this.wireAskUserHandler(session)
         this.sessions.set(msg.id, session)
       }
 
@@ -598,6 +609,17 @@ export class AgentServer {
   private handleProviderSetDefault(msg: { provider: string; model: string }) {
     try {
       setDefault(this.config, msg.provider, msg.model)
+
+      // Switch all active sessions to the new default model
+      for (const [id, session] of this.sessions) {
+        try {
+          session.switchModel(msg.provider, msg.model)
+          console.log(`Switched session ${id} to ${msg.provider}/${msg.model}`)
+        } catch (err) {
+          console.warn(`Failed to switch session ${id}:`, (err as Error).message)
+        }
+      }
+
       this.sendToClient(Channel.AI, {
         type: 'provider_set_default_response',
         success: true,
@@ -700,12 +722,16 @@ export class AgentServer {
       if (sessionId === DEFAULT_SESSION_ID) {
         session = createSession(DEFAULT_SESSION_ID, this.config)
         this.wireSessionConfirmHandler(session)
+        this.wirePlanConfirmHandler(session)
+        this.wireAskUserHandler(session)
         this.sessions.set(DEFAULT_SESSION_ID, session)
       } else {
         // Try to resume from disk automatically
         session = resumeSession(sessionId, this.config) ?? undefined
         if (session) {
           this.wireSessionConfirmHandler(session)
+          this.wirePlanConfirmHandler(session)
+          this.wireAskUserHandler(session)
           this.sessions.set(sessionId, session)
           console.log(`Auto-resumed session from disk: ${sessionId}`)
         } else {
@@ -844,6 +870,85 @@ export class AgentServer {
                 clearTimeout(timeout)
                 this.activeClient?.off('message', handler)
                 resolve(msg.approved)
+              }
+            }
+          } catch {}
+        }
+
+        this.activeClient?.on('message', handler)
+      })
+    })
+  }
+
+  private wirePlanConfirmHandler(session: Session) {
+    session.setPlanConfirmHandler(async (title, content) => {
+      if (!this.activeClient) return { approved: false, feedback: 'No client connected' }
+
+      return new Promise((resolve) => {
+        const confirmId = `plan_${Date.now()}`
+
+        this.sendToClient(Channel.AI, {
+          type: 'plan_confirm',
+          id: confirmId,
+          title,
+          content,
+          sessionId: session.id,
+        })
+
+        // 5 minutes — plans need reading time
+        const timeout = setTimeout(
+          () => resolve({ approved: false, feedback: 'Timed out waiting for plan review' }),
+          300_000,
+        )
+
+        const handler = (data: Buffer) => {
+          try {
+            const frame = decodeFrame(new Uint8Array(data))
+            if (frame.channel === Channel.AI) {
+              const msg = parseJsonPayload<AiMessage>(frame.payload)
+              if (msg.type === 'plan_confirm_response' && msg.id === confirmId) {
+                clearTimeout(timeout)
+                this.activeClient?.off('message', handler)
+                resolve({ approved: msg.approved, feedback: msg.feedback })
+              }
+            }
+          } catch {}
+        }
+
+        this.activeClient?.on('message', handler)
+      })
+    })
+  }
+
+  private wireAskUserHandler(session: Session) {
+    session.setAskUserHandler(async (questions) => {
+      if (!this.activeClient) return {}
+
+      return new Promise((resolve) => {
+        const askId = `ask_${Date.now()}`
+
+        this.sendToClient(Channel.AI, {
+          type: 'ask_user',
+          id: askId,
+          questions,
+          sessionId: session.id,
+        })
+
+        // 5 minutes — user needs time to answer
+        const timeout = setTimeout(() => {
+          this.activeClient?.off('message', handler)
+          resolve({})
+        }, 300_000)
+
+        const handler = (data: Buffer) => {
+          try {
+            const frame = decodeFrame(new Uint8Array(data))
+            if (frame.channel === Channel.AI) {
+              const msg = parseJsonPayload<AiMessage>(frame.payload)
+              if (msg.type === 'ask_user_response' && msg.id === askId) {
+                clearTimeout(timeout)
+                this.activeClient?.off('message', handler)
+                resolve(msg.answers)
               }
             }
           } catch {}

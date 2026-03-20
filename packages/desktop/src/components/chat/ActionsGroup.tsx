@@ -24,8 +24,9 @@ import {
   FileDiff,
 } from 'lucide-react'
 import type React from 'react'
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useStore } from '../../lib/store.js'
+import { ArtifactCard } from './ArtifactCard.js'
 import type { ToolAction } from './groupMessages.js'
 
 // ── Tool icons & helpers ───────────────────────────────────────────
@@ -252,6 +253,13 @@ export function ActionsGroup({ actions, defaultExpanded = false }: Props) {
   const setActiveArtifact = useStore((s) => s.setActiveArtifact)
   const setArtifactPanelOpen = useStore((s) => s.setArtifactPanelOpen)
 
+  // Find artifacts produced by actions in this group
+  const actionCallIds = useMemo(() => new Set(actions.map((a) => a.call.id)), [actions])
+  const groupArtifacts = useMemo(
+    () => artifacts.filter((a) => actionCallIds.has(a.toolCallId)),
+    [artifacts, actionCallIds],
+  )
+
   useEffect(() => {
     if (defaultExpanded) setExpanded(true)
   }, [defaultExpanded])
@@ -428,6 +436,15 @@ export function ActionsGroup({ actions, defaultExpanded = false }: Props) {
           </motion.div>
         )}
       </AnimatePresence>
+
+      {/* Inline artifact cards */}
+      {groupArtifacts.length > 0 && (
+        <div className="actions-group__artifacts">
+          {groupArtifacts.map((artifact) => (
+            <ArtifactCard key={artifact.id} artifact={artifact} />
+          ))}
+        </div>
+      )}
     </motion.div>
   )
 }

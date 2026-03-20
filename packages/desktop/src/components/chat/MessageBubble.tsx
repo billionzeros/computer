@@ -1,8 +1,6 @@
 import { motion } from 'framer-motion'
 import { AlertTriangle } from 'lucide-react'
 import type { ChatMessage } from '../../lib/store.js'
-import { useAgentStatus } from '../../lib/store.js'
-import { AntonLogo } from '../AntonLogo.js'
 import { MarkdownRenderer } from './MarkdownRenderer.js'
 import { ToolCallBlock } from './ToolCallBlock.js'
 
@@ -11,8 +9,6 @@ interface Props {
 }
 
 export function MessageBubble({ message }: Props) {
-  const agentStatus = useAgentStatus()
-
   return (
     <motion.div
       initial={{ opacity: 0, y: 6 }}
@@ -20,12 +16,6 @@ export function MessageBubble({ message }: Props) {
       transition={{ duration: 0.2 }}
       className={getContainerClass(message)}
     >
-      {message.role === 'assistant' && (
-        <div className="message__meta">
-          <AntonLogo size={24} thinking={agentStatus === 'working'} className="message__anton-logo" />
-        </div>
-      )}
-
       {message.role === 'user' && (
         <div className="message__surface message__surface--user">
           <div className="message__text">{message.content}</div>
