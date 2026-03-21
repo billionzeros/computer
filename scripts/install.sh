@@ -156,17 +156,32 @@ get_latest_version() {
   echo "$version"
 }
 
-# ── Download binary ───────────────────────────────────────────────
+# ── Check Node.js ─────────────────────────────────────────────────
 
-download_binary() {
+check_node() {
+  if ! command -v node &>/dev/null; then
+    fail "Node.js is required (>= 22). Install from https://nodejs.org"
+  fi
+
+  local node_major
+  node_major=$(node -e "console.log(process.version.split('.')[0].slice(1))")
+  if [[ "$node_major" -lt 22 ]]; then
+    fail "Node.js >= 22 is required (found $(node --version)). Update from https://nodejs.org"
+  fi
+
+  ok "Node.js $(node --version)"
+}
+
+# ── Download CLI ──────────────────────────────────────────────────
+
+download_cli() {
   local version="$1"
-  local platform="$2"
-  local dest="$3"
+  local dest="$2"
 
-  local url="https://github.com/OmGuptaIND/anton.computer/releases/download/v${version}/anton-cli-${platform}"
+  local url="https://github.com/OmGuptaIND/anton.computer/releases/download/v${version}/anton-cli.mjs"
 
   if command -v curl &>/dev/null; then
-    curl -fsSL --progress-bar -o "$dest" "$url" || fail "Download failed. Check if v${version} has a binary for ${platform}."
+    curl -fsSL --progress-bar -o "$dest" "$url" || fail "Download failed. Check if v${version} has been released."
   elif command -v wget &>/dev/null; then
     wget -q --show-progress -O "$dest" "$url" || fail "Download failed."
   fi
@@ -177,23 +192,22 @@ download_binary() {
 main() {
   banner
 
-  local platform
-  platform=$(detect_platform)
   local shell_name
   shell_name=$(detect_shell)
 
   local version="${ANTON_VERSION:-}"
   local install_dir="${ANTON_DIR:-$HOME/.anton/bin}"
-  local binary_path="$install_dir/anton"
+  local cli_path="$install_dir/anton-cli.mjs"
+  local wrapper_path="$install_dir/anton"
 
-  # Check if already installed
+  # Check existing install
   local existing_version=""
-  if [[ -f "$binary_path" ]]; then
-    existing_version=$("$binary_path" --version 2>/dev/null | sed 's/anton v//' || echo "")
+  if [[ -f "$wrapper_path" ]]; then
+    existing_version=$("$wrapper_path" --version 2>/dev/null | sed 's/anton CLI v//' | sed 's/ .*//' || echo "")
   fi
 
   step "Detecting system"
-  ok "Platform: ${platform}"
+  check_node
   ok "Shell: ${shell_name}"
   if [[ -n "$existing_version" ]]; then
     ok "Existing install: v${existing_version}"
@@ -221,13 +235,23 @@ main() {
   fi
 
   # Download
-  step "Downloading binary"
+  step "Downloading CLI"
   mkdir -p "$install_dir"
-  local temp_path="${binary_path}.download-$$"
-  download_binary "$version" "$platform" "$temp_path"
+  local temp_path="${cli_path}.download-$$"
+  download_cli "$version" "$temp_path"
   chmod +x "$temp_path"
-  mv -f "$temp_path" "$binary_path"
-  ok "Installed to ${binary_path}"
+  mv -f "$temp_path" "$cli_path"
+  ok "Downloaded anton-cli.mjs ($(du -h "$cli_path" | cut -f1))"
+
+  # Create wrapper script
+  cat > "$wrapper_path" << 'WRAPPER'
+#!/usr/bin/env bash
+# anton.computer CLI wrapper — runs the bundled .mjs with node
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+exec node "$SCRIPT_DIR/anton-cli.mjs" "$@"
+WRAPPER
+  chmod +x "$wrapper_path"
+  ok "Installed to ${install_dir}/"
 
   # PATH
   step "Configuring PATH"
@@ -235,15 +259,17 @@ main() {
 
   # Verify
   step "Verifying"
-  if "$binary_path" --version &>/dev/null; then
-    local installed_version
-    installed_version=$("$binary_path" --version 2>/dev/null)
+  local installed_version
+  installed_version=$("$wrapper_path" --version 2>/dev/null || echo "")
+  if [[ -n "$installed_version" ]]; then
     ok "${installed_version}"
   else
-    warn "Binary installed but could not verify. Try restarting your terminal."
+    warn "Installed but could not verify. Try restarting your terminal."
   fi
 
   # Done
+  local rc_name
+  rc_name=$(basename "$(get_shell_rc "$shell_name")")
   echo ""
   echo -e "${GREEN}${BOLD}"
   echo "    ┌─────────────────────────────────────────┐"
@@ -252,8 +278,8 @@ main() {
   echo "    │                                         │"
   echo "    │   Get started:                          │"
   echo "    │     1. Restart your terminal             │"
-  echo "    │        (or run: source $(basename "$(get_shell_rc "$shell_name")"))"
-  printf "    │     %-36s│\n" ""
+  printf "    │        (or run: source %s)%-*s│\n" "$rc_name" $((22 - ${#rc_name})) ""
+  echo "    │                                         │"
   echo "    │     2. Connect to your machine:          │"
   echo "    │        anton connect <ip>                │"
   echo "    │                                         │"

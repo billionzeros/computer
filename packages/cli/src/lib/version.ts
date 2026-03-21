@@ -33,7 +33,7 @@ export interface CLIManifest {
   gitHash: string
   changelog: string
   publishedAt: string
-  cli?: Record<string, string> // platform-arch → download URL
+  cli?: string // Single .mjs bundle URL (platform-independent)
 }
 
 // ── Version resolution ──────────────────────────────────────────
@@ -113,10 +113,7 @@ export async function checkForUpdate(): Promise<{
       return { available: false, latest: manifest.version, changelog: null, downloadUrl: null }
     }
 
-    const platform = process.platform === 'linux' ? 'linux' : process.platform === 'darwin' ? 'darwin' : process.platform === 'win32' ? 'windows' : null
-    const arch = process.arch === 'x64' ? 'x64' : process.arch === 'arm64' ? 'arm64' : null
-    const key = platform && arch ? `${platform}-${arch}` : null
-    const downloadUrl = key && manifest.cli ? manifest.cli[key] ?? null : null
+    const downloadUrl = manifest.cli ?? null
 
     return {
       available: true,

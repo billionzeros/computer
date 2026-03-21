@@ -56,18 +56,17 @@ npx esbuild packages/agent-server/dist/index.js \
   --bundle \
   --platform=node \
   --target=node22 \
-  --format=esm \
-  --outfile=dist/agent-bundle.mjs \
+  --format=cjs \
+  --outfile=dist/agent-bundle.js \
   --external:node-pty \
-  --external:chokidar \
-  --banner:js="import{createRequire}from'module';const require=createRequire(import.meta.url);"
+  --external:chokidar
 
 # ── 3. Create SEA config ──────────────────────────────────────────
 
 echo "  [3/5] Creating SEA blob..."
 cat > dist/sea-config.json << 'EOF'
 {
-  "main": "agent-bundle.mjs",
+  "main": "agent-bundle.js",
   "output": "sea-prep.blob",
   "disableExperimentalSEAWarning": true,
   "useSnapshot": false,
@@ -104,7 +103,7 @@ chmod +x "dist/${BINARY_NAME}"
 # ── 5. Clean up intermediate files ─────────────────────────────────
 
 echo "  [5/5] Cleaning up..."
-rm -f dist/agent-bundle.mjs dist/sea-config.json dist/sea-prep.blob
+rm -f dist/agent-bundle.js dist/sea-config.json dist/sea-prep.blob
 
 # ── Done ───────────────────────────────────────────────────────────
 

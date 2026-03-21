@@ -59,17 +59,16 @@ jobs:
             --bundle \
             --platform=node \
             --target=node22 \
-            --format=esm \
-            --outfile=agent-bundle.mjs \
+            --format=cjs \
+            --outfile=agent-bundle.js \
             --external:node-pty \
-            --external:chokidar \
-            --banner:js="import{createRequire}from'module';const require=createRequire(import.meta.url);"
+            --external:chokidar
 
       - name: Create SEA binary
         run: |
           cat > sea-config.json << 'EOF'
           {
-            "main": "agent-bundle.mjs",
+            "main": "agent-bundle.js",
             "output": "sea-prep.blob",
             "disableExperimentalSEAWarning": true,
             "useSnapshot": false,
@@ -91,21 +90,12 @@ jobs:
           name: anton-agent-${{ matrix.target }}
           path: anton-agent-${{ matrix.target }}
 
-  # ── CLI binary (all platforms) ─────────────────────────────────
+  # ── CLI (single .mjs file, platform-independent) ─────────────────
+  # ink/yoga-layout use top-level await (ESM-only) which is incompatible
+  # with Node.js SEA (CJS-only). We ship a single .mjs bundle instead.
+  # The install script creates a wrapper that invokes it with node.
   cli:
-    strategy:
-      matrix:
-        include:
-          - os: ubuntu-latest
-            target: linux-x64
-          - os: ubuntu-24.04-arm
-            target: linux-arm64
-          - os: macos-latest
-            target: darwin-arm64
-          - os: macos-13
-            target: darwin-x64
-
-    runs-on: ${{ matrix.os }}
+    runs-on: ubuntu-latest
 
     steps:
       - uses: actions/checkout@v4
@@ -132,51 +122,27 @@ jobs:
 
       - name: Bundle CLI with esbuild
         run: |
+          # Stub out react-devtools-core (ink imports it but it's optional/dev-only)
+          mkdir -p .stubs
+          echo "export default {};" > .stubs/react-devtools-core.mjs
+
           npx esbuild packages/cli/dist/index.js \
             --bundle \
             --platform=node \
             --target=node22 \
             --format=esm \
-            --outfile=cli-bundle.mjs \
+            --outfile=anton-cli.mjs \
             --external:node-pty \
+            --alias:react-devtools-core=./.stubs/react-devtools-core.mjs \
             --define:__CLI_VERSION__=\"${{ steps.cli_version.outputs.version }}\" \
             --banner:js="import{createRequire}from'module';const require=createRequire(import.meta.url);"
-
-      - name: Create SEA binary
-        run: |
-          cat > sea-config.json << 'EOF'
-          {
-            "main": "cli-bundle.mjs",
-            "output": "sea-prep.blob",
-            "disableExperimentalSEAWarning": true,
-            "useSnapshot": false,
-            "useCodeCache": true
-          }
-          EOF
-
-          node --experimental-sea-config sea-config.json
-          cp $(which node) anton-cli-${{ matrix.target }}
-
-          # Remove code signature on macOS
-          if [[ "${{ matrix.target }}" == darwin-* ]]; then
-            codesign --remove-signature anton-cli-${{ matrix.target }} 2>/dev/null || true
-          fi
-
-          npx postject anton-cli-${{ matrix.target }} NODE_SEA_BLOB sea-prep.blob \
-            --sentinel-fuse NODE_SEA_FUSE_fce680ab2cc467b6e072b8b5df1996b2
-
-          # Re-sign on macOS
-          if [[ "${{ matrix.target }}" == darwin-* ]]; then
-            codesign --sign - anton-cli-${{ matrix.target }} 2>/dev/null || true
-          fi
-
-          chmod +x anton-cli-${{ matrix.target }}
+          chmod +x anton-cli.mjs
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: anton-cli-${{ matrix.target }}
-          path: anton-cli-${{ matrix.target }}
+          name: anton-cli
+          path: anton-cli.mjs
 
   # ── Desktop app (macOS, Windows, Linux) ──────────────────────────
   desktop:

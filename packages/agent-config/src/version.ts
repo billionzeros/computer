@@ -57,8 +57,8 @@ export interface UpdateManifest {
   publishedAt: string
   /** Pre-compiled agent binary URLs keyed by platform-arch (e.g. "linux-x64", "linux-arm64") */
   binaries?: Record<string, string>
-  /** Pre-compiled CLI binary URLs keyed by platform-arch (e.g. "linux-x64", "darwin-arm64") */
-  cli?: Record<string, string>
+  /** CLI bundle download URL (single .mjs file, platform-independent) */
+  cli?: string
 }
 
 // ── Semver comparison ──────────────────────────────────────────────

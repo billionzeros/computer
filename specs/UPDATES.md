@@ -388,7 +388,7 @@ git push origin main --tags
 
 The GitHub Actions workflow (`.github/workflows/release.yml`) runs **only on version tags** (`v*`), not on every push to main. It:
 1. Builds agent SEA binaries for `linux-x64` and `linux-arm64`
-2. Builds CLI SEA binaries for `linux-x64`, `linux-arm64`, `darwin-x64`, `darwin-arm64`
+2. Builds CLI bundle (`anton-cli.mjs` — single file, platform-independent)
 3. Builds desktop app for macOS (.dmg), Windows (.msi), Linux (.AppImage/.deb)
 4. Creates a GitHub Release with all artifacts + changelog
 5. Updates `manifest.json` with the git hash
@@ -474,16 +474,15 @@ The `/install` endpoint on `antoncomputer.in` proxies the script from GitHub so 
 anton update
 ```
 
-The CLI checks `manifest.json` for a newer version, downloads the binary for the current platform, and replaces itself. Same manifest the agent uses, with a `cli` section:
+The CLI checks `manifest.json` for a newer version, downloads the `.mjs` bundle, and replaces itself. Same manifest the agent uses, with a `cli` field:
 
 ```json
 {
-  "cli": {
-    "linux-x64": "https://github.com/.../anton-cli-linux-x64",
-    "darwin-arm64": "https://github.com/.../anton-cli-darwin-arm64"
-  }
+  "cli": "https://github.com/.../anton-cli.mjs"
 }
 ```
+
+The CLI is a single platform-independent `.mjs` file (requires Node.js >= 22). No per-platform binaries needed — it's pure JavaScript.
 
 ### CLI commands
 

@@ -207,12 +207,7 @@ node -e "
     'linux-x64': '${GITHUB_BASE}/anton-agent-linux-x64',
     'linux-arm64': '${GITHUB_BASE}/anton-agent-linux-arm64'
   };
-  manifest.cli = {
-    'linux-x64': '${GITHUB_BASE}/anton-cli-linux-x64',
-    'linux-arm64': '${GITHUB_BASE}/anton-cli-linux-arm64',
-    'darwin-x64': '${GITHUB_BASE}/anton-cli-darwin-x64',
-    'darwin-arm64': '${GITHUB_BASE}/anton-cli-darwin-arm64'
-  };
+  manifest.cli = '${GITHUB_BASE}/anton-cli.mjs';
   fs.writeFileSync('manifest.json', JSON.stringify(manifest, null, 2) + '\n');
 "
 
