@@ -1,7 +1,6 @@
 import { randomBytes } from 'node:crypto'
 import {
   appendFileSync,
-  copyFileSync,
   existsSync,
   mkdirSync,
   readFileSync,
@@ -11,8 +10,7 @@ import {
   writeFileSync,
 } from 'node:fs'
 import { homedir, hostname } from 'node:os'
-import { dirname, join } from 'node:path'
-import { fileURLToPath } from 'node:url'
+import { join } from 'node:path'
 import { parse as parseYaml, stringify as stringifyYaml } from 'yaml'
 
 // ── Provider types ──────────────────────────────────────────────────
@@ -149,9 +147,9 @@ const SESSIONS_DIR = join(ANTON_DIR, 'sessions')
 const PROMPTS_DIR = join(ANTON_DIR, 'prompts')
 const SYSTEM_PROMPT_PATH = join(PROMPTS_DIR, 'system.md')
 
-// Path to bundled default prompt shipped with the package
-const __dirname = dirname(fileURLToPath(import.meta.url))
-const BUNDLED_PROMPT_PATH = join(__dirname, '..', 'prompts', 'system.md')
+// Embedded system prompt — baked in at build time by scripts/embed-prompts.js.
+// This works in both source mode and binary mode (no filesystem read needed).
+import { EMBEDDED_SYSTEM_PROMPT } from './embedded-prompts.js'
 
 // ── Default providers ───────────────────────────────────────────────
 
@@ -721,15 +719,10 @@ export function getSessionsDir(): string {
 export function loadSystemPrompt(): string {
   mkdirSync(PROMPTS_DIR, { recursive: true })
 
-  // Seed from bundled default if user hasn't customized yet
+  // Seed from embedded default if user hasn't customized yet
   if (!existsSync(SYSTEM_PROMPT_PATH)) {
-    if (existsSync(BUNDLED_PROMPT_PATH)) {
-      copyFileSync(BUNDLED_PROMPT_PATH, SYSTEM_PROMPT_PATH)
-      console.log(`  System prompt created: ${SYSTEM_PROMPT_PATH}`)
-    } else {
-      // Hardcoded fallback if bundled file is missing
-      return FALLBACK_SYSTEM_PROMPT
-    }
+    writeFileSync(SYSTEM_PROMPT_PATH, EMBEDDED_SYSTEM_PROMPT, 'utf-8')
+    console.log(`  System prompt created: ${SYSTEM_PROMPT_PATH}`)
   }
 
   let prompt = readFileSync(SYSTEM_PROMPT_PATH, 'utf-8')
@@ -755,5 +748,3 @@ export function loadSystemPrompt(): string {
   return prompt
 }
 
-const FALLBACK_SYSTEM_PROMPT =
-  'You are anton, an AI agent running on this machine. You are a doer, not a describer. When the user asks you to do something, use your tools and do it. Be concise.'

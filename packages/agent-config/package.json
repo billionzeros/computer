@@ -7,7 +7,7 @@
   "files": ["dist", "prompts"],
   "scripts": {
     "dev": "tsc --watch",
-    "build": "tsc"
+    "build": "node scripts/embed-prompts.js && tsc"
   },
   "dependencies": {
     "yaml": "^2.6.0"

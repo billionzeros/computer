@@ -23,7 +23,7 @@ endif
 
 # ── Commands ─────────────────────────────────────────────────────
 
-.PHONY: deploy update sync verify status logs restart stop ping check setup help
+.PHONY: deploy update sync push verify status logs restart stop ping check setup help
 
 ## deploy: Full deploy to all hosts in inventory (or HOST=name for one)
 deploy: _check-ansible
@@ -88,6 +88,40 @@ sync: _check-ansible
 		echo ""; \
 	done
 	@echo "  Sync complete. Run 'make verify' to check."
+	@echo ""
+
+## push: Bundle agent → scp to VPS → restart (fast dev deploy, ~5 seconds)
+push: _check-ansible
+	@echo ""
+	@echo "  Bundling and pushing to VPS..."
+	@echo "  ──────────────────────────────"
+	@echo ""
+	@./scripts/bundle.sh
+	@BUNDLE="dist/anton-agent.mjs"; \
+	GIT_HASH=$$(git rev-parse --short HEAD 2>/dev/null || echo "dev"); \
+	PKG_VERSION=$$(node -e "console.log(JSON.parse(require('fs').readFileSync('package.json','utf8')).version)" 2>/dev/null || echo "0.1.0"); \
+	SPEC_VERSION=$$(grep "SPEC_VERSION = " packages/agent-config/src/version.ts | sed "s/.*'\(.*\)'/\1/"); \
+	ansible all -i $(INVENTORY) $(LIMIT) --list-hosts 2>/dev/null | tail -n +2 | sed 's/^ *//' | while read host; do \
+		IP=$$(ansible-inventory -i $(INVENTORY) --host "$$host" 2>/dev/null | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('ansible_host','$$host'))" 2>/dev/null || echo "$$host"); \
+		USER=$$(ansible-inventory -i $(INVENTORY) --host "$$host" 2>/dev/null | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('ansible_user','anton'))" 2>/dev/null || echo "anton"); \
+		KEY=$$(ansible-inventory -i $(INVENTORY) --host "$$host" 2>/dev/null | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('ansible_ssh_private_key_file',''))" 2>/dev/null || echo ""); \
+		SSH_OPTS="-o StrictHostKeyChecking=no"; \
+		SCP_OPTS="-o StrictHostKeyChecking=no"; \
+		if [ -n "$$KEY" ]; then SSH_OPTS="$$SSH_OPTS -i $$KEY"; SCP_OPTS="$$SCP_OPTS -i $$KEY"; fi; \
+		echo "  → $$host ($$IP)"; \
+		echo "    Uploading bundle..."; \
+		scp $$SCP_OPTS "$$BUNDLE" "$$USER@$$IP:/tmp/anton-agent.mjs"; \
+		echo "    Installing + restarting..."; \
+		ssh $$SSH_OPTS "$$USER@$$IP" "\
+			sudo mv /tmp/anton-agent.mjs /home/anton/.anton/anton-agent.mjs && \
+			sudo chmod +x /home/anton/.anton/anton-agent.mjs && \
+			sudo chown anton:anton /home/anton/.anton/anton-agent.mjs && \
+			sudo -u anton bash -c \"echo '{\\\"version\\\": \\\"$$PKG_VERSION\\\", \\\"gitHash\\\": \\\"$$GIT_HASH\\\", \\\"specVersion\\\": \\\"$$SPEC_VERSION\\\", \\\"deployedAt\\\": \\\"$$(date -u +%%Y-%%m-%%dT%%H:%%M:%%SZ)\\\", \\\"deployedBy\\\": \\\"push\\\"}' > /home/anton/.anton/version.json\" && \
+			sudo systemctl restart anton-agent 2>/dev/null || true"; \
+		echo "    $$host done ✓"; \
+		echo ""; \
+	done
+	@echo "  Push complete. Run 'make verify' to check."
 	@echo ""
 
 ## verify: Health check across all hosts (or HOST=name for one)
@@ -229,7 +263,9 @@ help:
 	@echo "    make deploy"
 	@echo "    make deploy HOST=agent1 API_KEY=sk-ant-api03-xxxxx"
 	@echo "    make deploy BRANCH=staging"
-	@echo "    make sync                    # rsync local code → VPS"
+	@echo "    make push                    # build binary + scp to VPS (fast)"
+	@echo "    make push HOST=agent1        # push to one host"
+	@echo "    make sync                    # rsync source code → VPS (legacy)"
 	@echo "    make sync HOST=agent1        # sync to one host"
 	@echo "    make status"
 	@echo "    make logs HOST=agent2"

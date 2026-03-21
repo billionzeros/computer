@@ -131,6 +131,9 @@ site/
 ehthumbs.db
 Thumbs.db
 
+# Generated files
+packages/agent-config/src/embedded-prompts.ts
+
 # Node.js (for any frontend tooling)
 node_modules/
 npm-debug.log*

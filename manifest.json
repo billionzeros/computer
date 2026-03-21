@@ -4,5 +4,9 @@
   "gitHash": "",
   "releaseUrl": "https://github.com/OmGuptaIND/anton.computer/releases",
   "changelog": "- Added self-update system with version compatibility checks\n- Agent now checks for updates automatically\n- Desktop shows update notifications with one-click update",
-  "publishedAt": "2026-03-21T00:00:00Z"
+  "publishedAt": "2026-03-21T00:00:00Z",
+  "binaries": {
+    "linux-x64": "https://github.com/OmGuptaIND/anton.computer/releases/download/v0.5.0/anton-agent-linux-x64",
+    "linux-arm64": "https://github.com/OmGuptaIND/anton.computer/releases/download/v0.5.0/anton-agent-linux-arm64"
+  }
 }
