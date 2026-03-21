@@ -11,9 +11,22 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versioning: [S
 ### Added
 - Binary distribution for agent updates (download binary instead of git pull + build)
 - Changelog tracking for all releases
+- `make release` — single command to ship a new version (interactive version prompt)
+- `make push` — fast dev deployment via esbuild bundle + scp (~5 seconds)
+- CLI binary distribution with self-update (`anton update`)
+- CLI install script: `curl -fsSL https://antoncomputer.in/install | bash`
+- CLI version compatibility check on connect (`MIN_AGENT_SPEC`)
+- CLI commands: `anton computer version`, `anton computer update` (manage agent from CLI)
+- Desktop app auto-updater (Tauri updater plugin)
+- Desktop app builds in CI (macOS .dmg, Windows .msi, Linux .AppImage/.deb)
+- System prompt embedded at build time (no fallback needed in binary mode)
+- GitHub Actions workflow builds agent + CLI + desktop on version tags
+- Install endpoint at `antoncomputer.in/install`
 
 ### Changed
 - Self-update system now prefers binary download path, falls back to source build
+- Manifest now includes `cli` section with per-platform binary URLs
+- Release script updates all versions (package.json, tauri.conf.json, Cargo.toml)
 
 ---
 

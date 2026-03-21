@@ -8,5 +8,11 @@
   "binaries": {
     "linux-x64": "https://github.com/OmGuptaIND/anton.computer/releases/download/v0.5.0/anton-agent-linux-x64",
     "linux-arm64": "https://github.com/OmGuptaIND/anton.computer/releases/download/v0.5.0/anton-agent-linux-arm64"
+  },
+  "cli": {
+    "linux-x64": "https://github.com/OmGuptaIND/anton.computer/releases/download/v0.5.0/anton-cli-linux-x64",
+    "linux-arm64": "https://github.com/OmGuptaIND/anton.computer/releases/download/v0.5.0/anton-cli-linux-arm64",
+    "darwin-x64": "https://github.com/OmGuptaIND/anton.computer/releases/download/v0.5.0/anton-cli-darwin-x64",
+    "darwin-arm64": "https://github.com/OmGuptaIND/anton.computer/releases/download/v0.5.0/anton-cli-darwin-arm64"
   }
 }

@@ -28,6 +28,7 @@ import { skillsCommand } from './commands/skills.js'
 import { statusCommand } from './commands/status.js'
 import { getDefaultMachine } from './lib/machines.js'
 import { LOGO, theme } from './lib/theme.js'
+import { CLI_VERSION, checkForUpdate, selfUpdate } from './lib/version.js'
 import { App } from './ui/App.js'
 
 const args = process.argv.slice(2)
@@ -95,8 +96,125 @@ async function main() {
     case 'version':
     case '--version':
     case '-v':
-      console.log('anton v0.1.0')
+      console.log(`anton CLI v${CLI_VERSION} (spec ${(await import('./lib/version.js')).SPEC_VERSION})`)
       break
+
+    case 'computer': {
+      const subcommand = args[1]
+      if (subcommand === 'version') {
+        // Connect to agent and show its version
+        const m = getDefaultMachine()
+        if (!m) {
+          console.log(`\n  No machines configured. Run ${theme.bold('anton connect')} first.\n`)
+          break
+        }
+        const { Connection } = await import('./lib/connection.js')
+        const { SPEC_VERSION: cliSpec, MIN_AGENT_SPEC: cliMinAgent } = await import('./lib/version.js')
+        const conn = new Connection()
+        try {
+          await conn.connect({ host: m.host, port: m.port, token: m.token, useTLS: m.useTLS })
+          console.log(`\n  ${theme.bold('Agent')}`)
+          console.log(`    ID:        ${conn.agentId}`)
+          console.log(`    Version:   ${conn.agentVersion}`)
+          console.log(`    Spec:      ${conn.agentSpecVersion}`)
+          console.log(`    Commit:    ${conn.agentGitHash}`)
+          console.log(`    Host:      ${m.host}:${m.port}`)
+          console.log(``)
+          console.log(`  ${theme.bold('CLI')}`)
+          console.log(`    Version:   ${CLI_VERSION}`)
+          console.log(`    Spec:      ${cliSpec}`)
+          console.log(`    Min agent: ${cliMinAgent}`)
+          console.log(``)
+          conn.disconnect()
+        } catch (err: unknown) {
+          console.log(`\n  ${theme.error(`Could not connect: ${(err as Error).message}`)}\n`)
+        }
+      } else if (subcommand === 'update') {
+        // Trigger agent self-update via the protocol
+        const m = getDefaultMachine()
+        if (!m) {
+          console.log(`\n  No machines configured. Run ${theme.bold('anton connect')} first.\n`)
+          break
+        }
+        const { Connection } = await import('./lib/connection.js')
+        const { Channel } = await import('@anton/protocol')
+        const conn = new Connection()
+        try {
+          await conn.connect({ host: m.host, port: m.port, token: m.token, useTLS: m.useTLS })
+          console.log(`\n  Connected to ${conn.agentId} (v${conn.agentVersion})`)
+          console.log(`  Triggering update...\n`)
+
+          // Listen for progress messages
+          conn.onMessage((channel, msg: unknown) => {
+            const m = msg as Record<string, unknown>
+            if (channel === Channel.CONTROL && m.type === 'update_progress') {
+              const stage = m.stage as string
+              const message = m.message as string
+              if (stage === 'done') {
+                console.log(`  ${theme.success(message)}`)
+                conn.disconnect()
+                process.exit(0)
+              } else if (stage === 'error') {
+                console.log(`  ${theme.error(message)}`)
+                conn.disconnect()
+                process.exit(1)
+              } else {
+                console.log(`  [${stage}] ${message}`)
+              }
+            } else if (channel === Channel.CONTROL && m.type === 'update_check_response') {
+              if (!(m.updateAvailable as boolean)) {
+                console.log(`  ${theme.success('Agent is already up to date.')}`)
+                conn.disconnect()
+                process.exit(0)
+              }
+              console.log(`  Update available: v${m.currentVersion} → v${m.latestVersion}`)
+              console.log(`  Starting update...`)
+              conn.send(Channel.CONTROL, { type: 'update_start' })
+            }
+          })
+
+          // First check if update is available
+          conn.send(Channel.CONTROL, { type: 'update_check' })
+
+          // Wait for completion (timeout after 5 min)
+          await new Promise((resolve) => setTimeout(resolve, 300_000))
+        } catch (err: unknown) {
+          console.log(`\n  ${theme.error(`Failed: ${(err as Error).message}`)}\n`)
+        }
+      } else {
+        console.log(`\n  Usage:`)
+        console.log(`    ${theme.brand('anton computer version')}    Show agent version`)
+        console.log(`    ${theme.brand('anton computer update')}     Update the agent\n`)
+      }
+      break
+    }
+
+    case 'update': {
+      console.log(`\n  Checking for updates... (current: v${CLI_VERSION})`)
+      const update = await checkForUpdate()
+      if (!update || !update.available) {
+        console.log(`  ${theme.success('Already up to date.')}\n`)
+        break
+      }
+      console.log(`  ${theme.brand(`v${update.latest}`)} available`)
+      if (update.changelog) {
+        console.log(`  ${theme.dim(update.changelog)}\n`)
+      }
+      if (!update.downloadUrl) {
+        console.log(`  No binary available for this platform.`)
+        console.log(`  Update manually: npm i -g @anton/cli\n`)
+        break
+      }
+      console.log(`  Downloading...`)
+      try {
+        await selfUpdate(update.downloadUrl)
+        console.log(`  ${theme.success(`Updated to v${update.latest}`)}`)
+        console.log(`  Restart your terminal or run ${theme.bold('anton version')} to verify.\n`)
+      } catch (err: unknown) {
+        console.log(`  ${theme.error(`Update failed: ${(err as Error).message}`)}\n`)
+      }
+      break
+    }
 
     case undefined: {
       // Interactive REPL mode
@@ -134,6 +252,9 @@ function showHelp() {
   console.log(`  ${theme.brand('anton shell')}                         Remote shell`)
   console.log(`  ${theme.brand('anton skills')} [list|run <name>]      Manage skills`)
   console.log(`  ${theme.brand('anton status')}                        Check agent status`)
+  console.log(`  ${theme.brand('anton update')}                        Update CLI to latest version`)
+  console.log(`  ${theme.brand('anton computer version')}              Show agent version`)
+  console.log(`  ${theme.brand('anton computer update')}               Update the agent on your VM`)
   console.log(`  ${theme.brand('anton help')}                          Show this help`)
   console.log()
   console.log(`  ${theme.dim('Ports (from SPEC.md):')}`)

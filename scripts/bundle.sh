@@ -40,8 +40,7 @@ npx esbuild packages/agent-server/dist/index.js \
   --outfile=dist/anton-agent.mjs \
   --external:node-pty \
   --external:chokidar \
-  --banner:js="#!/usr/bin/env node
-import{createRequire}from'module';const require=createRequire(import.meta.url);"
+  --banner:js="import{createRequire}from'module';const require=createRequire(import.meta.url);"
 
 chmod +x dist/anton-agent.mjs
 

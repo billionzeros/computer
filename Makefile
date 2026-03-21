@@ -23,7 +23,18 @@ endif
 
 # ── Commands ─────────────────────────────────────────────────────
 
-.PHONY: deploy update sync push verify status logs restart stop ping check setup help
+.PHONY: deploy update sync push release verify status logs restart stop ping check setup help
+
+## release: Ship a new version (bumps versions, changelog, tags, pushes, triggers CI)
+release:
+	@echo ""
+	@CURRENT=$$(node -e "console.log(JSON.parse(require('fs').readFileSync('package.json','utf8')).version)"); \
+	echo "  Current version: $$CURRENT"; \
+	echo ""; \
+	read -p "  New version: " VERSION; \
+	if [ -z "$$VERSION" ]; then echo "  Aborted."; exit 0; fi; \
+	echo ""; \
+	./scripts/release.sh "$$VERSION" --push
 
 ## deploy: Full deploy to all hosts in inventory (or HOST=name for one)
 deploy: _check-ansible
@@ -263,7 +274,8 @@ help:
 	@echo "    make deploy"
 	@echo "    make deploy HOST=agent1 API_KEY=sk-ant-api03-xxxxx"
 	@echo "    make deploy BRANCH=staging"
-	@echo "    make push                    # build binary + scp to VPS (fast)"
+	@echo "    make release                 # ship new version (interactive)"
+	@echo "    make push                    # build bundle + scp to VPS (fast)"
 	@echo "    make push HOST=agent1        # push to one host"
 	@echo "    make sync                    # rsync source code → VPS (legacy)"
 	@echo "    make sync HOST=agent1        # sync to one host"

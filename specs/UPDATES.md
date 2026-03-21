@@ -195,37 +195,66 @@ Each step streams `update_progress` messages back to the client so you can show 
 
 After restart, the desktop auto-reconnects (it already has 3-second reconnect logic) and gets the new version in `auth_ok`.
 
-### Binary distribution
+### Agent distribution
 
-The agent is compiled into a standalone executable using Node.js Single Executable Application (SEA). This bundles the V8 runtime + all application code into one file with zero runtime dependencies.
+The agent ships in two forms depending on context:
 
-#### How the binary is built
+| Form | What it is | When to use |
+|------|-----------|-------------|
+| **Bundle** (`anton-agent.mjs`) | Single JS file (~5MB), needs Node.js on VM | Dev iteration (`make push`) |
+| **SEA binary** (`anton-agent-linux-x64`) | Self-contained executable (~80MB), zero deps | Production releases (GitHub Release) |
 
-A GitHub Actions workflow runs on every tagged release:
+For day-to-day development, the bundle is the right choice — it builds in under 1 second and scps in under 2 seconds. SEA binaries are for production releases where you want zero runtime dependencies on the VM.
 
-1. `git tag v0.6.0 && git push --tags` triggers the workflow
-2. CI builds all TypeScript packages (`pnpm build`)
-3. Bundles the agent-server entry point into a single JS blob (using esbuild or similar)
-4. Injects the blob into a Node.js SEA binary for each target: `linux-x64`, `linux-arm64`
-5. Uploads binaries as GitHub Release assets
-6. Updates `manifest.json` with the new version + binary URLs
-7. Pushes the updated `manifest.json` to `main`
+#### How the bundle is built
+
+```bash
+./scripts/bundle.sh         # Build TypeScript + esbuild → dist/anton-agent.mjs
+./scripts/bundle.sh --skip-ts  # Just esbuild (if TS is already built)
+```
+
+esbuild takes the compiled TypeScript and bundles all workspace packages (`@anton/protocol`, `@anton/agent-config`, `@anton/agent-core`, `@anton/agent-server`) plus npm dependencies (like `ws`, `yaml`) into a single `.mjs` file. Native modules (`node-pty`, `chokidar`) are marked as external.
+
+#### How the SEA binary is built
+
+For production releases, CI (or `./scripts/build-binary.sh`) takes the bundle and injects it into a Node.js SEA:
+
+1. `git tag v0.6.0 && git push --tags` triggers the CI workflow
+2. CI builds TypeScript → bundles with esbuild
+3. Creates Node.js SEA binary for `linux-x64` and `linux-arm64`
+4. Uploads binaries as GitHub Release assets
+5. Updates `manifest.json` with version + binary URLs
+
+#### Embedded assets
+
+The system prompt (`prompts/system.md`) is embedded into the bundle at build time. The build step `scripts/embed-prompts.js` reads the prompt file and generates `src/embedded-prompts.ts` with the content as a string constant. esbuild then inlines it into the bundle.
+
+This means:
+- The binary/bundle always has the correct prompt — no fallback needed
+- On first run, the prompt is written to `~/.anton/prompts/system.md` so users can customize it
+- Users can edit their copy; it won't be overwritten on updates
+- When you update the prompt in source, the next build/release includes the new version
 
 #### What's on the VM
 
-For binary-deployed VMs, the filesystem is minimal:
-
 ```
 ~/.anton/
-├── anton-agent              ← The single binary (self-contained)
-├── config.yaml              ← User config
+├── anton-agent.mjs          ← Bundle (dev deploy via make push)
+│   OR
+├── anton-agent              ← SEA binary (production via self-update)
+├── config.yaml              ← Auto-created on first run (generates token)
 ├── version.json             ← Current version metadata
 ├── update-manifest.json     ← Cached latest manifest
-├── sessions/                ← Session data
+├── sessions/                ← Session data (auto-created)
+├── skills/                  ← User skills (auto-created)
+├── prompts/
+│   ├── system.md            ← Seeded from embedded prompt on first run
+│   ├── append.md            ← Optional user additions
+│   └── rules/               ← Optional rule files
 └── certs/                   ← TLS certs
 ```
 
-No `node_modules/`, no `.git/`, no source code. The binary is the entire agent.
+No `node_modules/`, no `.git/`, no source code. Everything is bootstrapped on first run from the bundle/binary.
 
 #### Platform key format
 
@@ -236,13 +265,22 @@ Binary URLs in the manifest are keyed by `{platform}-{arch}`:
 | `linux-x64` | Linux x86_64 (most Huddle01 / cloud VMs) |
 | `linux-arm64` | Linux ARM64 (Graviton, Ampere) |
 
-Only linux binaries are built. The agent binary runs on VMs — macOS users run from source during development.
+Only linux binaries are built. macOS users run from source during development.
+
+### Deployment modes
+
+| Command | What happens | Speed | Use when |
+|---------|-------------|-------|----------|
+| `make push` | Bundle locally → scp `.mjs` → restart | **~5s** | Day-to-day dev iteration |
+| `make sync` | Rsync source → build on VPS → restart | ~3 min | Legacy / need full source on VM |
+| `make deploy` | Full Ansible playbook | ~10 min | First-time VPS setup |
+| Self-update | Download SEA binary from GitHub Release → replace → restart | ~15s | Production user updates |
 
 ### Where the agent finds itself
 
-For **binary mode**: the binary runs from `~/.anton/anton-agent`. The updater replaces this file in-place.
+For **bundle/binary mode**: runs from `~/.anton/anton-agent.mjs` or `~/.anton/anton-agent`. The updater downloads the new file and replaces in-place.
 
-For **source mode** (fallback), the updater checks these locations in order:
+For **source mode** (legacy fallback), the updater checks these locations:
 
 1. **Git root** — if running from source (`git rev-parse --show-toplevel`)
 2. **`~/.anton/agent/`** — deployed via `make sync`
@@ -349,10 +387,10 @@ git push origin main --tags
 ```
 
 The GitHub Actions workflow (`.github/workflows/release.yml`) runs **only on version tags** (`v*`), not on every push to main. It:
-1. Builds TypeScript packages
-2. Bundles with esbuild into a single JS file
-3. Creates Node.js SEA binaries for `linux-x64` and `linux-arm64`
-4. Creates a GitHub Release with binaries + changelog
+1. Builds agent SEA binaries for `linux-x64` and `linux-arm64`
+2. Builds CLI SEA binaries for `linux-x64`, `linux-arm64`, `darwin-x64`, `darwin-arm64`
+3. Builds desktop app for macOS (.dmg), Windows (.msi), Linux (.AppImage/.deb)
+4. Creates a GitHub Release with all artifacts + changelog
 5. Updates `manifest.json` with the git hash
 
 ### Option B: Build locally and upload (free, faster)
@@ -397,6 +435,7 @@ ssh your-linux-vm "cd /path/to/repo && ./scripts/build-binary.sh linux-x64"
 | New feature (new messages) | Yes | Yes |
 | Breaking protocol change | Yes | Yes + update `MIN_CLIENT_SPEC` / `MIN_AGENT_SPEC` |
 | Desktop-only change | Desktop version only | No |
+| CLI-only change | CLI version only | No |
 
 ### What happens if versions mismatch
 
@@ -404,24 +443,125 @@ ssh your-linux-vm "cd /path/to/repo && ./scripts/build-binary.sh linux-x64"
 |----------|-------------|
 | Old desktop, new agent | Works fine. Desktop ignores unknown fields/messages. Missing new UI features. |
 | New desktop, old agent | Works fine. Agent ignores unknown messages. Desktop shows "Agent outdated" banner. |
+| Old CLI, new agent | Works fine. CLI ignores unknown messages. Warns if spec is too old. |
+| New CLI, old agent | Works fine. Agent ignores unknown messages. CLI warns on connect. |
 | Desktop spec < agent's `minClientSpec` | Desktop shows "Please update your desktop app" warning. Still connects. |
 | Agent spec < desktop's `MIN_AGENT_SPEC` | Desktop shows "Agent outdated — please update" banner. Still connects. |
+| Agent spec < CLI's `MIN_AGENT_SPEC` | CLI shows warning on connect. Still connects. |
 
-**Nothing ever breaks.** The worst case is degraded features with a banner telling you what to do.
+**Nothing ever breaks.** The worst case is degraded features with a warning telling you what to do.
+
+## CLI Distribution
+
+### Install
+
+```bash
+curl -fsSL https://antoncomputer.in/install | bash
+```
+
+The install script:
+1. Detects OS (linux/macOS) and architecture (x64/arm64)
+2. Downloads the CLI binary from the latest GitHub Release
+3. Installs to `~/.anton/bin/anton`
+4. Adds `~/.anton/bin` to PATH in the user's shell rc file (bash, zsh, or fish)
+5. Idempotent — re-running updates to latest without duplicating PATH entries
+
+The `/install` endpoint on `antoncomputer.in` proxies the script from GitHub so the URL stays clean.
+
+### CLI self-update
+
+```bash
+anton update
+```
+
+The CLI checks `manifest.json` for a newer version, downloads the binary for the current platform, and replaces itself. Same manifest the agent uses, with a `cli` section:
+
+```json
+{
+  "cli": {
+    "linux-x64": "https://github.com/.../anton-cli-linux-x64",
+    "darwin-arm64": "https://github.com/.../anton-cli-darwin-arm64"
+  }
+}
+```
+
+### CLI commands
+
+```bash
+anton version                # Show CLI version + spec version
+anton update                 # Update the CLI binary itself
+anton computer version       # Connect to agent, show full version info
+anton computer update        # Trigger agent self-update via protocol
+```
+
+#### `anton computer version` output
+
+Connects to the default machine and shows both sides:
+
+```
+  Agent
+    ID:        anton-vm1-abc123
+    Version:   0.6.0
+    Spec:      0.5.0
+    Commit:    a1b2c3d
+    Host:      148.113.4.94:9876
+
+  CLI
+    Version:   0.6.0
+    Spec:      0.5.0
+    Min agent: 0.4.0
+```
+
+#### `anton computer update`
+
+Connects to the agent, sends `update_check` on the CONTROL channel, and if an update is available, sends `update_start`. Streams `update_progress` messages to the terminal until done. Same protocol the desktop app uses — no new messages needed.
+
+### CLI version compatibility
+
+The CLI stores the full version info from `auth_ok`:
+
+| Field from `auth_ok` | CLI property | Purpose |
+|---|---|---|
+| `version` | `conn.agentVersion` | Agent release version |
+| `specVersion` | `conn.agentSpecVersion` | Wire protocol version |
+| `gitHash` | `conn.agentGitHash` | Exact build |
+| `minClientSpec` | `conn.agentMinClientSpec` | Oldest client the agent supports |
+
+The CLI declares its own `MIN_AGENT_SPEC` (in `packages/cli/src/lib/version.ts`). On connect, if the agent's `specVersion < MIN_AGENT_SPEC`, the CLI prints a warning but still connects (graceful degradation, same as desktop).
+
+### Version constants across all components
+
+| Component | File | Constants |
+|---|---|---|
+| **Agent** | `packages/agent-config/src/version.ts` | `VERSION`, `SPEC_VERSION`, `MIN_CLIENT_SPEC` |
+| **Desktop** | Uses agent's constants via `auth_ok` | `MIN_AGENT_SPEC` |
+| **CLI** | `packages/cli/src/lib/version.ts` | `CLI_VERSION`, `SPEC_VERSION`, `MIN_AGENT_SPEC` |
+
+All three share the same `SPEC_VERSION` (wire protocol) and independently declare which minimum version of the *other* side they support.
 
 ## File Map
 
 ```
-packages/agent-config/src/version.ts    ← Version constants, semver utils, manifest types
+packages/agent-config/src/version.ts    ← Agent version constants, semver utils, manifest types
+packages/cli/src/lib/version.ts          ← CLI version constants, MIN_AGENT_SPEC, self-update
 packages/protocol/src/messages.ts        ← Update protocol message types
-packages/agent-server/src/updater.ts     ← Updater service (binary + source self-update)
+packages/agent-server/src/updater.ts     ← Agent updater (binary + source self-update)
 packages/agent-server/src/server.ts      ← Wired into handshake + control channel
 packages/desktop/src/lib/connection.ts   ← sendUpdateCheck(), sendUpdateStart()
+packages/desktop/src/lib/desktop-updater.ts ← Tauri auto-updater for desktop app
 packages/desktop/src/lib/store.ts        ← Update state in Zustand store
-manifest.json                            ← Release manifest (source of truth)
+packages/cli/src/lib/connection.ts       ← CLI connection + agent spec check
+manifest.json                            ← Release manifest (agent + CLI binaries)
 CHANGELOG.md                             ← Version history (Keep a Changelog format)
 scripts/release.sh                       ← Release automation (version bump + changelog + tag)
-scripts/build-binary.sh                  ← Local binary build (avoids CI costs)
-.github/workflows/release.yml            ← CI binary build + GitHub Release (on tag push)
+scripts/bundle.sh                        ← Fast esbuild bundle for dev deploys
+scripts/build-binary.sh                  ← Local SEA binary build (avoids CI costs)
+scripts/install.sh                       ← CLI installer (curl | bash)
+.github/workflows/release.yml            ← CI: agent + CLI + desktop builds + GitHub Release
 SPEC.md                                  ← Wire protocol spec (v0.5.0 section)
+```
+
+### External (antoncomputer.in)
+```
+src/app/install/route.ts                 ← Serves install.sh at antoncomputer.in/install
 ```

@@ -1,14 +1,13 @@
-# Build agent binaries and create a GitHub Release when a version tag is pushed.
+# Build agent binaries + desktop app installers, then create a GitHub Release.
 #
-# Triggered by: git push origin main --tags (after running ./scripts/release.sh)
+# Triggered by: git push origin main --tags (after running `make release`)
 #
 # What it does:
-#   1. Builds all TypeScript packages
-#   2. Bundles agent-server into a single JS file with esbuild
-#   3. Creates a Node.js SEA (Single Executable Application) for linux-x64 and linux-arm64
-#   4. Extracts changelog for this version
-#   5. Creates a GitHub Release with binaries + changelog
-#   6. Updates manifest.json with the final git hash and pushes to main
+#   1. Builds agent SEA binaries for linux-x64 and linux-arm64
+#   2. Builds desktop app for macOS (dmg), Windows (msi), Linux (AppImage/deb)
+#   3. Extracts changelog for this version
+#   4. Creates a GitHub Release with all artifacts + changelog
+#   5. Updates manifest.json with the final git hash
 
 name: Release
 
@@ -21,9 +20,8 @@ permissions:
   contents: write
 
 jobs:
-  build:
-    # Only build linux binaries — VMs are always linux.
-    # macOS/darwin builds are not needed (desktop app is Tauri, not the agent).
+  # ── Agent binaries (linux only) ──────────────────────────────────
+  agent:
     strategy:
       matrix:
         include:
@@ -67,7 +65,7 @@ jobs:
             --external:chokidar \
             --banner:js="import{createRequire}from'module';const require=createRequire(import.meta.url);"
 
-      - name: Create SEA config
+      - name: Create SEA binary
         run: |
           cat > sea-config.json << 'EOF'
           {
@@ -79,19 +77,12 @@ jobs:
           }
           EOF
 
-      - name: Generate SEA blob
-        run: node --experimental-sea-config sea-config.json
-
-      - name: Create executable
-        run: |
-          # Copy the node binary as our base
+          node --experimental-sea-config sea-config.json
           cp $(which node) anton-agent-${{ matrix.target }}
 
-          # Inject the SEA blob
           npx postject anton-agent-${{ matrix.target }} NODE_SEA_BLOB sea-prep.blob \
             --sentinel-fuse NODE_SEA_FUSE_fce680ab2cc467b6e072b8b5df1996b2
 
-          # Make executable
           chmod +x anton-agent-${{ matrix.target }}
 
       - name: Upload artifact
@@ -100,8 +91,164 @@ jobs:
           name: anton-agent-${{ matrix.target }}
           path: anton-agent-${{ matrix.target }}
 
+  # ── CLI binary (all platforms) ─────────────────────────────────
+  cli:
+    strategy:
+      matrix:
+        include:
+          - os: ubuntu-latest
+            target: linux-x64
+          - os: ubuntu-24.04-arm
+            target: linux-arm64
+          - os: macos-latest
+            target: darwin-arm64
+          - os: macos-13
+            target: darwin-x64
+
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - name: Install dependencies
+        run: pnpm install --ignore-scripts
+
+      - name: Build TypeScript
+        run: |
+          pnpm --filter @anton/protocol build
+          pnpm --filter @anton/cli build
+
+      - name: Get CLI version
+        id: cli_version
+        run: echo "version=$(node -e "console.log(JSON.parse(require('fs').readFileSync('packages/cli/package.json','utf8')).version)")" >> "$GITHUB_OUTPUT"
+
+      - name: Bundle CLI with esbuild
+        run: |
+          npx esbuild packages/cli/dist/index.js \
+            --bundle \
+            --platform=node \
+            --target=node22 \
+            --format=esm \
+            --outfile=cli-bundle.mjs \
+            --external:node-pty \
+            --define:__CLI_VERSION__=\"${{ steps.cli_version.outputs.version }}\" \
+            --banner:js="import{createRequire}from'module';const require=createRequire(import.meta.url);"
+
+      - name: Create SEA binary
+        run: |
+          cat > sea-config.json << 'EOF'
+          {
+            "main": "cli-bundle.mjs",
+            "output": "sea-prep.blob",
+            "disableExperimentalSEAWarning": true,
+            "useSnapshot": false,
+            "useCodeCache": true
+          }
+          EOF
+
+          node --experimental-sea-config sea-config.json
+          cp $(which node) anton-cli-${{ matrix.target }}
+
+          # Remove code signature on macOS
+          if [[ "${{ matrix.target }}" == darwin-* ]]; then
+            codesign --remove-signature anton-cli-${{ matrix.target }} 2>/dev/null || true
+          fi
+
+          npx postject anton-cli-${{ matrix.target }} NODE_SEA_BLOB sea-prep.blob \
+            --sentinel-fuse NODE_SEA_FUSE_fce680ab2cc467b6e072b8b5df1996b2
+
+          # Re-sign on macOS
+          if [[ "${{ matrix.target }}" == darwin-* ]]; then
+            codesign --sign - anton-cli-${{ matrix.target }} 2>/dev/null || true
+          fi
+
+          chmod +x anton-cli-${{ matrix.target }}
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: anton-cli-${{ matrix.target }}
+          path: anton-cli-${{ matrix.target }}
+
+  # ── Desktop app (macOS, Windows, Linux) ──────────────────────────
+  desktop:
+    strategy:
+      matrix:
+        include:
+          - os: macos-latest
+            target: macos
+          - os: windows-latest
+            target: windows
+          - os: ubuntu-latest
+            target: linux
+
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Install Linux dependencies
+        if: matrix.target == 'linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libwebkit2gtk-4.1-dev \
+            libappindicator3-dev \
+            librsvg2-dev \
+            patchelf
+
+      - name: Install dependencies
+        run: pnpm install
+
+      - name: Build protocol (desktop dependency)
+        run: pnpm --filter @anton/protocol build
+
+      - name: Build desktop app
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        with:
+          projectPath: packages/desktop
+          tauriScript: pnpm tauri
+
+      - name: Upload desktop artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: desktop-${{ matrix.target }}
+          path: |
+            packages/desktop/src-tauri/target/release/bundle/**/*.dmg
+            packages/desktop/src-tauri/target/release/bundle/**/*.app.tar.gz
+            packages/desktop/src-tauri/target/release/bundle/**/*.app.tar.gz.sig
+            packages/desktop/src-tauri/target/release/bundle/**/*.msi
+            packages/desktop/src-tauri/target/release/bundle/**/*.msi.sig
+            packages/desktop/src-tauri/target/release/bundle/**/*.AppImage
+            packages/desktop/src-tauri/target/release/bundle/**/*.AppImage.sig
+            packages/desktop/src-tauri/target/release/bundle/**/*.deb
+
+  # ── Create GitHub Release ────────────────────────────────────────
   release:
-    needs: build
+    needs: [agent, cli, desktop]
     runs-on: ubuntu-latest
 
     steps:
@@ -117,24 +264,33 @@ jobs:
         id: version
         run: echo "version=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
 
-      - name: Extract changelog for this version
-        id: changelog
+      - name: Extract changelog
         run: |
-          # Extract the section for this version from CHANGELOG.md
           VERSION="${{ steps.version.outputs.version }}"
-          NOTES=$(node -e "
+          node -e "
             const fs = require('fs');
             const changelog = fs.readFileSync('CHANGELOG.md', 'utf8');
             const regex = new RegExp('## \\\\[' + '${VERSION}'.replace(/\\./g, '\\\\.') + '\\\\][\\\\s\\\\S]*?(?=\\n---)', 'm');
             const match = changelog.match(regex);
-            if (match) {
-              console.log(match[0]);
-            } else {
-              console.log('Release v${VERSION}');
-            }
-          ")
-          # Write to file for gh release
-          echo "$NOTES" > release-notes.md
+            fs.writeFileSync('release-notes.md', match ? match[0] : 'Release v${VERSION}');
+          "
+
+      - name: Collect all release assets
+        run: |
+          mkdir -p release-assets
+          # Agent binaries
+          cp artifacts/anton-agent-linux-x64/anton-agent-linux-x64 release-assets/ 2>/dev/null || true
+          cp artifacts/anton-agent-linux-arm64/anton-agent-linux-arm64 release-assets/ 2>/dev/null || true
+          # Desktop installers — find recursively since Tauri nests them
+          find artifacts/desktop-* -type f \( \
+            -name "*.dmg" -o -name "*.msi" -o -name "*.AppImage" -o -name "*.deb" \
+            -o -name "*.app.tar.gz" -o -name "*.app.tar.gz.sig" \
+            -o -name "*.msi.sig" -o -name "*.AppImage.sig" \
+          \) -exec cp {} release-assets/ \;
+          # Tauri updater manifest (latest.json) — generated by tauri-action
+          find artifacts/desktop-* -name "latest.json" -exec cp {} release-assets/ \; 2>/dev/null || true
+          echo "Release assets:"
+          ls -lh release-assets/
 
       - name: Create GitHub Release
         env:
@@ -143,12 +299,9 @@ jobs:
           gh release create "${{ github.ref_name }}" \
             --title "v${{ steps.version.outputs.version }}" \
             --notes-file release-notes.md \
-            artifacts/anton-agent-linux-x64/anton-agent-linux-x64 \
-            artifacts/anton-agent-linux-arm64/anton-agent-linux-arm64
+            release-assets/*
 
       - name: Update manifest with git hash
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           GIT_HASH=$(git rev-parse --short HEAD)
 

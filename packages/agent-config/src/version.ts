@@ -55,8 +55,10 @@ export interface UpdateManifest {
   changelog: string
   /** ISO timestamp of when this release was published */
   publishedAt: string
-  /** Pre-compiled binary URLs keyed by platform-arch (e.g. "linux-x64", "linux-arm64") */
+  /** Pre-compiled agent binary URLs keyed by platform-arch (e.g. "linux-x64", "linux-arm64") */
   binaries?: Record<string, string>
+  /** Pre-compiled CLI binary URLs keyed by platform-arch (e.g. "linux-x64", "darwin-arm64") */
+  cli?: Record<string, string>
 }
 
 // ── Semver comparison ──────────────────────────────────────────────
