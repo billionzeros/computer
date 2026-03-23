@@ -1,0 +1,25 @@
+packages/desktop/src/index.css
+  ef16e84d65bd2bea 2223-2264
+packages/desktop/src/components/Connect.tsx
+  ef16e84d65bd2bea 2,10-14,19-20,59-73,95,160-162,167-193,197-234,251
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.1.17",
+  "base_commit_sha": "07d7d9f8a3a628de5544cc4aa2889e567c7006e8",
+  "prompts": {
+    "ef16e84d65bd2bea": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "b80c20ce-d482-4b1a-b172-eef1821dfb5f",
+        "model": "claude-opus-4-6"
+      },
+      "human_author": "Om Gupta <omgupta0720@gmail.com>",
+      "messages": [],
+      "total_additions": 213,
+      "total_deletions": 138,
+      "accepted_lines": 138,
+      "overriden_lines": 0
+    }
+  }
+}
