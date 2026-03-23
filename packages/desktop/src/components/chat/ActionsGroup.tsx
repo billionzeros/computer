@@ -1,12 +1,14 @@
 import { AnimatePresence, motion } from 'framer-motion'
 import {
   Bell,
+  Brain,
   ChevronDown,
   ChevronRight,
   Clipboard,
   Code2,
   Cpu,
   Database,
+  FileDiff,
   FolderOpen,
   GitBranch,
   Globe,
@@ -20,8 +22,6 @@ import {
   Terminal,
   Wifi,
   Wrench,
-  Brain,
-  FileDiff,
 } from 'lucide-react'
 import type React from 'react'
 import { useEffect, useMemo, useState } from 'react'
@@ -69,7 +69,7 @@ const toolLabels: Record<string, string> = {
   diff: 'File diff',
 }
 
-function getToolParam(toolName: string, toolInput: Record<string, unknown>): string {
+function _getToolParam(toolName: string, toolInput: Record<string, unknown>): string {
   switch (toolName) {
     case 'shell':
       return (toolInput.command as string) || ''
@@ -92,10 +92,12 @@ function getStepTitle(toolName: string, toolInput: Record<string, unknown>): str
     case 'shell': {
       const cmd = (toolInput.command as string) || ''
       // Try to describe common commands
-      if (cmd.startsWith('cd ') && cmd.includes('&&')) return cmd.split('&&')[1]?.trim().split(' ')[0] || 'Running command'
+      if (cmd.startsWith('cd ') && cmd.includes('&&'))
+        return cmd.split('&&')[1]?.trim().split(' ')[0] || 'Running command'
       if (cmd.startsWith('python')) return 'Running Python script'
       if (cmd.startsWith('node')) return 'Running Node.js script'
-      if (cmd.startsWith('npm ') || cmd.startsWith('pnpm ')) return `Running ${cmd.split(' ').slice(0, 3).join(' ')}`
+      if (cmd.startsWith('npm ') || cmd.startsWith('pnpm '))
+        return `Running ${cmd.split(' ').slice(0, 3).join(' ')}`
       if (cmd.startsWith('git ')) return `Git ${cmd.split(' ')[1]}`
       if (cmd.startsWith('curl ') || cmd.startsWith('wget ')) return 'Making HTTP request'
       if (cmd.startsWith('ls ') || cmd === 'ls') return 'Listing directory'
@@ -115,7 +117,7 @@ function getStepTitle(toolName: string, toolInput: Record<string, unknown>): str
       if (op === 'write') return `Writing ${filename}`
       if (op === 'read') return `Reading ${filename}`
       if (op === 'delete') return `Deleting ${filename}`
-      if (op === 'mkdir') return `Creating directory`
+      if (op === 'mkdir') return 'Creating directory'
       return `${op || 'File'} operation`
     }
     case 'browser': {
@@ -156,7 +158,11 @@ function getStepTitle(toolName: string, toolInput: Record<string, unknown>): str
     }
     case 'database': {
       const op = (toolInput.operation as string) || ''
-      return op === 'query' ? 'Running query' : op === 'execute' ? 'Executing SQL' : `Database ${op}`
+      return op === 'query'
+        ? 'Running query'
+        : op === 'execute'
+          ? 'Executing SQL'
+          : `Database ${op}`
     }
     case 'memory': {
       const op = (toolInput.operation as string) || ''
@@ -290,11 +296,7 @@ export function ActionsGroup({ actions, defaultExpanded = false }: Props) {
       >
         <Code2 size={14} className="actions-group__header-icon" />
         <span className="actions-group__header-text">{headerText}</span>
-        {errorCount > 0 && (
-          <span className="actions-group__error-badge">
-            {errorCount} failed
-          </span>
-        )}
+        {errorCount > 0 && <span className="actions-group__error-badge">{errorCount} failed</span>}
         {expanded ? (
           <ChevronDown size={14} className="actions-group__chevron" />
         ) : (
@@ -358,8 +360,7 @@ export function ActionsGroup({ actions, defaultExpanded = false }: Props) {
                         type="button"
                         className="actions-group__step-header"
                         onClick={() =>
-                          action.result &&
-                          setExpandedRowId(isRowExpanded ? null : action.call.id)
+                          action.result && setExpandedRowId(isRowExpanded ? null : action.call.id)
                         }
                       >
                         <span
@@ -396,9 +397,7 @@ export function ActionsGroup({ actions, defaultExpanded = false }: Props) {
 
                       {/* Code preview */}
                       {codePreview && (
-                        <div className="actions-group__code-preview">
-                          {codePreview}
-                        </div>
+                        <div className="actions-group__code-preview">{codePreview}</div>
                       )}
 
                       {/* Result preview (one-liner) when not expanded */}
@@ -422,9 +421,7 @@ export function ActionsGroup({ actions, defaultExpanded = false }: Props) {
                             transition={{ duration: 0.12 }}
                             style={{ overflow: 'hidden' }}
                           >
-                            <pre className="actions-group__result">
-                              {action.result.content}
-                            </pre>
+                            <pre className="actions-group__result">{action.result.content}</pre>
                           </motion.div>
                         )}
                       </AnimatePresence>

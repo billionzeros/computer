@@ -105,8 +105,7 @@ export function ProviderSettingsModal({ provider, onClose }: Props) {
   }
 
   const modelsChanged =
-    models.length !== provider.models.length ||
-    models.some((m, i) => m !== provider.models[i])
+    models.length !== provider.models.length || models.some((m, i) => m !== provider.models[i])
 
   return (
     <Modal open={!!provider} onClose={onClose}>
@@ -136,9 +135,12 @@ export function ProviderSettingsModal({ provider, onClose }: Props) {
 
         {/* API Key */}
         <div className="prov-modal__section">
-          <label className="prov-modal__field-label">API Key</label>
+          <label className="prov-modal__field-label" htmlFor="prov-api-key">
+            API Key
+          </label>
           <form onSubmit={handleKeySubmit} className="prov-modal__key-row">
             <input
+              id="prov-api-key"
               type="password"
               className="prov-modal__key-input"
               placeholder={provider.hasApiKey ? 'Replace existing key...' : 'sk-or-v1-...'}
@@ -152,7 +154,13 @@ export function ProviderSettingsModal({ provider, onClose }: Props) {
               disabled={!apiKey.trim()}
               className={`prov-modal__key-btn ${keySaved ? 'prov-modal__key-btn--saved' : ''}`}
             >
-              {keySaved ? <><Check size={14} /> Saved</> : 'Save key'}
+              {keySaved ? (
+                <>
+                  <Check size={14} /> Saved
+                </>
+              ) : (
+                'Save key'
+              )}
             </button>
           </form>
         </div>
@@ -160,8 +168,8 @@ export function ProviderSettingsModal({ provider, onClose }: Props) {
         {/* Models */}
         <div className="prov-modal__section">
           <div className="prov-modal__field-header">
-            <label className="prov-modal__field-label">Models</label>
-            {(provider.defaultModels && provider.defaultModels.length > 0) && (
+            <span className="prov-modal__field-label">Models</span>
+            {provider.defaultModels && provider.defaultModels.length > 0 && (
               <button type="button" onClick={handleResetModels} className="prov-modal__reset">
                 <RotateCcw size={11} /> Defaults
               </button>
@@ -210,7 +218,13 @@ export function ProviderSettingsModal({ provider, onClose }: Props) {
               onClick={handleSaveModels}
               className={`prov-modal__save-btn ${modelsSaved ? 'prov-modal__save-btn--saved' : ''}`}
             >
-              {modelsSaved ? <><Check size={14} /> Models saved</> : 'Save model changes'}
+              {modelsSaved ? (
+                <>
+                  <Check size={14} /> Models saved
+                </>
+              ) : (
+                'Save model changes'
+              )}
             </button>
           </div>
         )}

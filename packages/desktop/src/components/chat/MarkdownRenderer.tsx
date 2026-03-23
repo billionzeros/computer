@@ -12,43 +12,49 @@ interface Props {
 export function MarkdownRenderer({ content }: Props) {
   return (
     <div className="markdown-body">
-    <Markdown
-      remarkPlugins={[remarkGfm]}
-      children={content}
-      components={{
-        code: CodeBlock,
-        a: ({ href, children }) => (
-          <a href={href} target="_blank" rel="noopener noreferrer" className="markdown-body__link">
-            {children}
-          </a>
-        ),
-        ul: ({ children }) => <ul className="markdown-body__list">{children}</ul>,
-        ol: ({ children }) => (
-          <ol className="markdown-body__list markdown-body__list--ordered">{children}</ol>
-        ),
-        blockquote: ({ children }) => (
-          <blockquote className="markdown-body__quote">{children}</blockquote>
-        ),
-        table: ({ children }) => (
-          <div className="markdown-body__tableWrap">
-            <table className="markdown-body__table">{children}</table>
-          </div>
-        ),
-        th: ({ children }) => <th className="markdown-body__th">{children}</th>,
-        td: ({ children }) => <td className="markdown-body__td">{children}</td>,
-        h1: ({ children }) => (
-          <h1 className="markdown-body__heading markdown-body__heading--h1">{children}</h1>
-        ),
-        h2: ({ children }) => (
-          <h2 className="markdown-body__heading markdown-body__heading--h2">{children}</h2>
-        ),
-        h3: ({ children }) => (
-          <h3 className="markdown-body__heading markdown-body__heading--h3">{children}</h3>
-        ),
-        p: ({ children }) => <p className="markdown-body__paragraph">{children}</p>,
-        hr: () => <hr className="markdown-body__rule" />,
-      }}
-    />
+      <Markdown
+        remarkPlugins={[remarkGfm]}
+        components={{
+          code: CodeBlock,
+          a: ({ href, children }) => (
+            <a
+              href={href}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="markdown-body__link"
+            >
+              {children}
+            </a>
+          ),
+          ul: ({ children }) => <ul className="markdown-body__list">{children}</ul>,
+          ol: ({ children }) => (
+            <ol className="markdown-body__list markdown-body__list--ordered">{children}</ol>
+          ),
+          blockquote: ({ children }) => (
+            <blockquote className="markdown-body__quote">{children}</blockquote>
+          ),
+          table: ({ children }) => (
+            <div className="markdown-body__tableWrap">
+              <table className="markdown-body__table">{children}</table>
+            </div>
+          ),
+          th: ({ children }) => <th className="markdown-body__th">{children}</th>,
+          td: ({ children }) => <td className="markdown-body__td">{children}</td>,
+          h1: ({ children }) => (
+            <h1 className="markdown-body__heading markdown-body__heading--h1">{children}</h1>
+          ),
+          h2: ({ children }) => (
+            <h2 className="markdown-body__heading markdown-body__heading--h2">{children}</h2>
+          ),
+          h3: ({ children }) => (
+            <h3 className="markdown-body__heading markdown-body__heading--h3">{children}</h3>
+          ),
+          p: ({ children }) => <p className="markdown-body__paragraph">{children}</p>,
+          hr: () => <hr className="markdown-body__rule" />,
+        }}
+      >
+        {content}
+      </Markdown>
     </div>
   )
 }

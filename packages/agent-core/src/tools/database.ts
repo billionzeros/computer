@@ -23,14 +23,11 @@ function ensureDbDir(dbPath: string) {
 
 function sqlite(sql: string, dbPath: string, mode = 'column'): string {
   try {
-    return execSync(
-      `sqlite3 -${mode} -header "${dbPath}" "${sql.replace(/"/g, '\\"')}"`,
-      {
-        encoding: 'utf-8',
-        timeout: 10_000,
-        maxBuffer: 1024 * 1024,
-      },
-    ).trim()
+    return execSync(`sqlite3 -${mode} -header "${dbPath}" "${sql.replace(/"/g, '\\"')}"`, {
+      encoding: 'utf-8',
+      timeout: 10_000,
+      maxBuffer: 1024 * 1024,
+    }).trim()
   } catch (err: unknown) {
     const e = err as { stderr?: string; message: string }
     return `Error: ${e.stderr?.trim() || e.message}`

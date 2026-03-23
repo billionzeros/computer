@@ -1,11 +1,11 @@
 import { AnimatePresence } from 'framer-motion'
 import { ArrowDown } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { useAgentStatus, type ChatMessage } from '../../lib/store.js'
+import { type ChatMessage, useAgentStatus } from '../../lib/store.js'
 import { ActionsGroup } from './ActionsGroup.js'
-import { groupMessages } from './groupMessages.js'
 import { MessageBubble } from './MessageBubble.js'
 import { ThinkingIndicator } from './ThinkingIndicator.js'
+import { groupMessages } from './groupMessages.js'
 
 interface Props {
   messages: ChatMessage[]
@@ -60,9 +60,7 @@ export function MessageList({ messages }: Props) {
               <ActionsGroup
                 key={item.id}
                 actions={item.actions}
-                defaultExpanded={
-                  idx === grouped.length - 1 && agentStatus === 'working'
-                }
+                defaultExpanded={idx === grouped.length - 1 && agentStatus === 'working'}
               />
             ),
           )}

@@ -53,7 +53,10 @@ export function autoTitle(messages: ChatMessage[]): string {
 function generateTitle(text: string): string {
   // Remove common filler/greeting prefixes
   let cleaned = text
-    .replace(/^(hey|hi|hello|yo|sup|ok|okay|please|can you|could you|i want to|i need to|i'd like to|help me|let's|let me)\b[,!.\s]*/i, '')
+    .replace(
+      /^(hey|hi|hello|yo|sup|ok|okay|please|can you|could you|i want to|i need to|i'd like to|help me|let's|let me)\b[,!.\s]*/i,
+      '',
+    )
     .trim()
 
   // If cleaning removed everything, use original
@@ -64,7 +67,8 @@ function generateTitle(text: string): string {
 
   // If it starts with a verb, capitalize and use as-is (it's already action-oriented)
   // Common action verbs that make good title starts
-  const actionVerbs = /^(build|create|make|set up|setup|deploy|fix|debug|write|add|remove|delete|update|install|configure|analyze|track|design|implement|refactor|migrate|optimize|test|check|find|search|list|show|explain|generate|convert|merge|split|run|start|stop|monitor|connect|schedule|automate|scrape|fetch|download|upload|compare|review|plan|organize|sort|filter|clean|format|validate|import|export|parse|render|compile|package)/i
+  const actionVerbs =
+    /^(build|create|make|set up|setup|deploy|fix|debug|write|add|remove|delete|update|install|configure|analyze|track|design|implement|refactor|migrate|optimize|test|check|find|search|list|show|explain|generate|convert|merge|split|run|start|stop|monitor|connect|schedule|automate|scrape|fetch|download|upload|compare|review|plan|organize|sort|filter|clean|format|validate|import|export|parse|render|compile|package)/i
 
   const MAX_TITLE = 40
 
@@ -73,7 +77,9 @@ function generateTitle(text: string): string {
   }
 
   // If it's a question, extract the topic
-  const questionMatch = cleaned.match(/^(?:what|how|why|where|when|which|who|is|are|can|do|does|will|should|would)\s+(.+)/i)
+  const questionMatch = cleaned.match(
+    /^(?:what|how|why|where|when|which|who|is|are|can|do|does|will|should|would)\s+(.+)/i,
+  )
   if (questionMatch) {
     const topic = questionMatch[1].replace(/^(?:the|a|an|i|we|you)\s+/i, '').trim()
     return capitalize(truncateSmart(topic, MAX_TITLE))

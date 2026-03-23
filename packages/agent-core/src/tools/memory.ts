@@ -3,7 +3,14 @@
  * Stores memories as markdown files in ~/.anton/memory/.
  */
 
-import { existsSync, mkdirSync, readFileSync, readdirSync, unlinkSync, writeFileSync } from 'node:fs'
+import {
+  existsSync,
+  mkdirSync,
+  readFileSync,
+  readdirSync,
+  unlinkSync,
+  writeFileSync,
+} from 'node:fs'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
 
@@ -22,7 +29,11 @@ function ensureDir() {
 
 function keyToFile(key: string): string {
   // Sanitize key to safe filename
-  const safe = key.toLowerCase().replace(/[^a-z0-9_-]/g, '-').replace(/-+/g, '-').slice(0, 80)
+  const safe = key
+    .toLowerCase()
+    .replace(/[^a-z0-9_-]/g, '-')
+    .replace(/-+/g, '-')
+    .slice(0, 80)
   return join(MEMORY_DIR, `${safe}.md`)
 }
 
@@ -54,15 +65,17 @@ export function executeMemory(input: MemoryInput): string {
 
       const entries = files.map((f) => {
         const content = readFileSync(join(MEMORY_DIR, f), 'utf-8')
-        const firstLine = content.split('\n').find((l) => l.startsWith('# '))?.slice(2) || f.replace('.md', '')
+        const firstLine =
+          content
+            .split('\n')
+            .find((l) => l.startsWith('# '))
+            ?.slice(2) || f.replace('.md', '')
         return firstLine
       })
 
       // Filter by query if provided
       const query = input.query?.toLowerCase()
-      const filtered = query
-        ? entries.filter((e) => e.toLowerCase().includes(query))
-        : entries
+      const filtered = query ? entries.filter((e) => e.toLowerCase().includes(query)) : entries
 
       if (filtered.length === 0) return `No memories matching "${input.query}".`
       return `Memories (${filtered.length}):\n${filtered.map((e) => `• ${e}`).join('\n')}`

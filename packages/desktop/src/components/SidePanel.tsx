@@ -2,8 +2,8 @@ import { motion } from 'framer-motion'
 import { FileCode, ListChecks, X } from 'lucide-react'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useStore } from '../lib/store.js'
-import { ArtifactPanelContent } from './artifacts/ArtifactPanel.js'
 import { PlanPanel } from './PlanPanel.js'
+import { ArtifactPanelContent } from './artifacts/ArtifactPanel.js'
 
 type PanelView = 'artifacts' | 'plan'
 
@@ -30,14 +30,17 @@ export function SidePanel() {
   const startX = useRef(0)
   const startWidth = useRef(DEFAULT_WIDTH)
 
-  const handleMouseDown = useCallback((e: React.MouseEvent) => {
-    e.preventDefault()
-    isDragging.current = true
-    startX.current = e.clientX
-    startWidth.current = panelWidth
-    document.body.style.cursor = 'col-resize'
-    document.body.style.userSelect = 'none'
-  }, [panelWidth])
+  const handleMouseDown = useCallback(
+    (e: React.MouseEvent) => {
+      e.preventDefault()
+      isDragging.current = true
+      startX.current = e.clientX
+      startWidth.current = panelWidth
+      document.body.style.cursor = 'col-resize'
+      document.body.style.userSelect = 'none'
+    },
+    [panelWidth],
+  )
 
   useEffect(() => {
     const handleMouseMove = (e: MouseEvent) => {
@@ -74,7 +77,7 @@ export function SidePanel() {
   // If current view is not available, switch to first available
   const activeView = availableViews.find((v) => v.id === sidePanelView)
     ? sidePanelView
-    : availableViews[0]?.id ?? 'artifacts'
+    : (availableViews[0]?.id ?? 'artifacts')
 
   return (
     <motion.div

@@ -21,7 +21,15 @@ export function Modal({ open, onClose, title, children }: Props) {
           transition={{ duration: 0.15 }}
         >
           {/* Backdrop click to close */}
-          <div className="modal-backdrop__overlay" onClick={onClose} />
+          <div
+            className="modal-backdrop__overlay"
+            role="button"
+            tabIndex={0}
+            onClick={onClose}
+            onKeyDown={(e) => {
+              if (e.key === 'Escape') onClose()
+            }}
+          />
 
           {/* Content */}
           <motion.div
@@ -34,11 +42,7 @@ export function Modal({ open, onClose, title, children }: Props) {
             {title && (
               <div className="modal-content__header">
                 <h2 className="modal-content__title">{title}</h2>
-                <button
-                  type="button"
-                  onClick={onClose}
-                  className="modal-content__close"
-                >
+                <button type="button" onClick={onClose} className="modal-content__close">
                   <X className="modal-content__close-icon" />
                 </button>
               </div>

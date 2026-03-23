@@ -96,9 +96,8 @@ export function extractArtifact(
   // Explicit artifact tool calls
   if (toolName === 'artifact') {
     const artifactType = (toolInput.type as string) || 'code'
-    const language = artifactType === 'code'
-      ? (toolInput.language as string) || 'text'
-      : artifactType
+    const language =
+      artifactType === 'code' ? (toolInput.language as string) || 'text' : artifactType
 
     return {
       id: `artifact_${toolCallMsg.id}_${Date.now()}`,

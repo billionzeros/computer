@@ -11,8 +11,8 @@
 
 import { Channel } from '@anton/protocol'
 import type { AiMessage, ControlMessage, EventMessage } from '@anton/protocol'
-import { Box, useApp, useInput } from 'ink'
 import type { TokenUsage } from '@anton/protocol'
+import { Box, useApp, useInput } from 'ink'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { Connection } from '../lib/connection.js'
 import type { ConnectionStatus } from '../lib/connection.js'
@@ -53,7 +53,7 @@ export function App({ machine }: AppProps) {
   const [currentProvider, setCurrentProvider] = useState('anthropic')
   const [currentModel, setCurrentModel] = useState('claude-sonnet-4-6')
   const [sessions, setSessions] = useState<SessionInfo[]>([])
-  const [hasAutoResumed, setHasAutoResumed] = useState(false)
+  const [_hasAutoResumed, setHasAutoResumed] = useState(false)
   const hasAutoResumedRef = useRef(false)
 
   // Token usage state
@@ -201,7 +201,7 @@ export function App({ machine }: AppProps) {
           break
       }
     },
-    [addMessage, appendAgentText, conn, hasAutoResumed, currentSessionId],
+    [addMessage, appendAgentText, conn, currentSessionId],
   )
 
   const handleEvent = useCallback((event: EventMessage) => {

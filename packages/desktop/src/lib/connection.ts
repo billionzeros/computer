@@ -201,7 +201,10 @@ export class Connection {
   }
 
   onFilesystemResponse(
-    handler: (entries: { name: string; type: 'file' | 'dir' | 'link'; size: string }[], error?: string) => void,
+    handler: (
+      entries: { name: string; type: 'file' | 'dir' | 'link'; size: string }[],
+      error?: string,
+    ) => void,
   ) {
     return this.onMessage((channel, msg) => {
       if (channel === Channel.FILESYNC && msg.type === 'fs_list_response') {
@@ -264,7 +267,9 @@ export class Connection {
     }
 
     this.ws.onclose = (event) => {
-      console.log(`[WS] Closed: code=${event.code} reason=${event.reason} wasClean=${event.wasClean}`)
+      console.log(
+        `[WS] Closed: code=${event.code} reason=${event.reason} wasClean=${event.wasClean}`,
+      )
       if (this._status === 'connected') {
         this.setStatus('disconnected', 'Connection lost')
         this.scheduleReconnect()

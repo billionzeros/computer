@@ -9,6 +9,9 @@
  * Usage:
  *   anton-agent              # Start with default config (~/.anton/config.yaml)
  *   anton-agent --port 9876  # Override port
+ *
+ * Environment variables:
+ *   ANTON_TOKEN  — Force a specific auth token (skips random generation)
  */
 
 import { loadConfig, loadSkills } from '@anton/agent-config'

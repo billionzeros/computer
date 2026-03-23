@@ -1,7 +1,7 @@
+import type { AskUserQuestion } from '@anton/protocol'
 import { motion } from 'framer-motion'
 import { MessageCircleQuestion } from 'lucide-react'
 import { useState } from 'react'
-import type { AskUserQuestion } from '@anton/protocol'
 
 interface Props {
   questions: AskUserQuestion[]
@@ -54,13 +54,13 @@ export function AskUserDialog({ questions, onSubmit }: Props) {
         </div>
 
         <div className="ask-user-dialog__questions">
-          {questions.map((q, idx) => {
+          {questions.map((q, _idx) => {
             const hasOptions = q.options && q.options.length > 0
             const allowFreeText = q.allowFreeText !== false
 
             return (
-              <div key={idx} className="ask-user-dialog__question">
-                <label className="ask-user-dialog__label">{q.question}</label>
+              <div key={q.question} className="ask-user-dialog__question">
+                <span className="ask-user-dialog__label">{q.question}</span>
 
                 {hasOptions && (
                   <div className="ask-user-dialog__options">
@@ -110,7 +110,6 @@ export function AskUserDialog({ questions, onSubmit }: Props) {
                     onKeyDown={(e) => {
                       if (e.key === 'Enter' && allAnswered) handleSubmit()
                     }}
-                    autoFocus={!hasOptions && idx === 0}
                   />
                 )}
               </div>

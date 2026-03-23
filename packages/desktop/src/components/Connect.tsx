@@ -90,7 +90,6 @@ export function Connect({ onConnected }: { onConnected: () => void }) {
         transition={{ duration: 0.3, ease: 'easeOut' }}
         className="connect-center"
       >
-
         {/* Saved machines — show first if available */}
         {machines.length > 0 && (
           <>
@@ -110,7 +109,8 @@ export function Connect({ onConnected }: { onConnected: () => void }) {
                   <div className="connect-saved__info">
                     <span className="connect-saved__name">{m.name}</span>
                     <span className="connect-saved__host">
-                      {m.host}{m.useTLS ? ' (TLS)' : ''}
+                      {m.host}
+                      {m.useTLS ? ' (TLS)' : ''}
                     </span>
                   </div>
                   <button

@@ -76,7 +76,12 @@ export class AgentServer {
             gitHash: GIT_HASH,
             specVersion: SPEC_VERSION,
             ...(updateInfo
-              ? { updateAvailable: { version: updateInfo.version, specVersion: updateInfo.specVersion } }
+              ? {
+                  updateAvailable: {
+                    version: updateInfo.version,
+                    specVersion: updateInfo.specVersion,
+                  },
+                }
               : {}),
           }),
         )

@@ -25,7 +25,15 @@ import {
 
 const CACHED_MANIFEST_PATH = join(getAntonDir(), 'update-manifest.json')
 
-type UpdateStage = 'downloading' | 'replacing' | 'restarting' | 'done' | 'error' | 'pulling' | 'installing' | 'building'
+type UpdateStage =
+  | 'downloading'
+  | 'replacing'
+  | 'restarting'
+  | 'done'
+  | 'error'
+  | 'pulling'
+  | 'installing'
+  | 'building'
 type UpdateProgress = { stage: UpdateStage; message: string }
 
 export class Updater {
@@ -128,7 +136,10 @@ export class Updater {
     try {
       const manifest = this.cachedManifest
       if (!manifest) {
-        yield { stage: 'error', message: 'No update manifest available. Run an update check first.' }
+        yield {
+          stage: 'error',
+          message: 'No update manifest available. Run an update check first.',
+        }
         return
       }
 
@@ -173,7 +184,7 @@ export class Updater {
 
     // Stream to temp file
     const { createWriteStream, unlinkSync, renameSync, chmodSync } = await import('node:fs')
-    const { Writable } = await import('node:stream')
+    const { Writable: _Writable } = await import('node:stream')
     const { pipeline } = await import('node:stream/promises')
     const { Readable } = await import('node:stream')
 
@@ -203,13 +214,17 @@ export class Updater {
         }
       } catch {}
       // Clean up temp file
-      try { unlinkSync(tempPath) } catch {}
+      try {
+        unlinkSync(tempPath)
+      } catch {}
       yield { stage: 'error', message: `Binary replace failed: ${(err as Error).message}` }
       return
     }
 
     // Clean up backup (non-critical)
-    try { unlinkSync(`${binaryPath}.bak`) } catch {}
+    try {
+      unlinkSync(`${binaryPath}.bak`)
+    } catch {}
 
     // 3. Write version.json
     writeFileSync(
@@ -232,7 +247,10 @@ export class Updater {
     try {
       this.run('sudo systemctl restart anton-agent', antonDir)
     } catch {
-      yield { stage: 'restarting', message: 'No systemd — process will exit. Restart manually or use a process manager.' }
+      yield {
+        stage: 'restarting',
+        message: 'No systemd — process will exit. Restart manually or use a process manager.',
+      }
     }
 
     yield { stage: 'done', message: `Updated to v${manifest.version} (${manifest.gitHash})` }
@@ -242,13 +260,14 @@ export class Updater {
    * Legacy fallback: git pull → pnpm install → pnpm build → restart.
    * Used when the manifest has no binary URLs (dev builds, pre-binary releases).
    */
-  private async *sourceUpdate(
-    manifest: UpdateManifest,
-  ): AsyncGenerator<UpdateProgress> {
+  private async *sourceUpdate(manifest: UpdateManifest): AsyncGenerator<UpdateProgress> {
     const agentDir = this.resolveAgentDir()
 
     if (!agentDir) {
-      yield { stage: 'error', message: 'Could not find agent source directory and no binary URL in manifest' }
+      yield {
+        stage: 'error',
+        message: 'Could not find agent source directory and no binary URL in manifest',
+      }
       return
     }
 
@@ -293,7 +312,10 @@ export class Updater {
     try {
       this.run('sudo systemctl restart anton-agent', agentDir)
     } catch {
-      yield { stage: 'restarting', message: 'No systemd — process will exit. Restart manually or use a process manager.' }
+      yield {
+        stage: 'restarting',
+        message: 'No systemd — process will exit. Restart manually or use a process manager.',
+      }
     }
 
     this.cachedManifest = null
@@ -309,7 +331,8 @@ export class Updater {
   private resolveBinaryUrl(manifest: UpdateManifest): string | null {
     if (!manifest.binaries) return null
 
-    const platform = process.platform === 'linux' ? 'linux' : process.platform === 'darwin' ? 'darwin' : null
+    const platform =
+      process.platform === 'linux' ? 'linux' : process.platform === 'darwin' ? 'darwin' : null
     const arch = process.arch === 'x64' ? 'x64' : process.arch === 'arm64' ? 'arm64' : null
 
     if (!platform || !arch) return null

@@ -6,7 +6,7 @@
  * The actual rendering happens client-side — the tool just returns a confirmation.
  */
 
-import { writeFileSync, mkdirSync } from 'node:fs'
+import { mkdirSync, writeFileSync } from 'node:fs'
 import { dirname } from 'node:path'
 
 export interface ArtifactInput {

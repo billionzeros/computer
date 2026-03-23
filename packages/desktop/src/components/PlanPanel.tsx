@@ -56,7 +56,7 @@ export function PlanPanel() {
               value={feedback}
               onChange={(e) => setFeedback(e.target.value)}
               rows={3}
-              autoFocus
+              /* eslint-disable-next-line jsx-a11y/no-autofocus */
             />
           </div>
         )}

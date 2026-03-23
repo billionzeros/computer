@@ -28,7 +28,15 @@ const providerIcons: Record<string, string> = {
 function ProviderIcon({ provider, size = 16 }: { provider: string; size?: number }) {
   const icon = providerIcons[provider]
   if (icon) {
-    return <img src={icon} alt={provider} width={size} height={size} className="model-selector__provider-icon" />
+    return (
+      <img
+        src={icon}
+        alt={provider}
+        width={size}
+        height={size}
+        className="model-selector__provider-icon"
+      />
+    )
   }
   return (
     <span className="model-selector__provider-icon-fallback" style={{ width: size, height: size }}>
@@ -42,7 +50,10 @@ function formatModelName(model: string): string {
   let name = model.split('/').pop() || model
 
   // Strip provider prefixes
-  name = name.replace(/^claude-/, '').replace(/^gpt-/, 'GPT-').replace(/^o(\d)/, 'O$1')
+  name = name
+    .replace(/^claude-/, '')
+    .replace(/^gpt-/, 'GPT-')
+    .replace(/^o(\d)/, 'O$1')
 
   // Convert version dashes to dots: "4-6" → "4.6", "4-5" → "4.5"
   name = name.replace(/(\d+)-(\d+)(?=$|-)/g, '$1.$2')
@@ -137,7 +148,9 @@ export function ModelSelector() {
       <button type="button" className="model-selector__trigger" onClick={() => setOpen(!open)}>
         {hasAnyKey && <ProviderIcon provider={currentProvider} size={14} />}
         <span className="model-selector__label">{displayModel}</span>
-        <ChevronDown className={`model-selector__chevron ${open ? 'model-selector__chevron--open' : ''}`} />
+        <ChevronDown
+          className={`model-selector__chevron ${open ? 'model-selector__chevron--open' : ''}`}
+        />
       </button>
 
       {open && (
@@ -192,7 +205,9 @@ export function ModelSelector() {
                             className={`model-selector__option ${isActive ? 'model-selector__option--active' : ''}`}
                             onClick={() => handleSelect(provider.name, model)}
                           >
-                            <span className="model-selector__option-name">{formatModelName(model)}</span>
+                            <span className="model-selector__option-name">
+                              {formatModelName(model)}
+                            </span>
                             {isActive && <Check size={14} className="model-selector__check" />}
                           </button>
                         )
@@ -205,18 +220,13 @@ export function ModelSelector() {
           })}
 
           {providers.length === 0 && (
-            <div className="model-selector__empty">
-              No providers available from server.
-            </div>
+            <div className="model-selector__empty">No providers available from server.</div>
           )}
         </div>
       )}
 
       {/* Provider settings modal */}
-      <ProviderSettingsModal
-        provider={settingsProvider}
-        onClose={handleSettingsClose}
-      />
+      <ProviderSettingsModal provider={settingsProvider} onClose={handleSettingsClose} />
     </div>
   )
 }

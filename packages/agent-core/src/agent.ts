@@ -15,6 +15,7 @@
 
 import type { AgentConfig } from '@anton/agent-config'
 import { loadSystemPrompt } from '@anton/agent-config'
+import type { AskUserQuestion } from '@anton/protocol'
 import type { AgentTool } from '@mariozechner/pi-agent-core'
 import { Type } from '@mariozechner/pi-ai'
 import type { TextContent } from '@mariozechner/pi-ai'
@@ -23,7 +24,6 @@ import { executeBrowser } from './tools/browser.js'
 import { executeClipboard } from './tools/clipboard.js'
 import { executeCodeSearch } from './tools/code-search.js'
 import { executeDatabase } from './tools/database.js'
-import type { AskUserQuestion } from '@anton/protocol'
 import { executeDiff } from './tools/diff.js'
 import { executeFilesystem } from './tools/filesystem.js'
 import { executeGit } from './tools/git.js'
@@ -32,9 +32,9 @@ import { executeImage } from './tools/image.js'
 import { executeMemory } from './tools/memory.js'
 import { executeNetwork } from './tools/network.js'
 import { executeNotification } from './tools/notification.js'
+import { executePlan } from './tools/plan.js'
 import { executeProcess } from './tools/process.js'
 import { executeShell } from './tools/shell.js'
-import { executePlan } from './tools/plan.js'
 import { executeTodo } from './tools/todo.js'
 
 // Re-export for session.ts
@@ -200,14 +200,22 @@ export function buildTools(config: AgentConfig, callbacks?: ToolCallbacks): Agen
             Type.Literal('svg'),
             Type.Literal('mermaid'),
           ],
-          { description: 'Content type: html for web pages/apps, code for source files, markdown for docs, svg for graphics, mermaid for diagrams' },
+          {
+            description:
+              'Content type: html for web pages/apps, code for source files, markdown for docs, svg for graphics, mermaid for diagrams',
+          },
         ),
         language: Type.Optional(
-          Type.String({ description: 'Language for syntax highlighting when type=code (e.g. "typescript", "python")' }),
+          Type.String({
+            description:
+              'Language for syntax highlighting when type=code (e.g. "typescript", "python")',
+          }),
         ),
         content: Type.String({ description: 'The full content to render' }),
         filename: Type.Optional(
-          Type.String({ description: 'If provided, also saves the content to this file path on disk' }),
+          Type.String({
+            description: 'If provided, also saves the content to this file path on disk',
+          }),
         ),
       }),
       async execute(_toolCallId, params) {
@@ -259,9 +267,15 @@ export function buildTools(config: AgentConfig, callbacks?: ToolCallbacks): Agen
         'Use for finding function definitions, references, patterns across a codebase.',
       parameters: Type.Object({
         query: Type.String({ description: 'Search pattern (supports regex)' }),
-        path: Type.Optional(Type.String({ description: 'Directory to search (default: current dir)' })),
-        file_type: Type.Optional(Type.String({ description: 'Filter by extension, e.g. "ts", "py", "rs"' })),
-        context_lines: Type.Optional(Type.Number({ description: 'Lines of context before/after (default: 2)' })),
+        path: Type.Optional(
+          Type.String({ description: 'Directory to search (default: current dir)' }),
+        ),
+        file_type: Type.Optional(
+          Type.String({ description: 'Filter by extension, e.g. "ts", "py", "rs"' }),
+        ),
+        context_lines: Type.Optional(
+          Type.Number({ description: 'Lines of context before/after (default: 2)' }),
+        ),
         max_results: Type.Optional(Type.Number({ description: 'Max matches (default: 20)' })),
       }),
       async execute(_toolCallId, params) {
@@ -322,8 +336,12 @@ export function buildTools(config: AgentConfig, callbacks?: ToolCallbacks): Agen
           ],
           { description: 'Database operation' },
         ),
-        db_path: Type.Optional(Type.String({ description: 'SQLite database path (default: ~/.anton/data.db)' })),
-        sql: Type.Optional(Type.String({ description: 'SQL statement, or table name for schema operation' })),
+        db_path: Type.Optional(
+          Type.String({ description: 'SQLite database path (default: ~/.anton/data.db)' }),
+        ),
+        sql: Type.Optional(
+          Type.String({ description: 'SQL statement, or table name for schema operation' }),
+        ),
       }),
       async execute(_toolCallId, params) {
         const output = executeDatabase(params)
@@ -396,11 +414,12 @@ export function buildTools(config: AgentConfig, callbacks?: ToolCallbacks): Agen
         'Operations: read (get clipboard contents), write (copy text to clipboard). ' +
         'Use when user says "copy this", "paste what I have", or needs clipboard access.',
       parameters: Type.Object({
-        operation: Type.Union(
-          [Type.Literal('read'), Type.Literal('write')],
-          { description: 'Clipboard operation' },
+        operation: Type.Union([Type.Literal('read'), Type.Literal('write')], {
+          description: 'Clipboard operation',
+        }),
+        content: Type.Optional(
+          Type.String({ description: 'Text to copy to clipboard (for write)' }),
         ),
-        content: Type.Optional(Type.String({ description: 'Text to copy to clipboard (for write)' })),
       }),
       async execute(_toolCallId, params) {
         const output = executeClipboard(params)
@@ -476,13 +495,14 @@ export function buildTools(config: AgentConfig, callbacks?: ToolCallbacks): Agen
         'Operations: compare (diff two files), patch (apply a patch to a file). ' +
         'Use for reviewing changes, comparing versions, or applying modifications.',
       parameters: Type.Object({
-        operation: Type.Union(
-          [Type.Literal('compare'), Type.Literal('patch')],
-          { description: 'Diff operation' },
-        ),
+        operation: Type.Union([Type.Literal('compare'), Type.Literal('patch')], {
+          description: 'Diff operation',
+        }),
         file_a: Type.String({ description: 'First file path (or target for patch)' }),
         file_b: Type.Optional(Type.String({ description: 'Second file path (for compare)' })),
-        patch_content: Type.Optional(Type.String({ description: 'Unified diff patch content (for patch)' })),
+        patch_content: Type.Optional(
+          Type.String({ description: 'Unified diff patch content (for patch)' }),
+        ),
       }),
       async execute(_toolCallId, params) {
         const output = executeDiff(params)

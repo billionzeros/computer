@@ -6,13 +6,22 @@
 import { execSync } from 'node:child_process'
 
 export interface GitInput {
-  operation: 'status' | 'diff' | 'log' | 'commit' | 'branch' | 'checkout' | 'stash' | 'add' | 'reset'
+  operation:
+    | 'status'
+    | 'diff'
+    | 'log'
+    | 'commit'
+    | 'branch'
+    | 'checkout'
+    | 'stash'
+    | 'add'
+    | 'reset'
   path?: string
   message?: string
   count?: number
 }
 
-const BLOCKED_OPS = ['push --force', 'push -f', 'reset --hard', 'clean -fd', 'clean -f']
+const _BLOCKED_OPS = ['push --force', 'push -f', 'reset --hard', 'clean -fd', 'clean -f']
 
 function git(args: string, cwd?: string): string {
   try {
@@ -73,13 +82,14 @@ export function executeGit(input: GitInput): string {
     }
 
     case 'add': {
-      if (!path) return git('add -A') + '\nStaged all changes.'
-      return git(`add ${path}`) + `\nStaged: ${path}`
+      if (!path) return `${git('add -A')}\nStaged all changes.`
+      return `${git(`add ${path}`)}\nStaged: ${path}`
     }
 
     case 'reset': {
       // Safety: only allow soft reset
-      if (path === '--hard') return 'Error: hard reset is blocked. Use shell tool with confirmation if needed.'
+      if (path === '--hard')
+        return 'Error: hard reset is blocked. Use shell tool with confirmation if needed.'
       const target = path || 'HEAD'
       return git(`reset ${target}`)
     }

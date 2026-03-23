@@ -1,4 +1,4 @@
-import { Channel, type AskUserQuestion, type TokenUsage } from '@anton/protocol'
+import { type AskUserQuestion, Channel, type TokenUsage } from '@anton/protocol'
 import { create } from 'zustand'
 import { type Artifact, extractArtifact } from './artifacts.js'
 import { type ConnectionStatus, connection } from './connection.js'
@@ -70,7 +70,14 @@ export interface UpdateInfo {
   releaseUrl: string | null
 }
 
-export type UpdateStage = 'pulling' | 'installing' | 'building' | 'restarting' | 'done' | 'error' | null
+export type UpdateStage =
+  | 'pulling'
+  | 'installing'
+  | 'building'
+  | 'restarting'
+  | 'done'
+  | 'error'
+  | null
 export type SidebarTab = 'history' | 'skills'
 
 // ── Saved machines (localStorage) ───────────────────────────────────
@@ -242,9 +249,10 @@ export const useStore = create<AppState>((set, get) => {
   const savedModel = loadSelectedModel()
   const savedActiveConvId = localStorage.getItem(ACTIVE_CONV_KEY)
   // Only restore if the conversation still exists
-  const restoredActiveId = savedActiveConvId && persisted.some((c) => c.id === savedActiveConvId)
-    ? savedActiveConvId
-    : null
+  const restoredActiveId =
+    savedActiveConvId && persisted.some((c) => c.id === savedActiveConvId)
+      ? savedActiveConvId
+      : null
 
   return {
     connectionStatus: 'disconnected',
@@ -439,14 +447,11 @@ export const useStore = create<AppState>((set, get) => {
 
     setAgentStatusDetail: (detail) => set({ agentStatusDetail: detail }),
 
-    addAgentStep: (step) =>
-      set((state) => ({ agentSteps: [...state.agentSteps, step] })),
+    addAgentStep: (step) => set((state) => ({ agentSteps: [...state.agentSteps, step] })),
 
     updateAgentStep: (id, updates) =>
       set((state) => ({
-        agentSteps: state.agentSteps.map((s) =>
-          s.id === id ? { ...s, ...updates } : s,
-        ),
+        agentSteps: state.agentSteps.map((s) => (s.id === id ? { ...s, ...updates } : s)),
       })),
 
     clearAgentSteps: () => set({ agentSteps: [] }),
@@ -490,8 +495,7 @@ export const useStore = create<AppState>((set, get) => {
 
     setArtifactPanelOpen: (open) => set({ artifactPanelOpen: open }),
 
-    clearArtifacts: () =>
-      set({ artifacts: [], activeArtifactId: null, artifactPanelOpen: false }),
+    clearArtifacts: () => set({ artifacts: [], activeArtifactId: null, artifactPanelOpen: false }),
 
     setPendingConfirm: (confirm) => set({ pendingConfirm: confirm }),
 
@@ -502,11 +506,9 @@ export const useStore = create<AppState>((set, get) => {
     setAgentVersionInfo: (version, specVersion, gitHash) =>
       set({ agentVersion: version, agentSpecVersion: specVersion, agentGitHash: gitHash }),
 
-    setUpdateInfo: (info) =>
-      set({ updateInfo: info, updateDismissed: false }),
+    setUpdateInfo: (info) => set({ updateInfo: info, updateDismissed: false }),
 
-    setUpdateProgress: (stage, message) =>
-      set({ updateStage: stage, updateMessage: message }),
+    setUpdateProgress: (stage, message) => set({ updateStage: stage, updateMessage: message }),
 
     dismissUpdate: () => set({ updateDismissed: true }),
   }
@@ -717,11 +719,14 @@ connection.onMessage((channel, msg) => {
       const zeroTokens = msg.usage && msg.usage.inputTokens === 0 && msg.usage.outputTokens === 0
 
       if (noResponse && zeroTokens) {
-        console.error('[WS] Silent failure: "done" with zero tokens and no response. Likely missing API key on server.')
+        console.error(
+          '[WS] Silent failure: "done" with zero tokens and no response. Likely missing API key on server.',
+        )
         store.addMessage({
           id: `err_silent_${Date.now()}`,
           role: 'system',
-          content: 'No response from the agent. The LLM was never called (0 tokens used). Check that a valid API key is configured on the server.',
+          content:
+            'No response from the agent. The LLM was never called (0 tokens used). Check that a valid API key is configured on the server.',
           isError: true,
           timestamp: Date.now(),
         })
@@ -747,7 +752,9 @@ connection.onMessage((channel, msg) => {
       if (msg.provider && msg.model) {
         try {
           useStore.setState({ lastResponseProvider: msg.provider, lastResponseModel: msg.model })
-        } catch { /* ignore during HMR transitions */ }
+        } catch {
+          /* ignore during HMR transitions */
+        }
       }
       break
     }

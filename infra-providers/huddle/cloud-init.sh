@@ -10,13 +10,13 @@
 #         or run manually on a fresh Ubuntu 22.04+ / Debian 12+ machine.
 #
 # Required env vars (set in Huddle's infra config):
-#   ANTON_VERSION    — e.g. "0.9.0"
 #   DOMAIN           — e.g. "agent-42.huddle.computer"
 #   ANTHROPIC_API_KEY
 #
 # Optional:
 #   AGENT_PORT       — override default 9876
 #   AGENT_ARCH       — "x64" (default) or "arm64"
+#   ANTON_TOKEN      — force a specific auth token (skips random generation)
 # ─────────────────────────────────────────────────────────────────
 set -euo pipefail
 
@@ -24,10 +24,9 @@ set -euo pipefail
 AGENT_PORT="${AGENT_PORT:-9876}"
 AGENT_ARCH="${AGENT_ARCH:-arm64}"
 ANTON_DIR="/home/anton/.anton"
-BINARY_URL="https://github.com/OmGuptaIND/anton.computer/releases/download/v${ANTON_VERSION}/anton-agent-linux-${AGENT_ARCH}"
+BINARY_URL="https://github.com/OmGuptaIND/anton.computer/releases/latest/download/anton-agent-linux-${AGENT_ARCH}"
 
 echo ">>> Huddle agent provisioner"
-echo "    Version : ${ANTON_VERSION}"
 echo "    Domain  : ${DOMAIN}"
 echo "    Port    : ${AGENT_PORT}"
 echo "    Arch    : ${AGENT_ARCH}"
@@ -56,6 +55,7 @@ YAML
 cat > /etc/anton-agent.env <<ENV
 ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
 ANTON_DIR=${ANTON_DIR}
+${ANTON_TOKEN:+ANTON_TOKEN=${ANTON_TOKEN}}
 ENV
 chmod 600 /etc/anton-agent.env
 

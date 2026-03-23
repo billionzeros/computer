@@ -11,11 +11,18 @@
  *   If available, downloads the binary and replaces itself.
  */
 
-import { createWriteStream, chmodSync, renameSync, unlinkSync, existsSync, readFileSync } from 'node:fs'
+import {
+  chmodSync,
+  createWriteStream,
+  existsSync,
+  readFileSync,
+  renameSync,
+  unlinkSync,
+} from 'node:fs'
 import { dirname, join } from 'node:path'
-import { fileURLToPath } from 'node:url'
 import { Readable } from 'node:stream'
 import { pipeline } from 'node:stream/promises'
+import { fileURLToPath } from 'node:url'
 
 /** Wire protocol version this CLI speaks */
 export const SPEC_VERSION = '0.5.0'
@@ -163,10 +170,14 @@ export async function selfUpdate(downloadUrl: string): Promise<void> {
     try {
       if (existsSync(backupPath)) renameSync(backupPath, binaryPath)
     } catch {}
-    try { unlinkSync(tempPath) } catch {}
+    try {
+      unlinkSync(tempPath)
+    } catch {}
     throw err
   }
 
   // Clean up backup
-  try { unlinkSync(backupPath) } catch {}
+  try {
+    unlinkSync(backupPath)
+  } catch {}
 }

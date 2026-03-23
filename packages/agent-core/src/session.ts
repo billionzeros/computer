@@ -30,7 +30,10 @@ import {
 } from './compaction.js'
 
 export type ConfirmHandler = (command: string, reason: string) => Promise<boolean>
-export type PlanConfirmHandler = (title: string, content: string) => Promise<{ approved: boolean; feedback?: string }>
+export type PlanConfirmHandler = (
+  title: string,
+  content: string,
+) => Promise<{ approved: boolean; feedback?: string }>
 
 export type ArtifactRenderType = 'code' | 'markdown' | 'html' | 'svg' | 'mermaid'
 
@@ -39,11 +42,28 @@ export type SessionEvent =
   | { type: 'text'; content: string }
   | { type: 'tool_call'; id: string; name: string; input: Record<string, unknown> }
   | { type: 'tool_result'; id: string; output: string; isError?: boolean }
-  | { type: 'artifact'; id: string; toolCallId: string; artifactType: 'file' | 'output' | 'artifact'; renderType: ArtifactRenderType; title?: string; filename?: string; filepath?: string; language: string; content: string }
+  | {
+      type: 'artifact'
+      id: string
+      toolCallId: string
+      artifactType: 'file' | 'output' | 'artifact'
+      renderType: ArtifactRenderType
+      title?: string
+      filename?: string
+      filepath?: string
+      language: string
+      content: string
+    }
   | { type: 'confirm'; id: string; command: string; reason: string }
   | { type: 'compaction'; compactedMessages: number; totalCompactions: number }
   | { type: 'title_update'; title: string }
-  | { type: 'done'; usage?: TokenUsage; cumulativeUsage?: TokenUsage; provider?: string; model?: string }
+  | {
+      type: 'done'
+      usage?: TokenUsage
+      cumulativeUsage?: TokenUsage
+      provider?: string
+      model?: string
+    }
   | { type: 'error'; message: string }
 
 export interface SessionInfo {
@@ -155,9 +175,13 @@ export class Session {
       getApiKey: async (provider: string) => {
         const key = this.resolveApiKey(provider, this.clientApiKey, this.config)
         if (!key) {
-          console.error(`[session ${this.id}] No API key found for provider "${provider}". Check config or env vars.`)
+          console.error(
+            `[session ${this.id}] No API key found for provider "${provider}". Check config or env vars.`,
+          )
         } else {
-          console.log(`[session ${this.id}] Resolved API key for "${provider}" (${key.slice(0, 8)}...)`)
+          console.log(
+            `[session ${this.id}] Resolved API key for "${provider}" (${key.slice(0, 8)}...)`,
+          )
         }
         return key
       },
@@ -345,9 +369,13 @@ export class Session {
       }
     }
 
-    console.log(`[session ${this.id}] processMessage complete: ${eventCount} events, ${textEventCount} text chunks`)
+    console.log(
+      `[session ${this.id}] processMessage complete: ${eventCount} events, ${textEventCount} text chunks`,
+    )
     if (eventCount === 0) {
-      console.error(`[session ${this.id}] WARNING: No events produced! The LLM may not have been called. Check API key.`)
+      console.error(
+        `[session ${this.id}] WARNING: No events produced! The LLM may not have been called. Check API key.`,
+      )
     }
 
     // Persist after each turn
@@ -554,34 +582,44 @@ export class Session {
           name: piEvent.toolName,
           input: piEvent.args || {},
         })
-        return [{
-          type: 'tool_call',
-          id: piEvent.toolCallId,
-          name: piEvent.toolName,
-          input: piEvent.args || {},
-        }]
+        return [
+          {
+            type: 'tool_call',
+            id: piEvent.toolCallId,
+            name: piEvent.toolName,
+            input: piEvent.args || {},
+          },
+        ]
 
       case 'tool_execution_end': {
         const resultContent = piEvent.result?.content as
           | { type: string; text?: string }[]
           | undefined
-        const output = resultContent
-          ?.filter((c) => c.type === 'text')
-          ?.map((c) => c.text ?? '')
-          ?.join('\n') ?? ''
+        const output =
+          resultContent
+            ?.filter((c) => c.type === 'text')
+            ?.map((c) => c.text ?? '')
+            ?.join('\n') ?? ''
 
-        const result: SessionEvent[] = [{
-          type: 'tool_result',
-          id: piEvent.toolCallId,
-          output,
-          isError: piEvent.isError,
-        }]
+        const result: SessionEvent[] = [
+          {
+            type: 'tool_result',
+            id: piEvent.toolCallId,
+            output,
+            isError: piEvent.isError,
+          },
+        ]
 
         // Detect and emit artifact event after tool_result
         const toolCall = this.pendingToolCalls.get(piEvent.toolCallId)
         this.pendingToolCalls.delete(piEvent.toolCallId)
         if (toolCall && !piEvent.isError) {
-          const artifact = this.detectArtifact(piEvent.toolCallId, toolCall.name, toolCall.input, output)
+          const artifact = this.detectArtifact(
+            piEvent.toolCallId,
+            toolCall.name,
+            toolCall.input,
+            output,
+          )
           if (artifact) result.push(artifact)
         }
 
@@ -631,11 +669,29 @@ export class Session {
     output: string,
   ): SessionEvent | null {
     const EXT_MAP: Record<string, string> = {
-      md: 'markdown', mdx: 'markdown', ts: 'typescript', tsx: 'tsx',
-      js: 'javascript', jsx: 'jsx', json: 'json', py: 'python',
-      rb: 'ruby', rs: 'rust', go: 'go', java: 'java', c: 'c', cpp: 'cpp',
-      html: 'html', css: 'css', svg: 'xml', sql: 'sql', sh: 'bash',
-      yml: 'yaml', yaml: 'yaml', xml: 'xml', txt: 'text',
+      md: 'markdown',
+      mdx: 'markdown',
+      ts: 'typescript',
+      tsx: 'tsx',
+      js: 'javascript',
+      jsx: 'jsx',
+      json: 'json',
+      py: 'python',
+      rb: 'ruby',
+      rs: 'rust',
+      go: 'go',
+      java: 'java',
+      c: 'c',
+      cpp: 'cpp',
+      html: 'html',
+      css: 'css',
+      svg: 'xml',
+      sql: 'sql',
+      sh: 'bash',
+      yml: 'yaml',
+      yaml: 'yaml',
+      xml: 'xml',
+      txt: 'text',
     }
 
     function langFromPath(path: string): string {
@@ -652,9 +708,7 @@ export class Session {
     // Explicit artifact tool
     if (toolName === 'artifact') {
       const artType = (toolInput.type as string) || 'code'
-      const language = artType === 'code'
-        ? (toolInput.language as string) || 'text'
-        : artType
+      const language = artType === 'code' ? (toolInput.language as string) || 'text' : artType
       return {
         type: 'artifact',
         id: `artifact_${toolCallId}_${Date.now()}`,
@@ -693,45 +747,45 @@ export class Session {
 
       // Skip routine/exploratory commands whose output isn't artifact-worthy
       const SKIP_PATTERNS = [
-        /^\s*ls\b/,           // directory listings
-        /^\s*find\b/,         // file search results
-        /^\s*cat\b/,          // file dumps (already readable inline or via filesystem)
-        /^\s*head\b/,         // partial file reads
-        /^\s*tail\b/,         // partial file reads
-        /^\s*echo\b/,         // echo output
-        /^\s*pwd\b/,          // working directory
-        /^\s*whoami\b/,       // user info
-        /^\s*env\b/,          // environment dump
-        /^\s*printenv\b/,     // environment dump
-        /^\s*set\b/,          // shell variables
-        /^\s*df\b/,           // disk usage
-        /^\s*du\b/,           // directory sizes
-        /^\s*free\b/,         // memory info
-        /^\s*top\b/,          // process list
-        /^\s*ps\b/,           // process list
-        /^\s*uname\b/,       // system info
-        /^\s*which\b/,       // command location
-        /^\s*whereis\b/,     // command location
-        /^\s*file\b/,        // file type info
-        /^\s*wc\b/,          // word/line count
-        /^\s*grep\b/,        // search results
-        /^\s*rg\b/,          // search results
-        /^\s*tree\b/,        // directory tree
-        /^\s*stat\b/,        // file stats
-        /^\s*mount\b/,       // mount points
-        /^\s*ip\b/,          // network config
-        /^\s*ifconfig\b/,    // network config
-        /^\s*netstat\b/,     // network stats
-        /^\s*ss\b/,          // socket stats
-        /^\s*systemctl\s+(status|list)/,  // service status
-        /^\s*apt\s+list/,    // package listing
-        /^\s*dpkg\s+-l/,     // package listing
-        /^\s*brew\s+list/,   // package listing
-        /^\s*pip\s+list/,    // package listing
-        /^\s*npm\s+list/,    // package listing
+        /^\s*ls\b/, // directory listings
+        /^\s*find\b/, // file search results
+        /^\s*cat\b/, // file dumps (already readable inline or via filesystem)
+        /^\s*head\b/, // partial file reads
+        /^\s*tail\b/, // partial file reads
+        /^\s*echo\b/, // echo output
+        /^\s*pwd\b/, // working directory
+        /^\s*whoami\b/, // user info
+        /^\s*env\b/, // environment dump
+        /^\s*printenv\b/, // environment dump
+        /^\s*set\b/, // shell variables
+        /^\s*df\b/, // disk usage
+        /^\s*du\b/, // directory sizes
+        /^\s*free\b/, // memory info
+        /^\s*top\b/, // process list
+        /^\s*ps\b/, // process list
+        /^\s*uname\b/, // system info
+        /^\s*which\b/, // command location
+        /^\s*whereis\b/, // command location
+        /^\s*file\b/, // file type info
+        /^\s*wc\b/, // word/line count
+        /^\s*grep\b/, // search results
+        /^\s*rg\b/, // search results
+        /^\s*tree\b/, // directory tree
+        /^\s*stat\b/, // file stats
+        /^\s*mount\b/, // mount points
+        /^\s*ip\b/, // network config
+        /^\s*ifconfig\b/, // network config
+        /^\s*netstat\b/, // network stats
+        /^\s*ss\b/, // socket stats
+        /^\s*systemctl\s+(status|list)/, // service status
+        /^\s*apt\s+list/, // package listing
+        /^\s*dpkg\s+-l/, // package listing
+        /^\s*brew\s+list/, // package listing
+        /^\s*pip\s+list/, // package listing
+        /^\s*npm\s+list/, // package listing
         /^\s*docker\s+(ps|images|container\s+ls)/, // docker listings
       ]
-      if (SKIP_PATTERNS.some(p => p.test(cmd))) return null
+      if (SKIP_PATTERNS.some((p) => p.test(cmd))) return null
 
       const shortCmd = cmd.length > 40 ? `${cmd.slice(0, 37)}...` : cmd
       return {
@@ -860,7 +914,10 @@ function generateSmartTitle(text: string): string {
 
   // Strip greeting prefixes
   cleaned = cleaned
-    .replace(/^(hey|hi|hello|yo|sup|ok|okay|please|can you|could you|i want to|i need to|i'd like to|help me|let's|let me)\b[,!.\s]*/i, '')
+    .replace(
+      /^(hey|hi|hello|yo|sup|ok|okay|please|can you|could you|i want to|i need to|i'd like to|help me|let's|let me)\b[,!.\s]*/i,
+      '',
+    )
     .trim()
 
   if (!cleaned) cleaned = text.trim().replace(/\n/g, ' ')
@@ -869,7 +926,9 @@ function generateSmartTitle(text: string): string {
   cleaned = cleaned.replace(/[.!?]+$/, '').trim()
 
   // Extract question topic
-  const qMatch = cleaned.match(/^(?:what|how|why|where|when|which|who|is|are|can|do|does|will|should|would)\s+(.+)/i)
+  const qMatch = cleaned.match(
+    /^(?:what|how|why|where|when|which|who|is|are|can|do|does|will|should|would)\s+(.+)/i,
+  )
   if (qMatch) {
     const topic = qMatch[1].replace(/^(?:the|a|an|i|we|you)\s+/i, '').trim()
     return smartCap(smartTruncate(topic, 40))

@@ -44,9 +44,7 @@ function saveTodos(todos: TodoItem[]) {
 
 function formatList(todos: TodoItem[]): string {
   if (todos.length === 0) return 'No tasks.'
-  return todos
-    .map((t) => `${t.done ? '✓' : '○'} [${t.id}] ${t.text}`)
-    .join('\n')
+  return todos.map((t) => `${t.done ? '✓' : '○'} [${t.id}] ${t.text}`).join('\n')
 }
 
 export function executeTodo(input: TodoInput): string {

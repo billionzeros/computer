@@ -3,7 +3,7 @@
  */
 
 import { execSync } from 'node:child_process'
-import { existsSync, readFileSync, writeFileSync } from 'node:fs'
+import { existsSync, writeFileSync } from 'node:fs'
 
 export interface DiffInput {
   operation: 'compare' | 'patch'
@@ -21,10 +21,10 @@ export function executeDiff(input: DiffInput): string {
       if (!existsSync(input.file_b)) return `Error: file not found: ${input.file_b}`
 
       try {
-        const output = execSync(
-          `diff -u "${input.file_a}" "${input.file_b}"`,
-          { encoding: 'utf-8', timeout: 10_000 },
-        )
+        const output = execSync(`diff -u "${input.file_a}" "${input.file_b}"`, {
+          encoding: 'utf-8',
+          timeout: 10_000,
+        })
         return output || 'Files are identical.'
       } catch (err: unknown) {
         const e = err as { status?: number; stdout?: string; stderr?: string; message: string }
@@ -43,10 +43,10 @@ export function executeDiff(input: DiffInput): string {
         // Write patch to temp file
         const patchFile = `/tmp/anton_patch_${Date.now()}.patch`
         writeFileSync(patchFile, input.patch_content, 'utf-8')
-        const output = execSync(
-          `patch "${input.file_a}" "${patchFile}"`,
-          { encoding: 'utf-8', timeout: 10_000 },
-        )
+        const output = execSync(`patch "${input.file_a}" "${patchFile}"`, {
+          encoding: 'utf-8',
+          timeout: 10_000,
+        })
         return output.trim() || 'Patch applied successfully.'
       } catch (err: unknown) {
         const e = err as { stderr?: string; message: string }

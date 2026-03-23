@@ -31,7 +31,7 @@ export function FileBrowser() {
   const [cwd, setCwd] = useState(HOME_DIR)
   const [pathParts, setPathParts] = useState<string[]>([HOME_DIR])
   const [dirState, setDirState] = useState<DirState>({ entries: [], loading: true, error: null })
-  const [expandedDirs, setExpandedDirs] = useState<Set<string>>(new Set())
+  const [_expandedDirs, _setExpandedDirs] = useState<Set<string>>(new Set())
 
   const listDir = useCallback((path: string) => {
     setDirState({ entries: [], loading: true, error: null })
@@ -39,7 +39,7 @@ export function FileBrowser() {
 
     // Build breadcrumb parts — show ~ for home
     const isHome = path === HOME_DIR
-    const isUnderHome = path.startsWith(HOME_DIR + '/')
+    const isUnderHome = path.startsWith(`${HOME_DIR}/`)
     if (isHome) {
       setPathParts(['~'])
     } else if (isUnderHome) {
@@ -71,7 +71,11 @@ export function FileBrowser() {
     const timer = setTimeout(() => {
       setDirState((prev) =>
         prev.loading
-          ? { entries: [], loading: false, error: 'No response — restart the agent server to enable file browsing.' }
+          ? {
+              entries: [],
+              loading: false,
+              error: 'No response — restart the agent server to enable file browsing.',
+            }
           : prev,
       )
     }, 5000)
@@ -109,7 +113,11 @@ export function FileBrowser() {
     if (entry.type === 'dir') return <Folder className="fb-entry__icon fb-entry__icon--dir" />
 
     const ext = entry.name.split('.').pop()?.toLowerCase()
-    if (['ts', 'tsx', 'js', 'jsx', 'py', 'rs', 'go', 'sh', 'json', 'yaml', 'yml', 'toml'].includes(ext || ''))
+    if (
+      ['ts', 'tsx', 'js', 'jsx', 'py', 'rs', 'go', 'sh', 'json', 'yaml', 'yml', 'toml'].includes(
+        ext || '',
+      )
+    )
       return <FileCode className="fb-entry__icon fb-entry__icon--code" />
     if (['md', 'txt', 'log', 'csv'].includes(ext || ''))
       return <FileText className="fb-entry__icon fb-entry__icon--text" />
@@ -123,6 +131,7 @@ export function FileBrowser() {
       {/* Breadcrumb */}
       <div className="fb-breadcrumb">
         {pathParts.map((part, i) => (
+          // biome-ignore lint/suspicious/noArrayIndexKey: breadcrumb parts can have duplicate names
           <span key={`${part}-${i}`} className="fb-breadcrumb__segment">
             {i > 0 && <ChevronRight className="fb-breadcrumb__sep" />}
             <button
@@ -140,7 +149,9 @@ export function FileBrowser() {
           className="fb-breadcrumb__refresh"
           aria-label="Refresh"
         >
-          <RefreshCw className={`fb-breadcrumb__refreshIcon${dirState.loading ? ' fb-spinning' : ''}`} />
+          <RefreshCw
+            className={`fb-breadcrumb__refreshIcon${dirState.loading ? ' fb-spinning' : ''}`}
+          />
         </button>
       </div>
 

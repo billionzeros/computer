@@ -1,5 +1,5 @@
-import { Box, Text } from 'ink'
 import type { TokenUsage } from '@anton/protocol'
+import { Box, Text } from 'ink'
 import type { ConnectionStatus } from '../lib/connection.js'
 import { ICONS } from '../lib/theme.js'
 

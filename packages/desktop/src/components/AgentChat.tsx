@@ -17,7 +17,7 @@ export function AgentChat() {
   const setPendingConfirm = useStore((s) => s.setPendingConfirm)
   const pendingAskUser = useStore((s) => s.pendingAskUser)
   const setPendingAskUser = useStore((s) => s.setPendingAskUser)
-  const currentProvider = useStore((s) => s.currentProvider)
+  const _currentProvider = useStore((s) => s.currentProvider)
   const [selectedSkill, setSelectedSkill] = useState<Skill | null>(null)
 
   // On mount: resume existing conversation's session, or create a new one
@@ -132,10 +132,7 @@ export function AgentChat() {
   return (
     <div className="chat-shell">
       {messages.length === 0 ? (
-        <EmptyState
-          onSend={handleSend}
-          onSkillSelect={setSelectedSkill}
-        />
+        <EmptyState onSend={handleSend} onSkillSelect={setSelectedSkill} />
       ) : (
         <MessageList messages={messages} />
       )}
@@ -153,10 +150,7 @@ export function AgentChat() {
 
       {pendingAskUser && (
         <div className="chat-shell__confirm">
-          <AskUserDialog
-            questions={pendingAskUser.questions}
-            onSubmit={handleAskUserSubmit}
-          />
+          <AskUserDialog questions={pendingAskUser.questions} onSubmit={handleAskUserSubmit} />
         </div>
       )}
 

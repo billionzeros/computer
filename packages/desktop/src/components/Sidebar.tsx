@@ -22,7 +22,7 @@ interface Props {
 
 type SidebarPanel = 'recent' | 'files'
 
-export function Sidebar({ onDisconnect, activeView, onViewChange }: Props) {
+export function Sidebar({ onDisconnect: _onDisconnect, activeView, onViewChange }: Props) {
   useConnectionStatus()
   const conversations = useStore((s) => s.conversations)
   const activeId = useStore((s) => s.activeConversationId)
@@ -139,6 +139,16 @@ export function Sidebar({ onDisconnect, activeView, onViewChange }: Props) {
                               connection.sendSessionHistory(conv.sessionId)
                             }
                             onViewChange('agent')
+                          }}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter' || e.key === ' ') {
+                              switchConversation(conv.id)
+                              if (conv.sessionId) {
+                                connection.sendSessionResume(conv.sessionId)
+                                connection.sendSessionHistory(conv.sessionId)
+                              }
+                              onViewChange('agent')
+                            }
                           }}
                           className={`sidebar-recent__item${conv.id === activeId ? ' sidebar-recent__item--active' : ''}`}
                         >

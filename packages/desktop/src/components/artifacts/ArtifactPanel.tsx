@@ -65,12 +65,19 @@ function MermaidRenderer({ content }: { content: string }) {
 
 // ── Content renderer ───────────────────────────────────────────────
 
-function ArtifactContent({ artifact, viewMode }: { artifact: Artifact; viewMode: 'preview' | 'source' }) {
+function ArtifactContent({
+  artifact,
+  viewMode,
+}: { artifact: Artifact; viewMode: 'preview' | 'source' }) {
   if (viewMode === 'source') {
-    const lang = artifact.renderType === 'html' ? 'html'
-      : artifact.renderType === 'svg' ? 'xml'
-      : artifact.renderType === 'mermaid' ? 'text'
-      : artifact.language
+    const lang =
+      artifact.renderType === 'html'
+        ? 'html'
+        : artifact.renderType === 'svg'
+          ? 'xml'
+          : artifact.renderType === 'mermaid'
+            ? 'text'
+            : artifact.language
     return <HighlightedBlock code={artifact.content} lang={lang} />
   }
 
@@ -83,7 +90,6 @@ function ArtifactContent({ artifact, viewMode }: { artifact: Artifact; viewMode:
       return <MermaidRenderer content={artifact.content} />
     case 'markdown':
       return <MarkdownRenderer content={artifact.content} />
-    case 'code':
     default:
       return <HighlightedBlock code={artifact.content} lang={artifact.language} />
   }
@@ -97,7 +103,8 @@ export function ArtifactPanelContent() {
   const setActiveArtifact = useStore((s) => s.setActiveArtifact)
   const setArtifactPanelOpen = useStore((s) => s.setArtifactPanelOpen)
 
-  const activeArtifact = artifacts.find((a) => a.id === activeArtifactId) || artifacts[artifacts.length - 1]
+  const activeArtifact =
+    artifacts.find((a) => a.id === activeArtifactId) || artifacts[artifacts.length - 1]
 
   const [copied, setCopied] = useState(false)
   const [viewMode, setViewMode] = useState<'preview' | 'source'>('preview')
@@ -110,7 +117,8 @@ export function ArtifactPanelContent() {
   }, [activeArtifact])
 
   // Show source toggle only for renderable types (not code which is already source)
-  const canToggleView = activeArtifact && ['html', 'svg', 'mermaid', 'markdown'].includes(activeArtifact.renderType)
+  const canToggleView =
+    activeArtifact && ['html', 'svg', 'mermaid', 'markdown'].includes(activeArtifact.renderType)
 
   if (!activeArtifact) return null
 

@@ -34,7 +34,13 @@ export function executeCodeSearch(input: CodeSearchInput): string {
   }
 
   // Exclude common noise directories
-  args.push('--glob=!node_modules', '--glob=!.git', '--glob=!dist', '--glob=!build', '--glob=!*.min.*')
+  args.push(
+    '--glob=!node_modules',
+    '--glob=!.git',
+    '--glob=!dist',
+    '--glob=!build',
+    '--glob=!*.min.*',
+  )
 
   const cmd = `rg ${args.join(' ')} "${query.replace(/"/g, '\\"')}" "${path}"`
 

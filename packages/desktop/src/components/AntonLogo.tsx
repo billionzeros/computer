@@ -49,6 +49,8 @@ export function AntonLogo({ size = 48, thinking = false, className }: Props) {
       xmlns="http://www.w3.org/2000/svg"
       className={className}
       style={{ verticalAlign: 'middle' }}
+      role="img"
+      aria-label="Anton logo"
     >
       {/* Monitor body */}
       <rect
@@ -63,14 +65,7 @@ export function AntonLogo({ size = 48, thinking = false, className }: Props) {
       />
 
       {/* Screen inner */}
-      <rect
-        x="7"
-        y="7"
-        width="26"
-        height="18"
-        rx="1.5"
-        fill="rgba(255,255,255,0.04)"
-      />
+      <rect x="7" y="7" width="26" height="18" rx="1.5" fill="rgba(255,255,255,0.04)" />
 
       {/* Eyes — thick lines that move together */}
       <g

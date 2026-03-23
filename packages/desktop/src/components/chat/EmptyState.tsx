@@ -50,9 +50,8 @@ export function EmptyState({ onSend, onSkillSelect }: Props) {
     return personalized.map((s) => s.text)
   }, [conversations])
 
-  const activeSuggestions = activeCategory === 'for-you'
-    ? forYouSuggestions
-    : staticSuggestions[activeCategory]
+  const activeSuggestions =
+    activeCategory === 'for-you' ? forYouSuggestions : staticSuggestions[activeCategory]
 
   return (
     <div className="empty-state">
@@ -68,7 +67,12 @@ export function EmptyState({ onSend, onSkillSelect }: Props) {
         </h1>
 
         <div className="empty-state__input-wrap">
-          <ChatInput onSend={onSend} onSkillSelect={onSkillSelect} variant="hero" initialValue={draft} />
+          <ChatInput
+            onSend={onSend}
+            onSkillSelect={onSkillSelect}
+            variant="hero"
+            initialValue={draft}
+          />
         </div>
 
         <div className="empty-state__tabs">

@@ -61,7 +61,7 @@ export async function executeHttpApi(input: HttpApiInput): Promise<string> {
     })
 
     const status = `${response.status} ${response.statusText}`
-    const contentType = response.headers.get('content-type') || ''
+    const _contentType = response.headers.get('content-type') || ''
     const text = await response.text()
 
     // Try to parse as JSON

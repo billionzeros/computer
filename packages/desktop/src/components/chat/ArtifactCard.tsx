@@ -1,12 +1,5 @@
 import { motion } from 'framer-motion'
-import {
-  Code2,
-  FileText,
-  Globe,
-  Image as ImageIcon,
-  PanelRight,
-  GitBranch,
-} from 'lucide-react'
+import { Code2, FileText, GitBranch, Globe, Image as ImageIcon, PanelRight } from 'lucide-react'
 import type React from 'react'
 import type { Artifact } from '../../lib/artifacts.js'
 import { useStore } from '../../lib/store.js'

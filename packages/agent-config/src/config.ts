@@ -195,13 +195,37 @@ const DEFAULT_PROVIDERS: ProvidersMap = {
 
 // ── Load / Save / Migrate ───────────────────────────────────────────
 
+/**
+ * Parse CLI flags from process.argv.
+ * Supports: --port <n>, --token <string>
+ */
+function parseCLIFlags(): { port?: number; token?: string } {
+  const args = process.argv.slice(2)
+  const flags: { port?: number; token?: string } = {}
+  for (let i = 0; i < args.length; i++) {
+    if (args[i] === '--port' && args[i + 1]) {
+      flags.port = Number(args[++i])
+    } else if (args[i] === '--token' && args[i + 1]) {
+      flags.token = args[++i]
+    }
+  }
+  return flags
+}
+
 export function loadConfig(): AgentConfig {
   mkdirSync(ANTON_DIR, { recursive: true })
   mkdirSync(SESSIONS_DIR, { recursive: true })
   mkdirSync(join(ANTON_DIR, 'skills'), { recursive: true })
 
+  const flags = parseCLIFlags()
+
+  // Token override: --token flag > ANTON_TOKEN env var
+  const tokenOverride = flags.token || process.env.ANTON_TOKEN
+
   if (!existsSync(CONFIG_PATH)) {
     const defaultConfig = createDefaultConfig()
+    if (tokenOverride) defaultConfig.token = tokenOverride
+    if (flags.port) defaultConfig.port = flags.port
     writeFileSync(CONFIG_PATH, stringifyYaml(defaultConfig), 'utf-8')
     console.log(`\n  Config created: ${CONFIG_PATH}`)
     console.log(`  Token: ${defaultConfig.token}`)
@@ -216,12 +240,20 @@ export function loadConfig(): AgentConfig {
   // Migrate legacy single-provider config
   if (parsed.ai && !parsed.providers) {
     const migrated = migrateLegacyConfig(parsed as unknown as LegacyConfig)
+    if (tokenOverride) migrated.token = tokenOverride
+    if (flags.port) migrated.port = flags.port
     saveConfig(migrated)
     console.log('  Config migrated to multi-provider format.')
     return migrated
   }
 
-  return parsed as AgentConfig
+  const config = parsed as AgentConfig
+
+  // Apply CLI/env overrides (these take precedence over config file)
+  if (tokenOverride) config.token = tokenOverride
+  if (flags.port) config.port = flags.port
+
+  return config
 }
 
 export function saveConfig(config: AgentConfig): void {
@@ -747,4 +779,3 @@ export function loadSystemPrompt(): string {
 
   return prompt
 }
-
