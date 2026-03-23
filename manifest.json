@@ -1,13 +1,13 @@
 {
-  "version": "0.9.0",
+  "version": "1.0.0",
   "specVersion": "0.5.0",
-  "gitHash": "0a89f46",
+  "gitHash": "",
   "releaseUrl": "https://github.com/OmGuptaIND/anton.computer/releases",
-  "changelog": "",
-  "publishedAt": "2026-03-23T04:26:12.980Z",
+  "changelog": "Fixes:\n- tls issue\n- liniting issue\n\nAdded:\n- init for provider\n- init for provider",
+  "publishedAt": "2026-03-23T06:49:23.964Z",
   "binaries": {
-    "linux-x64": "https://github.com/OmGuptaIND/anton.computer/releases/download/v0.9.0/anton-agent-linux-x64",
-    "linux-arm64": "https://github.com/OmGuptaIND/anton.computer/releases/download/v0.9.0/anton-agent-linux-arm64"
+    "linux-x64": "https://github.com/OmGuptaIND/anton.computer/releases/download/v1.0.0/anton-agent-linux-x64",
+    "linux-arm64": "https://github.com/OmGuptaIND/anton.computer/releases/download/v1.0.0/anton-agent-linux-arm64"
   },
-  "cli": "https://github.com/OmGuptaIND/anton.computer/releases/download/v0.9.0/anton-cli.mjs"
+  "cli": "https://github.com/OmGuptaIND/anton.computer/releases/download/v1.0.0/anton-cli.mjs"
 }

@@ -10,6 +10,17 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versioning: [S
 
 ---
 
+## [1.0.0] - 2026-03-23
+
+### Fixes
+- tls issue
+- liniting issue
+
+### Added
+- init for provider
+- init for provider
+---
+
 ## [0.9.0] - 2026-03-23
 
 ---
@@ -85,7 +96,8 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versioning: [S
 
 ---
 
-[Unreleased]: https://github.com/OmGuptaIND/anton.computer/compare/v0.9.0...HEAD
+[Unreleased]: https://github.com/OmGuptaIND/anton.computer/compare/v1.0.0...HEAD
+[1.0.0]: https://github.com/OmGuptaIND/anton.computer/compare/v$(changelog.match(/## [(d+.d+.d+)]/g)[1].match(/d+.d+.d+/)[0])...v1.0.0
 [0.9.0]: https://github.com/OmGuptaIND/anton.computer/compare/v$(changelog.match(/## [(d+.d+.d+)]/g)[1].match(/d+.d+.d+/)[0])...v0.9.0
 [0.8.0]: https://github.com/OmGuptaIND/anton.computer/compare/v$(changelog.match(/## [(d+.d+.d+)]/g)[1].match(/d+.d+.d+/)[0])...v0.8.0
 [0.7.0]: https://github.com/OmGuptaIND/anton.computer/compare/v$(changelog.match(/## [(d+.d+.d+)]/g)[1].match(/d+.d+.d+/)[0])...v0.7.0
