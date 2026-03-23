@@ -1,0 +1,23 @@
+infra-providers/huddle/cloud-init.sh
+  2d8213ac86db5040 127-128
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.1.17",
+  "base_commit_sha": "0e76fc7496c772285bc733089ede3c52516d1bcc",
+  "prompts": {
+    "2d8213ac86db5040": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "4fd2d58b-9756-4974-9cad-dc3284e53f7b",
+        "model": "claude-opus-4-6"
+      },
+      "human_author": "Om Gupta <omgupta0720@gmail.com>",
+      "messages": [],
+      "total_additions": 2,
+      "total_deletions": 2,
+      "accepted_lines": 2,
+      "overriden_lines": 0
+    }
+  }
+}
