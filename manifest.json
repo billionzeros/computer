@@ -3,8 +3,8 @@
   "specVersion": "0.5.0",
   "gitHash": "",
   "releaseUrl": "https://github.com/OmGuptaIND/anton.computer/releases",
-  "changelog": "Added:\n- Binary distribution for agent updates (download binary instead of git pull + build)\n- Changelog tracking for all releases\n- `make release` — single command to ship a new version (interactive version prompt)\n- `make push` — fast dev deployment via esbuild bundle + scp (~5 seconds)\n- CLI binary distribution with self-update (`anton update`)\n- CLI install script: `curl -fsSL https://antoncomputer.in/install | bash`\n- CLI version compatibility check on connect (`MIN_AGENT_SPEC`)\n- CLI commands: `anton computer version`, `anton computer update` (manage agent from CLI)\n- Desktop app auto-updater (Tauri updater plugin)\n- Desktop app builds in CI (macOS .dmg, Windows .msi, Linux .AppImage/.deb)\n- System prompt embedded at build time (no fallback needed in binary mode)\n- GitHub Actions workflow builds agent + CLI + desktop on version tags\n- Install endpoint at `antoncomputer.in/install`\n\nChanged:\n- Self-update system now prefers binary download path, falls back to source build\n- Manifest now includes `cli` section with per-platform binary URLs\n- Release script updates all versions (package.json, tauri.conf.json, Cargo.toml)",
-  "publishedAt": "2026-03-21T05:52:42.963Z",
+  "changelog": "",
+  "publishedAt": "2026-03-23T03:29:45.944Z",
   "binaries": {
     "linux-x64": "https://github.com/OmGuptaIND/anton.computer/releases/download/v0.6.0/anton-agent-linux-x64",
     "linux-arm64": "https://github.com/OmGuptaIND/anton.computer/releases/download/v0.6.0/anton-agent-linux-arm64"
