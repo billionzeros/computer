@@ -1,6 +1,6 @@
 import { motion } from 'framer-motion'
 import { ArrowRight, Monitor, Trash2, User, Wifi } from 'lucide-react'
-import { useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { type ConnectionConfig, connection } from '../lib/connection.js'
 import { type SavedMachine, loadMachines, saveMachines, useConnectionStatus } from '../lib/store.js'
 import { AntonLogo } from './AntonLogo.js'
@@ -25,7 +25,7 @@ export function Connect({ onConnected }: { onConnected: () => void }) {
 
   const isConnecting = status === 'connecting' || status === 'authenticating'
 
-  const handleConnect = (config: ConnectionConfig, machineName?: string) => {
+  const handleConnect = useCallback((config: ConnectionConfig, machineName?: string) => {
     setError('')
 
     const unsub = connection.onStatusChange((s, detail) => {
@@ -53,7 +53,7 @@ export function Connect({ onConnected }: { onConnected: () => void }) {
     })
 
     connection.connect(config)
-  }
+  }, [remember, onConnected])
 
   const connectFromForm = () => {
     if (mode === 'username') {
@@ -91,6 +91,31 @@ export function Connect({ onConnected }: { onConnected: () => void }) {
     saveMachines(updated)
     setMachines(updated)
   }
+
+  // Auto-connect from URL hash params (e.g. #computer=crazy&token=xxx)
+  const autoConnectAttempted = useRef(false)
+  useEffect(() => {
+    if (autoConnectAttempted.current) return
+    const hash = window.location.hash.slice(1) // remove #
+    if (!hash) return
+    const params = new URLSearchParams(hash)
+    const computer = params.get('computer')
+    const urlToken = params.get('token')
+    if (computer && urlToken) {
+      autoConnectAttempted.current = true
+      // Clear hash from URL to avoid re-triggering
+      window.history.replaceState(null, '', window.location.pathname + window.location.search)
+      handleConnect(
+        {
+          host: `${computer}.antoncomputer.in`,
+          port: 443,
+          token: urlToken,
+          useTLS: true,
+        },
+        computer,
+      )
+    }
+  }, [handleConnect])
 
   const canSubmit = mode === 'username' ? username && token : host && token
 

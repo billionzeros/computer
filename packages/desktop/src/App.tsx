@@ -63,6 +63,7 @@ export function App() {
 
   const handleDisconnect = () => {
     connection.disconnect()
+    useStore.getState().resetForDisconnect()
     setConnected(false)
   }
 

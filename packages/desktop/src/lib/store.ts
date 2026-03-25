@@ -238,6 +238,9 @@ interface AppState {
   setUpdateInfo: (info: UpdateInfo | null) => void
   setUpdateProgress: (stage: UpdateStage, message: string | null) => void
   dismissUpdate: () => void
+
+  // Reset actions
+  resetForDisconnect: () => void
 }
 
 export const useStore = create<AppState>((set, get) => {
@@ -507,6 +510,41 @@ export const useStore = create<AppState>((set, get) => {
     setUpdateProgress: (stage, message) => set({ updateStage: stage, updateMessage: message }),
 
     dismissUpdate: () => set({ updateDismissed: true }),
+
+    resetForDisconnect: () => {
+      set({
+        currentSessionId: null,
+        sessions: [],
+        conversations: [],
+        activeConversationId: null,
+        agentStatus: 'unknown',
+        agentStatusDetail: null,
+        agentSteps: [],
+        _currentAssistantMsgId: null,
+        _sessionResolvers: new Map(),
+        artifacts: [],
+        activeArtifactId: null,
+        artifactPanelOpen: false,
+        pendingConfirm: null,
+        pendingPlan: null,
+        sidePanelView: 'artifacts' as const,
+        pendingAskUser: null,
+        turnUsage: null,
+        sessionUsage: null,
+        lastResponseProvider: null,
+        lastResponseModel: null,
+        providers: [],
+        agentVersion: null,
+        agentGitHash: null,
+        updateInfo: null,
+        updateStage: null,
+        updateMessage: null,
+        updateDismissed: false,
+      })
+      // Clear persisted conversation data
+      saveConversations([])
+      localStorage.removeItem(ACTIVE_CONV_KEY)
+    },
   }
 })
 
