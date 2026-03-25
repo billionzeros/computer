@@ -43,10 +43,12 @@ async function main() {
   }
 
   // Show provider status
-  const providers = Object.entries(config.providers)
+  const providers = Object.entries(config.providers ?? {})
   const configured = providers.filter(([, p]) => p.apiKey && p.apiKey.length > 0)
   console.log(`  Providers: ${configured.length}/${providers.length} configured`)
-  console.log(`  Default:   ${config.defaults.provider}/${config.defaults.model}`)
+  if (config.defaults) {
+    console.log(`  Default:   ${config.defaults.provider}/${config.defaults.model}`)
+  }
 
   // Start the WebSocket server (handles client connections + sessions)
   const server = new AgentServer(config)

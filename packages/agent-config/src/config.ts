@@ -247,7 +247,19 @@ export function loadConfig(): AgentConfig {
     return migrated
   }
 
-  const config = parsed as AgentConfig
+  // Merge parsed config with defaults — any missing fields get filled in.
+  // This makes the binary truly zero-config: even a config file with just
+  // "port: 9876" will work because providers, security, etc. get defaults.
+  const defaults = createDefaultConfig()
+  const config: AgentConfig = {
+    ...defaults,
+    ...parsed,
+    providers: parsed.providers ?? defaults.providers,
+    defaults: parsed.defaults ?? defaults.defaults,
+    security: parsed.security ?? defaults.security,
+    skills: parsed.skills ?? defaults.skills ?? [],
+    sessions: parsed.sessions ?? defaults.sessions,
+  }
 
   // Apply CLI/env overrides (these take precedence over config file)
   if (tokenOverride) config.token = tokenOverride
