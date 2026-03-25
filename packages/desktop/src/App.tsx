@@ -3,6 +3,7 @@ import { PanelLeft, Settings, Share2, Ticket } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { AgentChat } from './components/AgentChat.js'
 import { Connect } from './components/Connect.js'
+import { MachineInfoPanel } from './components/MachineInfoPanel.js'
 import { SidePanel } from './components/SidePanel.js'
 import { Sidebar } from './components/Sidebar.js'
 import { Terminal } from './components/Terminal.js'
@@ -14,6 +15,7 @@ type View = 'agent' | 'terminal'
 export function App() {
   const [connected, setConnected] = useState(false)
   const [activeView, setActiveView] = useState<View>('agent')
+  const [showMachineInfo, setShowMachineInfo] = useState(false)
   const status = useConnectionStatus()
   const sessionUsage = useStore((s) => s.sessionUsage)
   const activeConv = useStore((s) => s.getActiveConversation())
@@ -23,6 +25,7 @@ export function App() {
   const sidebarCollapsed = useStore((s) => s.sidebarCollapsed)
   const toggleSidebar = useStore((s) => s.toggleSidebar)
   const sidePanelOpen = artifactPanelOpen || pendingPlan !== null
+  const machineName = connection.currentConfig?.host?.replace('.antoncomputer.in', '') ?? ''
 
   // Dynamic page title
   useEffect(() => {
@@ -47,12 +50,23 @@ export function App() {
   useEffect(() => {
     const unsub = useStore.subscribe((state, prev) => {
       if (state.sessions.length > 0 && prev.sessions.length === 0) {
+        const store = useStore.getState()
+
+        // Sync all server sessions → local conversations
+        // Iterate oldest-first so newest ends up on top (newConversation prepends)
+        const sessionsOldestFirst = [...state.sessions].reverse()
+        for (const session of sessionsOldestFirst) {
+          const existing = store.findConversationBySession(session.id)
+          if (!existing) {
+            store.newConversation(session.title || 'New conversation', session.id)
+          }
+        }
+
+        // Resume and load the latest session
         const latest = state.sessions[0]
-        const existing = state.findConversationBySession(latest.id)
-        if (existing) {
-          useStore.getState().switchConversation(existing.id)
-        } else {
-          useStore.getState().newConversation(latest.title, latest.id)
+        const latestConv = useStore.getState().findConversationBySession(latest.id)
+        if (latestConv) {
+          useStore.getState().switchConversation(latestConv.id)
         }
         connection.sendSessionResume(latest.id)
         connection.sendSessionHistory(latest.id)
@@ -120,10 +134,16 @@ export function App() {
             </div>
 
             <div className="workspace-topbar__actions">
-              <div className="workspace-topbar__connection">
+              <button
+                type="button"
+                className="workspace-topbar__connection"
+                onClick={() => setShowMachineInfo(true)}
+              >
                 <span className="workspace-topbar__connectionDot" />
-                <span className="workspace-topbar__connectionLabel">Connected</span>
-              </div>
+                <span className="workspace-topbar__connectionLabel">
+                  {machineName || 'Connected'}
+                </span>
+              </button>
               {sessionUsage && (
                 <div className="workspace-topbar__credits">
                   <Ticket className="workspace-topbar__creditsIcon" />
@@ -154,17 +174,28 @@ export function App() {
               )}
             </div>
             <div className="workspace-topbar__actions">
-              <div className="workspace-topbar__connection">
+              <button
+                type="button"
+                className="workspace-topbar__connection"
+                onClick={() => setShowMachineInfo(true)}
+              >
                 <span className="workspace-topbar__connectionDot" />
-                <span className="workspace-topbar__connectionLabel">Connected</span>
-              </div>
+                <span className="workspace-topbar__connectionLabel">
+                  {machineName || 'Connected'}
+                </span>
+              </button>
               {sessionUsage && (
                 <div className="workspace-topbar__credits">
                   <Ticket className="workspace-topbar__creditsIcon" />
                   <span>{formatTokens(sessionUsage.totalTokens)}</span>
                 </div>
               )}
-              <button type="button" className="workspace-topbar__settingsBtn" aria-label="Settings">
+              <button
+                type="button"
+                className="workspace-topbar__settingsBtn"
+                aria-label="Settings"
+                onClick={() => setShowMachineInfo(true)}
+              >
                 <Settings className="workspace-topbar__settingsIcon" />
               </button>
             </div>
@@ -179,6 +210,8 @@ export function App() {
           </AnimatePresence>
         </div>
       </div>
+
+      {showMachineInfo && <MachineInfoPanel onClose={() => setShowMachineInfo(false)} />}
     </div>
   )
 }

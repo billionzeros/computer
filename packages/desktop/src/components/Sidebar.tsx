@@ -7,12 +7,14 @@ import {
   Plus,
   TerminalSquare,
   X,
+  Zap,
 } from 'lucide-react'
 import { useState } from 'react'
 import { connection } from '../lib/connection.js'
 import { useConnectionStatus, useStore } from '../lib/store.js'
 import { AntonLogo } from './AntonLogo.js'
 import { FileBrowser } from './FileBrowser.js'
+import { SidebarSkillsPanel } from './SidebarSkillsPanel.js'
 
 interface Props {
   onDisconnect: () => void
@@ -20,7 +22,7 @@ interface Props {
   onViewChange: (view: 'agent' | 'terminal') => void
 }
 
-type SidebarPanel = 'recent' | 'files'
+type SidebarPanel = 'recent' | 'files' | 'skills'
 
 export function Sidebar({ onDisconnect: _onDisconnect, activeView, onViewChange }: Props) {
   useConnectionStatus()
@@ -100,12 +102,29 @@ export function Sidebar({ onDisconnect: _onDisconnect, activeView, onViewChange 
             active={activeView === 'terminal'}
             onClick={() => onViewChange(activeView === 'terminal' ? 'agent' : 'terminal')}
           />
+          <NavItem
+            icon={<Zap />}
+            label="Skills"
+            active={panel === 'skills'}
+            onClick={() => setPanel(panel === 'skills' ? 'recent' : 'skills')}
+          />
         </div>
 
         {/* Panel content */}
         <div className="sidebar-panel">
           <AnimatePresence mode="wait">
-            {panel === 'files' ? (
+            {panel === 'skills' ? (
+              <motion.div
+                key="skills"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                transition={{ duration: 0.12 }}
+                className="sidebar-panel__inner"
+              >
+                <SidebarSkillsPanel />
+              </motion.div>
+            ) : panel === 'files' ? (
               <motion.div
                 key="files"
                 initial={{ opacity: 0 }}

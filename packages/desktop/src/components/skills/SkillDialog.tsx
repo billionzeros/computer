@@ -1,4 +1,27 @@
-import { Activity, Box, Clock, Database, FileText, Globe, Rocket, Shield } from 'lucide-react'
+import {
+  Activity,
+  Ban,
+  BarChart,
+  Box,
+  Clock,
+  Database,
+  Download,
+  Eye,
+  FileText,
+  Gauge,
+  Globe,
+  HardDrive,
+  Key,
+  Lock,
+  RefreshCw,
+  Rocket,
+  Settings,
+  Shield,
+  ShieldCheck,
+  Users,
+  Wifi,
+  Zap,
+} from 'lucide-react'
 import type React from 'react'
 import { useState } from 'react'
 import { type Skill, executeSkill } from '../../lib/skills.js'
@@ -11,8 +34,22 @@ const iconMap: Record<string, React.ElementType> = {
   box: Box,
   'file-text': FileText,
   shield: Shield,
+  'shield-check': ShieldCheck,
   database: Database,
   clock: Clock,
+  lock: Lock,
+  key: Key,
+  ban: Ban,
+  'hard-drive': HardDrive,
+  wifi: Wifi,
+  gauge: Gauge,
+  users: Users,
+  download: Download,
+  settings: Settings,
+  eye: Eye,
+  'bar-chart': BarChart,
+  'refresh-cw': RefreshCw,
+  zap: Zap,
 }
 
 interface Props {

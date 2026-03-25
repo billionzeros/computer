@@ -61,6 +61,14 @@ export class Connection {
     return this._status
   }
 
+  get currentConfig() {
+    return this.config
+  }
+
+  get currentAgentId() {
+    return this.agentId
+  }
+
   onMessage(handler: MessageHandler) {
     this.handlers.push(handler)
     return () => {

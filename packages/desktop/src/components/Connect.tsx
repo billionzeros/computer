@@ -2,10 +2,12 @@ import { motion } from 'framer-motion'
 import { ArrowRight, Monitor, Trash2, User, Wifi } from 'lucide-react'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { type ConnectionConfig, connection } from '../lib/connection.js'
-import { type SavedMachine, loadMachines, saveMachines, useConnectionStatus } from '../lib/store.js'
+import { saveConversations } from '../lib/conversations.js'
+import { type SavedMachine, loadMachines, saveMachines, useConnectionStatus, useStore } from '../lib/store.js'
 import { AntonLogo } from './AntonLogo.js'
 
 const PORT_PLAIN = 9876
+const LAST_MACHINE_KEY = 'anton.lastMachineId'
 
 const isDev =
   typeof window !== 'undefined' &&
@@ -28,14 +30,23 @@ export function Connect({ onConnected }: { onConnected: () => void }) {
   const handleConnect = useCallback((config: ConnectionConfig, machineName?: string) => {
     setError('')
 
+    // Clear stale session data if connecting to a different machine
+    const machineId = `${config.host}:${config.port}`
+    const lastMachineId = localStorage.getItem(LAST_MACHINE_KEY)
+    if (lastMachineId && lastMachineId !== machineId) {
+      saveConversations([])
+      localStorage.removeItem('anton.activeConversationId')
+      useStore.getState().resetForDisconnect()
+    }
+    localStorage.setItem(LAST_MACHINE_KEY, machineId)
+
     const unsub = connection.onStatusChange((s, detail) => {
       if (s === 'connected') {
         if (remember || machineName) {
           const existing = loadMachines()
-          const id = `${config.host}:${config.port}`
-          const updated = existing.filter((m) => m.id !== id)
+          const updated = existing.filter((m) => m.id !== machineId)
           updated.push({
-            id,
+            id: machineId,
             name: machineName || config.host,
             host: config.host,
             port: config.port,
