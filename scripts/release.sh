@@ -206,7 +206,7 @@ node -e "
   const oldUnreleasedLink = /\\[Unreleased\\]: .*/;
   changelog = changelog.replace(
     oldUnreleasedLink,
-    '[Unreleased]: https://github.com/OmGuptaIND/anton.computer/compare/v${NEW_VERSION}...HEAD\n[${NEW_VERSION}]: https://github.com/OmGuptaIND/anton.computer/compare/v\$(changelog.match(/## \\[(\\d+\\.\\d+\\.\\d+)\\]/g)[1].match(/\\d+\\.\\d+\\.\\d+/)[0])...v${NEW_VERSION}'
+    '[Unreleased]: https://github.com/OmGuptaIND/computer/compare/v${NEW_VERSION}...HEAD\n[${NEW_VERSION}]: https://github.com/OmGuptaIND/computer/compare/v\$(changelog.match(/## \\[(\\d+\\.\\d+\\.\\d+)\\]/g)[1].match(/\\d+\\.\\d+\\.\\d+/)[0])...v${NEW_VERSION}'
   );
 
   fs.writeFileSync('CHANGELOG.md', changelog);
@@ -225,7 +225,7 @@ echo ""
 
 step "Updating manifest.json"
 
-GITHUB_BASE="https://github.com/OmGuptaIND/anton.computer/releases/download/v${NEW_VERSION}"
+GITHUB_BASE="https://github.com/OmGuptaIND/computer/releases/download/v${NEW_VERSION}"
 
 node -e "
   const fs = require('fs');
@@ -245,6 +245,10 @@ node -e "
   manifest.binaries = {
     'linux-x64': '${GITHUB_BASE}/anton-agent-linux-x64',
     'linux-arm64': '${GITHUB_BASE}/anton-agent-linux-arm64'
+  };
+  manifest.sidecar_binaries = {
+    'linux-x64': '${GITHUB_BASE}/anton-sidecar-linux-amd64',
+    'linux-arm64': '${GITHUB_BASE}/anton-sidecar-linux-arm64'
   };
   manifest.cli = '${GITHUB_BASE}/anton-cli.mjs';
   fs.writeFileSync('manifest.json', JSON.stringify(manifest, null, 2) + '\n');
@@ -278,7 +282,7 @@ if [[ "$AUTO_PUSH" == "--push" ]]; then
   echo "    3. Create GitHub Release with all artifacts + changelog"
   echo "    4. Update manifest.json with git hash"
   echo ""
-  echo -e "  Track progress: ${BLUE}https://github.com/OmGuptaIND/anton.computer/actions${NC}"
+  echo -e "  Track progress: ${BLUE}https://github.com/OmGuptaIND/computer/actions${NC}"
 else
   echo ""
   echo -e "  ${BOLD}Release v${NEW_VERSION} ready locally.${NC}"

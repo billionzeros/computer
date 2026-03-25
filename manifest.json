@@ -1,16 +1,16 @@
 {
   "version": "1.0.1",
   "gitHash": "",
-  "releaseUrl": "https://github.com/OmGuptaIND/anton.computer/releases",
+  "releaseUrl": "https://github.com/OmGuptaIND/computer/releases",
   "changelog": "Features:\n- Introduce a new Go sidecar service for agent health, status, and system checks, removing agent spec version tracking from clients.",
   "publishedAt": "2026-03-24T20:58:55.359Z",
   "binaries": {
-    "linux-x64": "https://github.com/OmGuptaIND/anton.computer/releases/download/v1.0.1/anton-agent-linux-x64",
-    "linux-arm64": "https://github.com/OmGuptaIND/anton.computer/releases/download/v1.0.1/anton-agent-linux-arm64"
+    "linux-x64": "https://github.com/OmGuptaIND/computer/releases/download/v1.0.1/anton-agent-linux-x64",
+    "linux-arm64": "https://github.com/OmGuptaIND/computer/releases/download/v1.0.1/anton-agent-linux-arm64"
   },
   "sidecar_binaries": {
-    "linux-x64": "https://github.com/OmGuptaIND/anton.computer/releases/download/v1.0.0/anton-sidecar-linux-amd64",
-    "linux-arm64": "https://github.com/OmGuptaIND/anton.computer/releases/download/v1.0.0/anton-sidecar-linux-arm64"
+    "linux-x64": "https://github.com/OmGuptaIND/computer/releases/download/v1.0.1/anton-sidecar-linux-amd64",
+    "linux-arm64": "https://github.com/OmGuptaIND/computer/releases/download/v1.0.1/anton-sidecar-linux-arm64"
   },
-  "cli": "https://github.com/OmGuptaIND/anton.computer/releases/download/v1.0.1/anton-cli.mjs"
+  "cli": "https://github.com/OmGuptaIND/computer/releases/download/v1.0.1/anton-cli.mjs"
 }

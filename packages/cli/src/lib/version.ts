@@ -19,7 +19,7 @@ import { fileURLToPath } from 'node:url'
 
 /** Manifest URL — same one the agent uses */
 export const UPDATE_MANIFEST_URL =
-  'https://raw.githubusercontent.com/OmGuptaIND/anton.computer/main/manifest.json'
+  'https://raw.githubusercontent.com/OmGuptaIND/computer/main/manifest.json'
 
 export interface CLIManifest {
   version: string

@@ -4,9 +4,9 @@
     <strong>A computer that thinks. Your AI agent, on your server, 24/7.</strong>
   </p>
   <p align="center">
-    <a href="https://github.com/OmGuptaIND/anton.computer/blob/main/LICENSE"><img src="https://img.shields.io/badge/license-Apache%202.0-blue.svg" alt="License"></a>
-    <a href="https://github.com/OmGuptaIND/anton.computer/releases"><img src="https://img.shields.io/github/v/release/OmGuptaIND/anton.computer" alt="Release"></a>
-    <a href="https://github.com/OmGuptaIND/anton.computer/issues"><img src="https://img.shields.io/github/issues/OmGuptaIND/anton.computer" alt="Issues"></a>
+    <a href="https://github.com/OmGuptaIND/computer/blob/main/LICENSE"><img src="https://img.shields.io/badge/license-Apache%202.0-blue.svg" alt="License"></a>
+    <a href="https://github.com/OmGuptaIND/computer/releases"><img src="https://img.shields.io/github/v/release/OmGuptaIND/computer" alt="Release"></a>
+    <a href="https://github.com/OmGuptaIND/computer/issues"><img src="https://img.shields.io/github/issues/OmGuptaIND/computer" alt="Issues"></a>
     <a href="https://antoncomputer.in"><img src="https://img.shields.io/badge/website-antoncomputer.in-orange" alt="Website"></a>
   </p>
 </p>
@@ -52,7 +52,7 @@ Anton doesn't generate code for you to copy-paste. It runs the commands, creates
 ### Install & Run
 
 ```bash
-git clone https://github.com/OmGuptaIND/anton.computer.git
+git clone https://github.com/OmGuptaIND/computer.git
 cd anton.computer
 pnpm install
 pnpm dev          # builds protocol, runs agent + desktop concurrently
@@ -94,7 +94,7 @@ Ansible handles everything: Node.js, pnpm, systemd service, firewall, security h
 
 ```bash
 ssh ubuntu@your-vps
-git clone https://github.com/OmGuptaIND/anton.computer.git ~/.anton/agent
+git clone https://github.com/OmGuptaIND/computer.git ~/.anton/agent
 cd ~/.anton/agent && bash deploy/install.sh
 export ANTHROPIC_API_KEY=sk-ant-...
 ~/.anton/start.sh
@@ -203,7 +203,7 @@ We welcome contributions! Anton is open source because we believe AI agents shou
 - **CLI features** — Enhance the terminal client in `packages/cli/`
 - **Deployment** — Better Docker support, new cloud providers, Kubernetes
 - **Documentation** — Improve specs, add guides, write tutorials
-- **Bug fixes** — Check [open issues](https://github.com/OmGuptaIND/anton.computer/issues)
+- **Bug fixes** — Check [open issues](https://github.com/OmGuptaIND/computer/issues)
 
 ### Guidelines
 
@@ -215,7 +215,7 @@ We welcome contributions! Anton is open source because we believe AI agents shou
 
 ### Reporting Issues
 
-Found a bug or have a feature request? [Open an issue](https://github.com/OmGuptaIND/anton.computer/issues/new) with:
+Found a bug or have a feature request? [Open an issue](https://github.com/OmGuptaIND/computer/issues/new) with:
 
 - A clear description of the problem or feature
 - Steps to reproduce (for bugs)
@@ -224,8 +224,8 @@ Found a bug or have a feature request? [Open an issue](https://github.com/OmGupt
 ## Community
 
 - [Website](https://antoncomputer.in)
-- [GitHub Issues](https://github.com/OmGuptaIND/anton.computer/issues)
-- [Releases](https://github.com/OmGuptaIND/anton.computer/releases)
+- [GitHub Issues](https://github.com/OmGuptaIND/computer/issues)
+- [Releases](https://github.com/OmGuptaIND/computer/releases)
 
 ## License
 
