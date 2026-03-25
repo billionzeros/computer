@@ -1,0 +1,55 @@
+packages/desktop/src/components/skills/SkillDialog.tsx
+  a50ecbe2e1be8e0c 1-23,37,40-52
+packages/desktop/src/index.css
+  a50ecbe2e1be8e0c 3403-3623
+  6e2029ebf3f73b62 478-484,4748-4922
+packages/desktop/src/components/Sidebar.tsx
+  a50ecbe2e1be8e0c 10,17,25,105-110,116-127
+packages/desktop/src/components/MachineInfoPanel.tsx
+  6e2029ebf3f73b62 1-172
+packages/desktop/src/components/Connect.tsx
+  6e2029ebf3f73b62 5-6,10,33-42,47,49
+packages/desktop/src/App.tsx
+  6e2029ebf3f73b62 6,18,28,53-65,67-69,137-141,143-146,177-181,183-186,193-198,213-214
+packages/desktop/src/lib/connection.ts
+  6e2029ebf3f73b62 64-71
+packages/desktop/src/components/SidebarSkillsPanel.tsx
+  a50ecbe2e1be8e0c 1-263
+packages/desktop/src/lib/skills.ts
+  a50ecbe2e1be8e0c 21,26,91-96,98-101,103-120,122-123,137-207,210-211,238-252,255,258-259,277-311,315-360,363-378,381-396,400
+packages/desktop/src/components/skills/SkillCard.tsx
+  a50ecbe2e1be8e0c 1-23,35,38-50
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.1.19",
+  "base_commit_sha": "bf4c15618d784916fce3cf6425f1a319a9896364",
+  "prompts": {
+    "6e2029ebf3f73b62": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "4f3dc869-f7ac-426e-b30d-3ee88ac2c37a",
+        "model": "claude-opus-4-6"
+      },
+      "human_author": "Om Gupta <omgupta0720@gmail.com>",
+      "messages": [],
+      "total_additions": 423,
+      "total_deletions": 17,
+      "accepted_lines": 422,
+      "overriden_lines": 0
+    },
+    "a50ecbe2e1be8e0c": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "d65b4579-80f0-42e7-9985-f970892f9624",
+        "model": "claude-opus-4-6"
+      },
+      "human_author": "Om Gupta <omgupta0720@gmail.com>",
+      "messages": [],
+      "total_additions": 830,
+      "total_deletions": 14,
+      "accepted_lines": 828,
+      "overriden_lines": 0
+    }
+  }
+}
