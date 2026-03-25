@@ -1,6 +1,6 @@
 {
   "version": "1.0.22",
-  "gitHash": "",
+  "gitHash": "474aa2d",
   "releaseUrl": "https://github.com/OmGuptaIND/computer/releases",
   "changelog": "Features:\n- Introduce new `computer` subcommands for setup and lifecycle management, leveraging shared utilities and improving version detection.\n\nFixes:\n- pass AUTO_CHANGELOG via env var to avoid JS template literal syntax error",
   "publishedAt": "2026-03-25T07:50:02.697Z",
