@@ -1,6 +1,6 @@
 {
   "version": "1.0.1",
-  "gitHash": "",
+  "gitHash": "b7b92d1",
   "releaseUrl": "https://github.com/OmGuptaIND/computer/releases",
   "changelog": "Features:\n- Introduce a new Go sidecar service for agent health, status, and system checks, removing agent spec version tracking from clients.",
   "publishedAt": "2026-03-24T20:58:55.359Z",
