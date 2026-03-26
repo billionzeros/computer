@@ -20,6 +20,9 @@ REPO_ROOT  := $(shell cd ../.. && pwd)
 ifdef API_KEY
   EXTRA_ARGS += -e "anthropic_api_key=$(API_KEY)"
 endif
+ifdef BRAINTRUST_KEY
+  EXTRA_ARGS += -e "braintrust_api_key=$(BRAINTRUST_KEY)"
+endif
 ifdef BRANCH
   EXTRA_ARGS += -e "anton_branch=$(BRANCH)"
 endif

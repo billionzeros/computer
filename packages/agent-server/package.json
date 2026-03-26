@@ -17,7 +17,6 @@
     "@anton/agent-core": "workspace:*",
     "@anton/protocol": "workspace:*",
     "ws": "^8.18.0",
-    "node-pty": "^1.0.0",
     "chokidar": "^4.0.0"
   },
   "devDependencies": {

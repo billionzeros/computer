@@ -2,6 +2,7 @@ import { AnimatePresence } from 'framer-motion'
 import { FolderOpen, PanelLeft, Ticket } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { AgentChat } from './components/AgentChat.js'
+import { DebugOverlay } from './components/chat/DebugOverlay.js'
 import { Connect } from './components/Connect.js'
 import { MachineInfoPanel } from './components/MachineInfoPanel.js'
 import { ModeSelector } from './components/ModeSelector.js'
@@ -62,6 +63,14 @@ export function App() {
       connection.sendProjectsList()
       connection.sendConnectorsList()
       connection.sendConnectorRegistryList()
+
+      // If there's a persisted active project, fetch its sessions so
+      // landing directly on a project view shows up-to-date data
+      const store = useStore.getState()
+      if (store.activeProjectId) {
+        useStore.setState({ projectSessionsLoading: true })
+        connection.sendProjectSessionsList(store.activeProjectId)
+      }
     }
   }, [status])
 
@@ -245,6 +254,7 @@ export function App() {
 
       {showMachineInfo && <MachineInfoPanel onClose={() => setShowMachineInfo(false)} />}
       <SettingsModal open={showSettings} onClose={() => setShowSettings(false)} />
+      <DebugOverlay />
     </div>
   )
 }

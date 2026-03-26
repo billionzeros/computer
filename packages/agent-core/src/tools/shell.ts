@@ -17,19 +17,35 @@ export function needsConfirmation(command: string, patterns: string[]): boolean 
 
 /**
  * Execute a shell command with timeout.
+ * Uses the user's default shell with login profile for full PATH support.
  */
 export async function executeShell(input: ShellToolInput, _config: AgentConfig): Promise<string> {
   const { command, timeout_seconds = 30, working_directory } = input
   const timeout = Math.min(timeout_seconds, 300) * 1000
 
+  // Use user's shell for proper PATH and env (npm, node, etc.)
+  const userShell = process.env.SHELL || '/bin/sh'
+
   return new Promise((resolve) => {
     execFile(
-      '/bin/sh',
-      ['-c', command],
+      userShell,
+      ['-l', '-c', command],
       {
         timeout,
         maxBuffer: 1024 * 1024 * 10, // 10MB
         cwd: working_directory || process.env.HOME,
+        env: {
+          ...process.env,
+          // Ensure common tool paths are available
+          PATH: [
+            process.env.PATH,
+            '/usr/local/bin',
+            '/opt/homebrew/bin',
+            `${process.env.HOME}/.nvm/versions/node/current/bin`,
+          ]
+            .filter(Boolean)
+            .join(':'),
+        },
       },
       (error, stdout, stderr) => {
         let output = ''

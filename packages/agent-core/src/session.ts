@@ -9,8 +9,9 @@
  * pi SDK does the heavy lifting — we just manage lifecycle and persistence.
  */
 
-import type { AgentConfig, PersistedSession } from '@anton/agent-config'
-import { ensureConversationDirs, getConversationWorkspace, getProjectSessionsDir, loadSession, saveSession } from '@anton/agent-config'
+import type { AgentConfig, PersistedSession, PersistedTaskItem } from '@anton/agent-config'
+import { ensureConversationDirs, getConversationWorkspace, getProjectSessionsDir, loadProjectTypePrompt, loadReferences, loadSession, saveSession, saveSessionTasks } from '@anton/agent-config'
+import type { ProjectType } from '@anton/agent-config'
 import type { ChatImageAttachmentInput, SessionImageAttachment, TokenUsage } from '@anton/protocol'
 import { Agent as PiAgent } from '@mariozechner/pi-agent-core'
 import type {
@@ -22,6 +23,7 @@ import { completeSimple, getModel } from '@mariozechner/pi-ai'
 import type { Api, ImageContent, Model, TextContent } from '@mariozechner/pi-ai'
 import { type AskUserHandler, SYSTEM_PROMPT, type ToolCallbacks, buildTools } from './agent.js'
 import { type ContextInfo, assembleConversationContext } from './context.js'
+import { type Span, isTracingEnabled, startTrace } from './tracing.js'
 import {
   type CompactionConfig,
   type CompactionState,
@@ -79,6 +81,7 @@ export interface SessionInfo {
   messageCount: number
   createdAt: number
   lastActiveAt: number
+  lastTasks?: import('@anton/agent-config').PersistedTaskItem[]
 }
 
 /** Fallback max messages if compaction fails */
@@ -123,9 +126,16 @@ export class Session {
   private ephemeral: boolean
   public projectId?: string
   private projectContext?: string
+  private projectType?: string
   private workspacePath?: string
   private conversationContext?: string
+  private firstMessage?: string
   public contextInfo?: ContextInfo
+
+  // Last known task tracker state — persisted for resume
+  private _lastTasks: PersistedTaskItem[] = []
+  // Whether we need to inject task context on the next user message (set on resume)
+  private _needsTaskResumeHint = false
 
   constructor(opts: {
     id: string
@@ -141,6 +151,8 @@ export class Session {
     ephemeral?: boolean // sub-agent sessions: no persist, no title gen, no compaction
     projectId?: string // scoped to a project
     projectContext?: string // injected into system prompt
+    projectType?: string // project type for prompt module loading
+    lastTasks?: PersistedTaskItem[] // restored task state from persistence
   }) {
     this.id = opts.id
     this.provider = opts.provider
@@ -153,6 +165,10 @@ export class Session {
     this.ephemeral = opts.ephemeral || false
     this.projectId = opts.projectId
     this.projectContext = opts.projectContext
+    this.projectType = opts.projectType
+    this._lastTasks = opts.lastTasks || []
+    // If resuming with incomplete tasks, flag for context injection on next message
+    this._needsTaskResumeHint = this._lastTasks.some((t) => t.status !== 'completed')
 
     // Set up conversation workspace (skip for ephemeral sub-agents)
     if (!this.ephemeral) {
@@ -308,8 +324,29 @@ export class Session {
     this.askUserHandler = handler
   }
 
+  /** Get last known task state (for resume). */
+  get lastTasks(): PersistedTaskItem[] {
+    return this._lastTasks
+  }
+
+  /** Check if there are incomplete tasks from a prior turn. */
+  hasIncompleteTasks(): boolean {
+    return this._lastTasks.some((t) => t.status !== 'completed')
+  }
+
   /** Push a tasks_update event into the live event stream (called by task_tracker tool). */
   emitTasksUpdate(tasks: import('@anton/protocol').TaskItem[]) {
+    // Store for persistence and resume
+    this._lastTasks = tasks.map((t) => ({
+      content: t.content,
+      activeForm: t.activeForm,
+      status: t.status,
+    }))
+    // Persist immediately so tasks survive mid-turn disconnects
+    if (!this.ephemeral) {
+      const basePath = this.projectId ? getProjectSessionsDir(this.projectId) : undefined
+      saveSessionTasks(this.id, this._lastTasks, basePath)
+    }
     this.pushEvent?.({ type: 'tasks_update', tasks })
   }
 
@@ -323,8 +360,23 @@ export class Session {
   ): AsyncGenerator<SessionEvent> {
     this.lastActiveAt = Date.now()
     this.lastEmittedTextLength = 0 // reset delta tracking for new turn
-    const trimmedMessage = userMessage.trim()
+    let trimmedMessage = userMessage.trim()
     const hasAttachments = attachments.length > 0
+
+    // If this is a resumed session with incomplete tasks, inject context so the LLM
+    // knows where it left off (the user chose auto-continue behavior).
+    // Only done once — the flag is cleared after injection.
+    if (this._needsTaskResumeHint && this._lastTasks.length > 0) {
+      this._needsTaskResumeHint = false
+      const taskSummary = this._lastTasks
+        .map((t) => {
+          const icon = t.status === 'completed' ? '[DONE]' : t.status === 'in_progress' ? '[IN PROGRESS]' : '[PENDING]'
+          return `  ${icon} ${t.content}`
+        })
+        .join('\n')
+      const resumeHint = `\n\n<session_resume_context>\nYou were previously working on a multi-step task. Here is your last known task state:\n${taskSummary}\nPlease continue from where you left off. If you need to pick up an in-progress or pending task, do so now.\n</session_resume_context>`
+      trimmedMessage = trimmedMessage + resumeHint
+    }
 
     if (hasAttachments && !this.resolvedModel.input.includes('image')) {
       throw new Error(`Model "${this.model}" does not support image input.`)
@@ -369,6 +421,21 @@ export class Session {
     let done = false
     let eventCount = 0
     let textEventCount = 0
+    let assistantText = ''
+
+    // Braintrust tracing: start a parent span for this turn
+    const traceSpan = startTrace({
+      name: 'agent-turn',
+      input: { message: userMessage, attachments: attachments.length },
+      metadata: {
+        sessionId: this.id,
+        provider: this.provider,
+        model: this.model,
+        ephemeral: this.ephemeral,
+      },
+    })
+    // Track active tool spans by toolCallId
+    const toolSpans = new Map<string, Span>()
 
     // Allow tools (like task_tracker) to push events into the stream
     this.pushEvent = (ev: SessionEvent) => {
@@ -381,8 +448,36 @@ export class Session {
       const translated = this.translateEvent(event)
       for (const ev of translated) {
         eventCount++
-        if (ev.type === 'text') textEventCount++
+        if (ev.type === 'text') {
+          textEventCount++
+          assistantText += ev.content
+        }
         events.push(ev)
+
+        // Braintrust: start a child span for each tool call
+        if (traceSpan && ev.type === 'tool_call') {
+          const toolSpan = traceSpan.startSpan({
+            name: ev.name,
+            event: {
+              input: ev.input,
+              metadata: { toolCallId: ev.id },
+            },
+          })
+          toolSpans.set(ev.id, toolSpan)
+        }
+
+        // Braintrust: end the child span when the tool finishes
+        if (traceSpan && ev.type === 'tool_result') {
+          const toolSpan = toolSpans.get(ev.id)
+          if (toolSpan) {
+            toolSpan.log({
+              output: ev.output.slice(0, 2000),
+              metadata: { isError: ev.isError ?? false },
+            })
+            toolSpan.end()
+            toolSpans.delete(ev.id)
+          }
+        }
       }
       // Incremental persist: save state after tool completions and turn ends
       // so that if the client disconnects mid-turn, progress is not lost.
@@ -454,6 +549,28 @@ export class Session {
     // Final persist (incremental persists happen during tool_execution_end/turn_end,
     // but this ensures we capture any title or compaction state changes)
     this.persist()
+
+    // Braintrust: close the parent trace span with output + usage
+    if (traceSpan) {
+      // End any orphaned tool spans
+      for (const [, s] of toolSpans) { s.end() }
+      toolSpans.clear()
+
+      traceSpan.log({
+        output: assistantText.slice(0, 4000),
+        metadata: {
+          eventCount,
+          textEventCount,
+          title: this.title,
+        },
+        metrics: this.lastTurnUsage ? {
+          inputTokens: this.lastTurnUsage.inputTokens,
+          outputTokens: this.lastTurnUsage.outputTokens,
+          totalTokens: this.lastTurnUsage.totalTokens,
+        } : undefined,
+      })
+      traceSpan.end()
+    }
 
     yield {
       type: 'done',
@@ -709,6 +826,7 @@ export class Session {
       messageCount: this.piAgent.state.messages.length,
       createdAt: this.createdAt,
       lastActiveAt: this.lastActiveAt,
+      lastTasks: this._lastTasks.length > 0 ? this._lastTasks : undefined,
     }
   }
 
@@ -724,6 +842,7 @@ export class Session {
       lastActiveAt: this.lastActiveAt,
       title: this.title,
       compactionState: this.compactionState,
+      lastTasks: this._lastTasks.length > 0 ? this._lastTasks : undefined,
     }
     const basePath = this.projectId ? getProjectSessionsDir(this.projectId) : undefined
     saveSession(persisted, basePath)
@@ -1023,6 +1142,23 @@ export class Session {
       prompt += this.projectContext
     }
 
+    // Project-type prompt module (code.md, document.md, etc.)
+    if (this.projectType) {
+      const typePrompt = loadProjectTypePrompt(this.projectType as ProjectType)
+      if (typePrompt) {
+        prompt += `\n\n${typePrompt}`
+      }
+    }
+
+    // Reference knowledge — contextual coding guides loaded by project type and task
+    const refs = loadReferences({
+      projectType: this.projectType,
+      firstMessage: this.firstMessage,
+    })
+    if (refs) {
+      prompt += `\n\n## Reference Knowledge\n\n${refs}`
+    }
+
     if (this.config.skills.length > 0) {
       prompt += '\n\n## Active Skills\n'
       for (const skill of this.config.skills) {
@@ -1037,6 +1173,7 @@ export class Session {
    * Call after construction with the first user message for cross-conversation matching.
    */
   loadConversationContext(firstMessage?: string): ContextInfo | undefined {
+    if (firstMessage) this.firstMessage = firstMessage
     if (this.ephemeral) return undefined
     const { contextBlock, contextInfo } = assembleConversationContext(
       this.id,
@@ -1068,6 +1205,8 @@ export function createSession(
     ephemeral?: boolean
     projectId?: string
     projectContext?: string
+    projectWorkspacePath?: string
+    projectType?: string
     mcpManager?: import('./mcp/mcp-manager.js').McpManager
   },
 ): Session {
@@ -1088,6 +1227,8 @@ export function createSession(
     onTasksUpdate: (tasks) => {
       sessionRef.session?.emitTasksUpdate(tasks)
     },
+    defaultWorkingDirectory: opts?.projectWorkspacePath,
+    projectId: opts?.projectId,
   }
 
   const session = new Session({
@@ -1100,6 +1241,7 @@ export function createSession(
     ephemeral: opts?.ephemeral,
     projectId: opts?.projectId,
     projectContext: opts?.projectContext,
+    projectType: opts?.projectType,
   })
   sessionRef.session = session
   // Wire: when setAskUserHandler is called on session, update the holder
@@ -1128,6 +1270,8 @@ export function resumeSession(
     onSubAgentEvent?: SubAgentEventHandler
     projectId?: string
     projectContext?: string
+    projectWorkspacePath?: string
+    projectType?: string
     mcpManager?: import('./mcp/mcp-manager.js').McpManager
   },
 ): Session | null {
@@ -1147,6 +1291,8 @@ export function resumeSession(
     onTasksUpdate: (tasks) => {
       sessionRef.session?.emitTasksUpdate(tasks)
     },
+    defaultWorkingDirectory: opts?.projectWorkspacePath,
+    projectId: opts?.projectId,
   }
 
   const session = new Session({
@@ -1161,6 +1307,8 @@ export function resumeSession(
     compactionState: persisted.compactionState || undefined,
     projectId: opts?.projectId,
     projectContext: opts?.projectContext,
+    projectType: opts?.projectType,
+    lastTasks: persisted.lastTasks,
   })
   sessionRef.session = session
 

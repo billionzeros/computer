@@ -15,6 +15,22 @@ import type { ToolAction } from './groupMessages.js'
 
 // ── Tool type labels & helpers ─────────────────────────────────────
 
+/** Get a favicon URL for tools that interact with external URLs (free, no API key) */
+function getToolFavicon(toolName: string, toolInput?: Record<string, unknown>): string | null {
+  if (!toolInput) return null
+  let url: string | null = null
+  if (toolName === 'browser') url = toolInput.url as string
+  else if (toolName === 'network') url = (toolInput.url || toolInput.host) as string
+  else if (toolName === 'http_api') url = toolInput.url as string
+  if (!url) return null
+  try {
+    const hostname = new URL(url.startsWith('http') ? url : `https://${url}`).hostname
+    return `https://www.google.com/s2/favicons?domain=${hostname}&sz=16`
+  } catch {
+    return null
+  }
+}
+
 /** Get a short, bold tool type label (like Claude Code's "Read", "Edit", "Shell") */
 function getToolTypeLabel(toolName: string, toolInput?: Record<string, unknown>): string {
   switch (toolName) {
@@ -76,8 +92,15 @@ function getToolTarget(toolName: string, toolInput?: Record<string, unknown>): s
       return path || null
     }
     case 'browser': {
+      const bUrl = toolInput.url as string
+      if (bUrl) {
+        try {
+          return new URL(bUrl.startsWith('http') ? bUrl : `https://${bUrl}`).hostname
+        } catch {
+          return bUrl.length > 60 ? `${bUrl.slice(0, 57)}...` : bUrl
+        }
+      }
       const op = toolInput.operation as string
-      if (op === 'navigate') return (toolInput.url as string) || 'page'
       if (op === 'screenshot') return 'screenshot'
       if (op === 'click') return (toolInput.selector as string) || 'element'
       if (op === 'type') return (toolInput.selector as string) || 'input'
@@ -214,6 +237,7 @@ function ToolTreeItem({ action, isLast }: ToolTreeItemProps) {
   const isError = action.result?.isError
   const isPending = !action.result
   const meta = getToolMeta(toolName, input, action.result?.content, isError)
+  const faviconUrl = getToolFavicon(toolName, input)
   const artifact = artifacts.find((a) => a.toolCallId === action.call.id)
 
   // For long results, show "Show more" toggle
@@ -237,6 +261,17 @@ function ToolTreeItem({ action, isLast }: ToolTreeItemProps) {
           }
         }}
       >
+        {faviconUrl && (
+          <img
+            src={faviconUrl}
+            alt=""
+            className="tool-tree__favicon"
+            width={14}
+            height={14}
+            loading="lazy"
+            onError={(e) => { (e.target as HTMLImageElement).style.display = 'none' }}
+          />
+        )}
         <span className="tool-tree__type">{typeLabel}</span>
         {target && <span className="tool-tree__target">{target}</span>}
         {isPending && (
@@ -319,6 +354,13 @@ export function ActionsGroup({ actions, defaultExpanded = false }: Props) {
 
   const headerText = getGroupHeader(actions)
 
+  // Show favicon in header for single-action groups that fetch URLs
+  const headerFavicon = useMemo(() => {
+    if (actions.length !== 1) return null
+    const input = actions[0].call.toolInput as Record<string, unknown> | undefined
+    return getToolFavicon(actions[0].call.toolName || '', input)
+  }, [actions])
+
   let statusIcon: React.ReactNode
   if (pendingCount > 0) {
     statusIcon = <Loader2 size={14} strokeWidth={1.5} className="tool-tree__spinner" />
@@ -347,6 +389,17 @@ export function ActionsGroup({ actions, defaultExpanded = false }: Props) {
           <ChevronRight size={14} strokeWidth={1.5} className="tool-tree__chevron" />
         )}
         <span className="tool-tree__status-icon">{statusIcon}</span>
+        {headerFavicon && (
+          <img
+            src={headerFavicon}
+            alt=""
+            className="tool-tree__favicon"
+            width={14}
+            height={14}
+            loading="lazy"
+            onError={(e) => { (e.target as HTMLImageElement).style.display = 'none' }}
+          />
+        )}
         <span className="tool-tree__header-text">{headerText}</span>
         {errorCount > 0 && <span className="tool-tree__error-badge">{errorCount} failed</span>}
       </button>

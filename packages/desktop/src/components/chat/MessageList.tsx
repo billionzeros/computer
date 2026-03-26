@@ -74,18 +74,28 @@ export function MessageList({ messages }: Props) {
     }
   }, [messages, scrollToBottom])
 
-  // Show/hide scroll button
+  // Show/hide scroll button (recalculate on scroll AND content size changes)
   useEffect(() => {
     const container = containerRef.current
     if (!container) return
 
-    const onScroll = () => {
+    const checkScroll = () => {
       const distFromBottom = container.scrollHeight - container.scrollTop - container.clientHeight
       setShowScrollBtn(distFromBottom > 200)
     }
 
-    container.addEventListener('scroll', onScroll)
-    return () => container.removeEventListener('scroll', onScroll)
+    container.addEventListener('scroll', checkScroll)
+
+    const observer = new ResizeObserver(checkScroll)
+    observer.observe(container)
+    for (const child of container.children) {
+      observer.observe(child)
+    }
+
+    return () => {
+      container.removeEventListener('scroll', checkScroll)
+      observer.disconnect()
+    }
   }, [])
 
   return (

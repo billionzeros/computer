@@ -1,10 +1,11 @@
 import { Settings, Trash2, Zap } from 'lucide-react'
 import { useEffect, useState } from 'react'
-import { AnimatePresence } from 'framer-motion'
+import { AnimatePresence, motion } from 'framer-motion'
 import { connection } from '../../lib/connection.js'
 import { useStore } from '../../lib/store.js'
 import { AgentChat } from '../AgentChat.js'
 import { SidePanel } from '../SidePanel.js'
+import { CodeModePanel } from '../code-mode/CodeModePanel.js'
 import { ProjectLanding } from './ProjectLanding.js'
 
 export function ProjectView() {
@@ -36,6 +37,8 @@ export function ProjectView() {
   const project = projects.find((p) => p.id === activeProjectId)
   if (!project) return null
 
+  const [codeModeOpen, setCodeModeOpen] = useState(true)
+  const isCodeProject = project?.type === 'code' || project?.type === 'clone'
   const sidePanelOpen = artifactPanelOpen || pendingPlan !== null
 
   // ── Handlers ──
@@ -230,7 +233,19 @@ export function ProjectView() {
         <div className="project-chat-view__chat">
           <AgentChat />
           <AnimatePresence>
-            {sidePanelOpen && <SidePanel />}
+            {isCodeProject && codeModeOpen ? (
+              <motion.div
+                key="code-mode"
+                initial={{ width: 0, opacity: 0 }}
+                animate={{ width: 'auto', opacity: 1 }}
+                exit={{ width: 0, opacity: 0 }}
+                transition={{ duration: 0.2, ease: 'easeOut' }}
+              >
+                <CodeModePanel onClose={() => setCodeModeOpen(false)} />
+              </motion.div>
+            ) : sidePanelOpen ? (
+              <SidePanel />
+            ) : null}
           </AnimatePresence>
         </div>
       </div>

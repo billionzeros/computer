@@ -13,7 +13,8 @@
     "@anton/protocol": "workspace:*",
     "@mariozechner/pi-ai": "^0.60.0",
     "@mariozechner/pi-agent-core": "^0.60.0",
-    "@sinclair/typebox": "^0.34.0"
+    "@sinclair/typebox": "^0.34.0",
+    "braintrust": "^0.0.182"
   },
   "devDependencies": {
     "@types/node": "^22.0.0",

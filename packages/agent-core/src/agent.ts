@@ -97,6 +97,10 @@ export interface ToolCallbacks {
   conversationId?: string
   /** Callback when the agent updates its task list. */
   onTasksUpdate?: TasksUpdateCallback
+  /** Default working directory for shell commands (project workspace or conversation workspace). */
+  defaultWorkingDirectory?: string
+  /** Project ID — when set, enables the update_project_context tool. */
+  projectId?: string
 }
 
 export function buildTools(config: AgentConfig, callbacks?: ToolCallbacks, mcpManager?: import('./mcp/mcp-manager.js').McpManager): AgentTool[] {
@@ -116,7 +120,12 @@ export function buildTools(config: AgentConfig, callbacks?: ToolCallbacks, mcpMa
         working_directory: Type.Optional(Type.String({ description: 'Working directory' })),
       }),
       async execute(_toolCallId, params) {
-        const output = await executeShell(params, config)
+        // Use project workspace as default cwd if available
+        const enrichedParams = {
+          ...params,
+          working_directory: params.working_directory || callbacks?.defaultWorkingDirectory,
+        }
+        const output = await executeShell(enrichedParams, config)
         return toolResult(output)
       },
     }),
@@ -739,6 +748,28 @@ export function buildTools(config: AgentConfig, callbacks?: ToolCallbacks, mcpMa
         })
 
         return toolResult(finalText || '(sub-agent produced no output)', hadError)
+      },
+    }))
+  }
+
+  // ── Project context update (only for project-scoped sessions) ─────
+  if (callbacks?.projectId) {
+    tools.push(defineTool({
+      name: 'update_project_context',
+      label: 'Project Context',
+      description:
+        'Update the project context with a summary of what was accomplished in this session. ' +
+        'Call this when a conversation is wrapping up or when significant progress has been made on the project. ' +
+        'This persists the summary so future sessions have context about past work.',
+      parameters: Type.Object({
+        session_summary: Type.String({ description: '1-2 sentence summary of what was accomplished in this session' }),
+        project_summary: Type.Optional(Type.String({ description: 'Updated overall project summary incorporating new info. Only provide if something significant changed.' })),
+      }),
+      async execute(_toolCallId, params) {
+        return toolResult(JSON.stringify({
+          sessionSummary: params.session_summary,
+          projectSummary: params.project_summary,
+        }))
       },
     }))
   }

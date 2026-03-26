@@ -27,3 +27,4 @@ export {
   type SubAgentEventHandler,
 } from './session.js'
 export { type ContextInfo, assembleConversationContext } from './context.js'
+export { initTracing, flushTraces } from './tracing.js'

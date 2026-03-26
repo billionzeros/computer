@@ -54,6 +54,10 @@ export function groupMessages(messages: ChatMessage[]): GroupedItem[] {
   let currentActions: ToolAction[] = []
   let pendingCall: ChatMessage | null = null
 
+  // Track unmatched tool calls for parallel call/result pairing.
+  // Key: base ID (without tc_/tr_ prefix), Value: index in currentActions
+  const unmatchedCalls = new Map<string, number>()
+
   // Track active sub-agent groups: toolCallId -> sub-agent state
   const subAgentGroups = new Map<
     string,
@@ -73,6 +77,7 @@ export function groupMessages(messages: ChatMessage[]): GroupedItem[] {
       })
       currentActions = []
     }
+    unmatchedCalls.clear()
   }
 
   // Tool names that should be hidden from the actions timeline
@@ -85,8 +90,14 @@ export function groupMessages(messages: ChatMessage[]): GroupedItem[] {
       continue
     }
 
-    // Skip hidden tools — they have their own UI
+    // Hidden tools: set as pendingCall so their result gets discarded by the
+    // hiddenTools check in the result-handling branch below (lines ~176-181).
+    // We must NOT `continue` here — that would orphan the result into "unknown".
     if (msg.toolName && hiddenTools.has(msg.toolName)) {
+      if (pendingCall) {
+        currentActions.push({ call: pendingCall, result: null })
+      }
+      pendingCall = msg
       continue
     }
 
@@ -169,18 +180,50 @@ export function groupMessages(messages: ChatMessage[]): GroupedItem[] {
     // Regular top-level tool message
     if (msg.toolName) {
       if (pendingCall) {
+        // Push previous pending call as unmatched (parallel calls scenario)
+        const idx = currentActions.length
         currentActions.push({ call: pendingCall, result: null })
+        // Track by base ID so we can match its result later
+        const baseId = pendingCall.id.startsWith('tc_') ? pendingCall.id.slice(3) : pendingCall.id
+        if (!hiddenTools.has(pendingCall.toolName!)) {
+          unmatchedCalls.set(baseId, idx)
+        }
       }
       pendingCall = msg
     } else {
+      // This is a tool result — try to match it to a call by ID
+      const resultBaseId = msg.id.startsWith('tr_') ? msg.id.slice(3) : msg.id
+
       if (pendingCall) {
-        // If the pending call was a hidden tool, discard the pair
-        if (pendingCall.toolName && hiddenTools.has(pendingCall.toolName)) {
+        const pendingBaseId = pendingCall.id.startsWith('tc_') ? pendingCall.id.slice(3) : pendingCall.id
+
+        if (pendingBaseId === resultBaseId) {
+          // Direct match with pending call
+          if (pendingCall.toolName && hiddenTools.has(pendingCall.toolName)) {
+            pendingCall = null
+            continue
+          }
+          currentActions.push({ call: pendingCall, result: msg })
           pendingCall = null
-          continue
+        } else if (unmatchedCalls.has(resultBaseId)) {
+          // Match with a previously pushed unmatched call (parallel scenario)
+          const idx = unmatchedCalls.get(resultBaseId)!
+          currentActions[idx] = { call: currentActions[idx].call, result: msg }
+          unmatchedCalls.delete(resultBaseId)
+        } else {
+          // Fallback: pair with pending call sequentially
+          if (pendingCall.toolName && hiddenTools.has(pendingCall.toolName)) {
+            pendingCall = null
+            continue
+          }
+          currentActions.push({ call: pendingCall, result: msg })
+          pendingCall = null
         }
-        currentActions.push({ call: pendingCall, result: msg })
-        pendingCall = null
+      } else if (unmatchedCalls.has(resultBaseId)) {
+        // No pending call, but we have an unmatched call for this ID
+        const idx = unmatchedCalls.get(resultBaseId)!
+        currentActions[idx] = { call: currentActions[idx].call, result: msg }
+        unmatchedCalls.delete(resultBaseId)
       } else {
         currentActions.push({
           call: { ...msg, toolName: 'unknown', content: msg.content },

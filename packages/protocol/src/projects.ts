@@ -4,6 +4,7 @@ export interface ProjectContext {
   summary: string // auto-maintained by agent after each session
   files: string[] // relevant file paths on server
   notes: string // freeform notes
+  stack?: string[] // detected tech stack (for code projects)
 }
 
 export interface ProjectStats {
@@ -11,6 +12,12 @@ export interface ProjectStats {
   activeJobs: number
   lastActive: number
 }
+
+/** How the project was created */
+export type ProjectSource = 'prompt' | 'git-clone' | 'import' | 'manual'
+
+/** Project classification — determines prompt module and UI mode */
+export type ProjectType = 'code' | 'document' | 'data' | 'clone' | 'mixed'
 
 export interface Project {
   id: string // e.g. "proj_abc123"
@@ -22,6 +29,12 @@ export interface Project {
   updatedAt: number
   context: ProjectContext
   stats: ProjectStats
+
+  // Workspace fields (Phase 1)
+  type?: ProjectType // project classification
+  workspacePath?: string // absolute path to ~/Anton/{name}/
+  source?: ProjectSource // how the project was created
+  sourceConversationId?: string // the conversation that triggered creation
 }
 
 // ── Job types (runtime not implemented yet) ─────────────────────────

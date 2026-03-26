@@ -161,6 +161,7 @@ export interface SessionResumedMessage {
   model: string
   messageCount: number
   title: string
+  lastTasks?: TaskItem[]
 }
 
 export interface ContextInfoMessage {
@@ -438,6 +439,13 @@ export interface AiTokenUpdateMessage {
   type: 'token_update'
   usage: TokenUsage // cumulative so far this turn
   sessionId?: string
+}
+
+export interface AiTextReplaceMessage {
+  type: 'text_replace'
+  sessionId?: string
+  /** The exact substring to remove from the current assistant message */
+  remove: string
 }
 
 export interface AiDoneMessage {
@@ -782,6 +790,7 @@ export type AiMessage =
   | AiArtifactMessage
   | AiTasksUpdateMessage
   | AiTokenUpdateMessage
+  | AiTextReplaceMessage
   | AiDoneMessage
   | AiErrorMessage
   // Sub-agent

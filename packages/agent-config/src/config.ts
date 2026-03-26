@@ -64,6 +64,12 @@ interface SessionIndex {
 }
 
 /** Full session data for backward compat and session.ts */
+export interface PersistedTaskItem {
+  content: string
+  activeForm: string
+  status: 'pending' | 'in_progress' | 'completed'
+}
+
 export interface PersistedSession {
   id: string
   provider: string
@@ -78,6 +84,7 @@ export interface PersistedSession {
     lastCompactedAt: number | null
     compactionCount: number
   }
+  lastTasks?: PersistedTaskItem[]
 }
 
 // ── Main config ─────────────────────────────────────────────────────
@@ -104,6 +111,10 @@ export interface AgentConfig {
 
   connectors: ConnectorConfig[]
 
+  workspace?: {
+    root: string // default: ~/Anton — user-visible directory for all projects
+  }
+
   sessions?: {
     ttlDays: number // auto-cleanup after N days, default 7
   }
@@ -113,6 +124,11 @@ export interface AgentConfig {
     threshold: number // fraction of context window (default: 0.80)
     preserveRecentCount: number // messages to keep verbatim (default: 20)
     toolOutputMaxTokens: number // max tokens per tool output (default: 4000)
+  }
+
+  braintrust?: {
+    apiKey?: string // or use BRAINTRUST_API_KEY env var
+    projectName?: string // defaults to "anton-agent"
   }
 }
 
@@ -151,12 +167,14 @@ const ANTON_DIR = join(homedir(), '.anton')
 const CONFIG_PATH = join(ANTON_DIR, 'config.yaml')
 const CONVERSATIONS_DIR = join(ANTON_DIR, 'conversations')
 const PROMPTS_DIR = join(ANTON_DIR, 'prompts')
+const PROJECT_TYPES_DIR = join(PROMPTS_DIR, 'project-types')
+const DEFAULT_WORKSPACE_ROOT = join(homedir(), 'Anton')
 const SYSTEM_PROMPT_PATH = join(PROMPTS_DIR, 'system.md')
 const GLOBAL_MEMORY_DIR = join(ANTON_DIR, 'memory')
 
-// Embedded system prompt — baked in at build time by scripts/embed-prompts.js.
+// Embedded prompts — baked in at build time by scripts/embed-prompts.js.
 // This works in both source mode and binary mode (no filesystem read needed).
-import { EMBEDDED_SYSTEM_PROMPT } from './embedded-prompts.js'
+import { EMBEDDED_PROJECT_TYPE_PROMPTS, EMBEDDED_SYSTEM_PROMPT } from './embedded-prompts.js'
 
 // ── Default providers ───────────────────────────────────────────────
 
@@ -191,6 +209,7 @@ const DEFAULT_PROVIDERS: ProvidersMap = {
       'openai/gpt-4o',
       'google/gemini-2.5-pro-preview',
       'minimax/minimax-m2.5',
+      'minimax/minimax-m2.7',
       'meta-llama/llama-4-maverick',
     ],
   },
@@ -256,6 +275,7 @@ export function loadConfig(): AgentConfig {
     security: parsed.security ?? defaults.security,
     skills: parsed.skills ?? defaults.skills ?? [],
     connectors: parsed.connectors ?? defaults.connectors ?? [],
+    workspace: parsed.workspace ?? defaults.workspace,
     sessions: parsed.sessions ?? defaults.sessions,
   }
 
@@ -304,6 +324,7 @@ function createDefaultConfig(): AgentConfig {
     },
     skills: [],
     connectors: [],
+    workspace: { root: DEFAULT_WORKSPACE_ROOT },
     sessions: { ttlDays: 7 },
   }
 }
@@ -601,6 +622,11 @@ export function saveSession(session: PersistedSession, basePath?: string): void 
     writeFileSync(join(dir, 'compaction.json'), JSON.stringify(session.compactionState, null, 2), 'utf-8')
   }
 
+  // Write last tasks if present
+  if (session.lastTasks && session.lastTasks.length > 0) {
+    writeFileSync(join(dir, 'tasks.json'), JSON.stringify(session.lastTasks, null, 2), 'utf-8')
+  }
+
   // Write messages as JSONL with image blocks externalized into session-local files.
   const lines = session.messages.map((rawMsg: unknown, i: number) =>
     JSON.stringify(serializeSessionMessage(session.id, rawMsg, i)),
@@ -629,6 +655,13 @@ export function appendSessionMessage(id: string, msg: SessionMessage): void {
   }
 }
 
+/** Persist task state immediately (called during streaming to avoid data loss on disconnect). */
+export function saveSessionTasks(id: string, tasks: PersistedTaskItem[], basePath?: string): void {
+  const dir = basePath ? join(basePath, id) : sessionDir(id)
+  if (!existsSync(dir)) return
+  writeFileSync(join(dir, 'tasks.json'), JSON.stringify(tasks, null, 2), 'utf-8')
+}
+
 /** Load session with full messages (for pi SDK resume) */
 export function loadSession(id: string, basePath?: string): PersistedSession | null {
   // If basePath given, load from custom location (project sessions)
@@ -650,6 +683,11 @@ export function loadSession(id: string, basePath?: string): PersistedSession | n
       if (existsSync(compPath)) {
         try { compactionState = JSON.parse(readFileSync(compPath, 'utf-8')) } catch {}
       }
+      let lastTasks: PersistedTaskItem[] | undefined
+      const tasksPath = join(dir, 'tasks.json')
+      if (existsSync(tasksPath)) {
+        try { lastTasks = JSON.parse(readFileSync(tasksPath, 'utf-8')) } catch {}
+      }
       return {
         id: meta.id,
         provider: meta.provider,
@@ -659,6 +697,7 @@ export function loadSession(id: string, basePath?: string): PersistedSession | n
         lastActiveAt: meta.lastActiveAt,
         title: meta.title,
         compactionState,
+        lastTasks,
       }
     } catch {
       return null
@@ -679,6 +718,15 @@ export function loadSession(id: string, basePath?: string): PersistedSession | n
       } catch {}
     }
 
+    // Load last tasks if present
+    let lastTasks: PersistedTaskItem[] | undefined
+    const tasksFilePath = join(sessionDir(id), 'tasks.json')
+    if (existsSync(tasksFilePath)) {
+      try {
+        lastTasks = JSON.parse(readFileSync(tasksFilePath, 'utf-8'))
+      } catch {}
+    }
+
     return {
       id: meta.id,
       provider: meta.provider,
@@ -688,6 +736,7 @@ export function loadSession(id: string, basePath?: string): PersistedSession | n
       lastActiveAt: meta.lastActiveAt,
       title: meta.title,
       compactionState,
+      lastTasks,
     }
   }
 
@@ -877,10 +926,65 @@ export function ensureConversationDirs(convId: string): void {
   mkdirSync(join(dir, 'images'), { recursive: true })
 }
 
+// ── Workspace root helpers ──────────────────────────────────────────
+
+/** Get the workspace root directory (default: ~/Anton/) */
+export function getWorkspaceRoot(config?: AgentConfig): string {
+  const root = config?.workspace?.root || DEFAULT_WORKSPACE_ROOT
+  // Resolve ~ to homedir
+  return root.startsWith('~') ? join(homedir(), root.slice(1)) : root
+}
+
+/** Ensure workspace root exists */
+export function ensureWorkspaceRoot(config?: AgentConfig): string {
+  const root = getWorkspaceRoot(config)
+  mkdirSync(root, { recursive: true })
+  return root
+}
+
+/** Get the misc directory for one-off files */
+export function getWorkspaceMisc(config?: AgentConfig): string {
+  return join(getWorkspaceRoot(config), 'misc')
+}
+
+// ── Project-type prompt module loader ──────────────────────────────
+
+export type ProjectType = 'code' | 'document' | 'data' | 'clone' | 'mixed'
+
+/**
+ * Load a project-type prompt module.
+ * Checks ~/.anton/prompts/project-types/{type}.md first (user-customizable),
+ * then falls back to embedded defaults.
+ */
+export function loadProjectTypePrompt(projectType: ProjectType): string | undefined {
+  // Check user-customized prompt first
+  const modulePath = join(PROJECT_TYPES_DIR, `${projectType}.md`)
+  if (existsSync(modulePath)) {
+    try {
+      return readFileSync(modulePath, 'utf-8')
+    } catch {
+      // fall through to embedded
+    }
+  }
+  // Fall back to embedded default
+  return EMBEDDED_PROJECT_TYPE_PROMPTS[projectType]
+}
+
+/**
+ * Ensure project-type prompt modules exist (seed from defaults on first run).
+ */
+export function ensureProjectTypePrompts(): void {
+  mkdirSync(PROJECT_TYPES_DIR, { recursive: true })
+}
+
 // ── Exports ─────────────────────────────────────────────────────────
 
 export function getAntonDir(): string {
   return ANTON_DIR
+}
+
+export function getPromptsDir(): string {
+  return PROMPTS_DIR
 }
 
 // ── System prompt loading ───────────────────────────────────────────

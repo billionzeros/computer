@@ -19,8 +19,9 @@ import {
   writeFileSync,
 } from 'node:fs'
 import { join } from 'node:path'
-import type { Project } from '@anton/protocol'
-import { type SessionMeta, getAntonDir } from './config.js'
+import type { Project, ProjectSource, ProjectType } from '@anton/protocol'
+import { type SessionMeta, ensureWorkspaceRoot, getAntonDir, getWorkspaceRoot } from './config.js'
+import type { AgentConfig } from './config.js'
 
 export type { Project } from '@anton/protocol'
 
@@ -67,17 +68,57 @@ function saveIndex(projects: Project[]): void {
   writeFileSync(INDEX_PATH, JSON.stringify(projects, null, 2), 'utf-8')
 }
 
+/** Sanitize a project name into a filesystem-safe directory name */
+function toDirectoryName(name: string): string {
+  return name
+    .toLowerCase()
+    .replace(/[^a-z0-9\s-]/g, '')
+    .replace(/\s+/g, '-')
+    .replace(/-+/g, '-')
+    .replace(/^-|-$/g, '')
+    .slice(0, 50) || 'project'
+}
+
+/** Write .anton.json link file into a workspace directory */
+function writeAntonLink(workspacePath: string, project: Project): void {
+  const linkData = {
+    projectId: project.id,
+    name: project.name,
+    createdAt: new Date(project.createdAt).toISOString(),
+    type: project.type || 'mixed',
+    source: project.source || 'manual',
+    sourceConversationId: project.sourceConversationId,
+  }
+  writeFileSync(join(workspacePath, '.anton.json'), JSON.stringify(linkData, null, 2), 'utf-8')
+}
+
 /** Create a new project with full directory structure */
 export function createProject(input: {
   name: string
   description?: string
   icon?: string
   color?: string
+  type?: ProjectType
+  source?: ProjectSource
+  sourceConversationId?: string
+  config?: AgentConfig
 }): Project {
   ensureProjectsDir()
 
   const id = `proj_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 6)}`
   const now = Date.now()
+
+  // Determine workspace path in ~/Anton/{dir-name}/
+  const dirName = toDirectoryName(input.name)
+  const workspaceRoot = ensureWorkspaceRoot(input.config)
+  let workspacePath = join(workspaceRoot, dirName)
+
+  // Handle name collisions by appending a suffix
+  if (existsSync(workspacePath)) {
+    let suffix = 2
+    while (existsSync(`${workspacePath}-${suffix}`)) suffix++
+    workspacePath = `${workspacePath}-${suffix}`
+  }
 
   const project: Project = {
     id,
@@ -87,6 +128,10 @@ export function createProject(input: {
     color: input.color || '#6366f1',
     createdAt: now,
     updatedAt: now,
+    type: input.type || 'mixed',
+    workspacePath,
+    source: input.source || 'manual',
+    sourceConversationId: input.sourceConversationId,
     context: {
       summary: '',
       files: [],
@@ -99,7 +144,7 @@ export function createProject(input: {
     },
   }
 
-  // Create directory structure
+  // Create internal project directory structure (~/.anton/projects/{id}/)
   const dir = getProjectDir(id)
   mkdirSync(dir, { recursive: true })
   mkdirSync(join(dir, 'conversations'), { recursive: true })
@@ -107,6 +152,10 @@ export function createProject(input: {
   mkdirSync(join(dir, 'notifications'), { recursive: true })
   mkdirSync(join(dir, 'context'), { recursive: true })
   mkdirSync(join(dir, 'files'), { recursive: true })
+
+  // Create user-visible workspace directory (~/Anton/{name}/)
+  mkdirSync(workspacePath, { recursive: true })
+  writeAntonLink(workspacePath, project)
 
   // Write project.json
   writeFileSync(join(dir, 'project.json'), JSON.stringify(project, null, 2), 'utf-8')
@@ -337,6 +386,13 @@ export function buildProjectContext(project: Project, projectId: string): string
   if (project.description) {
     ctx += `\nDescription: ${project.description}`
   }
+  if (project.type) {
+    ctx += `\nType: ${project.type}`
+  }
+  if (project.workspacePath) {
+    ctx += `\nWorkspace: ${project.workspacePath}/`
+    ctx += `\nIMPORTANT: Use ${project.workspacePath}/ as the working directory for all shell commands and file operations in this project.`
+  }
   if (project.context.summary) {
     ctx += `\n\nProject Summary:\n${project.context.summary}`
   }
@@ -367,10 +423,6 @@ export function buildProjectContext(project: Project, projectId: string): string
   }
 
   ctx += '\n\nYou are working within this project. Use the context above to inform your responses.'
-  ctx += '\n\nIMPORTANT: When this conversation is complete, output a context update block so the project memory stays current:'
-  ctx += '\n[PROJECT_CONTEXT_UPDATE]'
-  ctx += '\n{"sessionSummary": "1-2 sentence summary of what was accomplished", "summary": "Updated overall project summary incorporating new info (omit if nothing significant changed)"}'
-  ctx += '\n[/PROJECT_CONTEXT_UPDATE]'
   ctx += '\n[END PROJECT CONTEXT]\n'
   return ctx
 }

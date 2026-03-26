@@ -194,6 +194,8 @@ interface AppState {
 
   // Task tracker (Claude Code–style work plan)
   currentTasks: import('@anton/protocol').TaskItem[]
+  // Per-session task storage so tasks don't leak across conversations
+  _sessionTasks: Map<string, import('@anton/protocol').TaskItem[]>
 
   // Session readiness tracking (race condition fix)
   _sessionResolvers: Map<string, () => void>
@@ -290,6 +292,7 @@ interface AppState {
   addMessageToSession: (sessionId: string, msg: ChatMessage) => void
   appendAssistantText: (content: string) => void
   appendAssistantTextToSession: (sessionId: string, content: string) => void
+  replaceAssistantText: (search: string, replacement: string, sessionId?: string) => void
   getActiveConversation: () => Conversation | null
   findConversationBySession: (sessionId: string) => Conversation | undefined
   loadSessionMessages: (sessionId: string, messages: ChatMessage[]) => void
@@ -378,6 +381,7 @@ export const useStore = create<AppState>((set, get) => {
     agentStatusDetail: null,
     agentSteps: [],
     currentTasks: [],
+    _sessionTasks: new Map(),
     _sessionResolvers: new Map(),
     _currentAssistantMsgId: null,
     _sessionAssistantMsgIds: new Map(),
@@ -509,8 +513,26 @@ export const useStore = create<AppState>((set, get) => {
     setConnectionStatus: (status) => set({ connectionStatus: status }),
     setAgentStatus: (status, sessionId?) => {
       const prev = get().agentStatus
+
+      // Clear any existing stuck-state timeout
+      if ((window as unknown as Record<string, unknown>).__stuckTimeout) {
+        clearTimeout((window as unknown as Record<string, unknown>).__stuckTimeout as number)
+        ;(window as unknown as Record<string, unknown>).__stuckTimeout = null
+      }
+
       if (status === 'working' && prev !== 'working') {
         set({ agentStatus: status, workingStartedAt: Date.now(), lastTurnDurationMs: null, turnUsage: null, workingSessionId: sessionId || null })
+
+        // Safety net: if stuck in "working" for 5 min with no events, auto-recover
+        ;(window as unknown as Record<string, unknown>).__stuckTimeout = window.setTimeout(() => {
+          const current = get()
+          if (current.agentStatus === 'working') {
+            console.error('[store] Stuck-state timeout: agent has been "working" for 5 minutes without completing. Auto-recovering to idle.')
+            set({ agentStatus: 'idle', workingSessionId: null, _currentAssistantMsgId: null })
+            current.clearAgentSteps()
+            current.setAgentStatusDetail(null)
+          }
+        }, 5 * 60 * 1000)
       } else if (status === 'idle' && prev === 'working') {
         const started = get().workingStartedAt
         const duration = started ? Date.now() - started : null
@@ -610,6 +632,21 @@ export const useStore = create<AppState>((set, get) => {
         updates.workingSessionId = null
         updates.workingStartedAt = null
       }
+
+      // Save current session's tasks before switching, then restore target session's tasks
+      const currentState = get()
+      const currentConv = currentState.conversations.find(
+        (c) => c.id === currentState.activeConversationId
+      )
+      if (currentConv?.sessionId && currentState.currentTasks.length > 0) {
+        const sessionTasks = new Map(currentState._sessionTasks)
+        sessionTasks.set(currentConv.sessionId, currentState.currentTasks)
+        updates._sessionTasks = sessionTasks
+      }
+      // Restore target session's tasks (or clear if none)
+      updates.currentTasks = (conv?.sessionId
+        ? (updates._sessionTasks ?? currentState._sessionTasks).get(conv.sessionId)
+        : undefined) ?? []
 
       // If this session completed a turn in the background, fetch fresh history
       if (conv?.sessionId && get()._sessionsNeedingHistoryRefresh.has(conv.sessionId)) {
@@ -747,6 +784,34 @@ export const useStore = create<AppState>((set, get) => {
         if (newMsgId) {
           state._sessionAssistantMsgIds.set(sessionId, newMsgId)
         }
+
+        saveConversations(conversations)
+        return { conversations }
+      })
+    },
+
+    replaceAssistantText: (search, replacement, sessionId?) => {
+      set((state) => {
+        // Find the conversation — by sessionId or active
+        const conv = sessionId
+          ? state.conversations.find((c) => c.sessionId === sessionId)
+          : state.conversations.find((c) => c.id === state.activeConversationId)
+        if (!conv) return state
+
+        // Find the current assistant message
+        const targetId = sessionId
+          ? state._sessionAssistantMsgIds.get(sessionId)
+          : state._currentAssistantMsgId
+        if (!targetId) return state
+
+        const conversations = state.conversations.map((c) => {
+          if (c.id !== conv.id) return c
+          const messages = c.messages.map((m) => {
+            if (m.id !== targetId) return m
+            return { ...m, content: m.content.replace(search, replacement) }
+          })
+          return { ...c, messages, updatedAt: Date.now() }
+        })
 
         saveConversations(conversations)
         return { conversations }
@@ -1051,6 +1116,14 @@ connection.onMessage((channel, msg) => {
       store.setAgentStatus('working', msgSessionId)
       break
 
+    case 'text_replace': {
+      // Strip internal tags (e.g. [PROJECT_CONTEXT_UPDATE]) from the displayed message
+      if (msg.remove) {
+        store.replaceAssistantText(msg.remove, '', msgSessionId)
+      }
+      break
+    }
+
     case 'tool_call':
       // Reset assistant message tracking so any text AFTER this tool call
       // creates a new assistant bubble (shows reasoning between tool groups)
@@ -1170,14 +1243,24 @@ connection.onMessage((channel, msg) => {
       break
 
     case 'error': {
-      addMsg({
-        id: `err_${Date.now()}`,
-        role: 'system',
-        content: msg.message,
-        isError: true,
-        timestamp: Date.now(),
-      })
-      store.setAgentStatus('error')
+      // Only add error messages to a conversation if we know which session it belongs to.
+      // Errors without sessionId are non-session-scoped (project ops, connector ops, etc.)
+      // and should NOT be dumped into whatever conversation happens to be active.
+      if (msgSessionId) {
+        addMsg({
+          id: `err_${Date.now()}`,
+          role: 'system',
+          content: msg.message,
+          isError: true,
+          timestamp: Date.now(),
+        })
+      } else {
+        console.warn('[WS] Received error without sessionId, not adding to conversation:', msg.message)
+      }
+      // Only set global error status if this error belongs to the active session
+      if (isForActiveSession && msgSessionId) {
+        store.setAgentStatus('error', msgSessionId)
+      }
       // Clear streaming flag on error
       const errSessionId = msgSessionId || activeConv?.sessionId
       if (errSessionId && store._activeStreamingSessions.has(errSessionId)) {
@@ -1208,8 +1291,20 @@ connection.onMessage((channel, msg) => {
       break
 
     case 'tasks_update': {
-      if (isForActiveSession && msg.tasks) {
-        useStore.setState({ currentTasks: msg.tasks })
+      if (msg.tasks) {
+        // Always store tasks per-session so they persist across conversation switches
+        if (msgSessionId) {
+          const sessionTasks = new Map(store._sessionTasks)
+          sessionTasks.set(msgSessionId, msg.tasks)
+          const updates: Partial<AppState> = { _sessionTasks: sessionTasks }
+          // Only update the visible currentTasks if this is the active session
+          if (isForActiveSession) {
+            updates.currentTasks = msg.tasks
+          }
+          useStore.setState(updates)
+        } else if (isForActiveSession) {
+          useStore.setState({ currentTasks: msg.tasks })
+        }
       }
       break
     }
@@ -1388,26 +1483,39 @@ connection.onMessage((channel, msg) => {
         ts: number
         toolName?: string
         toolInput?: Record<string, unknown>
+        toolId?: string
         isError?: boolean
         attachments?: ChatImageAttachment[]
       }
-      const historyMessages: ChatMessage[] = msg.messages.map((entry: HistoryEntry) => ({
-        id: `hist_${entry.seq}_${Date.now()}`,
-        role:
-          entry.role === 'user'
-            ? 'user'
-            : entry.role === 'assistant'
-              ? 'assistant'
-              : entry.role === 'tool_call' || entry.role === 'tool_result'
-                ? 'tool'
-                : 'system',
-        content: entry.content,
-        timestamp: entry.ts,
-        attachments: entry.attachments,
-        toolName: entry.toolName,
-        toolInput: entry.toolInput,
-        isError: entry.isError,
-      }))
+      const historyMessages: ChatMessage[] = msg.messages.map((entry: HistoryEntry) => {
+        // Use tc_/tr_ prefixed IDs for tool messages so groupMessages can match
+        // tool_calls with their corresponding tool_results by base ID.
+        let id: string
+        if (entry.role === 'tool_call' && entry.toolId) {
+          id = `tc_${entry.toolId}`
+        } else if (entry.role === 'tool_result' && entry.toolId) {
+          id = `tr_${entry.toolId}`
+        } else {
+          id = `hist_${entry.seq}_${Date.now()}`
+        }
+        return {
+          id,
+          role:
+            entry.role === 'user'
+              ? 'user'
+              : entry.role === 'assistant'
+                ? 'assistant'
+                : entry.role === 'tool_call' || entry.role === 'tool_result'
+                  ? 'tool'
+                  : 'system',
+          content: entry.content,
+          timestamp: entry.ts,
+          attachments: entry.attachments,
+          toolName: entry.toolName,
+          toolInput: entry.toolInput,
+          isError: entry.isError,
+        } as ChatMessage
+      })
       store.loadSessionMessages(msg.id, historyMessages)
       break
     }

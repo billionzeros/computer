@@ -16,6 +16,7 @@
 
 import { loadConfig, loadSkills } from '@anton/agent-config'
 import { GIT_HASH, VERSION } from '@anton/agent-config'
+import { initTracing, flushTraces } from '@anton/agent-core'
 import { Scheduler } from './scheduler.js'
 import { AgentServer } from './server.js'
 
@@ -50,6 +51,9 @@ async function main() {
     console.log(`  Default:   ${config.defaults.provider}/${config.defaults.model}`)
   }
 
+  // Initialize Braintrust tracing (no-ops if no API key)
+  initTracing(config.braintrust)
+
   // Start the WebSocket server (handles client connections + sessions)
   const server = new AgentServer(config)
   await server.start()
@@ -60,9 +64,10 @@ async function main() {
   scheduler.start()
 
   // Graceful shutdown
-  const shutdown = () => {
+  const shutdown = async () => {
     console.log('\nShutting down...')
     scheduler.stop()
+    await flushTraces()
     process.exit(0)
   }
 

@@ -1,0 +1,21 @@
+web-dev:
+  description: Web development references — design, components, styling, testing
+  tags: [web, frontend, react, next, html, css, ui, component, tailwind, shadcn, website, app, dashboard, page, layout]
+  refs:
+    - design-tokens
+    - typography
+    - responsive-design
+    - component-patterns
+    - accessibility
+    - shadcn-ui
+    - tailwind-css
+    - testing
+    - code-quality
+
+api:
+  description: API and backend development references
+  tags: [api, rest, graphql, endpoint, server, express, fastify, hono, backend, route, middleware]
+  refs:
+    - api-design
+    - code-quality
+    - testing

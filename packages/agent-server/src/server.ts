@@ -9,8 +9,7 @@
  *   Port 9877 (config.port + 1) → wss:// with self-signed TLS
  */
 
-import { execSync } from 'node:child_process'
-import * as pty from 'node-pty'
+import { execSync, spawn, type ChildProcess } from 'node:child_process'
 import { existsSync, readFileSync } from 'node:fs'
 import { createServer as createHttpServer } from 'node:http'
 import { createServer as createHttpsServer } from 'node:https'
@@ -75,7 +74,7 @@ export class AgentServer {
   private scheduler: Scheduler | null = null
   private updater: Updater = new Updater()
   private mcpManager: McpManager = new McpManager()
-  private ptys: Map<string, pty.IPty> = new Map()
+  private ptys: Map<string, ChildProcess> = new Map()
 
   constructor(config: AgentConfig) {
     this.config = config
@@ -246,7 +245,7 @@ export class AgentServer {
         this.activeTurns.clear()
         // Kill all PTY sessions
         for (const [id, p] of this.ptys) {
-          try { p.kill() } catch {}
+          try { p.kill('SIGTERM') } catch {}
           this.ptys.delete(id)
         }
         console.log('Client disconnected — active sessions cancelled & persisted')
@@ -400,27 +399,31 @@ export class AgentServer {
         // Kill existing PTY with same ID if any
         const existing = this.ptys.get(msg.id)
         if (existing) {
-          try { existing.kill() } catch {}
+          try { existing.kill('SIGTERM') } catch {}
           this.ptys.delete(msg.id)
         }
 
         const shell = msg.shell || process.env.SHELL || '/bin/bash'
-        const p = pty.spawn(shell, [], {
-          name: 'xterm-256color',
-          cols: msg.cols || 80,
-          rows: msg.rows || 24,
+        const cols = msg.cols || 80
+        const rows = msg.rows || 24
+
+        const p = spawn(shell, ['-i'], {
+          stdio: ['pipe', 'pipe', 'pipe'],
           cwd: process.env.HOME || '/',
-          env: process.env as Record<string, string>,
+          env: { ...process.env, TERM: 'xterm-256color', COLUMNS: String(cols), LINES: String(rows) },
         })
 
         this.ptys.set(msg.id, p)
 
-        p.onData((data: string) => {
-          const b64 = Buffer.from(data, 'binary').toString('base64')
+        const onData = (data: Buffer) => {
+          const b64 = data.toString('base64')
           this.sendToClient(Channel.TERMINAL, { type: 'pty_data', id: msg.id, data: b64 })
-        })
+        }
 
-        p.onExit(() => {
+        p.stdout?.on('data', onData)
+        p.stderr?.on('data', onData)
+
+        p.on('exit', () => {
           this.ptys.delete(msg.id)
           this.sendToClient(Channel.TERMINAL, { type: 'pty_close', id: msg.id })
         })
@@ -431,25 +434,22 @@ export class AgentServer {
 
       case 'pty_data': {
         const p = this.ptys.get(msg.id)
-        if (p) {
+        if (p?.stdin?.writable) {
           const decoded = Buffer.from(msg.data, 'base64').toString('binary')
-          p.write(decoded)
+          p.stdin.write(decoded)
         }
         break
       }
 
       case 'pty_resize': {
-        const p = this.ptys.get(msg.id)
-        if (p) {
-          p.resize(msg.cols, msg.rows)
-        }
+        // child_process doesn't support resize — ignored for now
         break
       }
 
       case 'pty_close': {
         const p = this.ptys.get(msg.id)
         if (p) {
-          try { p.kill() } catch {}
+          try { p.kill('SIGTERM') } catch {}
           this.ptys.delete(msg.id)
         }
         break
@@ -665,10 +665,14 @@ export class AgentServer {
     try {
       // Build project context if this is a project-scoped session
       let projectContext: string | undefined
+      let projectWorkspacePath: string | undefined
+      let projectType: string | undefined
       if (msg.projectId) {
         const project = loadProject(msg.projectId)
         if (project) {
           projectContext = buildProjectContext(project, msg.projectId)
+          projectWorkspacePath = project.workspacePath
+          projectType = project.type
         }
       }
 
@@ -679,6 +683,8 @@ export class AgentServer {
         onSubAgentEvent: this.makeSubAgentEventHandler(msg.id),
         projectId: msg.projectId,
         projectContext,
+        projectWorkspacePath,
+        projectType,
         mcpManager: this.mcpManager,
       })
 
@@ -693,6 +699,15 @@ export class AgentServer {
         provider: session.provider,
         model: session.model,
       })
+
+      // Update project stats so session count is accurate
+      if (msg.projectId) {
+        updateProjectStats(msg.projectId)
+        const updatedProject = loadProject(msg.projectId)
+        if (updatedProject) {
+          this.sendToClient(Channel.AI, { type: 'project_updated', project: updatedProject })
+        }
+      }
 
       // Send context info if available
       if (session.contextInfo) {
@@ -730,15 +745,15 @@ export class AgentServer {
         }
 
         // Try loading from disk (project dir first if applicable, then global)
+        const resumeProject = projectId ? loadProject(projectId) : undefined
         session =
           resumeSession(msg.id, this.config, {
             onSubAgentEvent: this.makeSubAgentEventHandler(msg.id),
             mcpManager: this.mcpManager,
             projectId,
-            projectContext: projectId ? (() => {
-              const project = loadProject(projectId!)
-              return project ? buildProjectContext(project, projectId!) : undefined
-            })() : undefined,
+            projectContext: resumeProject ? buildProjectContext(resumeProject, projectId!) : undefined,
+            projectWorkspacePath: resumeProject?.workspacePath,
+            projectType: resumeProject?.type,
           }) ?? undefined
 
         // Fallback to global sessions
@@ -753,6 +768,7 @@ export class AgentServer {
           this.sendToClient(Channel.AI, {
             type: 'error',
             message: `Session not found: ${msg.id}`,
+            sessionId: msg.id,
           })
           return
         }
@@ -770,7 +786,17 @@ export class AgentServer {
         model: info.model,
         messageCount: info.messageCount,
         title: info.title,
+        lastTasks: info.lastTasks,
       })
+
+      // Send tasks_update so UI restores the task checklist immediately
+      if (info.lastTasks && info.lastTasks.length > 0) {
+        this.sendToClient(Channel.AI, {
+          type: 'tasks_update',
+          tasks: info.lastTasks,
+          sessionId: msg.id,
+        })
+      }
 
       // Send context info if available
       if (session.contextInfo) {
@@ -789,6 +815,7 @@ export class AgentServer {
       this.sendToClient(Channel.AI, {
         type: 'error',
         message: `Failed to resume session: ${(err as Error).message}`,
+        sessionId: msg.id,
       })
     }
   }
@@ -890,6 +917,7 @@ export class AgentServer {
           this.sendToClient(Channel.AI, {
             type: 'error',
             message: `Session not found: ${msg.id}`,
+            sessionId: msg.id,
           })
           return
         }
@@ -904,10 +932,21 @@ export class AgentServer {
         id: msg.id,
         messages: session.getHistory(),
       })
+
+      // Restore task state after history
+      const sessionInfo = session.getInfo()
+      if (sessionInfo.lastTasks && sessionInfo.lastTasks.length > 0) {
+        this.sendToClient(Channel.AI, {
+          type: 'tasks_update',
+          tasks: sessionInfo.lastTasks,
+          sessionId: msg.id,
+        })
+      }
     } catch (err: unknown) {
       this.sendToClient(Channel.AI, {
         type: 'error',
         message: `Failed to get session history: ${(err as Error).message}`,
+        sessionId: msg.id,
       })
     }
   }
@@ -1051,7 +1090,7 @@ export class AgentServer {
     project: { name: string; description?: string; icon?: string; color?: string }
   }) {
     try {
-      const project = createProject(msg.project)
+      const project = createProject({ ...msg.project, config: this.config })
       this.sendToClient(Channel.AI, { type: 'project_created', project })
     } catch (err: unknown) {
       this.sendToClient(Channel.AI, {
@@ -1241,15 +1280,15 @@ export class AgentServer {
           projectId = projMatch[1]
         }
 
+        const chatResumeProject = projectId ? loadProject(projectId) : undefined
         session =
           resumeSession(sessionId, this.config, {
             onSubAgentEvent: this.makeSubAgentEventHandler(sessionId),
             mcpManager: this.mcpManager,
             projectId,
-            projectContext: projectId ? (() => {
-              const project = loadProject(projectId!)
-              return project ? buildProjectContext(project, projectId!) : undefined
-            })() : undefined,
+            projectContext: chatResumeProject ? buildProjectContext(chatResumeProject, projectId!) : undefined,
+            projectWorkspacePath: chatResumeProject?.workspacePath,
+            projectType: chatResumeProject?.type,
           }) ?? undefined
 
         // Also try global sessions as fallback
@@ -1310,8 +1349,10 @@ export class AgentServer {
     this.activeTurns.add(sessionId)
 
     try {
+      const turnStartMs = Date.now()
       let eventCount = 0
       let accumulatedText = ''
+      let toolCallCount = 0
       for await (const event of session.processMessage(msg.content, msg.attachments || [])) {
         // Accumulate text for project context extraction
         if (event.type === 'text') {
@@ -1321,6 +1362,7 @@ export class AgentServer {
 
         // Emit granular status updates so the client can show step-by-step progress
         if (event.type === 'tool_call') {
+          toolCallCount++
           // Build richer detail: "Running shell: npm test" instead of just "Running shell..."
           const toolEvent = event as { name: string; input?: Record<string, unknown> }
           let toolDetail = `Running ${toolEvent.name}...`
@@ -1378,62 +1420,53 @@ export class AgentServer {
 
         this.sendToClient(Channel.AI, { ...event, sessionId } as Record<string, unknown>)
       }
-      console.log(`[${sessionId}] Done (${eventCount} events)`)
+      const turnDurationMs = Date.now() - turnStartMs
+      console.log(
+        `[${sessionId}] Turn complete: ${eventCount} events, ${toolCallCount} tool calls, ` +
+          `${accumulatedText.length} chars, ${turnDurationMs}ms`,
+      )
 
       // Track session in project history if this is a project session
       const sessionInfo = session.getInfo()
       if (session.projectId && sessionInfo.title) {
         try {
-          // Try to extract auto-summarization from [PROJECT_CONTEXT_UPDATE] block
-          let sessionSummary = sessionInfo.title
-          const ctxMatch = accumulatedText.match(
-            /\[PROJECT_CONTEXT_UPDATE\]\s*([\s\S]*?)\s*\[\/PROJECT_CONTEXT_UPDATE\]/,
-          )
-          if (ctxMatch) {
-            try {
-              const parsed = JSON.parse(ctxMatch[1])
-              if (parsed.sessionSummary) {
-                sessionSummary = parsed.sessionSummary
-              }
-              if (parsed.summary) {
-                updateProjectContext(session.projectId, 'summary', parsed.summary)
-                const updatedProject = loadProject(session.projectId)
-                if (updatedProject) {
-                  this.sendToClient(Channel.AI, { type: 'project_updated', project: updatedProject })
-                }
-              }
-            } catch {
-              // Malformed JSON — fall back to title
-            }
-          }
-
           appendSessionHistory(session.projectId, {
             sessionId: session.id,
             title: sessionInfo.title,
-            summary: sessionSummary,
+            summary: sessionInfo.title,
             ts: Date.now(),
           })
           updateProjectStats(session.projectId)
+
+          const updatedProject = loadProject(session.projectId)
+          if (updatedProject) {
+            this.sendToClient(Channel.AI, { type: 'project_updated', project: updatedProject })
+          }
         } catch (e) {
           console.warn(`Failed to update project history: ${(e as Error).message}`)
         }
       }
     } catch (err: unknown) {
-      console.error(`[${sessionId}] Error:`, (err as Error).message)
+      const errMsg = (err as Error).message
+      console.error(`[${sessionId}] Error:`, errMsg)
       this.sendToClient(Channel.AI, {
         type: 'error',
-        message: (err as Error).message,
+        message: errMsg,
+        sessionId,
+      })
+      // Send done on error path so the client always clears loading state
+      this.sendToClient(Channel.AI, {
+        type: 'done',
         sessionId,
       })
     } finally {
       this.activeTurns.delete(sessionId)
+      this.sendToClient(Channel.EVENTS, {
+        type: 'agent_status',
+        status: 'idle',
+        sessionId,
+      })
     }
-
-    this.sendToClient(Channel.EVENTS, {
-      type: 'agent_status',
-      status: 'idle',
-      sessionId,
-    })
   }
 
   private async handleCompactCommand(session: Session, sessionId: string, content: string) {
