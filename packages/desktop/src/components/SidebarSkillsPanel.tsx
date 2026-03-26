@@ -96,7 +96,7 @@ export function SidebarSkillsPanel() {
           onClick={() => setShowAddDialog(true)}
           aria-label="Add custom skill"
         >
-          <Plus size={14} />
+          <Plus size={14} strokeWidth={1.5} />
         </button>
       </div>
 
@@ -114,7 +114,7 @@ export function SidebarSkillsPanel() {
                   onClick={() => setSelectedSkill(skill)}
                 >
                   <span className="sidebar-skills__item-icon">
-                    <Icon size={14} />
+                    <Icon size={14} strokeWidth={1.5} />
                   </span>
                   <span className="sidebar-skills__item-name">{skill.name}</span>
                   {skill.isCustom && (
@@ -125,7 +125,7 @@ export function SidebarSkillsPanel() {
                       role="button"
                       tabIndex={-1}
                     >
-                      <Trash2 size={12} />
+                      <Trash2 size={12} strokeWidth={1.5} />
                     </span>
                   )}
                 </button>

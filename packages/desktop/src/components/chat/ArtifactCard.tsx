@@ -66,11 +66,11 @@ export function ArtifactCard({ artifact }: Props) {
       {/* Info bar */}
       <div className="artifact-card__info">
         <div className="artifact-card__meta">
-          <Icon size={14} className="artifact-card__icon" />
+          <Icon size={14} strokeWidth={1.5} className="artifact-card__icon" />
           <span className="artifact-card__title">{title}</span>
           <span className="artifact-card__type">{label}</span>
         </div>
-        <PanelRight size={14} className="artifact-card__open-icon" />
+        <PanelRight size={14} strokeWidth={1.5} className="artifact-card__open-icon" />
       </div>
     </motion.button>
   )

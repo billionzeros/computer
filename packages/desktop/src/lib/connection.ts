@@ -8,7 +8,7 @@
  *   Port 9877 → wss:// when "Use TLS" is checked
  */
 
-import { Channel } from '@anton/protocol'
+import { Channel, type ChatImageAttachmentInput } from '@anton/protocol'
 
 // We inline the codec here to avoid Uint8Array issues in browser context
 function encodeFrame(channel: number, payload: object): ArrayBuffer {
@@ -109,8 +109,8 @@ export class Connection {
     this.ws.send(encodeFrame(channel, message))
   }
 
-  sendAiMessage(content: string) {
-    this.send(Channel.AI, { type: 'message', content })
+  sendAiMessage(content: string, attachments?: ChatImageAttachmentInput[]) {
+    this.send(Channel.AI, { type: 'message', content, attachments })
   }
 
   sendTerminalData(sessionId: string, data: string) {
@@ -139,7 +139,10 @@ export class Connection {
 
   // ── Session management ──────────────────────────────────────────
 
-  sendSessionCreate(id: string, opts?: { provider?: string; model?: string; apiKey?: string }) {
+  sendSessionCreate(
+    id: string,
+    opts?: { provider?: string; model?: string; apiKey?: string; projectId?: string },
+  ) {
     this.send(Channel.AI, { type: 'session_create', id, ...opts })
   }
 
@@ -159,8 +162,12 @@ export class Connection {
     this.send(Channel.AI, { type: 'session_history', id })
   }
 
-  sendAiMessageToSession(content: string, sessionId: string) {
-    this.send(Channel.AI, { type: 'message', content, sessionId })
+  sendAiMessageToSession(
+    content: string,
+    sessionId: string,
+    attachments?: ChatImageAttachmentInput[],
+  ) {
+    this.send(Channel.AI, { type: 'message', content, sessionId, attachments })
   }
 
   // ── Provider management ─────────────────────────────────────────
@@ -195,6 +202,108 @@ export class Connection {
 
   sendUpdateStart() {
     this.send(Channel.CONTROL, { type: 'update_start' })
+  }
+
+  // ── Projects ──────────────────────────────────────────────────
+
+  sendProjectCreate(project: {
+    name: string
+    description?: string
+    icon?: string
+    color?: string
+  }) {
+    this.send(Channel.AI, { type: 'project_create', project })
+  }
+
+  sendProjectsList() {
+    this.send(Channel.AI, { type: 'projects_list' })
+  }
+
+  sendProjectUpdate(id: string, changes: Record<string, unknown>) {
+    this.send(Channel.AI, { type: 'project_update', id, changes })
+  }
+
+  sendProjectDelete(id: string) {
+    this.send(Channel.AI, { type: 'project_delete', id })
+  }
+
+  sendProjectContextUpdate(id: string, field: 'notes' | 'summary', value: string) {
+    this.send(Channel.AI, { type: 'project_context_update', id, field, value })
+  }
+
+  sendProjectFileUpload(
+    projectId: string,
+    filename: string,
+    content: string,
+    mimeType: string,
+    sizeBytes: number,
+  ) {
+    this.send(Channel.AI, {
+      type: 'project_file_upload',
+      projectId,
+      filename,
+      content,
+      mimeType,
+      sizeBytes,
+    })
+  }
+
+  sendProjectFileTextCreate(projectId: string, filename: string, content: string) {
+    this.send(Channel.AI, { type: 'project_file_text_create', projectId, filename, content })
+  }
+
+  sendProjectFileDelete(projectId: string, filename: string) {
+    this.send(Channel.AI, { type: 'project_file_delete', projectId, filename })
+  }
+
+  sendProjectFilesList(projectId: string) {
+    this.send(Channel.AI, { type: 'project_files_list', projectId })
+  }
+
+  sendProjectSessionsList(projectId: string) {
+    this.send(Channel.AI, { type: 'project_sessions_list', projectId })
+  }
+
+  // ── Connectors ─────────────────────────────────────────────────
+
+  sendConnectorsList() {
+    this.send(Channel.AI, { type: 'connectors_list' })
+  }
+
+  sendConnectorAdd(connector: {
+    id: string
+    name: string
+    description?: string
+    icon?: string
+    type: 'mcp' | 'api'
+    command?: string
+    args?: string[]
+    env?: Record<string, string>
+    apiKey?: string
+    baseUrl?: string
+    enabled: boolean
+  }) {
+    this.send(Channel.AI, { type: 'connector_add', connector })
+  }
+
+  sendConnectorUpdate(id: string, changes: Record<string, unknown>) {
+    this.send(Channel.AI, { type: 'connector_update', id, changes })
+  }
+
+  sendConnectorRemove(id: string) {
+    this.send(Channel.AI, { type: 'connector_remove', id })
+  }
+
+  sendConnectorToggle(id: string, enabled: boolean) {
+    this.send(Channel.AI, { type: 'connector_toggle', id, enabled })
+  }
+
+  sendConnectorTest(id: string) {
+    this.send(Channel.AI, { type: 'connector_test', id })
+  }
+
+  sendConnectorRegistryList() {
+    this.send(Channel.AI, { type: 'connector_registry_list' })
   }
 
   // ── Filesystem ─────────────────────────────────────────────────

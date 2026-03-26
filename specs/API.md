@@ -354,7 +354,15 @@ Agent returns the session's message history in client-friendly format.
   toolName?: string,     // for tool_call
   toolInput?: object,    // for tool_call
   toolId?: string,       // links tool_call ↔ tool_result
-  isError?: boolean      // for tool_result
+  isError?: boolean,     // for tool_result
+  attachments?: [{       // present on user/tool_result entries that include images
+    id: string,
+    name: string,
+    mimeType: string,
+    storagePath: string, // relative to ~/.anton/sessions/data/<sessionId>/
+    sizeBytes: number,
+    data?: string        // base64 payload returned for UI rendering
+  }]
 }
 ```
 
@@ -404,7 +412,14 @@ Client sends a chat message to a session.
 {
   type: "message",
   content: string,          // user's message text
-  sessionId?: string        // target session (defaults to "default")
+  sessionId?: string,       // target session (defaults to "default")
+  attachments?: [{          // optional image attachments
+    id: string,
+    name: string,
+    mimeType: string,
+    data: string,           // base64 image payload
+    sizeBytes: number
+  }]
 }
 ```
 
@@ -514,6 +529,67 @@ Client approves or denies a dangerous command.
   approved: boolean
 }
 ```
+
+### `ask_user`
+
+Agent requests a short structured clarification flow.
+
+| | |
+|---|---|
+| Direction | Agent → Client |
+| Client behavior | Render a stepper wizard: one visible question at a time, `Next` between questions, `Submit` on the last step |
+| Timeout | 5 minutes — resolves to an empty answer object if no response |
+
+```typescript
+{
+  type: "ask_user",
+  id: string,               // request ID
+  questions: AskUserQuestion[],
+  sessionId?: string
+}
+```
+
+**`AskUserQuestion`:**
+
+```typescript
+{
+  question: string,                     // visible prompt
+  description?: string,                 // optional markdown helper text
+  options?: Array<string | {
+    label: string,
+    description?: string                // optional markdown helper text
+  }>,
+  allowFreeText?: boolean,              // default: true
+  freeTextPlaceholder?: string          // optional custom placeholder
+}
+```
+
+Rules:
+
+- Current hard cap: 6 questions per request.
+- Each question is shown one at a time in the client UI.
+- `options` may be simple strings or richer objects with `label` and `description`.
+- If `allowFreeText !== false`, the client should always offer a custom text field.
+- If both an option and custom text are present, custom text wins for the submitted answer.
+
+### `ask_user_response`
+
+Client submits the answers collected by the stepper flow.
+
+| | |
+|---|---|
+| Direction | Client → Agent |
+| Side effect | Unblocks the session and resumes the agent turn |
+
+```typescript
+{
+  type: "ask_user_response",
+  id: string,               // matches ask_user.id
+  answers: Record<string, string>
+}
+```
+
+`answers` is keyed by the original question text. Each value is the final submitted answer for that step, either the selected option label or the typed custom text.
 
 ### `done`
 

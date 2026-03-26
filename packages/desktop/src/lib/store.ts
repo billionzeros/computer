@@ -1,4 +1,4 @@
-import { type AskUserQuestion, Channel, type TokenUsage } from '@anton/protocol'
+import { type AskUserQuestion, Channel, type Project, type TokenUsage } from '@anton/protocol'
 import { create } from 'zustand'
 import { type Artifact, extractArtifact } from './artifacts.js'
 import { type ConnectionStatus, connection } from './connection.js'
@@ -9,6 +9,12 @@ import {
   loadConversations,
   saveConversations,
 } from './conversations.js'
+import {
+  loadActiveProjectId,
+  loadProjects as loadPersistedProjects,
+  saveActiveProjectId,
+  saveProjects as savePersistedProjects,
+} from './projects.js'
 
 // ── Types ───────────────────────────────────────────────────────────
 
@@ -17,9 +23,20 @@ export interface ChatMessage {
   role: 'user' | 'assistant' | 'tool' | 'system'
   content: string
   timestamp: number
+  attachments?: ChatImageAttachment[]
   toolName?: string
   toolInput?: Record<string, unknown>
   isError?: boolean
+  parentToolCallId?: string // set when this message is from a sub-agent
+}
+
+export interface ChatImageAttachment {
+  id: string
+  name: string
+  mimeType: string
+  sizeBytes: number
+  data?: string
+  storagePath?: string
 }
 
 export interface ProviderInfo {
@@ -59,6 +76,31 @@ export interface AgentStep {
 }
 
 export type AgentStatus = 'idle' | 'working' | 'error' | 'unknown'
+
+export interface ConnectorStatusInfo {
+  id: string
+  name: string
+  description?: string
+  icon?: string
+  type: 'mcp' | 'api'
+  connected: boolean
+  enabled: boolean
+  toolCount: number
+  tools: string[]
+  error?: string
+}
+
+export interface ConnectorRegistryInfo {
+  id: string
+  name: string
+  description: string
+  icon: string
+  category: string
+  type: 'mcp' | 'api'
+  command?: string
+  args?: string[]
+  requiredEnv: string[]
+}
 
 export interface UpdateInfo {
   currentVersion: string
@@ -141,6 +183,10 @@ interface AppState {
   turnUsage: TokenUsage | null
   sessionUsage: TokenUsage | null
 
+  // Turn timing
+  workingStartedAt: number | null
+  lastTurnDurationMs: number | null
+
   // Agent status detail & steps
   agentStatusDetail: string | null
   agentSteps: AgentStep[]
@@ -174,10 +220,42 @@ interface AppState {
   updateMessage: string | null
   updateDismissed: boolean
 
+  // Projects
+  projects: Project[]
+  activeProjectId: string | null
+  activeProjectSessionId: string | null // when set, ProjectView shows embedded chat
+  projectSessions: SessionMeta[] // sessions for the active project
+  projectSessionsLoading: boolean // true while fetching project sessions
+  projectFiles: { name: string; size: number; mimeType: string }[]
+  projectFilesLoading: boolean
+  activeView: 'chat' | 'projects' | 'terminal'
+
+  // Connectors
+  connectors: ConnectorStatusInfo[]
+  connectorRegistry: ConnectorRegistryInfo[]
+
   // Sidebar
   sidebarCollapsed: boolean
   setSidebarCollapsed: (collapsed: boolean) => void
   toggleSidebar: () => void
+
+  // Project actions
+  setProjects: (projects: Project[]) => void
+  setActiveProject: (id: string | null) => void
+  addProject: (project: Project) => void
+  updateProject: (id: string, changes: Partial<Project>) => void
+  removeProject: (id: string) => void
+  setProjectSessions: (sessions: SessionMeta[]) => void
+  setProjectFiles: (files: { name: string; size: number; mimeType: string }[]) => void
+  setActiveProjectSession: (sessionId: string | null) => void
+  setActiveView: (view: 'chat' | 'projects' | 'terminal') => void
+
+  // Connector actions
+  setConnectors: (connectors: ConnectorStatusInfo[]) => void
+  addOrUpdateConnector: (connector: ConnectorStatusInfo) => void
+  removeConnector: (id: string) => void
+  updateConnectorStatus: (id: string, updates: Partial<ConnectorStatusInfo>) => void
+  setConnectorRegistry: (entries: ConnectorRegistryInfo[]) => void
 
   // Actions
   setConnectionStatus: (status: ConnectionStatus) => void
@@ -191,7 +269,8 @@ interface AppState {
   setProviders: (providers: ProviderInfo[], defaults: { provider: string; model: string }) => void
 
   // Conversation actions
-  newConversation: (title?: string, sessionId?: string) => string
+  newConversation: (title?: string, sessionId?: string, projectId?: string) => string
+  appendConversation: (title?: string, sessionId?: string, projectId?: string) => string
   switchConversation: (id: string) => void
   deleteConversation: (id: string) => void
   addMessage: (msg: ChatMessage) => void
@@ -271,6 +350,8 @@ export const useStore = create<AppState>((set, get) => {
     lastResponseModel: null,
     turnUsage: null,
     sessionUsage: null,
+    workingStartedAt: null,
+    lastTurnDurationMs: null,
     agentStatusDetail: null,
     agentSteps: [],
     _sessionResolvers: new Map(),
@@ -288,12 +369,114 @@ export const useStore = create<AppState>((set, get) => {
     updateStage: null,
     updateMessage: null,
     updateDismissed: false,
+    projects: loadPersistedProjects(),
+    activeProjectId: loadActiveProjectId(),
+    activeProjectSessionId: null,
+    projectSessions: [],
+    projectSessionsLoading: false,
+    projectFiles: [],
+    projectFilesLoading: false,
+    activeView: 'chat',
+
+    // Connectors
+    connectors: [],
+    connectorRegistry: [],
+
     sidebarCollapsed: false,
     setSidebarCollapsed: (collapsed) => set({ sidebarCollapsed: collapsed }),
     toggleSidebar: () => set((s) => ({ sidebarCollapsed: !s.sidebarCollapsed })),
 
+    setProjects: (projects) => {
+      savePersistedProjects(projects)
+      set({ projects })
+    },
+    setActiveProject: (id) => {
+      saveActiveProjectId(id)
+      set({ activeProjectId: id, activeProjectSessionId: null, projectSessions: [], projectSessionsLoading: !!id, projectFiles: [], projectFilesLoading: !!id })
+    },
+    addProject: (project) => {
+      set((state) => {
+        const projects = [project, ...state.projects]
+        savePersistedProjects(projects)
+        return { projects }
+      })
+    },
+    updateProject: (id, changes) => {
+      set((state) => {
+        const projects = state.projects.map((p) =>
+          p.id === id ? { ...p, ...changes, updatedAt: Date.now() } : p,
+        )
+        savePersistedProjects(projects)
+        return { projects }
+      })
+    },
+    removeProject: (id) => {
+      set((state) => {
+        const projects = state.projects.filter((p) => p.id !== id)
+        savePersistedProjects(projects)
+        const activeProjectId = state.activeProjectId === id ? null : state.activeProjectId
+        if (!activeProjectId) saveActiveProjectId(null)
+        return { projects, activeProjectId }
+      })
+    },
+    setProjectSessions: (sessions) => set({ projectSessions: sessions, projectSessionsLoading: false }),
+    setProjectFiles: (files) => set({ projectFiles: files, projectFilesLoading: false }),
+    setActiveProjectSession: (sessionId) => set({ activeProjectSessionId: sessionId }),
+    setActiveView: (view) => {
+      if (view === 'chat') {
+        // If the current active conversation belongs to a project, clear it
+        // so AgentChat picks or creates a proper chat conversation.
+        const state = get()
+        const activeConv = state.conversations.find((c) => c.id === state.activeConversationId)
+        if (activeConv?.projectId) {
+          // Try to find an existing chat conversation to switch to
+          const chatConv = state.conversations.find((c) => !c.projectId)
+          if (chatConv) {
+            localStorage.setItem(ACTIVE_CONV_KEY, chatConv.id)
+            set({ activeView: view, activeConversationId: chatConv.id })
+          } else {
+            localStorage.removeItem(ACTIVE_CONV_KEY)
+            set({ activeView: view, activeConversationId: null })
+          }
+          return
+        }
+      }
+      set({ activeView: view })
+    },
+
+    // Connector actions
+    setConnectors: (connectors) => set({ connectors }),
+    addOrUpdateConnector: (connector) =>
+      set((s) => {
+        const idx = s.connectors.findIndex((c) => c.id === connector.id)
+        if (idx >= 0) {
+          const updated = [...s.connectors]
+          updated[idx] = connector
+          return { connectors: updated }
+        }
+        return { connectors: [...s.connectors, connector] }
+      }),
+    removeConnector: (id) =>
+      set((s) => ({ connectors: s.connectors.filter((c) => c.id !== id) })),
+    updateConnectorStatus: (id, updates) =>
+      set((s) => ({
+        connectors: s.connectors.map((c) => (c.id === id ? { ...c, ...updates } : c)),
+      })),
+    setConnectorRegistry: (entries) => set({ connectorRegistry: entries }),
+
     setConnectionStatus: (status) => set({ connectionStatus: status }),
-    setAgentStatus: (status) => set({ agentStatus: status }),
+    setAgentStatus: (status) => {
+      const prev = get().agentStatus
+      if (status === 'working' && prev !== 'working') {
+        set({ agentStatus: status, workingStartedAt: Date.now(), lastTurnDurationMs: null, turnUsage: null })
+      } else if (status === 'idle' && prev === 'working') {
+        const started = get().workingStartedAt
+        const duration = started ? Date.now() - started : null
+        set({ agentStatus: status, lastTurnDurationMs: duration })
+      } else {
+        set({ agentStatus: status })
+      }
+    },
     setSidebarTab: (tab) => set({ sidebarTab: tab }),
     setSearchQuery: (query) => set({ searchQuery: query }),
 
@@ -317,13 +500,25 @@ export const useStore = create<AppState>((set, get) => {
       })
     },
 
-    newConversation: (title, sessionId) => {
-      const conv = createConversation(title, sessionId)
+    newConversation: (title, sessionId, projectId) => {
+      const conv = createConversation(title, sessionId, projectId)
       set((state) => {
         const conversations = [conv, ...state.conversations]
         saveConversations(conversations)
         localStorage.setItem(ACTIVE_CONV_KEY, conv.id)
         return { conversations, activeConversationId: conv.id }
+      })
+      return conv.id
+    },
+
+    appendConversation: (title, sessionId, projectId) => {
+      const conv = createConversation(title, sessionId, projectId)
+      set((state) => {
+        // Append at end instead of prepending — used for syncing server sessions
+        // so they don't displace the user's current conversation
+        const conversations = [...state.conversations, conv]
+        saveConversations(conversations)
+        return { conversations }
       })
       return conv.id
     },
@@ -513,24 +708,25 @@ export const useStore = create<AppState>((set, get) => {
 
     resetForDisconnect: () => {
       set({
+        // KEEP: conversations, activeConversationId — user's chat history persists
+        // KEEP: projects, activeProjectId — project context persists
+        // KEEP: activeView — don't reset navigation
+
+        // Clear transient session/connection state
         currentSessionId: null,
         sessions: [],
-        conversations: [],
-        activeConversationId: null,
         agentStatus: 'unknown',
         agentStatusDetail: null,
         agentSteps: [],
         _currentAssistantMsgId: null,
         _sessionResolvers: new Map(),
-        artifacts: [],
-        activeArtifactId: null,
-        artifactPanelOpen: false,
         pendingConfirm: null,
         pendingPlan: null,
-        sidePanelView: 'artifacts' as const,
         pendingAskUser: null,
         turnUsage: null,
         sessionUsage: null,
+        workingStartedAt: null,
+        lastTurnDurationMs: null,
         lastResponseProvider: null,
         lastResponseModel: null,
         providers: [],
@@ -540,10 +736,13 @@ export const useStore = create<AppState>((set, get) => {
         updateStage: null,
         updateMessage: null,
         updateDismissed: false,
+        projectSessions: [],
+        projectSessionsLoading: false,
+        projectFiles: [],
+        projectFilesLoading: false,
       })
-      // Clear persisted conversation data
-      saveConversations([])
-      localStorage.removeItem(ACTIVE_CONV_KEY)
+      // DO NOT clear conversations or active conversation — preserve chat history
+      // On reconnect, session_history will sync the server's persisted state
     },
   }
 })
@@ -635,7 +834,9 @@ connection.onMessage((channel, msg) => {
     case 'tool_call':
       // Reset assistant message tracking so any text AFTER this tool call
       // creates a new assistant bubble (shows reasoning between tool groups)
-      useStore.setState({ _currentAssistantMsgId: null })
+      if (!msg.parentToolCallId) {
+        useStore.setState({ _currentAssistantMsgId: null })
+      }
       store.addMessage({
         id: `tc_${msg.id}`,
         role: 'tool',
@@ -643,15 +844,18 @@ connection.onMessage((channel, msg) => {
         toolName: msg.name,
         toolInput: msg.input,
         timestamp: Date.now(),
+        parentToolCallId: msg.parentToolCallId,
       })
-      store.addAgentStep({
-        id: msg.id,
-        type: 'tool_call',
-        label: `Running: ${msg.name}`,
-        toolName: msg.name,
-        status: 'active',
-        timestamp: Date.now(),
-      })
+      if (!msg.parentToolCallId) {
+        store.addAgentStep({
+          id: msg.id,
+          type: 'tool_call',
+          label: `Running: ${msg.name}`,
+          toolName: msg.name,
+          status: 'active',
+          timestamp: Date.now(),
+        })
+      }
       store.setAgentStatus('working')
       break
 
@@ -662,14 +866,17 @@ connection.onMessage((channel, msg) => {
         content: msg.output,
         isError: msg.isError,
         timestamp: Date.now(),
+        parentToolCallId: msg.parentToolCallId,
       }
       store.addMessage(resultMsg)
-      store.updateAgentStep(msg.id, {
-        status: msg.isError ? 'error' : 'complete',
-      })
+      if (!msg.parentToolCallId) {
+        store.updateAgentStep(msg.id, {
+          status: msg.isError ? 'error' : 'complete',
+        })
+      }
 
       // Legacy client-side artifact extraction (fallback if server doesn't emit artifact events)
-      if (!msg.isError) {
+      if (!msg.isError && !msg.parentToolCallId) {
         const conv = store.getActiveConversation()
         const toolCallMsg = conv?.messages.find((m) => m.id === `tc_${msg.id}`)
         if (toolCallMsg) {
@@ -679,6 +886,29 @@ connection.onMessage((channel, msg) => {
       }
       break
     }
+
+    // ── Sub-agent lifecycle ──────────────────────────────────────
+    case 'sub_agent_start':
+      store.addMessage({
+        id: `sa_start_${msg.toolCallId}`,
+        role: 'tool',
+        content: msg.task,
+        toolName: 'sub_agent',
+        toolInput: { task: msg.task },
+        timestamp: Date.now(),
+      })
+      break
+
+    case 'sub_agent_end':
+      store.addMessage({
+        id: `sa_end_${msg.toolCallId}`,
+        role: 'tool',
+        content: msg.success ? 'Sub-agent completed' : 'Sub-agent failed',
+        isError: !msg.success,
+        timestamp: Date.now(),
+        parentToolCallId: msg.toolCallId,
+      })
+      break
 
     case 'artifact':
       // Server-side artifact detection — add directly to store
@@ -811,6 +1041,7 @@ connection.onMessage((channel, msg) => {
         toolName?: string
         toolInput?: Record<string, unknown>
         isError?: boolean
+        attachments?: ChatImageAttachment[]
       }
       const historyMessages: ChatMessage[] = msg.messages.map((entry: HistoryEntry) => ({
         id: `hist_${entry.seq}_${Date.now()}`,
@@ -824,6 +1055,7 @@ connection.onMessage((channel, msg) => {
                 : 'system',
         content: entry.content,
         timestamp: entry.ts,
+        attachments: entry.attachments,
         toolName: entry.toolName,
         toolInput: entry.toolInput,
         isError: entry.isError,
@@ -872,6 +1104,66 @@ connection.onMessage((channel, msg) => {
         content: `Context compacted: ${msg.compactedMessages} messages summarized (compaction #${msg.totalCompactions})`,
         timestamp: Date.now(),
       })
+      break
+
+    // ── Project responses ──────────────────────────────────────
+    case 'project_created':
+      store.addProject(msg.project)
+      store.setActiveProject(msg.project.id)
+      connection.sendProjectSessionsList(msg.project.id)
+      break
+
+    case 'projects_list_response':
+      store.setProjects(msg.projects)
+      break
+
+    case 'project_updated':
+      store.updateProject(msg.project.id, msg.project)
+      break
+
+    case 'project_deleted':
+      store.removeProject(msg.id)
+      break
+
+    case 'project_files_list_response':
+      if (msg.projectId === store.activeProjectId) {
+        store.setProjectFiles(msg.files)
+      }
+      break
+
+    case 'project_sessions_list_response':
+      if (msg.projectId === store.activeProjectId) {
+        store.setProjectSessions(msg.sessions)
+      }
+      break
+
+    // ── Connector responses ──────────────────────────────────────
+    case 'connectors_list_response':
+      store.setConnectors(msg.connectors)
+      break
+
+    case 'connector_added':
+      store.addOrUpdateConnector(msg.connector)
+      break
+
+    case 'connector_updated':
+      store.addOrUpdateConnector(msg.connector)
+      break
+
+    case 'connector_removed':
+      store.removeConnector(msg.id)
+      break
+
+    case 'connector_status':
+      store.updateConnectorStatus(msg.id, {
+        connected: msg.connected,
+        toolCount: msg.toolCount,
+        error: msg.error,
+      })
+      break
+
+    case 'connector_registry_list_response':
+      store.setConnectorRegistry(msg.entries)
       break
   }
 })

@@ -69,11 +69,21 @@ function toolResult(output: string, isError = false) {
  */
 export interface ToolCallbacks {
   getAskUserHandler?: () => AskUserHandler | undefined
+  /** Callback to stream sub-agent events to the client. */
+  onSubAgentEvent?: (
+    event: import('./session.js').SessionEvent & { parentToolCallId: string },
+  ) => void
+  /** When true, omit the sub_agent tool (prevents infinite recursion in child agents). */
+  excludeSubAgent?: boolean
+  /** Access the parent session's confirm handler for sub-agents. */
+  getConfirmHandler?: () => import('./session.js').ConfirmHandler | undefined
+  /** Client-provided API key to pass through to sub-agent sessions. */
+  clientApiKey?: string
 }
 
 // biome-ignore lint/suspicious/noExplicitAny: heterogeneous tool array requires any
-export function buildTools(config: AgentConfig, callbacks?: ToolCallbacks): AgentTool<any>[] {
-  return [
+export function buildTools(config: AgentConfig, callbacks?: ToolCallbacks, mcpManager?: import('./mcp/mcp-manager.js').McpManager): AgentTool<any>[] {
+  const tools: AgentTool<any>[] = [
     // ── Core tools ──────────────────────────────────────────────────
     {
       name: 'shell',
@@ -517,20 +527,29 @@ export function buildTools(config: AgentConfig, callbacks?: ToolCallbacks): Agen
       description:
         'Ask the user clarifying questions with optional multiple-choice options. ' +
         'Use when you need specific information before proceeding — e.g., technology choices, preferences, project details. ' +
-        'Maximum 4 questions. Each question can have selectable options and/or allow free-text input. ' +
-        'The user sees an interactive questionnaire in the chat UI.',
+        'Bundle all related questions into one call (max 6). The UI shows one question at a time with Next/Submit. ' +
+        'The user can pick from options or type a free-text answer.',
       parameters: Type.Object({
         questions: Type.Array(
           Type.Object({
             question: Type.String({ description: 'The question to ask' }),
+            description: Type.Optional(
+              Type.String({ description: 'Additional context shown below the question' }),
+            ),
             options: Type.Optional(
-              Type.Array(Type.String(), { description: 'Selectable options (max 5)' }),
+              Type.Array(Type.String(), {
+                description: 'Selectable options as short labels (max 6)',
+                maxItems: 6,
+              }),
             ),
             allowFreeText: Type.Optional(
               Type.Boolean({ description: 'Allow custom text input (default: true)' }),
             ),
+            freeTextPlaceholder: Type.Optional(
+              Type.String({ description: 'Placeholder text for the free-text input' }),
+            ),
           }),
-          { description: 'Questions to ask (max 4)' },
+          { description: 'Questions to ask (max 6)', maxItems: 6 },
         ),
       }),
       async execute(_toolCallId, params) {
@@ -538,11 +557,22 @@ export function buildTools(config: AgentConfig, callbacks?: ToolCallbacks): Agen
         if (!handler) {
           return toolResult('Ask user requires an interactive handler but none is available.', true)
         }
+        if (!params.questions?.length) {
+          return toolResult('ask_user requires at least one question.', true)
+        }
         const questions: AskUserQuestion[] = params.questions.map(
-          (q: { question: string; options?: string[]; allowFreeText?: boolean }) => ({
+          (q: {
+            question: string
+            description?: string
+            options?: (string | { label: string; description?: string })[]
+            allowFreeText?: boolean
+            freeTextPlaceholder?: string
+          }) => ({
             question: q.question,
-            options: q.options,
+            description: q.description,
+            options: q.options?.slice(0, 6),
             allowFreeText: q.allowFreeText,
+            freeTextPlaceholder: q.freeTextPlaceholder,
           }),
         )
         const answers = await handler(questions)
@@ -569,4 +599,104 @@ export function buildTools(config: AgentConfig, callbacks?: ToolCallbacks): Agen
       },
     },
   ]
+
+  // ── Sub-agent (conditional — excluded for child agents to prevent recursion) ──
+  if (!callbacks?.excludeSubAgent) {
+    tools.push({
+      name: 'sub_agent',
+      label: 'Sub Agent',
+      description:
+        'Spawn a sub-agent to handle a complex task independently. ' +
+        'The sub-agent has its own context and access to all tools (shell, filesystem, browser, git, etc.). ' +
+        'Use for tasks that can be parallelized or need focused work — e.g. research, code analysis, file operations. ' +
+        'Multiple sub_agent calls in the same response run in parallel. ' +
+        'The sub-agent works autonomously until the task is complete, then returns its final output as the result.',
+      parameters: Type.Object({
+        task: Type.String({
+          description: 'Detailed description of the task for the sub-agent to complete',
+        }),
+      }),
+      async execute(toolCallId: string, params: { task: string }) {
+        const onEvent = callbacks?.onSubAgentEvent
+
+        // Emit sub_agent_start
+        onEvent?.({
+          type: 'sub_agent_start',
+          toolCallId,
+          task: params.task,
+          parentToolCallId: toolCallId,
+        })
+
+        let finalText = ''
+        let hadError = false
+
+        try {
+          // Lazy import to avoid circular dependency (agent.ts <-> session.ts)
+          const { Session } = await import('./session.js')
+
+          // Build tools for sub-agent without sub_agent tool (prevents recursion)
+          const subTools = buildTools(config, {
+            getAskUserHandler: callbacks?.getAskUserHandler,
+            excludeSubAgent: true,
+          })
+
+          const subSession = new Session({
+            id: `sub_${toolCallId}`,
+            provider: config.defaults.provider,
+            model: config.defaults.model,
+            config,
+            tools: subTools,
+            apiKey: callbacks?.clientApiKey,
+            ephemeral: true,
+          })
+
+          // Wire confirm handler from parent so sub-agent shell commands can be approved
+          const confirmHandler = callbacks?.getConfirmHandler?.()
+          if (confirmHandler) {
+            subSession.setConfirmHandler(confirmHandler)
+          }
+
+          for await (const event of subSession.processMessage(params.task)) {
+            // Forward intermediate events to client, tagged with parentToolCallId
+            if (onEvent && event.type !== 'done' && event.type !== 'title_update') {
+              onEvent({ ...event, parentToolCallId: toolCallId } as any)
+            }
+
+            // Collect text output for the final tool result
+            if (event.type === 'text') {
+              finalText += event.content
+            }
+            if (event.type === 'error') {
+              hadError = true
+              finalText += `\nError: ${event.message}`
+            }
+          }
+        } catch (err) {
+          hadError = true
+          finalText = `Sub-agent error: ${(err as Error).message}`
+        }
+
+        // Emit sub_agent_end
+        onEvent?.({
+          type: 'sub_agent_end',
+          toolCallId,
+          success: !hadError,
+          parentToolCallId: toolCallId,
+        })
+
+        return toolResult(finalText || '(sub-agent produced no output)', hadError)
+      },
+    })
+  }
+
+  // ── MCP tools (from connected connectors) ─────────────────────────
+  if (mcpManager) {
+    const mcpTools = mcpManager.getAllTools()
+    if (mcpTools.length > 0) {
+      console.log(`[buildTools] adding ${mcpTools.length} MCP tools from connectors`)
+      tools.push(...mcpTools)
+    }
+  }
+
+  return tools
 }

@@ -1,3 +1,5 @@
+import type { Project } from './projects.js'
+
 // ── Control Channel (0x00) ──────────────────────────────────────────
 
 export interface AuthMessage {
@@ -137,6 +139,7 @@ export interface SessionCreateMessage {
   provider?: string
   model?: string
   apiKey?: string // client-provided key override (not persisted)
+  projectId?: string // create session scoped to a project
 }
 
 export interface SessionCreatedMessage {
@@ -201,12 +204,30 @@ export interface SessionHistoryEntry {
   toolInput?: Record<string, unknown>
   toolId?: string
   isError?: boolean
+  attachments?: SessionImageAttachment[]
 }
 
 export interface SessionHistoryResponse {
   type: 'session_history_response'
   id: string
   messages: SessionHistoryEntry[]
+}
+
+export interface ChatImageAttachmentInput {
+  id: string
+  name: string
+  mimeType: string
+  data: string
+  sizeBytes: number
+}
+
+export interface SessionImageAttachment {
+  id: string
+  name: string
+  mimeType: string
+  storagePath: string
+  sizeBytes: number
+  data?: string
 }
 
 // Provider management
@@ -267,6 +288,7 @@ export interface AiUserMessage {
   type: 'message'
   content: string
   sessionId?: string // target session (defaults to "default")
+  attachments?: ChatImageAttachmentInput[]
 }
 
 export interface AiThinkingMessage {
@@ -279,6 +301,7 @@ export interface AiTextMessage {
   type: 'text'
   content: string
   sessionId?: string
+  parentToolCallId?: string // set when this event is from a sub-agent
 }
 
 export interface AiToolCallMessage {
@@ -287,6 +310,7 @@ export interface AiToolCallMessage {
   name: string
   input: Record<string, unknown>
   sessionId?: string
+  parentToolCallId?: string
 }
 
 export interface AiToolResultMessage {
@@ -295,6 +319,7 @@ export interface AiToolResultMessage {
   output: string
   isError?: boolean
   sessionId?: string
+  parentToolCallId?: string
 }
 
 export interface AiConfirmMessage {
@@ -327,10 +352,17 @@ export interface AiPlanConfirmResponseMessage {
 }
 
 // Ask-user questionnaire (interactive clarification)
+export interface AskUserOption {
+  label: string
+  description?: string
+}
+
 export interface AskUserQuestion {
   question: string
-  options?: string[]
+  description?: string
+  options?: (string | AskUserOption)[]
   allowFreeText?: boolean
+  freeTextPlaceholder?: string
 }
 
 export interface AiAskUserMessage {
@@ -369,6 +401,7 @@ export interface AiArtifactMessage {
   language: string
   content: string
   sessionId?: string
+  parentToolCallId?: string
 }
 
 export interface AiDoneMessage {
@@ -381,6 +414,22 @@ export interface AiDoneMessage {
 export interface AiErrorMessage {
   type: 'error'
   message: string
+  sessionId?: string
+  parentToolCallId?: string
+}
+
+// Sub-agent lifecycle events
+export interface AiSubAgentStartMessage {
+  type: 'sub_agent_start'
+  toolCallId: string // the parent tool_call ID that spawned this sub-agent
+  task: string
+  sessionId?: string
+}
+
+export interface AiSubAgentEndMessage {
+  type: 'sub_agent_end'
+  toolCallId: string
+  success: boolean
   sessionId?: string
 }
 
@@ -428,6 +477,238 @@ export interface SchedulerRunResponse {
   error?: string
 }
 
+// Project management
+export interface ProjectCreateMessage {
+  type: 'project_create'
+  project: {
+    name: string
+    description?: string
+    icon?: string
+    color?: string
+  }
+}
+
+export interface ProjectCreatedMessage {
+  type: 'project_created'
+  project: Project
+}
+
+export interface ProjectsListMessage {
+  type: 'projects_list'
+}
+
+export interface ProjectsListResponse {
+  type: 'projects_list_response'
+  projects: Project[]
+}
+
+export interface ProjectUpdateMessage {
+  type: 'project_update'
+  id: string
+  changes: Partial<Pick<Project, 'name' | 'description' | 'icon' | 'color'>>
+}
+
+export interface ProjectUpdatedMessage {
+  type: 'project_updated'
+  project: Project
+}
+
+export interface ProjectDeleteMessage {
+  type: 'project_delete'
+  id: string
+}
+
+export interface ProjectDeletedMessage {
+  type: 'project_deleted'
+  id: string
+}
+
+// Project context updates (instructions / memory)
+export interface ProjectContextUpdateMessage {
+  type: 'project_context_update'
+  id: string
+  field: 'notes' | 'summary'
+  value: string
+}
+
+// Project file operations
+export interface ProjectFileUploadMessage {
+  type: 'project_file_upload'
+  projectId: string
+  filename: string
+  content: string // base64
+  mimeType: string
+  sizeBytes: number
+}
+
+export interface ProjectFileTextCreateMessage {
+  type: 'project_file_text_create'
+  projectId: string
+  filename: string
+  content: string // plain text
+}
+
+export interface ProjectFileDeleteMessage {
+  type: 'project_file_delete'
+  projectId: string
+  filename: string
+}
+
+export interface ProjectFilesListMessage {
+  type: 'project_files_list'
+  projectId: string
+}
+
+export interface ProjectFileInfo {
+  name: string
+  size: number
+  mimeType: string
+}
+
+export interface ProjectFilesListResponse {
+  type: 'project_files_list_response'
+  projectId: string
+  files: ProjectFileInfo[]
+}
+
+export interface ProjectSessionsListMessage {
+  type: 'project_sessions_list'
+  projectId: string
+}
+
+export interface ProjectSessionsListResponse {
+  type: 'project_sessions_list_response'
+  projectId: string
+  sessions: {
+    id: string
+    title: string
+    provider: string
+    model: string
+    messageCount: number
+    createdAt: number
+    lastActiveAt: number
+  }[]
+}
+
+// ── Connector management ─────────────────────────────────────────────
+
+export interface ConnectorConfigPayload {
+  id: string
+  name: string
+  description?: string
+  icon?: string
+  type: 'mcp' | 'api'
+  command?: string
+  args?: string[]
+  env?: Record<string, string>
+  apiKey?: string
+  baseUrl?: string
+  enabled: boolean
+}
+
+export interface ConnectorStatusPayload {
+  id: string
+  name: string
+  description?: string
+  icon?: string
+  type: 'mcp' | 'api'
+  connected: boolean
+  enabled: boolean
+  toolCount: number
+  tools: string[]
+  error?: string
+}
+
+export interface ConnectorRegistryEntryPayload {
+  id: string
+  name: string
+  description: string
+  icon: string
+  category: string
+  type: 'mcp' | 'api'
+  command?: string
+  args?: string[]
+  requiredEnv: string[]
+}
+
+// Client → Server
+export interface ConnectorsListMessage {
+  type: 'connectors_list'
+}
+
+export interface ConnectorAddMessage {
+  type: 'connector_add'
+  connector: ConnectorConfigPayload
+}
+
+export interface ConnectorUpdateMessage {
+  type: 'connector_update'
+  id: string
+  changes: Partial<ConnectorConfigPayload>
+}
+
+export interface ConnectorRemoveMessage {
+  type: 'connector_remove'
+  id: string
+}
+
+export interface ConnectorToggleMessage {
+  type: 'connector_toggle'
+  id: string
+  enabled: boolean
+}
+
+export interface ConnectorTestMessage {
+  type: 'connector_test'
+  id: string
+}
+
+export interface ConnectorRegistryListMessage {
+  type: 'connector_registry_list'
+}
+
+// Server → Client
+export interface ConnectorsListResponse {
+  type: 'connectors_list_response'
+  connectors: ConnectorStatusPayload[]
+}
+
+export interface ConnectorAddedMessage {
+  type: 'connector_added'
+  connector: ConnectorStatusPayload
+}
+
+export interface ConnectorUpdatedMessage {
+  type: 'connector_updated'
+  connector: ConnectorStatusPayload
+}
+
+export interface ConnectorRemovedMessage {
+  type: 'connector_removed'
+  id: string
+}
+
+export interface ConnectorStatusMessage {
+  type: 'connector_status'
+  id: string
+  connected: boolean
+  toolCount: number
+  error?: string
+}
+
+export interface ConnectorTestResponse {
+  type: 'connector_test_response'
+  id: string
+  success: boolean
+  tools: string[]
+  error?: string
+}
+
+export interface ConnectorRegistryListResponse {
+  type: 'connector_registry_list_response'
+  entries: ConnectorRegistryEntryPayload[]
+}
+
 export type AiMessage =
   // Session management
   | SessionCreateMessage
@@ -464,6 +745,9 @@ export type AiMessage =
   | AiArtifactMessage
   | AiDoneMessage
   | AiErrorMessage
+  // Sub-agent
+  | AiSubAgentStartMessage
+  | AiSubAgentEndMessage
   // Compaction
   | CompactionStartMessage
   | CompactionCompleteMessage
@@ -472,6 +756,38 @@ export type AiMessage =
   | SchedulerListResponse
   | SchedulerRunMessage
   | SchedulerRunResponse
+  // Projects
+  | ProjectCreateMessage
+  | ProjectCreatedMessage
+  | ProjectsListMessage
+  | ProjectsListResponse
+  | ProjectUpdateMessage
+  | ProjectUpdatedMessage
+  | ProjectDeleteMessage
+  | ProjectDeletedMessage
+  | ProjectContextUpdateMessage
+  | ProjectFileUploadMessage
+  | ProjectFileTextCreateMessage
+  | ProjectFileDeleteMessage
+  | ProjectFilesListMessage
+  | ProjectFilesListResponse
+  | ProjectSessionsListMessage
+  | ProjectSessionsListResponse
+  // Connectors
+  | ConnectorsListMessage
+  | ConnectorsListResponse
+  | ConnectorAddMessage
+  | ConnectorAddedMessage
+  | ConnectorUpdateMessage
+  | ConnectorUpdatedMessage
+  | ConnectorRemoveMessage
+  | ConnectorRemovedMessage
+  | ConnectorToggleMessage
+  | ConnectorStatusMessage
+  | ConnectorTestMessage
+  | ConnectorTestResponse
+  | ConnectorRegistryListMessage
+  | ConnectorRegistryListResponse
 
 // ── Event Channel (0x04) ────────────────────────────────────────────
 

@@ -8,6 +8,11 @@ interface Props {
   message: ChatMessage
 }
 
+function attachmentSrc(message: ChatMessage, index: number): string | undefined {
+  const attachment = message.attachments?.[index]
+  return attachment?.data ? `data:${attachment.mimeType};base64,${attachment.data}` : undefined
+}
+
 export function MessageBubble({ message }: Props) {
   return (
     <motion.div
@@ -18,6 +23,25 @@ export function MessageBubble({ message }: Props) {
     >
       {message.role === 'user' && (
         <div className="message__surface message__surface--user">
+          {message.attachments && message.attachments.length > 0 && (
+            <div className="message__attachments">
+              {message.attachments.map((attachment, index) => {
+                const src = attachmentSrc(message, index)
+                return src ? (
+                  <img
+                    key={attachment.id}
+                    src={src}
+                    alt={attachment.name}
+                    className="message__attachment-image"
+                  />
+                ) : (
+                  <div key={attachment.id} className="message__attachment-fallback">
+                    {attachment.name}
+                  </div>
+                )
+              })}
+            </div>
+          )}
           <div className="message__text">{message.content}</div>
         </div>
       )}
@@ -34,7 +58,7 @@ export function MessageBubble({ message }: Props) {
         <div
           className={message.isError ? 'system-message system-message--error' : 'system-message'}
         >
-          {message.isError && <AlertTriangle className="system-message__icon" />}
+          {message.isError && <AlertTriangle size={14} strokeWidth={1.5} className="system-message__icon" />}
           <span className="system-message__text">{message.content}</span>
         </div>
       )}

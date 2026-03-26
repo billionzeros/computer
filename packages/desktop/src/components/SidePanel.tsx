@@ -102,7 +102,7 @@ export function SidePanel() {
                 className={`side-panel__view-tab ${activeView === view.id ? 'side-panel__view-tab--active' : ''}`}
                 onClick={() => setSidePanelView(view.id)}
               >
-                <Icon size={14} />
+                <Icon size={14} strokeWidth={1.5} />
                 {view.label}
               </button>
             )
@@ -114,7 +114,7 @@ export function SidePanel() {
             onClick={() => setArtifactPanelOpen(false)}
             aria-label="Close panel"
           >
-            <X size={14} />
+            <X size={14} strokeWidth={1.5} />
           </button>
         </div>
       )}
@@ -129,7 +129,7 @@ export function SidePanel() {
             onClick={() => setArtifactPanelOpen(false)}
             aria-label="Close panel"
           >
-            <X size={14} />
+            <X size={14} strokeWidth={1.5} />
           </button>
         </div>
       )}

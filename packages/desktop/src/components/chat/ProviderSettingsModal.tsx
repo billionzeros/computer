@@ -3,27 +3,7 @@ import { useEffect, useRef, useState } from 'react'
 import { connection } from '../../lib/connection.js'
 import type { ProviderInfo } from '../../lib/store.js'
 import { Modal } from '../ui/Modal.js'
-
-// Provider icon imports
-import anthropicIcon from '../../assets/llm/anthropic_light.svg'
-import deepseekIcon from '../../assets/llm/deepseek.svg'
-import geminiIcon from '../../assets/llm/gemini.svg'
-import kimiIcon from '../../assets/llm/kimi_light.svg'
-import metaIcon from '../../assets/llm/meta_light.svg'
-import mistralIcon from '../../assets/llm/mistral.svg'
-import openrouterIcon from '../../assets/llm/openrouter_light.svg'
-import xaiIcon from '../../assets/llm/xai_light.svg'
-
-const providerIcons: Record<string, string> = {
-  anthropic: anthropicIcon,
-  google: geminiIcon,
-  openrouter: openrouterIcon,
-  mistral: mistralIcon,
-  deepseek: deepseekIcon,
-  meta: metaIcon,
-  xai: xaiIcon,
-  kimi: kimiIcon,
-}
+import { providerIcons } from './model-utils.js'
 
 interface Props {
   provider: ProviderInfo | null
@@ -156,7 +136,7 @@ export function ProviderSettingsModal({ provider, onClose }: Props) {
             >
               {keySaved ? (
                 <>
-                  <Check size={14} /> Saved
+                  <Check size={14} strokeWidth={1.5} /> Saved
                 </>
               ) : (
                 'Save key'
@@ -171,7 +151,7 @@ export function ProviderSettingsModal({ provider, onClose }: Props) {
             <span className="prov-modal__field-label">Models</span>
             {provider.defaultModels && provider.defaultModels.length > 0 && (
               <button type="button" onClick={handleResetModels} className="prov-modal__reset">
-                <RotateCcw size={11} /> Defaults
+                <RotateCcw size={12} strokeWidth={1.5} /> Defaults
               </button>
             )}
           </div>
@@ -191,12 +171,12 @@ export function ProviderSettingsModal({ provider, onClose }: Props) {
                   className="prov-modal__model-delete"
                   title="Remove model"
                 >
-                  <Trash2 size={12} />
+                  <Trash2 size={12} strokeWidth={1.5} />
                 </button>
               </div>
             ))}
             <form onSubmit={handleAddModelSubmit} className="prov-modal__model-add-row">
-              <Plus size={13} className="prov-modal__model-add-plus" />
+              <Plus size={14} strokeWidth={1.5} className="prov-modal__model-add-plus" />
               <input
                 ref={modelInputRef}
                 type="text"
@@ -220,7 +200,7 @@ export function ProviderSettingsModal({ provider, onClose }: Props) {
             >
               {modelsSaved ? (
                 <>
-                  <Check size={14} /> Models saved
+                  <Check size={14} strokeWidth={1.5} /> Models saved
                 </>
               ) : (
                 'Save model changes'

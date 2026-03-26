@@ -66,7 +66,7 @@ export function PlanPanel() {
             className="plan-panel__btn plan-panel__btn--approve"
             onClick={handleApprove}
           >
-            <Check size={16} />
+            <Check size={16} strokeWidth={1.5} />
             Approve plan
           </button>
           <button
@@ -74,7 +74,7 @@ export function PlanPanel() {
             className="plan-panel__btn plan-panel__btn--reject"
             onClick={handleReject}
           >
-            {showFeedback ? <MessageSquare size={16} /> : <X size={16} />}
+            {showFeedback ? <MessageSquare size={16} strokeWidth={1.5} /> : <X size={16} strokeWidth={1.5} />}
             {showFeedback ? 'Send feedback' : 'Reject'}
           </button>
         </div>

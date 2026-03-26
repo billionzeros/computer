@@ -1,24 +1,64 @@
-import { ArrowUp, ListChecks, Plus, Square } from 'lucide-react'
+import type { AskUserQuestion } from '@anton/protocol'
+import { ArrowUp, ListChecks, Plus, Square, X } from 'lucide-react'
 import type React from 'react'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { Skill } from '../../lib/skills.js'
+import type { ChatImageAttachment } from '../../lib/store.js'
 import { useAgentStatus } from '../../lib/store.js'
+import { AskUserDialog } from './AskUserDialog.js'
 import { ModelSelector } from './ModelSelector.js'
 import { SlashCommandMenu } from './SlashCommandMenu.js'
 
 interface Props {
-  onSend: (text: string) => void
+  onSend: (text: string, attachments?: ChatImageAttachment[]) => void
   onSkillSelect: (skill: Skill) => void
   variant?: 'docked' | 'hero'
   initialValue?: string
+  pendingAskUser?: { id: string; questions: AskUserQuestion[] } | null
+  onAskUserSubmit?: (answers: Record<string, string>) => void
 }
 
-export function ChatInput({ onSend, onSkillSelect, variant = 'docked', initialValue }: Props) {
+const MAX_IMAGE_ATTACHMENTS = 4
+const MAX_IMAGE_BYTES = 10 * 1024 * 1024
+
+async function readImageFile(file: File): Promise<ChatImageAttachment> {
+  const dataUrl = await new Promise<string>((resolve, reject) => {
+    const reader = new FileReader()
+    reader.onload = () => resolve(String(reader.result))
+    reader.onerror = () => reject(reader.error ?? new Error(`Failed to read "${file.name}"`))
+    reader.readAsDataURL(file)
+  })
+
+  const [, data = ''] = dataUrl.split(',', 2)
+  return {
+    id: `img_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+    name: file.name,
+    mimeType: file.type || 'image/png',
+    sizeBytes: file.size,
+    data,
+  }
+}
+
+function attachmentPreviewSrc(attachment: ChatImageAttachment): string | undefined {
+  return attachment.data ? `data:${attachment.mimeType};base64,${attachment.data}` : undefined
+}
+
+export function ChatInput({
+  onSend,
+  onSkillSelect,
+  variant = 'docked',
+  initialValue,
+  pendingAskUser,
+  onAskUserSubmit,
+}: Props) {
   const [input, setInput] = useState('')
   const [planFirst, setPlanFirst] = useState(false)
   const [showSlashMenu, setShowSlashMenu] = useState(false)
   const [slashFilter, setSlashFilter] = useState('')
+  const [attachments, setAttachments] = useState<ChatImageAttachment[]>([])
+  const [attachmentError, setAttachmentError] = useState<string | null>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
+  const fileInputRef = useRef<HTMLInputElement>(null)
   const agentStatus = useAgentStatus()
   const isHero = variant === 'hero'
 
@@ -50,18 +90,57 @@ export function ChatInput({ onSend, onSkillSelect, variant = 'docked', initialVa
     }
   }
 
+  const addFiles = useCallback(
+    async (files: File[]) => {
+      if (files.length === 0) return
+
+      const imageFiles = files.filter((file) => file.type.startsWith('image/'))
+      if (imageFiles.length === 0) {
+        setAttachmentError('Only image attachments are supported right now.')
+        return
+      }
+
+      const availableSlots = MAX_IMAGE_ATTACHMENTS - attachments.length
+      if (availableSlots <= 0) {
+        setAttachmentError(`You can attach up to ${MAX_IMAGE_ATTACHMENTS} images per message.`)
+        return
+      }
+
+      const oversized = imageFiles.find((file) => file.size > MAX_IMAGE_BYTES)
+      if (oversized) {
+        setAttachmentError(`"${oversized.name}" is larger than 10 MB.`)
+        return
+      }
+
+      const acceptedFiles = imageFiles.slice(0, availableSlots)
+      if (acceptedFiles.length < imageFiles.length) {
+        setAttachmentError(`You can attach up to ${MAX_IMAGE_ATTACHMENTS} images per message.`)
+      } else {
+        setAttachmentError(null)
+      }
+
+      const nextAttachments = await Promise.all(acceptedFiles.map((file) => readImageFile(file)))
+      setAttachments((current) => [...current, ...nextAttachments])
+    },
+    [attachments.length],
+  )
+
   const handleSend = useCallback(() => {
     const text = input.trim()
-    if (!text || agentStatus === 'working') return
+    if ((!text && attachments.length === 0) || agentStatus === 'working') return
+
     const message = planFirst
-      ? `Think step by step and create a plan before doing anything. Once I approve the plan, execute it.\n\n${text}`
+      ? `Think step by step and create a plan before doing anything. Once I approve the plan, execute it.${text ? `\n\n${text}` : ''}`
       : text
-    onSend(message)
+
+    onSend(message, attachments)
     setInput('')
+    setAttachments([])
+    setAttachmentError(null)
     setPlanFirst(false)
     setShowSlashMenu(false)
     textareaRef.current?.focus()
-  }, [input, agentStatus, onSend, planFirst])
+  }, [input, attachments, agentStatus, onSend, planFirst])
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (showSlashMenu) return
@@ -71,10 +150,44 @@ export function ChatInput({ onSend, onSkillSelect, variant = 'docked', initialVa
     }
   }
 
+  const handlePaste = (e: React.ClipboardEvent<HTMLTextAreaElement>) => {
+    const files = Array.from(e.clipboardData.items)
+      .filter((item) => item.type.startsWith('image/'))
+      .map((item) => item.getAsFile())
+      .filter((file): file is File => file !== null)
+
+    if (files.length === 0) return
+    e.preventDefault()
+    void addFiles(files)
+  }
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files || [])
+    void addFiles(files)
+    e.target.value = ''
+  }
+
+  const handleRemoveAttachment = (id: string) => {
+    setAttachments((current) => current.filter((attachment) => attachment.id !== id))
+    setAttachmentError(null)
+  }
+
   const handleSkillSelect = (skill: Skill) => {
     setInput('')
     setShowSlashMenu(false)
     onSkillSelect(skill)
+  }
+
+  if (pendingAskUser && onAskUserSubmit) {
+    return (
+      <div className={`composer${isHero ? ' composer--hero' : ''}`}>
+        <div className="composer__anchor">
+          <div className="composer__box composer__box--ask-user">
+            <AskUserDialog questions={pendingAskUser.questions} onSubmit={onAskUserSubmit} />
+          </div>
+        </div>
+      </div>
+    )
   }
 
   return (
@@ -88,19 +201,65 @@ export function ChatInput({ onSend, onSkillSelect, variant = 'docked', initialVa
         />
 
         <div className="composer__box">
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="image/*"
+            multiple
+            className="composer__file-input"
+            onChange={handleFileChange}
+          />
+          {attachments.length > 0 && (
+            <div className="composer__attachments" aria-label="Attached images">
+              {attachments.map((attachment) => {
+                const previewSrc = attachmentPreviewSrc(attachment)
+                return (
+                  <div key={attachment.id} className="composer__attachment">
+                    {previewSrc ? (
+                      <img
+                        src={previewSrc}
+                        alt={attachment.name}
+                        className="composer__attachment-image"
+                      />
+                    ) : (
+                      <div className="composer__attachment-fallback">{attachment.name}</div>
+                    )}
+                    <button
+                      type="button"
+                      className="composer__attachment-remove"
+                      aria-label={`Remove ${attachment.name}`}
+                      onClick={() => handleRemoveAttachment(attachment.id)}
+                    >
+                      <X size={14} strokeWidth={1.5} />
+                    </button>
+                    <div className="composer__attachment-name">{attachment.name}</div>
+                  </div>
+                )
+              })}
+            </div>
+          )}
           <textarea
             ref={textareaRef}
             value={input}
             onChange={handleChange}
             onKeyDown={handleKeyDown}
+            onPaste={handlePaste}
             placeholder={isHero ? 'What should we work on next?' : 'Ask a follow-up'}
             rows={1}
             className="composer__textarea"
           />
+          {attachmentError && (
+            <div className="composer__helper composer__helper--error">{attachmentError}</div>
+          )}
           <div className="composer__toolbar">
             <div className="composer__toolbar-left">
-              <button type="button" className="composer__btn" aria-label="Attach">
-                <Plus />
+              <button
+                type="button"
+                className="composer__btn"
+                aria-label="Attach images"
+                onClick={() => fileInputRef.current?.click()}
+              >
+                <Plus size={18} strokeWidth={1.5} />
               </button>
               <button
                 type="button"
@@ -109,7 +268,7 @@ export function ChatInput({ onSend, onSkillSelect, variant = 'docked', initialVa
                 aria-label="Plan first"
                 title="Plan before executing"
               >
-                <ListChecks />
+                <ListChecks size={18} strokeWidth={1.5} />
               </button>
             </div>
             <div className="composer__toolbar-right">
@@ -120,17 +279,17 @@ export function ChatInput({ onSend, onSkillSelect, variant = 'docked', initialVa
                   className="composer__btn composer__btn--stop"
                   aria-label="Stop"
                 >
-                  <Square />
+                  <Square size={18} strokeWidth={1.5} />
                 </button>
               ) : (
                 <button
                   type="button"
                   onClick={handleSend}
-                  disabled={!input.trim()}
+                  disabled={!input.trim() && attachments.length === 0}
                   className="composer__btn composer__btn--send"
                   aria-label="Send"
                 >
-                  <ArrowUp />
+                  <ArrowUp size={18} strokeWidth={1.5} />
                 </button>
               )}
             </div>

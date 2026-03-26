@@ -16,18 +16,47 @@ import { createServer as createHttpsServer } from 'node:https'
 import { join } from 'node:path'
 import type { AgentConfig } from '@anton/agent-config'
 import {
+  appendSessionHistory,
+  buildProjectContext,
   cleanExpiredSessions,
+  createProject,
   deleteSession as deletePersistedSession,
+  deleteProject,
   getAntonDir,
   getProvidersList,
+  listProjectSessions,
   listSessionMetas,
+  loadProject,
+  loadProjects,
   saveConfig,
   setDefault,
   setProviderKey,
   setProviderModels,
+  updateProject,
+  updateProjectContext,
+  updateProjectStats,
+  saveProjectFile,
+  deleteProjectFile,
+  listProjectFiles,
 } from '@anton/agent-config'
 import { GIT_HASH, VERSION } from '@anton/agent-config'
-import { type Session, createSession, resumeSession } from '@anton/agent-core'
+import {
+  type Session,
+  type SubAgentEventHandler,
+  McpManager,
+  type McpServerConfig,
+  createSession,
+  resumeSession,
+} from '@anton/agent-core'
+import {
+  CONNECTOR_REGISTRY,
+  type ConnectorConfig,
+  addConnector,
+  getConnectors,
+  removeConnector as removeConnectorConfig,
+  toggleConnector as toggleConnectorConfig,
+  updateConnector as updateConnectorConfig,
+} from '@anton/agent-config'
 import { Channel, decodeFrame, encodeFrame, parseJsonPayload } from '@anton/protocol'
 import type { AiMessage, ChannelId, ControlMessage, TerminalMessage } from '@anton/protocol'
 import { WebSocket, WebSocketServer } from 'ws'
@@ -40,9 +69,11 @@ export class AgentServer {
   private wss: WebSocketServer | null = null
   private config: AgentConfig
   private sessions: Map<string, Session> = new Map()
+  private activeTurns: Set<string> = new Set() // sessions currently processing a turn
   private activeClient: WebSocket | null = null
   private scheduler: Scheduler | null = null
   private updater: Updater = new Updater()
+  private mcpManager: McpManager = new McpManager()
 
   constructor(config: AgentConfig) {
     this.config = config
@@ -124,6 +155,9 @@ export class AgentServer {
     // Start update checker
     this.updater.start()
 
+    // Start MCP connectors
+    await this.startMcpConnectors()
+
     console.log(`\n  Agent ID: ${this.config.agentId}`)
     console.log(`  Token:    ${this.config.token}\n`)
   }
@@ -199,7 +233,16 @@ export class AgentServer {
     ws.on('close', () => {
       if (ws === this.activeClient) {
         this.activeClient = null
-        console.log('Client disconnected')
+        // Cancel active turns and persist their current state
+        for (const sessionId of this.activeTurns) {
+          const session = this.sessions.get(sessionId)
+          if (session) {
+            console.log(`Cancelling active turn for session ${sessionId}`)
+            session.cancel()
+          }
+        }
+        this.activeTurns.clear()
+        console.log('Client disconnected — active sessions cancelled & persisted')
       }
     })
   }
@@ -466,6 +509,61 @@ export class AgentServer {
         await this.handleSchedulerRun(msg)
         break
 
+      // ── Projects ──
+      case 'project_create':
+        this.handleProjectCreate(msg)
+        break
+      case 'projects_list':
+        this.handleProjectsList()
+        break
+      case 'project_update':
+        this.handleProjectUpdate(msg)
+        break
+      case 'project_delete':
+        this.handleProjectDelete(msg)
+        break
+      case 'project_context_update':
+        this.handleProjectContextUpdate(msg)
+        break
+      case 'project_file_upload':
+        this.handleProjectFileUpload(msg)
+        break
+      case 'project_file_text_create':
+        this.handleProjectFileTextCreate(msg)
+        break
+      case 'project_file_delete':
+        this.handleProjectFileDelete(msg)
+        break
+      case 'project_files_list':
+        this.handleProjectFilesList(msg)
+        break
+      case 'project_sessions_list':
+        this.handleProjectSessionsList(msg)
+        break
+
+      // ── Connectors ──
+      case 'connectors_list':
+        this.handleConnectorsList()
+        break
+      case 'connector_add':
+        await this.handleConnectorAdd(msg)
+        break
+      case 'connector_update':
+        await this.handleConnectorUpdate(msg)
+        break
+      case 'connector_remove':
+        await this.handleConnectorRemove(msg)
+        break
+      case 'connector_toggle':
+        await this.handleConnectorToggle(msg)
+        break
+      case 'connector_test':
+        await this.handleConnectorTest(msg)
+        break
+      case 'connector_registry_list':
+        this.handleConnectorRegistryList()
+        break
+
       // ── Chat messages ──
       case 'message':
         await this.handleChatMessage(msg)
@@ -490,12 +588,26 @@ export class AgentServer {
     provider?: string
     model?: string
     apiKey?: string
+    projectId?: string
   }) {
     try {
+      // Build project context if this is a project-scoped session
+      let projectContext: string | undefined
+      if (msg.projectId) {
+        const project = loadProject(msg.projectId)
+        if (project) {
+          projectContext = buildProjectContext(project, msg.projectId)
+        }
+      }
+
       const session = createSession(msg.id, this.config, {
         provider: msg.provider,
         model: msg.model,
         apiKey: msg.apiKey,
+        onSubAgentEvent: this.makeSubAgentEventHandler(msg.id),
+        projectId: msg.projectId,
+        projectContext,
+        mcpManager: this.mcpManager,
       })
 
       this.wireSessionConfirmHandler(session)
@@ -510,7 +622,7 @@ export class AgentServer {
         model: session.model,
       })
 
-      console.log(`Session created: ${msg.id} (${session.provider}/${session.model})`)
+      console.log(`Session created: ${msg.id} (${session.provider}/${session.model})${msg.projectId ? ` [project: ${msg.projectId}]` : ''}`)
     } catch (err: unknown) {
       this.sendToClient(Channel.AI, {
         type: 'error',
@@ -526,8 +638,33 @@ export class AgentServer {
       let session = this.sessions.get(msg.id)
 
       if (!session) {
-        // Try loading from disk
-        session = resumeSession(msg.id, this.config) ?? undefined
+        // Extract projectId from session ID format (proj_{projectId}_sess_...)
+        let projectId: string | undefined
+        const projMatch = msg.id.match(/^proj_([^_]+(?:_[^_]+)?)_sess_/)
+        if (projMatch) {
+          projectId = projMatch[1]
+        }
+
+        // Try loading from disk (project dir first if applicable, then global)
+        session =
+          resumeSession(msg.id, this.config, {
+            onSubAgentEvent: this.makeSubAgentEventHandler(msg.id),
+            mcpManager: this.mcpManager,
+            projectId,
+            projectContext: projectId ? (() => {
+              const project = loadProject(projectId!)
+              return project ? buildProjectContext(project, projectId!) : undefined
+            })() : undefined,
+          }) ?? undefined
+
+        // Fallback to global sessions
+        if (!session && projectId) {
+          session = resumeSession(msg.id, this.config, {
+            onSubAgentEvent: this.makeSubAgentEventHandler(msg.id),
+            mcpManager: this.mcpManager,
+          }) ?? undefined
+        }
+
         if (!session) {
           this.sendToClient(Channel.AI, {
             type: 'error',
@@ -574,9 +711,9 @@ export class AgentServer {
       lastActiveAt: m.lastActiveAt,
     }))
 
-    // Add in-memory sessions that aren't persisted yet
+    // Add in-memory sessions that aren't persisted yet (exclude project sessions)
     for (const [id, session] of this.sessions) {
-      if (!metas.some((m) => m.id === id)) {
+      if (!metas.some((m) => m.id === id) && !id.match(/^proj_/)) {
         const info = session.getInfo()
         sessions.push({
           id: info.id,
@@ -617,7 +754,11 @@ export class AgentServer {
 
       if (!session) {
         // Try loading from disk
-        session = resumeSession(msg.id, this.config) ?? undefined
+        session =
+          resumeSession(msg.id, this.config, {
+            onSubAgentEvent: this.makeSubAgentEventHandler(msg.id),
+            mcpManager: this.mcpManager,
+          }) ?? undefined
         if (!session) {
           this.sendToClient(Channel.AI, {
             type: 'error',
@@ -777,23 +918,221 @@ export class AgentServer {
     }
   }
 
+  // ── Project handlers ──────────────────────────────────────────
+
+  private handleProjectCreate(msg: {
+    project: { name: string; description?: string; icon?: string; color?: string }
+  }) {
+    try {
+      const project = createProject(msg.project)
+      this.sendToClient(Channel.AI, { type: 'project_created', project })
+    } catch (err: unknown) {
+      this.sendToClient(Channel.AI, {
+        type: 'error',
+        message: `Failed to create project: ${(err as Error).message}`,
+      })
+    }
+  }
+
+  private handleProjectsList() {
+    const projects = loadProjects()
+    this.sendToClient(Channel.AI, { type: 'projects_list_response', projects })
+  }
+
+  private handleProjectUpdate(msg: { id: string; changes: Record<string, unknown> }) {
+    const updated = updateProject(msg.id, msg.changes as Parameters<typeof updateProject>[1])
+    if (updated) {
+      this.sendToClient(Channel.AI, { type: 'project_updated', project: updated })
+    } else {
+      this.sendToClient(Channel.AI, { type: 'error', message: `Project not found: ${msg.id}` })
+    }
+  }
+
+  private handleProjectDelete(msg: { id: string }) {
+    const success = deleteProject(msg.id)
+    if (success) {
+      this.sendToClient(Channel.AI, { type: 'project_deleted', id: msg.id })
+    } else {
+      this.sendToClient(Channel.AI, { type: 'error', message: `Project not found: ${msg.id}` })
+    }
+  }
+
+  private handleProjectSessionsList(msg: { projectId: string }) {
+    const persisted = listProjectSessions(msg.projectId)
+    const sessions = persisted.map((s) => ({
+      id: s.id,
+      title: s.title,
+      provider: s.provider,
+      model: s.model,
+      messageCount: s.messageCount,
+      createdAt: s.createdAt,
+      lastActiveAt: s.lastActiveAt,
+    }))
+
+    // Add in-memory project sessions that aren't persisted yet
+    const prefix = `proj_${msg.projectId}_sess_`
+    for (const [id, session] of this.sessions) {
+      if (id.startsWith(prefix) && !persisted.some((s) => s.id === id)) {
+        const info = session.getInfo()
+        sessions.push({
+          id: info.id,
+          title: info.title,
+          provider: info.provider,
+          model: info.model,
+          messageCount: info.messageCount,
+          createdAt: info.createdAt,
+          lastActiveAt: info.lastActiveAt,
+        })
+      }
+    }
+
+    sessions.sort((a, b) => b.lastActiveAt - a.lastActiveAt)
+
+    this.sendToClient(Channel.AI, {
+      type: 'project_sessions_list_response',
+      projectId: msg.projectId,
+      sessions,
+    })
+  }
+
+  private handleProjectContextUpdate(msg: { id: string; field: 'notes' | 'summary'; value: string }) {
+    const updated = updateProjectContext(msg.id, msg.field, msg.value)
+    if (updated) {
+      this.sendToClient(Channel.AI, { type: 'project_updated', project: updated })
+    } else {
+      this.sendToClient(Channel.AI, { type: 'error', message: `Project not found: ${msg.id}` })
+    }
+  }
+
+  private handleProjectFileUpload(msg: {
+    projectId: string
+    filename: string
+    content: string
+    mimeType: string
+    sizeBytes: number
+  }) {
+    try {
+      const buffer = Buffer.from(msg.content, 'base64')
+      saveProjectFile(msg.projectId, msg.filename, buffer)
+      const project = loadProject(msg.projectId)
+      if (project) {
+        this.sendToClient(Channel.AI, { type: 'project_updated', project })
+      }
+      this.sendToClient(Channel.AI, {
+        type: 'project_files_list_response',
+        projectId: msg.projectId,
+        files: listProjectFiles(msg.projectId),
+      })
+    } catch (err: unknown) {
+      this.sendToClient(Channel.AI, {
+        type: 'error',
+        message: `Failed to upload file: ${(err as Error).message}`,
+      })
+    }
+  }
+
+  private handleProjectFileTextCreate(msg: {
+    projectId: string
+    filename: string
+    content: string
+  }) {
+    try {
+      const buffer = Buffer.from(msg.content, 'utf-8')
+      saveProjectFile(msg.projectId, msg.filename, buffer)
+      const project = loadProject(msg.projectId)
+      if (project) {
+        this.sendToClient(Channel.AI, { type: 'project_updated', project })
+      }
+      this.sendToClient(Channel.AI, {
+        type: 'project_files_list_response',
+        projectId: msg.projectId,
+        files: listProjectFiles(msg.projectId),
+      })
+    } catch (err: unknown) {
+      this.sendToClient(Channel.AI, {
+        type: 'error',
+        message: `Failed to create file: ${(err as Error).message}`,
+      })
+    }
+  }
+
+  private handleProjectFileDelete(msg: { projectId: string; filename: string }) {
+    const success = deleteProjectFile(msg.projectId, msg.filename)
+    if (success) {
+      const project = loadProject(msg.projectId)
+      if (project) {
+        this.sendToClient(Channel.AI, { type: 'project_updated', project })
+      }
+      this.sendToClient(Channel.AI, {
+        type: 'project_files_list_response',
+        projectId: msg.projectId,
+        files: listProjectFiles(msg.projectId),
+      })
+    } else {
+      this.sendToClient(Channel.AI, {
+        type: 'error',
+        message: `File not found: ${msg.filename}`,
+      })
+    }
+  }
+
+  private handleProjectFilesList(msg: { projectId: string }) {
+    this.sendToClient(Channel.AI, {
+      type: 'project_files_list_response',
+      projectId: msg.projectId,
+      files: listProjectFiles(msg.projectId),
+    })
+  }
+
   // ── Chat message handler ────────────────────────────────────────
 
-  private async handleChatMessage(msg: { content: string; sessionId?: string }) {
+  private async handleChatMessage(msg: {
+    content: string
+    sessionId?: string
+    attachments?: { id: string; name: string; mimeType: string; data: string; sizeBytes: number }[]
+  }) {
     const sessionId = msg.sessionId || DEFAULT_SESSION_ID
 
     // Auto-create default session if it doesn't exist
     let session = this.sessions.get(sessionId)
     if (!session) {
       if (sessionId === DEFAULT_SESSION_ID) {
-        session = createSession(DEFAULT_SESSION_ID, this.config)
+        session = createSession(DEFAULT_SESSION_ID, this.config, {
+          onSubAgentEvent: this.makeSubAgentEventHandler(DEFAULT_SESSION_ID),
+          mcpManager: this.mcpManager,
+        })
         this.wireSessionConfirmHandler(session)
         this.wirePlanConfirmHandler(session)
         this.wireAskUserHandler(session)
         this.sessions.set(DEFAULT_SESSION_ID, session)
       } else {
         // Try to resume from disk automatically
-        session = resumeSession(sessionId, this.config) ?? undefined
+        // For project sessions (proj_{projectId}_sess_...), try the project directory first
+        let projectId: string | undefined
+        const projMatch = sessionId.match(/^proj_([^_]+(?:_[^_]+)?)_sess_/)
+        if (projMatch) {
+          projectId = projMatch[1]
+        }
+
+        session =
+          resumeSession(sessionId, this.config, {
+            onSubAgentEvent: this.makeSubAgentEventHandler(sessionId),
+            mcpManager: this.mcpManager,
+            projectId,
+            projectContext: projectId ? (() => {
+              const project = loadProject(projectId!)
+              return project ? buildProjectContext(project, projectId!) : undefined
+            })() : undefined,
+          }) ?? undefined
+
+        // Also try global sessions as fallback
+        if (!session && projectId) {
+          session = resumeSession(sessionId, this.config, {
+            onSubAgentEvent: this.makeSubAgentEventHandler(sessionId),
+            mcpManager: this.mcpManager,
+          }) ?? undefined
+        }
+
         if (session) {
           this.wireSessionConfirmHandler(session)
           this.wirePlanConfirmHandler(session)
@@ -825,9 +1164,16 @@ export class AgentServer {
 
     console.log(`[${sessionId}] Processing: "${msg.content.slice(0, 50)}"`)
 
+    this.activeTurns.add(sessionId)
+
     try {
       let eventCount = 0
-      for await (const event of session.processMessage(msg.content)) {
+      let accumulatedText = ''
+      for await (const event of session.processMessage(msg.content, msg.attachments || [])) {
+        // Accumulate text for project context extraction
+        if (event.type === 'text') {
+          accumulatedText += event.content
+        }
         eventCount++
 
         // Emit granular status updates so the client can show step-by-step progress
@@ -854,6 +1200,45 @@ export class AgentServer {
         this.sendToClient(Channel.AI, { ...event, sessionId } as Record<string, unknown>)
       }
       console.log(`[${sessionId}] Done (${eventCount} events)`)
+
+      // Track session in project history if this is a project session
+      const sessionInfo = session.getInfo()
+      if (session.projectId && sessionInfo.title) {
+        try {
+          // Try to extract auto-summarization from [PROJECT_CONTEXT_UPDATE] block
+          let sessionSummary = sessionInfo.title
+          const ctxMatch = accumulatedText.match(
+            /\[PROJECT_CONTEXT_UPDATE\]\s*([\s\S]*?)\s*\[\/PROJECT_CONTEXT_UPDATE\]/,
+          )
+          if (ctxMatch) {
+            try {
+              const parsed = JSON.parse(ctxMatch[1])
+              if (parsed.sessionSummary) {
+                sessionSummary = parsed.sessionSummary
+              }
+              if (parsed.summary) {
+                updateProjectContext(session.projectId, 'summary', parsed.summary)
+                const updatedProject = loadProject(session.projectId)
+                if (updatedProject) {
+                  this.sendToClient(Channel.AI, { type: 'project_updated', project: updatedProject })
+                }
+              }
+            } catch {
+              // Malformed JSON — fall back to title
+            }
+          }
+
+          appendSessionHistory(session.projectId, {
+            sessionId: session.id,
+            title: sessionInfo.title,
+            summary: sessionSummary,
+            ts: Date.now(),
+          })
+          updateProjectStats(session.projectId)
+        } catch (e) {
+          console.warn(`Failed to update project history: ${(e as Error).message}`)
+        }
+      }
     } catch (err: unknown) {
       console.error(`[${sessionId}] Error:`, (err as Error).message)
       this.sendToClient(Channel.AI, {
@@ -861,6 +1246,8 @@ export class AgentServer {
         message: (err as Error).message,
         sessionId,
       })
+    } finally {
+      this.activeTurns.delete(sessionId)
     }
 
     this.sendToClient(Channel.EVENTS, {
@@ -906,6 +1293,15 @@ export class AgentServer {
       type: 'agent_status',
       status: 'idle',
     })
+  }
+
+  // ── Sub-agent event forwarding ──────────────────────────────────
+
+  /** Create a callback that forwards sub-agent events to the connected client. */
+  private makeSubAgentEventHandler(sessionId: string): SubAgentEventHandler {
+    return (event) => {
+      this.sendToClient(Channel.AI, { ...event, sessionId })
+    }
   }
 
   // ── Confirmation wiring ─────────────────────────────────────────
@@ -1022,6 +1418,176 @@ export class AgentServer {
 
         this.activeClient?.on('message', handler)
       })
+    })
+  }
+
+  // ── MCP Connectors ────────────────────────────────────────────────
+
+  private async startMcpConnectors(): Promise<void> {
+    const connectors = getConnectors(this.config)
+    if (connectors.length === 0) return
+
+    const mcpConfigs: McpServerConfig[] = connectors
+      .filter((c) => c.type === 'mcp' && c.command)
+      .map((c) => ({
+        id: c.id,
+        name: c.name,
+        description: c.description,
+        command: c.command!,
+        args: c.args || [],
+        env: c.env,
+        enabled: c.enabled,
+      }))
+
+    if (mcpConfigs.length > 0) {
+      console.log(`  Starting ${mcpConfigs.length} MCP connector(s)...`)
+      await this.mcpManager.startAll(mcpConfigs)
+    }
+  }
+
+  private connectorToMcpConfig(c: ConnectorConfig): McpServerConfig {
+    return {
+      id: c.id,
+      name: c.name,
+      description: c.description,
+      command: c.command || '',
+      args: c.args || [],
+      env: c.env,
+      enabled: c.enabled,
+    }
+  }
+
+  private buildConnectorStatus(c: ConnectorConfig) {
+    const mcpStatus = this.mcpManager.getStatus().find((s) => s.id === c.id)
+    return {
+      id: c.id,
+      name: c.name,
+      description: c.description,
+      icon: c.icon,
+      type: c.type,
+      connected: mcpStatus?.connected ?? false,
+      enabled: c.enabled,
+      toolCount: mcpStatus?.toolCount ?? 0,
+      tools: mcpStatus?.tools ?? [],
+    }
+  }
+
+  private handleConnectorsList(): void {
+    const connectors = getConnectors(this.config)
+    this.sendToClient(Channel.AI, {
+      type: 'connectors_list_response',
+      connectors: connectors.map((c) => this.buildConnectorStatus(c)),
+    })
+  }
+
+  private async handleConnectorAdd(msg: { connector: ConnectorConfig }): Promise<void> {
+    try {
+      addConnector(this.config, msg.connector)
+
+      if (msg.connector.type === 'mcp' && msg.connector.command) {
+        await this.mcpManager.addConnector(this.connectorToMcpConfig(msg.connector))
+      }
+
+      this.sendToClient(Channel.AI, {
+        type: 'connector_added',
+        connector: this.buildConnectorStatus(msg.connector),
+      })
+      console.log(`Connector added: ${msg.connector.id} (${msg.connector.name})`)
+    } catch (err) {
+      this.sendToClient(Channel.AI, {
+        type: 'error',
+        message: `Failed to add connector: ${(err as Error).message}`,
+      })
+    }
+  }
+
+  private async handleConnectorUpdate(msg: { id: string; changes: Partial<ConnectorConfig> }): Promise<void> {
+    try {
+      const updated = updateConnectorConfig(this.config, msg.id, msg.changes)
+      if (!updated) {
+        this.sendToClient(Channel.AI, { type: 'error', message: `Connector not found: ${msg.id}` })
+        return
+      }
+
+      if (updated.type === 'mcp' && updated.command) {
+        await this.mcpManager.removeConnector(msg.id)
+        await this.mcpManager.addConnector(this.connectorToMcpConfig(updated))
+      }
+
+      this.sendToClient(Channel.AI, {
+        type: 'connector_updated',
+        connector: this.buildConnectorStatus(updated),
+      })
+    } catch (err) {
+      this.sendToClient(Channel.AI, {
+        type: 'error',
+        message: `Failed to update connector: ${(err as Error).message}`,
+      })
+    }
+  }
+
+  private async handleConnectorRemove(msg: { id: string }): Promise<void> {
+    try {
+      await this.mcpManager.removeConnector(msg.id)
+      removeConnectorConfig(this.config, msg.id)
+      this.sendToClient(Channel.AI, { type: 'connector_removed', id: msg.id })
+      console.log(`Connector removed: ${msg.id}`)
+    } catch (err) {
+      this.sendToClient(Channel.AI, {
+        type: 'error',
+        message: `Failed to remove connector: ${(err as Error).message}`,
+      })
+    }
+  }
+
+  private async handleConnectorToggle(msg: { id: string; enabled: boolean }): Promise<void> {
+    try {
+      toggleConnectorConfig(this.config, msg.id, msg.enabled)
+      await this.mcpManager.toggleConnector(msg.id, msg.enabled)
+
+      const connector = getConnectors(this.config).find((c) => c.id === msg.id)
+      if (connector) {
+        this.sendToClient(Channel.AI, {
+          type: 'connector_status',
+          id: msg.id,
+          connected: this.mcpManager.isConnected(msg.id),
+          toolCount: this.mcpManager.getStatus().find((s) => s.id === msg.id)?.toolCount ?? 0,
+        })
+      }
+    } catch (err) {
+      this.sendToClient(Channel.AI, {
+        type: 'connector_status',
+        id: msg.id,
+        connected: false,
+        toolCount: 0,
+        error: (err as Error).message,
+      })
+    }
+  }
+
+  private async handleConnectorTest(msg: { id: string }): Promise<void> {
+    try {
+      const result = await this.mcpManager.testConnector(msg.id)
+      this.sendToClient(Channel.AI, {
+        type: 'connector_test_response',
+        id: msg.id,
+        ...result,
+      })
+    } catch (err) {
+      this.sendToClient(Channel.AI, {
+        type: 'connector_test_response',
+        id: msg.id,
+        success: false,
+        tools: [],
+        error: (err as Error).message,
+      })
+    }
+  }
+
+  private handleConnectorRegistryList(): void {
+    this.sendToClient(Channel.AI, {
+      type: 'connector_registry_list_response',
+      entries: CONNECTOR_REGISTRY,
     })
   }
 

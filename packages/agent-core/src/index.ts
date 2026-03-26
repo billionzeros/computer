@@ -1,4 +1,5 @@
 export { SYSTEM_PROMPT, buildTools, needsConfirmation } from './agent.js'
+export { McpClient, McpManager, type McpServerConfig, type ConnectorStatus } from './mcp/index.js'
 export {
   type CompactionConfig,
   type CompactionState,
@@ -23,4 +24,5 @@ export {
   type ConfirmHandler,
   type SessionEvent,
   type SessionInfo,
+  type SubAgentEventHandler,
 } from './session.js'

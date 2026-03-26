@@ -13,6 +13,7 @@
     "build": "node scripts/embed-prompts.js && tsc"
   },
   "dependencies": {
+    "@anton/protocol": "workspace:*",
     "yaml": "^2.6.0"
   },
   "devDependencies": {

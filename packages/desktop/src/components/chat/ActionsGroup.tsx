@@ -1,10 +1,14 @@
 import { AnimatePresence, motion } from 'framer-motion'
 import {
   Bell,
+  Bot,
   Brain,
+  Check,
   ChevronDown,
-  ChevronRight,
+  ChevronUp,
+  Circle,
   Clipboard,
+  Clock,
   Code2,
   Cpu,
   Database,
@@ -48,42 +52,7 @@ const toolIcons: Record<string, React.ElementType> = {
   notification: Bell,
   image: Image,
   diff: FileDiff,
-}
-
-const toolLabels: Record<string, string> = {
-  shell: 'Running command',
-  filesystem: 'File operation',
-  browser: 'Browser action',
-  process: 'Process',
-  network: 'Network request',
-  artifact: 'Creating artifact',
-  git: 'Git operation',
-  code_search: 'Searching code',
-  http_api: 'API request',
-  database: 'Database query',
-  memory: 'Memory operation',
-  todo: 'Task update',
-  clipboard: 'Clipboard',
-  notification: 'Notification',
-  image: 'Image operation',
-  diff: 'File diff',
-}
-
-function _getToolParam(toolName: string, toolInput: Record<string, unknown>): string {
-  switch (toolName) {
-    case 'shell':
-      return (toolInput.command as string) || ''
-    case 'filesystem':
-      return [toolInput.operation, toolInput.path].filter(Boolean).join(' ')
-    case 'browser':
-      return [toolInput.operation, toolInput.url].filter(Boolean).join(' ')
-    case 'process':
-      return [toolInput.operation, toolInput.pid || toolInput.name].filter(Boolean).join(' ')
-    case 'network':
-      return [toolInput.operation, toolInput.url || toolInput.host].filter(Boolean).join(' ')
-    default:
-      return JSON.stringify(toolInput).slice(0, 120)
-  }
+  sub_agent: Bot,
 }
 
 /** Generate a human-readable step title from tool call data */
@@ -91,7 +60,6 @@ function getStepTitle(toolName: string, toolInput: Record<string, unknown>): str
   switch (toolName) {
     case 'shell': {
       const cmd = (toolInput.command as string) || ''
-      // Try to describe common commands
       if (cmd.startsWith('cd ') && cmd.includes('&&'))
         return cmd.split('&&')[1]?.trim().split(' ')[0] || 'Running command'
       if (cmd.startsWith('python')) return 'Running Python script'
@@ -148,21 +116,21 @@ function getStepTitle(toolName: string, toolInput: Record<string, unknown>): str
     }
     case 'code_search': {
       const query = (toolInput.query as string) || ''
-      return query ? `Searching for "${query.slice(0, 30)}"` : 'Searching code'
+      return query ? `Searching for "${query.slice(0, 40)}"` : 'Searching code'
     }
     case 'http_api': {
       const method = (toolInput.method as string) || 'GET'
       const url = (toolInput.url as string) || ''
-      const host = url ? new URL(url).hostname : ''
-      return host ? `${method} ${host}` : `${method} request`
+      try {
+        const host = url ? new URL(url).hostname : ''
+        return host ? `${method} ${host}` : `${method} request`
+      } catch {
+        return `${method} request`
+      }
     }
     case 'database': {
       const op = (toolInput.operation as string) || ''
-      return op === 'query'
-        ? 'Running query'
-        : op === 'execute'
-          ? 'Executing SQL'
-          : `Database ${op}`
+      return op === 'query' ? 'Running query' : op === 'execute' ? 'Executing SQL' : `Database ${op}`
     }
     case 'memory': {
       const op = (toolInput.operation as string) || ''
@@ -196,53 +164,8 @@ function getStepTitle(toolName: string, toolInput: Record<string, unknown>): str
       return op === 'patch' ? 'Applying patch' : 'Comparing files'
     }
     default:
-      return toolLabels[toolName] || toolName
+      return toolName
   }
-}
-
-/** Get a code snippet preview from the tool input */
-function getCodePreview(toolName: string, toolInput: Record<string, unknown>): string | null {
-  switch (toolName) {
-    case 'shell':
-      return (toolInput.command as string) || null
-    case 'filesystem': {
-      const op = toolInput.operation as string
-      const path = toolInput.path as string
-      if (op && path) return `${op} ${path}`
-      return null
-    }
-    case 'network': {
-      const url = (toolInput.url || toolInput.host) as string
-      return url || null
-    }
-    case 'git': {
-      const op = toolInput.operation as string
-      const path = toolInput.path as string
-      return [op, path].filter(Boolean).join(' ')
-    }
-    case 'code_search':
-      return (toolInput.query as string) || null
-    case 'http_api': {
-      const method = toolInput.method as string
-      const url = toolInput.url as string
-      return url ? `${method} ${url}` : null
-    }
-    case 'database':
-      return (toolInput.sql as string) || null
-    case 'artifact':
-      return (toolInput.filename as string) || (toolInput.title as string) || null
-    default:
-      return null
-  }
-}
-
-/** Get a short result preview */
-function getResultPreview(content: string): string {
-  const trimmed = content.trim()
-  if (!trimmed) return '(no output)'
-  const firstLine = trimmed.split('\n')[0]
-  if (firstLine.length > 100) return `${firstLine.slice(0, 100)}...`
-  return firstLine
 }
 
 // ── Component ──────────────────────────────────────────────────────
@@ -259,7 +182,6 @@ export function ActionsGroup({ actions, defaultExpanded = false }: Props) {
   const setActiveArtifact = useStore((s) => s.setActiveArtifact)
   const setArtifactPanelOpen = useStore((s) => s.setArtifactPanelOpen)
 
-  // Find artifacts produced by actions in this group
   const actionCallIds = useMemo(() => new Set(actions.map((a) => a.call.id)), [actions])
   const groupArtifacts = useMemo(
     () => artifacts.filter((a) => actionCallIds.has(a.toolCallId)),
@@ -274,12 +196,29 @@ export function ActionsGroup({ actions, defaultExpanded = false }: Props) {
   const pendingCount = actions.filter((a) => !a.result).length
   const total = actions.length
 
-  let headerText: string
+  // Derive a header from the first action
+  const firstAction = actions[0]
+  const headerTitle = firstAction?.call.toolInput
+    ? getStepTitle(
+        firstAction.call.toolName || 'unknown',
+        firstAction.call.toolInput as Record<string, unknown>,
+      )
+    : null
+
+  let statusIcon: React.ReactNode
   if (pendingCount > 0) {
-    headerText = `${total} action${total > 1 ? 's' : ''}`
+    statusIcon = <Loader2 size={16} strokeWidth={1.5} className="actions-pill__spin" />
+  } else if (errorCount > 0) {
+    statusIcon = <Circle size={16} strokeWidth={1.5} className="actions-pill__status--error" />
   } else {
-    headerText = `${total} action${total > 1 ? 's' : ''} completed`
+    statusIcon = <Check size={16} strokeWidth={1.5} className="actions-pill__status--done" />
   }
+
+  const headerText = total === 1 && headerTitle
+    ? headerTitle
+    : pendingCount > 0
+      ? `${total} action${total > 1 ? 's' : ''}`
+      : `${total} action${total > 1 ? 's' : ''} completed`
 
   return (
     <motion.div
@@ -288,23 +227,23 @@ export function ActionsGroup({ actions, defaultExpanded = false }: Props) {
       transition={{ duration: 0.2 }}
       className="actions-group"
     >
-      {/* Collapsed header */}
+      {/* Header */}
       <button
         type="button"
         className="actions-group__header"
         onClick={() => setExpanded(!expanded)}
       >
-        <Code2 size={14} className="actions-group__header-icon" />
+        <span className="actions-group__status-icon">{statusIcon}</span>
         <span className="actions-group__header-text">{headerText}</span>
         {errorCount > 0 && <span className="actions-group__error-badge">{errorCount} failed</span>}
         {expanded ? (
-          <ChevronDown size={14} className="actions-group__chevron" />
+          <ChevronUp size={14} strokeWidth={1.5} className="actions-group__chevron" />
         ) : (
-          <ChevronRight size={14} className="actions-group__chevron" />
+          <ChevronDown size={14} strokeWidth={1.5} className="actions-group__chevron" />
         )}
       </button>
 
-      {/* Timeline of steps */}
+      {/* Tool call pills */}
       <AnimatePresence>
         {expanded && (
           <motion.div
@@ -314,118 +253,71 @@ export function ActionsGroup({ actions, defaultExpanded = false }: Props) {
             transition={{ duration: 0.15 }}
             style={{ overflow: 'hidden' }}
           >
-            <div className="actions-group__timeline">
-              {actions.map((action, idx) => {
+            <div className="actions-group__pills">
+              {actions.map((action) => {
                 const toolName = action.call.toolName || 'unknown'
                 const Icon = toolIcons[toolName] || Wrench
                 const title = action.call.toolInput
                   ? getStepTitle(toolName, action.call.toolInput as Record<string, unknown>)
-                  : toolLabels[toolName] || toolName
-                const codePreview = action.call.toolInput
-                  ? getCodePreview(toolName, action.call.toolInput as Record<string, unknown>)
-                  : null
+                  : toolName
                 const isError = action.result?.isError
                 const isPending = !action.result
                 const isRowExpanded = expandedRowId === action.call.id
-                const isLast = idx === actions.length - 1
 
                 return (
-                  <div
-                    key={action.call.id}
-                    className={`actions-group__step ${isLast ? 'actions-group__step--last' : ''}`}
-                  >
-                    {/* Timeline dot */}
-                    <div className="actions-group__dot-col">
-                      <div
-                        className={`actions-group__dot ${
-                          isPending
-                            ? 'actions-group__dot--pending'
-                            : isError
-                              ? 'actions-group__dot--error'
-                              : 'actions-group__dot--done'
-                        }`}
-                      >
+                  <div key={action.call.id} className="action-pill-wrap">
+                    {/* Pill */}
+                    <button
+                      type="button"
+                      className={`action-pill${isError ? ' action-pill--error' : ''}${isPending ? ' action-pill--pending' : ''}`}
+                      onClick={() =>
+                        action.result && setExpandedRowId(isRowExpanded ? null : action.call.id)
+                      }
+                    >
+                      <span className="action-pill__icon">
                         {isPending ? (
-                          <Loader2 size={12} className="actions-group__spin" />
+                          <Loader2 size={14} strokeWidth={1.5} className="actions-pill__spin" />
                         ) : (
-                          <Icon size={10} />
+                          <Icon size={14} strokeWidth={1.5} />
                         )}
-                      </div>
-                      {!isLast && <div className="actions-group__line" />}
-                    </div>
-
-                    {/* Step content */}
-                    <div className="actions-group__step-content">
-                      <button
-                        type="button"
-                        className="actions-group__step-header"
-                        onClick={() =>
-                          action.result && setExpandedRowId(isRowExpanded ? null : action.call.id)
-                        }
-                      >
-                        <span
-                          className={`actions-group__step-title ${
-                            isError ? 'actions-group__step-title--error' : ''
-                          }`}
-                        >
-                          {title}
-                        </span>
-                        {(() => {
-                          const artifact = artifacts.find((a) => a.toolCallId === action.call.id)
-                          if (!artifact) return null
-                          return (
-                            <button
-                              type="button"
-                              className="actions-group__open-panel"
-                              onClick={(e) => {
-                                e.stopPropagation()
-                                setActiveArtifact(artifact.id)
-                                setArtifactPanelOpen(true)
-                              }}
-                              aria-label="Open in panel"
-                            >
-                              <PanelRight size={12} />
-                            </button>
-                          )
-                        })()}
-                        {action.result && (
-                          <span className="actions-group__step-chevron">
-                            {isRowExpanded ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
-                          </span>
-                        )}
-                      </button>
-
-                      {/* Code preview */}
-                      {codePreview && (
-                        <div className="actions-group__code-preview">{codePreview}</div>
-                      )}
-
-                      {/* Result preview (one-liner) when not expanded */}
-                      {action.result && !isRowExpanded && (
-                        <div
-                          className={`actions-group__result-preview ${
-                            isError ? 'actions-group__result-preview--error' : ''
-                          }`}
-                        >
-                          {getResultPreview(action.result.content)}
-                        </div>
-                      )}
-
-                      {/* Full result when expanded */}
-                      <AnimatePresence>
-                        {isRowExpanded && action.result && (
-                          <motion.div
-                            initial={{ height: 0, opacity: 0 }}
-                            animate={{ height: 'auto', opacity: 1 }}
-                            exit={{ height: 0, opacity: 0 }}
-                            transition={{ duration: 0.12 }}
-                            style={{ overflow: 'hidden' }}
+                      </span>
+                      <span className="action-pill__text">{title}</span>
+                      {(() => {
+                        const artifact = artifacts.find((a) => a.toolCallId === action.call.id)
+                        if (!artifact) return null
+                        return (
+                          <button
+                            type="button"
+                            className="action-pill__panel-btn"
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              setActiveArtifact(artifact.id)
+                              setArtifactPanelOpen(true)
+                            }}
+                            aria-label="Open in panel"
                           >
-                            <pre className="actions-group__result">{action.result.content}</pre>
-                          </motion.div>
-                        )}
-                      </AnimatePresence>
-                    </div>
+                            <PanelRight size={14} strokeWidth={1.5} />
+                          </button>
+                        )
+                      })()}
+                    </button>
+
+                    {/* Expanded result */}
+                    <AnimatePresence>
+                      {isRowExpanded && action.result && (
+                        <motion.div
+                          initial={{ height: 0, opacity: 0 }}
+                          animate={{ height: 'auto', opacity: 1 }}
+                          exit={{ height: 0, opacity: 0 }}
+                          transition={{ duration: 0.12 }}
+                          style={{ overflow: 'hidden' }}
+                        >
+                          <pre className="action-pill__result">
+                            {action.result.content}
+                          </pre>
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
                   </div>
                 )
               })}
@@ -445,3 +337,6 @@ export function ActionsGroup({ actions, defaultExpanded = false }: Props) {
     </motion.div>
   )
 }
+
+// Re-export helpers for SubAgentGroup
+export { toolIcons, getStepTitle }

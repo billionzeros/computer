@@ -1,30 +1,32 @@
-import { AnimatePresence, motion } from 'framer-motion'
+import { motion } from 'framer-motion'
 import {
-  Bell,
+  ChevronDown,
+  ChevronRight,
   FolderOpen,
+  LayoutGrid,
   MessageSquareText,
+  Monitor,
+  MoreHorizontal,
   PanelLeft,
+  Pencil,
   Plus,
-  TerminalSquare,
+  SlidersHorizontal,
+  Trash2,
   X,
-  Zap,
 } from 'lucide-react'
 import { useState } from 'react'
 import { connection } from '../lib/connection.js'
 import { useConnectionStatus, useStore } from '../lib/store.js'
 import { AntonLogo } from './AntonLogo.js'
-import { FileBrowser } from './FileBrowser.js'
-import { SidebarSkillsPanel } from './SidebarSkillsPanel.js'
 
 interface Props {
   onDisconnect: () => void
   activeView: 'agent' | 'terminal'
   onViewChange: (view: 'agent' | 'terminal') => void
+  onOpenSettings: () => void
 }
 
-type SidebarPanel = 'recent' | 'files' | 'skills'
-
-export function Sidebar({ onDisconnect: _onDisconnect, activeView, onViewChange }: Props) {
+export function Sidebar({ onDisconnect: _onDisconnect, activeView, onViewChange, onOpenSettings }: Props) {
   useConnectionStatus()
   const conversations = useStore((s) => s.conversations)
   const activeId = useStore((s) => s.activeConversationId)
@@ -33,14 +35,24 @@ export function Sidebar({ onDisconnect: _onDisconnect, activeView, onViewChange 
   const deleteConversation = useStore((s) => s.deleteConversation)
   const sidebarCollapsed = useStore((s) => s.sidebarCollapsed)
   const toggleSidebar = useStore((s) => s.toggleSidebar)
-  const [panel, setPanel] = useState<SidebarPanel>('recent')
+  const currentView = useStore((s) => s.activeView)
+  const projects = useStore((s) => s.projects)
+  const activeProjectId = useStore((s) => s.activeProjectId)
+  const setActiveProject = useStore((s) => s.setActiveProject)
+  const projectSessions = useStore((s) => s.projectSessions)
+
+  const machineName = connection.currentConfig?.host?.replace('.antoncomputer.in', '') ?? ''
+  const chatConversations = conversations.filter((c) => !c.projectId)
 
   const handleNewTask = () => {
-    // If the active conversation is already empty (no messages), just reuse it
-    const activeConv = conversations.find((c) => c.id === activeId)
-    if (activeConv && activeConv.messages.length === 0) {
+    // If there's already an empty conversation, switch to it instead of creating another
+    const emptyConv = conversations.find((c) => c.messages.length === 0)
+    if (emptyConv) {
+      switchConversation(emptyConv.id)
       onViewChange('agent')
-      setPanel('recent')
+      if (currentView !== 'chat') {
+        useStore.getState().setActiveView('chat')
+      }
       return
     }
 
@@ -52,16 +64,22 @@ export function Sidebar({ onDisconnect: _onDisconnect, activeView, onViewChange 
       model: store.currentModel,
     })
     onViewChange('agent')
-    setPanel('recent')
+    if (currentView !== 'chat') {
+      store.setActiveView('chat')
+    }
   }
 
   const handleDelete = (e: React.MouseEvent, convId: string, sessionId: string) => {
     e.stopPropagation()
-    // Destroy the session on the VM
     if (sessionId) {
       connection.sendSessionDestroy(sessionId)
     }
     deleteConversation(convId)
+  }
+
+  const handleProjectClick = (projectId: string) => {
+    setActiveProject(projectId)
+    connection.sendProjectSessionsList(projectId)
   }
 
   return (
@@ -83,154 +101,326 @@ export function Sidebar({ onDisconnect: _onDisconnect, activeView, onViewChange 
             onClick={toggleSidebar}
             aria-label="Collapse sidebar"
           >
-            <PanelLeft size={16} />
+            <PanelLeft size={18} strokeWidth={1.5} />
           </button>
         </div>
 
-        {/* Primary nav */}
-        <div className="sidebar-primary">
-          <NavItem icon={<Plus />} label="New thread" onClick={handleNewTask} />
-          <NavItem
-            icon={<FolderOpen />}
-            label="Files"
-            active={panel === 'files'}
-            onClick={() => setPanel(panel === 'files' ? 'recent' : 'files')}
-          />
-          <NavItem
-            icon={<TerminalSquare />}
-            label="Terminal"
-            active={activeView === 'terminal'}
-            onClick={() => onViewChange(activeView === 'terminal' ? 'agent' : 'terminal')}
-          />
-          <NavItem
-            icon={<Zap />}
-            label="Skills"
-            active={panel === 'skills'}
-            onClick={() => setPanel(panel === 'skills' ? 'recent' : 'skills')}
-          />
-        </div>
+        {/* New thread button — only in chat mode */}
+        {currentView === 'chat' && (
+          <div className="sidebar-primary">
+            <button
+              type="button"
+              className="sidebar-new-thread"
+              onClick={handleNewTask}
+            >
+              <Plus size={14} strokeWidth={1.5} />
+              <span>New thread</span>
+            </button>
+          </div>
+        )}
 
-        {/* Panel content */}
+        {/* New project button — only in projects mode */}
+        {currentView === 'projects' && (
+          <div className="sidebar-primary">
+            <button
+              type="button"
+              className="sidebar-new-thread"
+              onClick={() => {
+                const store = useStore.getState()
+                if (store.activeProjectId) {
+                  store.setActiveProject(null)
+                  requestAnimationFrame(() => {
+                    window.dispatchEvent(new CustomEvent('anton:create-project'))
+                  })
+                } else {
+                  window.dispatchEvent(new CustomEvent('anton:create-project'))
+                }
+              }}
+            >
+              <Plus size={14} strokeWidth={1.5} />
+              <span>New project</span>
+            </button>
+          </div>
+        )}
+
+        {/* Panel content — changes based on mode */}
         <div className="sidebar-panel">
-          <AnimatePresence mode="wait">
-            {panel === 'skills' ? (
-              <motion.div
-                key="skills"
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                exit={{ opacity: 0 }}
-                transition={{ duration: 0.12 }}
-                className="sidebar-panel__inner"
-              >
-                <SidebarSkillsPanel />
-              </motion.div>
-            ) : panel === 'files' ? (
-              <motion.div
-                key="files"
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                exit={{ opacity: 0 }}
-                transition={{ duration: 0.12 }}
-                className="sidebar-panel__inner"
-              >
-                <FileBrowser />
-              </motion.div>
-            ) : (
-              <motion.div
-                key="recent"
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                exit={{ opacity: 0 }}
-                transition={{ duration: 0.12 }}
-                className="sidebar-panel__inner"
-              >
-                {conversations.length > 0 && (
-                  <>
-                    <div className="sidebar-section-label">Recent</div>
-                    <div className="sidebar-recent__list">
-                      {conversations.map((conv) => (
-                        <div
-                          key={conv.id}
-                          onClick={() => {
+          <div className="sidebar-panel__inner">
+            {currentView === 'chat' ? (
+              // ── Chat mode: show only non-project conversations ──
+              chatConversations.length > 0 ? (
+                <>
+                  <div className="sidebar-section-label">Recent</div>
+                  <div className="sidebar-recent__list">
+                    {chatConversations.map((conv) => (
+                      <div
+                        key={conv.id}
+                        onClick={() => {
+                          switchConversation(conv.id)
+                          if (conv.sessionId) {
+                            connection.sendSessionResume(conv.sessionId)
+                            connection.sendSessionHistory(conv.sessionId)
+                          }
+                          onViewChange('agent')
+                          if (currentView !== 'chat') {
+                            useStore.getState().setActiveView('chat')
+                          }
+                        }}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter' || e.key === ' ') {
                             switchConversation(conv.id)
                             if (conv.sessionId) {
                               connection.sendSessionResume(conv.sessionId)
                               connection.sendSessionHistory(conv.sessionId)
                             }
                             onViewChange('agent')
-                          }}
-                          onKeyDown={(e) => {
-                            if (e.key === 'Enter' || e.key === ' ') {
-                              switchConversation(conv.id)
-                              if (conv.sessionId) {
-                                connection.sendSessionResume(conv.sessionId)
-                                connection.sendSessionHistory(conv.sessionId)
-                              }
-                              onViewChange('agent')
-                            }
-                          }}
-                          className={`sidebar-recent__item${conv.id === activeId ? ' sidebar-recent__item--active' : ''}`}
-                        >
-                          <span className="sidebar-recent__title">{conv.title}</span>
-                          <button
-                            type="button"
-                            className="sidebar-recent__delete"
-                            onClick={(e) => handleDelete(e, conv.id, conv.sessionId)}
-                            aria-label="Delete conversation"
-                          >
-                            <X size={14} />
-                          </button>
-                        </div>
-                      ))}
-                    </div>
-                  </>
-                )}
-                {conversations.length === 0 && (
-                  <div className="sidebar-empty">
-                    <MessageSquareText className="sidebar-empty__icon" />
-                    <p className="sidebar-empty__text">No conversations yet</p>
+                          }
+                        }}
+                        className={`sidebar-recent__item${conv.id === activeId ? ' sidebar-recent__item--active' : ''}`}
+                      >
+                        <span className="sidebar-recent__title">{conv.title}</span>
+                        <ConversationMenu
+                          onDelete={(e) => handleDelete(e, conv.id, conv.sessionId)}
+                        />
+                      </div>
+                    ))}
                   </div>
-                )}
-              </motion.div>
-            )}
-          </AnimatePresence>
+                </>
+              ) : (
+                <div className="sidebar-empty">
+                  <MessageSquareText className="sidebar-empty__icon" />
+                  <p className="sidebar-empty__text">No conversations yet</p>
+                </div>
+              )
+            ) : currentView === 'projects' ? (
+              // ── Projects mode: show project folders with threads ──
+              projects.length > 0 ? (
+                <div className="sidebar-projects">
+                  {projects.map((project) => (
+                    <ProjectFolder
+                      key={project.id}
+                      projectId={project.id}
+                      name={project.name}
+                      icon={project.icon}
+                      isActive={project.id === activeProjectId}
+                      sessions={project.id === activeProjectId ? projectSessions : []}
+                      onClick={() => handleProjectClick(project.id)}
+                    />
+                  ))}
+                </div>
+              ) : (
+                <div className="sidebar-empty">
+                  <FolderOpen className="sidebar-empty__icon" />
+                  <p className="sidebar-empty__text">No projects yet</p>
+                </div>
+              )
+            ) : null}
+          </div>
         </div>
 
-        {/* User profile */}
-        <div className="sidebar-profile">
-          <div className="sidebar-profile__left">
-            <div className="sidebar-profile__avatar">O</div>
-            <span className="sidebar-profile__name">Om Gupta</span>
-            <span className="sidebar-profile__badge">Pro</span>
+        {/* Footer — Manus-style bottom bar */}
+        <div className="sidebar-bottombar">
+          <div className="sidebar-bottombar__icons">
+            <button
+              type="button"
+              className="sidebar-bottombar__btn"
+              aria-label="Settings"
+              onClick={onOpenSettings}
+            >
+              <SlidersHorizontal size={18} strokeWidth={1.5} />
+            </button>
+            <button
+              type="button"
+              className="sidebar-bottombar__btn"
+              aria-label="Dashboard"
+            >
+              <LayoutGrid size={18} strokeWidth={1.5} />
+            </button>
+            <button
+              type="button"
+              className="sidebar-bottombar__btn"
+              aria-label="Machine"
+            >
+              <Monitor size={18} strokeWidth={1.5} />
+            </button>
           </div>
-          <button type="button" className="sidebar-profile__bell" aria-label="Notifications">
-            <Bell />
-          </button>
+          <div className="sidebar-bottombar__brand">
+            <span className="sidebar-bottombar__from">from</span>
+            <AntonLogo size={16} />
+          </div>
         </div>
       </div>
     </motion.aside>
   )
 }
 
-function NavItem({
-  icon,
-  label,
-  active = false,
-  onClick,
-}: {
-  icon: React.ReactNode
-  label: string
-  active?: boolean
-  onClick?: () => void
-}) {
+// ── Conversation context menu (3-dot) ──
+
+function ConversationMenu({ onDelete }: { onDelete: (e: React.MouseEvent) => void }) {
+  const [open, setOpen] = useState(false)
+
   return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={`sidebar-nav-item${active ? ' sidebar-nav-item--active' : ''}`}
-    >
-      <span className="sidebar-nav-item__icon">{icon}</span>
-      <span className="sidebar-nav-item__label">{label}</span>
-    </button>
+    <div className="sidebar-conv-menu-wrap">
+      <button
+        type="button"
+        className="sidebar-conv-menu__trigger"
+        onClick={(e) => {
+          e.stopPropagation()
+          setOpen(!open)
+        }}
+        aria-label="Conversation options"
+      >
+        <MoreHorizontal size={14} strokeWidth={1.5} />
+      </button>
+      {open && (
+        <>
+          <div className="sidebar-conv-menu__backdrop" onClick={(e) => { e.stopPropagation(); setOpen(false) }} />
+          <div className="sidebar-conv-menu">
+            <button
+              type="button"
+              className="sidebar-conv-menu__item"
+              onClick={(e) => { e.stopPropagation(); setOpen(false) }}
+            >
+              <Pencil size={14} strokeWidth={1.5} />
+              <span>Rename</span>
+            </button>
+            <button
+              type="button"
+              className="sidebar-conv-menu__item sidebar-conv-menu__item--danger"
+              onClick={(e) => { onDelete(e); setOpen(false) }}
+            >
+              <Trash2 size={14} strokeWidth={1.5} />
+              <span>Delete</span>
+            </button>
+          </div>
+        </>
+      )}
+    </div>
+  )
+}
+
+// ── Project folder component (like Codex sidebar) ──
+
+interface ProjectFolderProps {
+  projectId: string
+  name: string
+  icon: string
+  isActive: boolean
+  sessions: { id: string; title: string; lastActiveAt: number }[]
+  onClick: () => void
+}
+
+function ProjectFolder({ projectId, name, icon, isActive, sessions, onClick }: ProjectFolderProps) {
+  const activeProjectSessionId = useStore((s) => s.activeProjectSessionId)
+  const setActiveProjectSession = useStore((s) => s.setActiveProjectSession)
+  const deleteConversation = useStore((s) => s.deleteConversation)
+
+  const handleThreadClick = (sessionId: string) => {
+    const store = useStore.getState()
+
+    // Ensure local conversation exists
+    let conv = store.findConversationBySession(sessionId)
+    if (!conv) {
+      store.newConversation(undefined, sessionId, projectId)
+      conv = store.findConversationBySession(sessionId)
+    }
+
+    if (conv) {
+      store.switchConversation(conv.id)
+    }
+
+    // Resume on server
+    connection.sendSessionResume(sessionId)
+    connection.sendSessionHistory(sessionId)
+
+    // Set the active project session (triggers embedded chat in ProjectView)
+    setActiveProjectSession(sessionId)
+  }
+
+  const handleDeleteThread = (e: React.MouseEvent, sessionId: string) => {
+    e.stopPropagation()
+    const store = useStore.getState()
+    const conv = store.findConversationBySession(sessionId)
+    if (conv) {
+      connection.sendSessionDestroy(sessionId)
+      deleteConversation(conv.id)
+    }
+    // If this was the active session, clear it
+    if (activeProjectSessionId === sessionId) {
+      store.setActiveProjectSession(null)
+    }
+    // Refresh project sessions
+    connection.sendProjectSessionsList(projectId)
+  }
+
+  return (
+    <div className="sidebar-project-folder">
+      <div className="sidebar-project-folder__header-row">
+        <button
+          type="button"
+          className={`sidebar-project-folder__header${isActive ? ' sidebar-project-folder__header--active' : ''}`}
+          onClick={onClick}
+        >
+          {isActive ? <ChevronDown size={14} strokeWidth={1.5} /> : <ChevronRight size={14} strokeWidth={1.5} />}
+          <FolderOpen size={14} strokeWidth={1.5} />
+          <span className="sidebar-project-folder__name">{name}</span>
+        </button>
+        {isActive && (
+          <button
+            type="button"
+            className="sidebar-project-folder__add"
+            onClick={(e) => {
+              e.stopPropagation()
+              // Create a new session in this project
+              const store = useStore.getState()
+              const sessionId = `proj_${projectId}_sess_${Date.now().toString(36)}`
+              store.newConversation(undefined, sessionId, projectId)
+              connection.sendSessionCreate(sessionId, {
+                provider: store.currentProvider,
+                model: store.currentModel,
+                projectId,
+              })
+              const conv = store.findConversationBySession(sessionId)
+              if (conv) {
+                store.switchConversation(conv.id)
+              }
+              setActiveProjectSession(sessionId)
+            }}
+            aria-label="New session"
+            title="New session"
+          >
+            <Plus size={14} strokeWidth={1.5} />
+          </button>
+        )}
+      </div>
+
+      {isActive && (
+        <div className="sidebar-project-folder__threads">
+          {sessions.length > 0 ? (
+            sessions.map((session) => (
+              <div
+                key={session.id}
+                onClick={() => handleThreadClick(session.id)}
+                className={`sidebar-recent__item${activeProjectSessionId === session.id ? ' sidebar-recent__item--active' : ''}`}
+              >
+                <span className="sidebar-recent__title">
+                  {session.title || 'New conversation'}
+                </span>
+                <button
+                  type="button"
+                  className="sidebar-recent__delete"
+                  onClick={(e) => handleDeleteThread(e, session.id)}
+                  aria-label="Delete conversation"
+                >
+                  <X size={14} strokeWidth={1.5} />
+                </button>
+              </div>
+            ))
+          ) : (
+            <div className="sidebar-project-folder__empty">No threads</div>
+          )}
+        </div>
+      )}
+    </div>
   )
 }

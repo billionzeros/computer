@@ -41,17 +41,20 @@ export interface SessionMeta {
   lastCompactedAt?: number
 }
 
+export interface PersistedImageBlock {
+  type: 'image'
+  mimeType: string
+  storagePath: string
+  name?: string
+  sizeBytes?: number
+}
+
 /** A single message line in messages.jsonl */
 export interface SessionMessage {
-  seq: number
-  role: 'user' | 'assistant' | 'tool_call' | 'tool_result' | 'system'
-  content?: string
-  name?: string // tool name
-  input?: unknown // tool input
-  id?: string // tool call ID
-  output?: string // tool result output
-  isError?: boolean
-  ts: number
+  role: string
+  timestamp?: number
+  content?: string | (Record<string, unknown> | PersistedImageBlock)[]
+  [key: string]: unknown
 }
 
 /** Session index — lightweight listing of all sessions */
@@ -99,6 +102,8 @@ export interface AgentConfig {
 
   skills: SkillConfig[]
 
+  connectors: ConnectorConfig[]
+
   sessions?: {
     ttlDays: number // auto-cleanup after N days, default 7
   }
@@ -117,6 +122,27 @@ export interface SkillConfig {
   prompt: string
   schedule?: string
   tools?: string[]
+}
+
+// ── Connector types ──────────────────────────────────────────────────
+
+export interface ConnectorConfig {
+  id: string
+  name: string
+  description?: string
+  icon?: string // emoji or URL
+  type: 'mcp' | 'api' // mcp = stdio server, api = simple API key service
+
+  // For MCP connectors (type: 'mcp')
+  command?: string
+  args?: string[]
+  env?: Record<string, string>
+
+  // For API key connectors (type: 'api')
+  apiKey?: string
+  baseUrl?: string
+
+  enabled: boolean
 }
 
 // ── Legacy config (for migration) ───────────────────────────────────
@@ -258,6 +284,7 @@ export function loadConfig(): AgentConfig {
     defaults: parsed.defaults ?? defaults.defaults,
     security: parsed.security ?? defaults.security,
     skills: parsed.skills ?? defaults.skills ?? [],
+    connectors: parsed.connectors ?? defaults.connectors ?? [],
     sessions: parsed.sessions ?? defaults.sessions,
   }
 
@@ -301,6 +328,7 @@ function migrateLegacyConfig(legacy: LegacyConfig): AgentConfig {
     },
     security: legacy.security,
     skills: legacy.skills,
+    connectors: [],
     sessions: { ttlDays: 7 },
   }
 }
@@ -338,6 +366,7 @@ function createDefaultConfig(): AgentConfig {
       ],
     },
     skills: [],
+    connectors: [],
     sessions: { ttlDays: 7 },
   }
 }
@@ -449,10 +478,170 @@ function messagesPath(id: string): string {
   return join(sessionDir(id), 'messages.jsonl')
 }
 
+function sessionImagesDir(id: string): string {
+  return join(sessionDir(id), 'images')
+}
+
+function clearSessionImages(id: string): void {
+  const dir = sessionImagesDir(id)
+  if (!existsSync(dir)) return
+  for (const file of readdirSync(dir)) {
+    unlinkSync(join(dir, file))
+  }
+}
+
+function sanitizeAttachmentName(name: string): string {
+  return (
+    name
+      .replace(/[^a-zA-Z0-9._-]+/g, '-')
+      .replace(/-+/g, '-')
+      .replace(/^-|-$/g, '') || 'image'
+  )
+}
+
+function extensionFromMimeType(mimeType: string): string {
+  const extMap: Record<string, string> = {
+    'image/jpeg': '.jpg',
+    'image/jpg': '.jpg',
+    'image/png': '.png',
+    'image/webp': '.webp',
+    'image/gif': '.gif',
+    'image/svg+xml': '.svg',
+    'image/bmp': '.bmp',
+    'image/heic': '.heic',
+    'image/heif': '.heif',
+  }
+  return extMap[mimeType] || ''
+}
+
+function splitAttachmentName(name?: string): { base: string; ext: string } {
+  if (!name) return { base: 'image', ext: '' }
+  const trimmed = name.trim()
+  const dot = trimmed.lastIndexOf('.')
+  if (dot <= 0 || dot === trimmed.length - 1) {
+    return { base: sanitizeAttachmentName(trimmed), ext: '' }
+  }
+  return {
+    base: sanitizeAttachmentName(trimmed.slice(0, dot)),
+    ext: trimmed.slice(dot),
+  }
+}
+
+function toRelativeImagePath(
+  messageIndex: number,
+  blockIndex: number,
+  name?: string,
+  mimeType?: string,
+): string {
+  const { base, ext } = splitAttachmentName(name)
+  const safeExt = ext || extensionFromMimeType(mimeType || '')
+  const filename = `${String(messageIndex + 1).padStart(4, '0')}-${String(blockIndex + 1).padStart(2, '0')}-${base}${safeExt}`
+  return join('images', filename).replaceAll('\\', '/')
+}
+
+function serializeSessionContent(
+  sessionId: string,
+  messageIndex: number,
+  content: unknown,
+): SessionMessage['content'] {
+  if (!Array.isArray(content)) {
+    return typeof content === 'string' ? content : undefined
+  }
+
+  const imagesDir = sessionImagesDir(sessionId)
+  mkdirSync(imagesDir, { recursive: true })
+
+  return content.map((block, blockIndex) => {
+    const value = block as Record<string, unknown>
+    if (
+      value.type !== 'image' ||
+      typeof value.data !== 'string' ||
+      typeof value.mimeType !== 'string'
+    ) {
+      return value
+    }
+
+    const relativePath = toRelativeImagePath(
+      messageIndex,
+      blockIndex,
+      typeof value.name === 'string' ? value.name : undefined,
+      value.mimeType,
+    )
+    const absolutePath = join(sessionDir(sessionId), relativePath)
+    const imageBuffer = Buffer.from(value.data, 'base64')
+    writeFileSync(absolutePath, imageBuffer)
+
+    return {
+      type: 'image',
+      mimeType: value.mimeType,
+      storagePath: relativePath,
+      name: typeof value.name === 'string' ? value.name : relativePath.split('/').pop(),
+      sizeBytes:
+        typeof value.sizeBytes === 'number' && Number.isFinite(value.sizeBytes)
+          ? value.sizeBytes
+          : imageBuffer.byteLength,
+    } satisfies PersistedImageBlock
+  })
+}
+
+function hydrateSessionContent(sessionId: string, content: unknown): SessionMessage['content'] {
+  if (!Array.isArray(content)) {
+    return typeof content === 'string' ? content : undefined
+  }
+
+  return content.map((block) => {
+    const value = block as Record<string, unknown>
+    if (value.type !== 'image' || typeof value.storagePath !== 'string') {
+      return value
+    }
+
+    const absolutePath = join(sessionDir(sessionId), value.storagePath)
+    if (!existsSync(absolutePath)) {
+      return value
+    }
+
+    return {
+      type: 'image',
+      mimeType: typeof value.mimeType === 'string' ? value.mimeType : 'image/png',
+      data: readFileSync(absolutePath).toString('base64'),
+      name: typeof value.name === 'string' ? value.name : value.storagePath.split('/').pop(),
+      storagePath: value.storagePath,
+      sizeBytes: typeof value.sizeBytes === 'number' ? value.sizeBytes : undefined,
+    }
+  })
+}
+
+function serializeSessionMessage(
+  sessionId: string,
+  rawMsg: unknown,
+  messageIndex: number,
+): SessionMessage {
+  const msg = rawMsg as Record<string, unknown>
+  const serialized: SessionMessage = {
+    ...msg,
+    role: typeof msg.role === 'string' ? msg.role : 'system',
+  }
+
+  if ('content' in msg) {
+    serialized.content = serializeSessionContent(sessionId, messageIndex, msg.content)
+  }
+
+  return serialized
+}
+
+function hydrateSessionMessage(sessionId: string, rawMsg: SessionMessage): SessionMessage {
+  const hydrated: SessionMessage = { ...rawMsg }
+  if ('content' in rawMsg) {
+    hydrated.content = hydrateSessionContent(sessionId, rawMsg.content)
+  }
+  return hydrated
+}
+
 /** Save session — writes meta.json and full messages.jsonl, updates index */
-export function saveSession(session: PersistedSession): void {
-  const dir = sessionDir(session.id)
+export function saveSession(session: PersistedSession, basePath?: string): void {
+  const dir = basePath ? join(basePath, session.id) : sessionDir(session.id)
   mkdirSync(dir, { recursive: true })
+  if (!basePath) clearSessionImages(session.id)
 
   // Write meta
   const meta: SessionMeta = {
@@ -468,39 +657,23 @@ export function saveSession(session: PersistedSession): void {
     compactionCount: session.compactionState?.compactionCount,
     lastCompactedAt: session.compactionState?.lastCompactedAt ?? undefined,
   }
-  writeFileSync(metaPath(session.id), JSON.stringify(meta, null, 2), 'utf-8')
+  writeFileSync(join(dir, 'meta.json'), JSON.stringify(meta, null, 2), 'utf-8')
 
   // Write compaction state if present
   if (session.compactionState) {
-    const compactionPath = join(sessionDir(session.id), 'compaction.json')
-    writeFileSync(compactionPath, JSON.stringify(session.compactionState, null, 2), 'utf-8')
+    writeFileSync(join(dir, 'compaction.json'), JSON.stringify(session.compactionState, null, 2), 'utf-8')
   }
 
-  // Write messages as JSONL (full rewrite from pi SDK format)
-  const lines = session.messages.map((rawMsg: unknown, i: number) => {
-    const msg = rawMsg as { role?: string; content?: string | { type: string; text?: string }[] }
-    const line: SessionMessage = {
-      seq: i + 1,
-      role: (msg.role as SessionMessage['role']) || 'system',
-      ts: session.lastActiveAt,
-    }
-    // Extract content from pi SDK message format
-    if (msg.content) {
-      if (typeof msg.content === 'string') {
-        line.content = msg.content
-      } else if (Array.isArray(msg.content)) {
-        const textParts = msg.content.filter((c) => c.type === 'text')
-        if (textParts.length > 0) {
-          line.content = textParts.map((c) => c.text ?? '').join('')
-        }
-      }
-    }
-    return JSON.stringify(line)
-  })
-  writeFileSync(messagesPath(session.id), `${lines.join('\n')}\n`, 'utf-8')
+  // Write messages as JSONL with image blocks externalized into session-local files.
+  const lines = session.messages.map((rawMsg: unknown, i: number) =>
+    JSON.stringify(serializeSessionMessage(session.id, rawMsg, i)),
+  )
+  writeFileSync(join(dir, 'messages.jsonl'), `${lines.join('\n')}\n`, 'utf-8')
 
-  // Update index
-  updateIndex(meta)
+  // Update index (only for global sessions)
+  if (!basePath) {
+    updateIndex(meta)
+  }
 }
 
 /** Append a single message to an existing session's JSONL */
@@ -513,14 +686,48 @@ export function appendSessionMessage(id: string, msg: SessionMessage): void {
   const meta = loadSessionMeta(id)
   if (meta) {
     meta.messageCount++
-    meta.lastActiveAt = msg.ts
+    meta.lastActiveAt = typeof msg.timestamp === 'number' ? msg.timestamp : Date.now()
     writeFileSync(metaPath(id), JSON.stringify(meta, null, 2), 'utf-8')
     updateIndex(meta)
   }
 }
 
 /** Load session with full messages (for pi SDK resume) */
-export function loadSession(id: string): PersistedSession | null {
+export function loadSession(id: string, basePath?: string): PersistedSession | null {
+  // If basePath given, load from custom location (project sessions)
+  if (basePath) {
+    const dir = join(basePath, id)
+    const mPath = join(dir, 'meta.json')
+    if (!existsSync(mPath)) return null
+    try {
+      const meta: SessionMeta = JSON.parse(readFileSync(mPath, 'utf-8'))
+      const msgPath = join(dir, 'messages.jsonl')
+      const messages = existsSync(msgPath)
+        ? readFileSync(msgPath, 'utf-8').trim().split('\n').filter(Boolean).map((l) => {
+            const parsed = JSON.parse(l)
+            return hydrateSessionContent(id, parsed) || parsed
+          })
+        : []
+      let compactionState: PersistedSession['compactionState'] | undefined
+      const compPath = join(dir, 'compaction.json')
+      if (existsSync(compPath)) {
+        try { compactionState = JSON.parse(readFileSync(compPath, 'utf-8')) } catch {}
+      }
+      return {
+        id: meta.id,
+        provider: meta.provider,
+        model: meta.model,
+        messages,
+        createdAt: meta.createdAt,
+        lastActiveAt: meta.lastActiveAt,
+        title: meta.title,
+        compactionState,
+      }
+    } catch {
+      return null
+    }
+  }
+
   // Try v2 format first
   const meta = loadSessionMeta(id)
   if (meta) {
@@ -539,7 +746,7 @@ export function loadSession(id: string): PersistedSession | null {
       id: meta.id,
       provider: meta.provider,
       model: meta.model,
-      messages, // raw JSONL messages — session.ts converts back to pi format
+      messages,
       createdAt: meta.createdAt,
       lastActiveAt: meta.lastActiveAt,
       title: meta.title,
@@ -574,7 +781,9 @@ function loadSessionMessages(id: string): unknown[] {
   if (!existsSync(path)) return []
   const raw = readFileSync(path, 'utf-8').trim()
   if (!raw) return []
-  return raw.split('\n').map((line) => JSON.parse(line))
+  return raw
+    .split('\n')
+    .map((line) => hydrateSessionMessage(id, JSON.parse(line) as SessionMessage))
 }
 
 /** List all sessions (from index, fast) */
@@ -604,9 +813,16 @@ export function listSessionMetas(): SessionMeta[] {
 export function deleteSession(id: string): boolean {
   const dir = sessionDir(id)
   if (existsSync(dir)) {
-    // Remove all files in the session directory
-    for (const file of readdirSync(dir)) {
-      unlinkSync(join(dir, file))
+    for (const entry of readdirSync(dir)) {
+      const entryPath = join(dir, entry)
+      if (entry === 'images') {
+        for (const image of readdirSync(entryPath)) {
+          unlinkSync(join(entryPath, image))
+        }
+        rmdirSync(entryPath)
+        continue
+      }
+      unlinkSync(entryPath)
     }
     rmdirSync(dir)
   }
@@ -791,3 +1007,151 @@ export function loadSystemPrompt(): string {
 
   return prompt
 }
+
+// ── Connector management ────────────────────────────────────────────
+
+export function addConnector(config: AgentConfig, connector: ConnectorConfig): void {
+  // Remove existing with same id
+  config.connectors = config.connectors.filter((c) => c.id !== connector.id)
+  config.connectors.push(connector)
+  saveConfig(config)
+}
+
+export function updateConnector(
+  config: AgentConfig,
+  id: string,
+  changes: Partial<ConnectorConfig>,
+): ConnectorConfig | null {
+  const idx = config.connectors.findIndex((c) => c.id === id)
+  if (idx === -1) return null
+  config.connectors[idx] = { ...config.connectors[idx], ...changes }
+  saveConfig(config)
+  return config.connectors[idx]
+}
+
+export function removeConnector(config: AgentConfig, id: string): boolean {
+  const len = config.connectors.length
+  config.connectors = config.connectors.filter((c) => c.id !== id)
+  if (config.connectors.length < len) {
+    saveConfig(config)
+    return true
+  }
+  return false
+}
+
+export function toggleConnector(config: AgentConfig, id: string, enabled: boolean): boolean {
+  const connector = config.connectors.find((c) => c.id === id)
+  if (!connector) return false
+  connector.enabled = enabled
+  saveConfig(config)
+  return true
+}
+
+export function getConnectors(config: AgentConfig): ConnectorConfig[] {
+  return config.connectors
+}
+
+// ── Connector registry (built-in catalog) ───────────────────────────
+
+export interface ConnectorRegistryEntry {
+  id: string
+  name: string
+  description: string
+  icon: string
+  category: 'messaging' | 'productivity' | 'development' | 'social' | 'other'
+  type: 'mcp' | 'api'
+  command?: string
+  args?: string[]
+  requiredEnv: string[]
+}
+
+export const CONNECTOR_REGISTRY: ConnectorRegistryEntry[] = [
+  {
+    id: 'telegram',
+    name: 'Telegram',
+    description: 'Send and receive Telegram messages',
+    icon: '📱',
+    category: 'messaging',
+    type: 'mcp',
+    command: 'npx',
+    args: ['-y', 'telegram-mcp-server'],
+    requiredEnv: ['TELEGRAM_BOT_TOKEN'],
+  },
+  {
+    id: 'gmail',
+    name: 'Gmail',
+    description: 'Access, search, and send emails',
+    icon: '📧',
+    category: 'productivity',
+    type: 'mcp',
+    command: 'npx',
+    args: ['-y', '@anthropic/mcp-server-gmail'],
+    requiredEnv: ['GMAIL_CREDENTIALS_PATH'],
+  },
+  {
+    id: 'google-calendar',
+    name: 'Google Calendar',
+    description: 'Manage events and schedules',
+    icon: '📅',
+    category: 'productivity',
+    type: 'mcp',
+    command: 'npx',
+    args: ['-y', '@anthropic/mcp-server-google-calendar'],
+    requiredEnv: ['GOOGLE_CALENDAR_CREDENTIALS_PATH'],
+  },
+  {
+    id: 'notion',
+    name: 'Notion',
+    description: 'Read and write Notion pages and databases',
+    icon: '📝',
+    category: 'productivity',
+    type: 'mcp',
+    command: 'npx',
+    args: ['-y', '@anthropic/mcp-server-notion'],
+    requiredEnv: ['NOTION_API_KEY'],
+  },
+  {
+    id: 'github',
+    name: 'GitHub',
+    description: 'Manage repositories, issues, and pull requests',
+    icon: '🐙',
+    category: 'development',
+    type: 'mcp',
+    command: 'npx',
+    args: ['-y', '@modelcontextprotocol/server-github'],
+    requiredEnv: ['GITHUB_TOKEN'],
+  },
+  {
+    id: 'slack',
+    name: 'Slack',
+    description: 'Send messages and manage Slack channels',
+    icon: '💬',
+    category: 'messaging',
+    type: 'mcp',
+    command: 'npx',
+    args: ['-y', '@anthropic/mcp-server-slack'],
+    requiredEnv: ['SLACK_BOT_TOKEN'],
+  },
+  {
+    id: 'linear',
+    name: 'Linear',
+    description: 'Manage issues, projects, and workflows',
+    icon: '📋',
+    category: 'development',
+    type: 'mcp',
+    command: 'npx',
+    args: ['-y', 'mcp-server-linear'],
+    requiredEnv: ['LINEAR_API_KEY'],
+  },
+  {
+    id: 'google-drive',
+    name: 'Google Drive',
+    description: 'Access and manage files in Google Drive',
+    icon: '📁',
+    category: 'productivity',
+    type: 'mcp',
+    command: 'npx',
+    args: ['-y', '@anthropic/mcp-server-google-drive'],
+    requiredEnv: ['GOOGLE_DRIVE_CREDENTIALS_PATH'],
+  },
+]

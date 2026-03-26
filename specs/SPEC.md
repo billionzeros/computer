@@ -73,6 +73,10 @@ Frame: [1 byte channel] [N bytes JSON payload]
 
 Sessions are independent agent instances, each with their own model, provider, and message history. Sessions persist to `~/.anton/sessions/` on the agent VM and can be resumed across client reconnects.
 
+**Persistence**: Sessions persist incrementally during turns (after each tool execution and turn end), not just at turn completion. On client disconnect, active turns are cancelled (`piAgent.abort()`) and the current state is persisted to disk. This ensures that when a user reconnects, `session_history` returns all messages including work completed before the disconnect.
+
+**Reconnection**: Clients preserve conversation UI state across disconnects (conversations, active conversation, projects). Only transient state (streaming indicators, pending confirmations) is cleared. On reconnect, the client fetches `sessions_list`, resumes the active session, and fetches `session_history` to sync the full conversation.
+
 ### Session Lifecycle
 
 | Step | Direction | Channel | Message |
@@ -105,7 +109,22 @@ Clients can fetch the full message history for any session. The server reads the
   type: "session_history_response",
   id: "sess_abc123",
   messages: [
-    { seq: 1, role: "user", content: "deploy nginx", ts: 1711036800000 },
+    {
+      seq: 1,
+      role: "user",
+      content: "What changed in this screenshot?",
+      ts: 1711036800000,
+      attachments: [
+        {
+          id: "images/0001-01-screenshot.png",
+          name: "screenshot.png",
+          mimeType: "image/png",
+          storagePath: "images/0001-01-screenshot.png",
+          sizeBytes: 248193,
+          data: "<base64>"
+        }
+      ]
+    },
     { seq: 2, role: "assistant", content: "I'll set up nginx...", ts: 1711036802000 },
     { seq: 3, role: "tool_call", content: "Running: shell", toolName: "shell", toolInput: { command: "apt install nginx" }, toolId: "tc_1", ts: 1711036802500 },
     { seq: 4, role: "tool_result", content: "Reading package lists...", toolId: "tc_1", ts: 1711036803000 }
@@ -125,6 +144,7 @@ History entry fields:
 | toolInput | object? | Tool input (for `tool_call`) |
 | toolId | string? | Links `tool_call` to `tool_result` |
 | isError | boolean? | Whether tool result is an error |
+| attachments | object[]? | Image attachments, with VM-relative `storagePath` and optional base64 `data` |
 
 This allows clients to be thin — all message history lives on the server. The desktop and CLI fetch history on session resume instead of storing messages locally.
 
@@ -133,7 +153,7 @@ This allows clients to be thin — all message history lives on the server. The 
 All AI chat messages accept an optional `sessionId` field:
 
 ```typescript
-{ type: "message", content: string, sessionId?: string }
+{ type: "message", content: string, sessionId?: string, attachments?: [{ id, name, mimeType, data, sizeBytes }] }
 { type: "text", content: string, sessionId?: string }
 { type: "thinking", text: string, sessionId?: string }
 { type: "tool_call", id, name, input, sessionId?: string }
@@ -144,6 +164,8 @@ All AI chat messages accept an optional `sessionId` field:
 { type: "done", sessionId?: string }
 { type: "error", message, sessionId?: string }
 ```
+
+User image attachments are stored on the VM under `~/.anton/sessions/data/<sessionId>/images/` and referenced from the session's `messages.jsonl` via relative `storagePath` values.
 
 ### AI Title Generation
 
@@ -191,6 +213,59 @@ Client → Agent: { type: "confirm_response", id: "c_1", approved: true }
 
 - Confirmation timeout: 60 seconds (resolves to denied if no response)
 - Confirmation is per-session — the handler is wired when the session is created/resumed
+
+### Ask User Flow
+
+The `ask_user` interaction is the structured clarification path for the desktop client. It is intended for a short guided questionnaire before the agent proceeds with work.
+
+```
+Agent → Client: {
+  type: "ask_user",
+  id: "ask_1",
+  questions: [
+    {
+      question: "What kind of dashboard do you want?",
+      description: "Pick the closest fit. You can also write your own answer.",
+      options: [
+        { label: "Competitive analysis", description: "Track rivals, pricing, positioning, and feature gaps." },
+        { label: "Internal KPI dashboard", description: "Focus on your own metrics, pipelines, and business health." }
+      ],
+      allowFreeText: true,
+      freeTextPlaceholder: "Describe your ideal dashboard in your own words..."
+    }
+  ],
+  sessionId: "sess_abc123"
+}
+
+Client → Agent: {
+  type: "ask_user_response",
+  id: "ask_1",
+  answers: {
+    "What kind of dashboard do you want?": "Competitive analysis"
+  }
+}
+```
+
+Behavior rules:
+
+- The agent MAY send multiple clarification questions in a single `ask_user` request.
+- The question set MUST stay short and focused. Current limit: 6 questions per request.
+- The client MUST render the questions as a stepper: one visible question at a time.
+- The client MUST show `Next` between intermediate questions and `Submit` on the final question.
+- The client SHOULD allow `Back` navigation across previously answered questions.
+- Each question MAY include markdown `description` text for extra guidance.
+- Each option MAY be a plain string or an object with `label` and optional markdown `description`.
+- If `allowFreeText !== false`, the client MUST show a custom text input for that question.
+- A typed custom answer overrides the selected MCQ option for the final submitted value.
+- The server waits for one `ask_user_response` matching the request `id`, then resumes the paused turn.
+- Timeout remains 5 minutes if the user does not respond.
+
+Recommended agent usage:
+
+- Use `ask_user` when a structured answer will materially improve the result.
+- Prefer 2-5 questions, even though the hard cap is 6.
+- Prefer concise MCQ options with short descriptions when they help the user distinguish choices.
+- Avoid large forms. The intent is a guided step-by-step clarification flow, not a long survey.
 
 ## Context Compaction (v0.3.0)
 

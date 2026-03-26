@@ -6,7 +6,7 @@
 ## Design Principles
 
 1. **Server-first** — All session data lives on the agent VM (`~/.anton/sessions/`). Clients are thin views that fetch history on demand.
-2. **Append-only messaging** — New messages are appended to the pi SDK state; no read-modify-write cycles.
+2. **Structured session logs** — Message history is stored as JSONL records that can be hydrated back into pi SDK state. Binary image payloads are stored beside the log, not embedded as anonymous UI state.
 3. **Fast listing** — Session metadata is indexed separately from message content for instant UI rendering.
 4. **Automatic compaction** — Long conversations are compressed transparently so users never hit context limits.
 
@@ -20,11 +20,14 @@
 │   └── data/
 │       ├── sess_abc123/
 │       │   ├── meta.json                # session metadata (no messages)
-│       │   ├── messages.jsonl           # append-only message log
+│       │   ├── messages.jsonl           # structured message log
+│       │   ├── images/                  # image attachments for this session only
+│       │   │   └── 0001-01-diagram.png
 │       │   └── compaction.json          # compaction state (summary, counts)
 │       ├── sess_def456/
 │       │   ├── meta.json
 │       │   ├── messages.jsonl
+│       │   ├── images/
 │       │   └── compaction.json
 │       └── ...
 ```
@@ -33,7 +36,8 @@
 
 - **index.json** — Fast listing without reading every session. The TUI and desktop app read this to show session history instantly (~1ms).
 - **meta.json** — Per-session metadata. Separated from messages so metadata updates don't rewrite the message log.
-- **messages.jsonl** — Append-only log. Each line is a self-contained JSON object. Scales to long conversations.
+- **messages.jsonl** — Structured message log. Each line is a self-contained JSON object representing one pi SDK message.
+- **images/** — Session-local binary storage for user-supplied images. Files are scoped to a single chat session and referenced from `messages.jsonl` by relative path.
 - **compaction.json** — Tracks compaction state: current summary, compacted message count, timestamps. Separated from messages because compaction rewrites the summary.
 
 ## index.json
@@ -131,30 +135,26 @@ class Session {
 
 ### Persistence Format
 
-The `PersistedSession` written to disk contains the pi SDK message array directly:
+`messages.jsonl` stores one serialized pi SDK message per line. Text-only messages are stored inline. Image blocks are externalized into the session's `images/` directory and replaced with metadata that points back to the file.
 
-```typescript
-interface PersistedSession {
-  id: string
-  provider: string
-  model: string
-  messages: unknown[]          // pi SDK internal message format
-  createdAt: number
-  lastActiveAt: number
-  title: string
-  compactionState?: CompactionState
-}
-```
-
-Messages are in the standard LLM format:
+Example `messages.jsonl` lines:
 
 ```json
-[
-  { "role": "user", "content": [{ "type": "text", "text": "deploy nginx" }] },
-  { "role": "assistant", "content": [{ "type": "text", "text": "I'll set up nginx..." }, { "type": "tool_use", "id": "tc_1", "name": "shell", "input": { "command": "apt install nginx" } }] },
-  { "role": "tool", "tool_use_id": "tc_1", "content": [{ "type": "text", "text": "Reading package lists..." }] }
-]
+{"role":"user","content":[{"type":"text","text":"What changed in this screenshot?"},{"type":"image","mimeType":"image/png","storagePath":"images/0001-01-screenshot.png","name":"screenshot.png","sizeBytes":248193}],"timestamp":1711036800000}
+{"role":"assistant","content":[{"type":"text","text":"The header layout shifted to the left."}],"api":"anthropic-messages","provider":"anthropic","model":"claude-sonnet-4-6","usage":{"input":812,"output":74,"cacheRead":0,"cacheWrite":0,"totalTokens":886,"cost":{"input":0,"output":0,"cacheRead":0,"cacheWrite":0,"total":0}},"stopReason":"stop","timestamp":1711036802400}
 ```
+
+### Session Images
+
+When a desktop client sends image attachments:
+
+1. The client sends image bytes as base64 in the `message.attachments[]` payload.
+2. The session runtime adds those images to the user message passed to the model.
+3. On persistence, each image is written to `~/.anton/sessions/data/<sessionId>/images/`.
+4. The corresponding message record stores a relative `storagePath` such as `images/0001-01-screenshot.png`.
+5. On resume/history fetch, the server reads the file back from disk and hydrates the message with base64 again for the model/UI.
+
+This gives each chat session a self-contained attachment namespace and avoids relying on client-local image state after the turn completes.
 
 ## Context Compaction
 
@@ -287,7 +287,8 @@ This is deliberately rough — the goal is to trigger compaction early enough, n
 2. Server routes to the correct Session instance
 3. Session calls piAgent.processMessage(content)
 4. Session streams events back: thinking → text → tool_call → tool_result → done
-5. After turn completes: persist session (messages + meta + compaction state)
+5. Incremental persist: session state is saved after each tool_execution_end and turn_end
+6. Final persist after turn completes (captures title, compaction state changes)
 ```
 
 ### Resume
@@ -329,6 +330,44 @@ On agent startup:
 3. Delete sessions archived for > 7 days
 4. Rebuild index.json from data/*/meta.json if index is stale
 ```
+
+## Disconnect & Reconnection
+
+### Incremental Persistence
+
+Sessions persist incrementally during a turn, not just at the end:
+
+- **After `tool_execution_end`** — the tool call and its result are saved to `messages.jsonl`
+- **After `turn_end`** — the full assistant message is saved
+- **Final persist** — captures title changes and compaction state
+
+This means if the client disconnects mid-turn, all completed tool calls and their results are already on disk.
+
+### On Client Disconnect
+
+```
+1. WebSocket closes (network drop, page reload, tab close)
+2. Server detects disconnect in onclose handler
+3. Server cancels all active turns for that client:
+   a. Calls piAgent.abort() to stop in-flight LLM calls and tool executions
+   b. Calls persist() to save current state to disk
+4. Sessions remain in memory for fast resume
+```
+
+Active turns are **not** continued in the background. When the client disconnects, work stops. This prevents runaway costs and unexpected side effects from long-running agent tasks.
+
+### On Client Reconnect
+
+```
+1. Client auto-reconnects (3-second retry)
+2. Auth handshake completes
+3. Client fetches sessions_list → syncs with local conversation cache
+4. Client resumes active conversation's session
+5. Client fetches session_history → receives all messages including partial turn work
+6. UI renders the full conversation history up to the disconnect point
+```
+
+The client preserves conversations and UI state across disconnects. Only transient state (streaming indicators, agent steps, pending confirmations) is cleared.
 
 ## Client Architecture
 

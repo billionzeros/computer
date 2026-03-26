@@ -7,6 +7,7 @@ export interface Conversation {
   messages: ChatMessage[]
   createdAt: number
   updatedAt: number
+  projectId?: string // set if this conversation belongs to a project
 }
 
 const STORAGE_KEY = 'anton.conversations'
@@ -21,10 +22,21 @@ export function loadConversations(): Conversation[] {
 }
 
 export function saveConversations(conversations: Conversation[]) {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(conversations))
+  const sanitized = conversations.map((conversation) => ({
+    ...conversation,
+    messages: conversation.messages.map((message) => ({
+      ...message,
+      attachments: message.attachments?.map(({ data: _data, ...attachment }) => attachment),
+    })),
+  }))
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(sanitized))
 }
 
-export function createConversation(title?: string, sessionId?: string): Conversation {
+export function createConversation(
+  title?: string,
+  sessionId?: string,
+  projectId?: string,
+): Conversation {
   const id = `conv_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`
   return {
     id,
@@ -33,6 +45,7 @@ export function createConversation(title?: string, sessionId?: string): Conversa
     messages: [],
     createdAt: Date.now(),
     updatedAt: Date.now(),
+    projectId,
   }
 }
 
@@ -45,7 +58,14 @@ export function autoTitle(messages: ChatMessage[]): string {
   if (!firstUser) return 'New conversation'
 
   const text = firstUser.content.trim()
-  if (!text) return 'New conversation'
+  if (!text) {
+    if (firstUser.attachments?.length) {
+      return firstUser.attachments.length === 1
+        ? `Image: ${firstUser.attachments[0].name}`
+        : `${firstUser.attachments.length} images`
+    }
+    return 'New conversation'
+  }
 
   return generateTitle(text)
 }

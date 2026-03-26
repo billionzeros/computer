@@ -1,22 +1,26 @@
 import { AnimatePresence } from 'framer-motion'
-import { PanelLeft, Settings, Share2, Ticket } from 'lucide-react'
+import { FolderOpen, PanelLeft, Share2, Ticket } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { AgentChat } from './components/AgentChat.js'
 import { Connect } from './components/Connect.js'
 import { MachineInfoPanel } from './components/MachineInfoPanel.js'
+import { ModeSelector } from './components/ModeSelector.js'
 import { SidePanel } from './components/SidePanel.js'
 import { Sidebar } from './components/Sidebar.js'
+import { SettingsModal } from './components/settings/SettingsModal.js'
 import { Terminal } from './components/Terminal.js'
+import { ProjectList } from './components/projects/ProjectList.js'
+import { ProjectView } from './components/projects/ProjectView.js'
 import { connection } from './lib/connection.js'
 import { useConnectionStatus, useStore } from './lib/store.js'
 
-type View = 'agent' | 'terminal'
-
 export function App() {
   const [connected, setConnected] = useState(false)
-  const [activeView, setActiveView] = useState<View>('agent')
   const [showMachineInfo, setShowMachineInfo] = useState(false)
+  const [showSettings, setShowSettings] = useState(false)
   const status = useConnectionStatus()
+  const activeView = useStore((s) => s.activeView)
+  const setActiveView = useStore((s) => s.setActiveView)
   const sessionUsage = useStore((s) => s.sessionUsage)
   const activeConv = useStore((s) => s.getActiveConversation())
   const hasMessages = (activeConv?.messages?.length || 0) > 0
@@ -26,6 +30,14 @@ export function App() {
   const toggleSidebar = useStore((s) => s.toggleSidebar)
   const sidePanelOpen = artifactPanelOpen || pendingPlan !== null
   const machineName = connection.currentConfig?.host?.replace('.antoncomputer.in', '') ?? ''
+  const activeProjectId = useStore((s) => s.activeProjectId)
+  const projects = useStore((s) => s.projects)
+
+  // If the active conversation belongs to a project, find the project
+  const activeConvProjectId = activeConv?.projectId
+  const activeConvProject = activeConvProjectId
+    ? projects.find((p) => p.id === activeConvProjectId)
+    : null
 
   // Dynamic page title
   useEffect(() => {
@@ -33,6 +45,8 @@ export function App() {
       document.title = 'anton'
     } else if (activeView === 'terminal') {
       document.title = 'Terminal — anton'
+    } else if (activeView === 'projects') {
+      document.title = 'Projects — anton'
     } else if (activeConv?.title && activeConv.title !== 'New conversation') {
       document.title = `${activeConv.title} — anton`
     } else {
@@ -44,6 +58,9 @@ export function App() {
     if (status === 'connected') {
       connection.sendProvidersList()
       connection.sendSessionsList()
+      connection.sendProjectsList()
+      connection.sendConnectorsList()
+      connection.sendConnectorRegistryList()
     }
   }, [status])
 
@@ -52,24 +69,46 @@ export function App() {
       if (state.sessions.length > 0 && prev.sessions.length === 0) {
         const store = useStore.getState()
 
-        // Sync all server sessions → local conversations
-        // Iterate oldest-first so newest ends up on top (newConversation prepends)
-        const sessionsOldestFirst = [...state.sessions].reverse()
-        for (const session of sessionsOldestFirst) {
+        // Sync server sessions → local conversations
+        // Only create conversations for sessions that don't already have one locally
+        for (const session of state.sessions) {
           const existing = store.findConversationBySession(session.id)
           if (!existing) {
-            store.newConversation(session.title || 'New conversation', session.id)
+            // Extract projectId from session ID format (proj_{projectId}_sess_...)
+            // so project conversations don't leak into the main chat sidebar
+            let projectId: string | undefined
+            const projMatch = session.id.match(/^proj_([^_]+(?:_[^_]+)?)_sess_/)
+            if (projMatch) {
+              projectId = projMatch[1]
+            }
+
+            // Use appendConversation to add at end (not top) so they don't
+            // displace the user's current/new conversation
+            store.appendConversation(session.title || 'New conversation', session.id, projectId)
           }
         }
 
-        // Resume and load the latest session
-        const latest = state.sessions[0]
-        const latestConv = useStore.getState().findConversationBySession(latest.id)
-        if (latestConv) {
-          useStore.getState().switchConversation(latestConv.id)
+        // If no active conversation, activate the latest non-project session
+        const currentStore = useStore.getState()
+        if (!currentStore.activeConversationId) {
+          // Prefer a non-project session for the default chat view
+          const chatSession = state.sessions.find((s) => !s.id.match(/^proj_/))
+          const latest = chatSession || state.sessions[0]
+          if (latest) {
+            const latestConv = currentStore.findConversationBySession(latest.id)
+            if (latestConv) {
+              currentStore.switchConversation(latestConv.id)
+            }
+          }
         }
-        connection.sendSessionResume(latest.id)
-        connection.sendSessionHistory(latest.id)
+
+        // Resume the active conversation's session (only if it's not a project session
+        // while we're in chat mode — project sessions are handled by ProjectView)
+        const activeConv = useStore.getState().getActiveConversation()
+        if (activeConv?.sessionId && !activeConv.projectId) {
+          connection.sendSessionResume(activeConv.sessionId)
+          connection.sendSessionHistory(activeConv.sessionId)
+        }
       }
     })
     return unsub
@@ -85,21 +124,7 @@ export function App() {
     return <Connect onConnected={() => setConnected(true)} />
   }
 
-  if (status === 'disconnected' || status === 'error') {
-    return (
-      <div className="connection-screen">
-        <div className="connection-card">
-          <p className="connection-card__title">Connection paused</p>
-          <p className="connection-card__copy">
-            We lost contact with your machine. You can reconnect in one click.
-          </p>
-          <button type="button" onClick={handleDisconnect} className="button button--primary">
-            Connect to a machine
-          </button>
-        </div>
-      </div>
-    )
-  }
+  const isDisconnected = status === 'disconnected' || status === 'error'
 
   const formatTokens = (n: number): string => {
     if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`
@@ -107,111 +132,105 @@ export function App() {
     return String(n)
   }
 
+  // For sidebar compatibility — map store view to sidebar view
+  const sidebarView = activeView === 'chat' ? 'agent' : activeView === 'terminal' ? 'terminal' : 'agent'
+  const handleSidebarViewChange = (view: 'agent' | 'terminal') => {
+    setActiveView(view === 'agent' ? 'chat' : 'terminal')
+  }
+
   return (
     <div className="app-shell">
       <Sidebar
         onDisconnect={handleDisconnect}
-        activeView={activeView}
-        onViewChange={setActiveView}
+        activeView={sidebarView}
+        onViewChange={handleSidebarViewChange}
+        onOpenSettings={() => setShowSettings(true)}
       />
 
       <div className="workspace-shell">
-        {/* Top bar — only show when in a conversation */}
-        {hasMessages && activeView === 'agent' && (
-          <header className="workspace-topbar" data-tauri-drag-region>
-            <div className="workspace-topbar__title-area">
-              {sidebarCollapsed && (
-                <button
-                  type="button"
-                  className="workspace-topbar__sidebarToggle"
-                  onClick={toggleSidebar}
-                  aria-label="Open sidebar"
-                >
-                  <PanelLeft size={18} />
-                </button>
-              )}
-              <h2 className="workspace-topbar__title">{activeConv?.title || 'New conversation'}</h2>
-            </div>
-
-            <div className="workspace-topbar__actions">
-              <button
-                type="button"
-                className="workspace-topbar__connection"
-                onClick={() => setShowMachineInfo(true)}
-              >
-                <span className="workspace-topbar__connectionDot" />
-                <span className="workspace-topbar__connectionLabel">
-                  {machineName || 'Connected'}
-                </span>
-              </button>
-              {sessionUsage && (
-                <div className="workspace-topbar__credits">
-                  <Ticket className="workspace-topbar__creditsIcon" />
-                  <span>{formatTokens(sessionUsage.totalTokens)}</span>
-                </div>
-              )}
-              <button type="button" className="topbar-share-btn">
-                <Share2 className="topbar-share-btn__icon" />
-                <span>Share</span>
-              </button>
-            </div>
-          </header>
+        {/* Reconnecting banner — non-blocking overlay */}
+        {isDisconnected && (
+          <div className="reconnect-banner">
+            <span className="reconnect-banner__dot" />
+            <span>Reconnecting to your machine...</span>
+            <button type="button" onClick={handleDisconnect} className="reconnect-banner__btn">
+              Switch machine
+            </button>
+          </div>
         )}
 
-        {/* Empty state top bar — minimal with just connection status + settings */}
-        {(!hasMessages || activeView === 'terminal') && (
-          <header className="workspace-topbar workspace-topbar--minimal" data-tauri-drag-region>
-            <div className="workspace-topbar__spacer">
-              {sidebarCollapsed && (
-                <button
-                  type="button"
-                  className="workspace-topbar__sidebarToggle"
-                  onClick={toggleSidebar}
-                  aria-label="Open sidebar"
-                >
-                  <PanelLeft size={18} />
-                </button>
-              )}
-            </div>
-            <div className="workspace-topbar__actions">
+        {/* Top bar with mode selector */}
+        <header className="workspace-topbar" data-tauri-drag-region>
+          <div className="workspace-topbar__title-area">
+            {sidebarCollapsed && (
               <button
                 type="button"
-                className="workspace-topbar__connection"
-                onClick={() => setShowMachineInfo(true)}
+                className="workspace-topbar__sidebarToggle"
+                onClick={toggleSidebar}
+                aria-label="Open sidebar"
               >
-                <span className="workspace-topbar__connectionDot" />
-                <span className="workspace-topbar__connectionLabel">
-                  {machineName || 'Connected'}
-                </span>
+                <PanelLeft size={18} strokeWidth={1.5} />
               </button>
-              {sessionUsage && (
-                <div className="workspace-topbar__credits">
-                  <Ticket className="workspace-topbar__creditsIcon" />
-                  <span>{formatTokens(sessionUsage.totalTokens)}</span>
-                </div>
-              )}
+            )}
+            {activeView === 'chat' && activeConvProject && (
               <button
                 type="button"
-                className="workspace-topbar__settingsBtn"
-                aria-label="Settings"
-                onClick={() => setShowMachineInfo(true)}
+                className="workspace-topbar__project-badge"
+                onClick={() => {
+                  setActiveView('projects')
+                  useStore.getState().setActiveProject(activeConvProject.id)
+                  connection.sendProjectSessionsList(activeConvProject.id)
+                }}
+                title={`Project: ${activeConvProject.name}`}
               >
-                <Settings className="workspace-topbar__settingsIcon" />
+                <FolderOpen size={12} strokeWidth={1.5} />
+                <span>{activeConvProject.name}</span>
               </button>
-            </div>
-          </header>
+            )}
+          </div>
+
+          <ModeSelector />
+
+          <div className="workspace-topbar__actions">
+            <button
+              type="button"
+              className="workspace-topbar__connection"
+              onClick={() => setShowMachineInfo(true)}
+            >
+              <span className="workspace-topbar__connectionDot" />
+              <span className="workspace-topbar__connectionLabel">
+                {machineName || 'Connected'}
+              </span>
+            </button>
+            {sessionUsage && activeView === 'chat' && (
+              <div className="workspace-topbar__credits">
+                <Ticket size={14} strokeWidth={1.5} className="workspace-topbar__creditsIcon" />
+                <span>{formatTokens(sessionUsage.totalTokens)}</span>
+              </div>
+            )}
+          </div>
+        </header>
+
+        {activeView === 'chat' && hasMessages && (
+          <div className="workspace-titlebar">
+            <h2 className="workspace-titlebar__title">{activeConv?.title || 'New conversation'}</h2>
+          </div>
         )}
 
         <div className="workspace-body">
-          {activeView === 'agent' && <AgentChat />}
+          {activeView === 'chat' && <AgentChat />}
+          {activeView === 'projects' && (
+            activeProjectId ? <ProjectView /> : <ProjectList />
+          )}
           {activeView === 'terminal' && <Terminal />}
           <AnimatePresence>
-            {activeView === 'agent' && sidePanelOpen && <SidePanel />}
+            {activeView === 'chat' && sidePanelOpen && <SidePanel />}
           </AnimatePresence>
         </div>
       </div>
 
       {showMachineInfo && <MachineInfoPanel onClose={() => setShowMachineInfo(false)} />}
+      <SettingsModal open={showSettings} onClose={() => setShowSettings(false)} />
     </div>
   )
 }

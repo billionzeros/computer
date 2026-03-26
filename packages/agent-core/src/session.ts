@@ -10,8 +10,8 @@
  */
 
 import type { AgentConfig, PersistedSession } from '@anton/agent-config'
-import { loadSession, saveSession } from '@anton/agent-config'
-import type { TokenUsage } from '@anton/protocol'
+import { getProjectSessionsDir, loadSession, saveSession } from '@anton/agent-config'
+import type { ChatImageAttachmentInput, SessionImageAttachment, TokenUsage } from '@anton/protocol'
 import { Agent as PiAgent } from '@mariozechner/pi-agent-core'
 import type {
   AgentMessage,
@@ -19,8 +19,8 @@ import type {
   AgentEvent as PiAgentEvent,
 } from '@mariozechner/pi-agent-core'
 import { completeSimple, getModel } from '@mariozechner/pi-ai'
-import type { Api, Model, TextContent } from '@mariozechner/pi-ai'
-import { type AskUserHandler, SYSTEM_PROMPT, buildTools } from './agent.js'
+import type { Api, ImageContent, Model, TextContent } from '@mariozechner/pi-ai'
+import { type AskUserHandler, SYSTEM_PROMPT, type ToolCallbacks, buildTools } from './agent.js'
 import {
   type CompactionConfig,
   type CompactionState,
@@ -65,6 +65,8 @@ export type SessionEvent =
       model?: string
     }
   | { type: 'error'; message: string }
+  | { type: 'sub_agent_start'; toolCallId: string; task: string }
+  | { type: 'sub_agent_end'; toolCallId: string; success: boolean }
 
 export interface SessionInfo {
   id: string
@@ -113,6 +115,9 @@ export class Session {
   private compactionInProgress = false
   private pendingCompactionEvent: SessionEvent | null = null
   private resolvedModel: Model<Api>
+  private ephemeral: boolean
+  public projectId?: string
+  private projectContext?: string
 
   constructor(opts: {
     id: string
@@ -125,6 +130,9 @@ export class Session {
     title?: string
     createdAt?: number
     compactionState?: CompactionState
+    ephemeral?: boolean // sub-agent sessions: no persist, no title gen, no compaction
+    projectId?: string // scoped to a project
+    projectContext?: string // injected into system prompt
   }) {
     this.id = opts.id
     this.provider = opts.provider
@@ -134,6 +142,9 @@ export class Session {
     this.title = opts.title || ''
     this.createdAt = opts.createdAt || Date.now()
     this.lastActiveAt = Date.now()
+    this.ephemeral = opts.ephemeral || false
+    this.projectId = opts.projectId
+    this.projectContext = opts.projectContext
 
     // Initialize compaction
     const configCompaction = opts.config.compaction
@@ -287,21 +298,37 @@ export class Session {
    * Process a user message. Streams events back via async generator.
    * Persists session state after completion.
    */
-  async *processMessage(userMessage: string): AsyncGenerator<SessionEvent> {
+  async *processMessage(
+    userMessage: string,
+    attachments: ChatImageAttachmentInput[] = [],
+  ): AsyncGenerator<SessionEvent> {
     this.lastActiveAt = Date.now()
     this.lastEmittedTextLength = 0 // reset delta tracking for new turn
+    const trimmedMessage = userMessage.trim()
+    const hasAttachments = attachments.length > 0
 
-    // Auto-generate title from first message
-    const isFirstMessage = !this.title
+    if (hasAttachments && !this.resolvedModel.input.includes('image')) {
+      throw new Error(`Model "${this.model}" does not support image input.`)
+    }
+
+    // Auto-generate title from first message (skip for ephemeral sub-agent sessions)
+    const isFirstMessage = !this.title && !this.ephemeral
     if (isFirstMessage) {
-      this.title = generateSmartTitle(userMessage)
+      this.title = generateSmartTitle(
+        trimmedMessage ||
+          (hasAttachments
+            ? attachments.length === 1
+              ? `Image: ${attachments[0].name}`
+              : `${attachments.length} images`
+            : userMessage),
+      )
     }
 
     // Fire off AI title generation in parallel (non-blocking)
     let aiTitlePromise: Promise<string | null> | null = null
-    if (isFirstMessage) {
+    if (isFirstMessage && trimmedMessage) {
       aiTitlePromise = generateAITitle(
-        userMessage,
+        trimmedMessage,
         this.resolvedModel,
         this.provider,
         async (provider: string) => this.resolveApiKey(provider, this.clientApiKey, this.config),
@@ -312,6 +339,13 @@ export class Session {
     }
 
     const events: SessionEvent[] = []
+
+    // Send initial regex-based title immediately so the client always has one,
+    // even if the async AI title generation fails later.
+    if (isFirstMessage) {
+      events.push({ type: 'title_update', title: this.title })
+    }
+
     let resolveNext: (() => void) | null = null
     let done = false
     let eventCount = 0
@@ -325,12 +359,25 @@ export class Session {
         if (ev.type === 'text') textEventCount++
         events.push(ev)
       }
+      // Incremental persist: save state after tool completions and turn ends
+      // so that if the client disconnects mid-turn, progress is not lost.
+      if (event.type === 'tool_execution_end' || event.type === 'turn_end') {
+        this.persist()
+      }
       if (translated.length > 0) resolveNext?.()
     })
 
     try {
+      const images: ImageContent[] = attachments.map((attachment) => ({
+        type: 'image',
+        data: attachment.data,
+        mimeType: attachment.mimeType,
+        name: attachment.name,
+        sizeBytes: attachment.sizeBytes,
+      }))
+
       this.piAgent
-        .prompt(userMessage)
+        .prompt(userMessage, images)
         .then(() => {
           done = true
           resolveNext?.()
@@ -378,7 +425,8 @@ export class Session {
       )
     }
 
-    // Persist after each turn
+    // Final persist (incremental persists happen during tool_execution_end/turn_end,
+    // but this ensures we capture any title or compaction state changes)
     this.persist()
 
     yield {
@@ -444,9 +492,10 @@ export class Session {
     this.persist()
   }
 
-  /** Cancel any running work. */
+  /** Cancel any running work and persist current state. */
   cancel() {
-    // pi Agent handles abort internally
+    this.piAgent.abort()
+    this.persist()
   }
 
   /** Get chat history in a client-friendly format. */
@@ -459,6 +508,7 @@ export class Session {
     toolInput?: Record<string, unknown>
     toolId?: string
     isError?: boolean
+    attachments?: SessionImageAttachment[]
   }> {
     const entries: Array<{
       seq: number
@@ -469,61 +519,153 @@ export class Session {
       toolInput?: Record<string, unknown>
       toolId?: string
       isError?: boolean
+      attachments?: SessionImageAttachment[]
     }> = []
     let seq = 0
 
-    type ContentBlock = { type: string; text?: string; name?: string; input?: unknown; id?: string }
+    type ContentBlock = {
+      type: string
+      text?: string
+      name?: string
+      input?: unknown
+      arguments?: unknown
+      id?: string
+      mimeType?: string
+      data?: string
+      storagePath?: string
+      sizeBytes?: number
+    }
     type RawMsg = {
       role: string
-      content: string | ContentBlock[]
+      content?: string | ContentBlock[]
+      timestamp?: number
+      toolCallId?: string
+      toolName?: string
+      isError?: boolean
       tool_use_id?: string
       is_error?: boolean
     }
 
-    for (const msg of this.piAgent.state.messages as RawMsg[]) {
+    const extractText = (content: string | ContentBlock[] | undefined): string => {
+      if (typeof content === 'string') return content
+      if (!Array.isArray(content)) return ''
+      return content
+        .filter((block) => block.type === 'text')
+        .map((block) => block.text ?? '')
+        .join('')
+    }
+
+    const sanitizeAttachmentName = (name: string): string =>
+      name
+        .replace(/[^a-zA-Z0-9._-]+/g, '-')
+        .replace(/-+/g, '-')
+        .replace(/^-|-$/g, '') || 'image'
+
+    const extensionFromMimeType = (mimeType: string): string => {
+      const extMap: Record<string, string> = {
+        'image/jpeg': '.jpg',
+        'image/jpg': '.jpg',
+        'image/png': '.png',
+        'image/webp': '.webp',
+        'image/gif': '.gif',
+        'image/svg+xml': '.svg',
+        'image/bmp': '.bmp',
+        'image/heic': '.heic',
+        'image/heif': '.heif',
+      }
+      return extMap[mimeType] || ''
+    }
+
+    const inferStoragePath = (
+      messageIndex: number,
+      blockIndex: number,
+      block: ContentBlock,
+    ): string => {
+      const rawName = typeof block.name === 'string' ? block.name.trim() : 'image'
+      const dot = rawName.lastIndexOf('.')
+      const hasExt = dot > 0 && dot < rawName.length - 1
+      const base = sanitizeAttachmentName(hasExt ? rawName.slice(0, dot) : rawName)
+      const ext = hasExt ? rawName.slice(dot) : extensionFromMimeType(block.mimeType || '')
+      return `images/${String(messageIndex + 1).padStart(4, '0')}-${String(blockIndex + 1).padStart(2, '0')}-${base}${ext}`
+    }
+
+    const extractAttachments = (
+      content: string | ContentBlock[] | undefined,
+      messageIndex: number,
+    ): SessionImageAttachment[] | undefined => {
+      if (!Array.isArray(content)) return undefined
+      const attachments = content
+        .filter(
+          (block) =>
+            block.type === 'image' &&
+            typeof block.mimeType === 'string' &&
+            typeof block.data === 'string',
+        )
+        .map((block, index) => ({
+          id:
+            typeof block.storagePath === 'string'
+              ? block.storagePath
+              : inferStoragePath(messageIndex, index, block),
+          name:
+            typeof block.name === 'string'
+              ? block.name
+              : typeof block.storagePath === 'string'
+                ? block.storagePath.split('/').pop() || `image-${index + 1}`
+                : `image-${index + 1}`,
+          mimeType: block.mimeType!,
+          storagePath:
+            typeof block.storagePath === 'string'
+              ? block.storagePath
+              : inferStoragePath(messageIndex, index, block),
+          sizeBytes: typeof block.sizeBytes === 'number' ? block.sizeBytes : 0,
+          data: block.data,
+        }))
+      return attachments.length > 0 ? attachments : undefined
+    }
+
+    for (const [messageIndex, msg] of (this.piAgent.state.messages as RawMsg[]).entries()) {
       if (msg.role === 'user') {
-        const text = Array.isArray(msg.content)
-          ? msg.content
-              .filter((c) => c.type === 'text')
-              .map((c) => c.text ?? '')
-              .join('')
-          : String(msg.content)
-        entries.push({ seq: ++seq, role: 'user', content: text, ts: this.createdAt })
+        entries.push({
+          seq: ++seq,
+          role: 'user',
+          content: extractText(msg.content),
+          ts: msg.timestamp ?? this.createdAt,
+          attachments: extractAttachments(msg.content, messageIndex),
+        })
       } else if (msg.role === 'assistant') {
         if (!Array.isArray(msg.content)) continue
-        // Extract text parts
-        const textParts = msg.content.filter((c) => c.type === 'text')
-        if (textParts.length > 0) {
-          const text = textParts.map((c) => c.text ?? '').join('')
-          entries.push({ seq: ++seq, role: 'assistant', content: text, ts: this.createdAt })
+        const text = extractText(msg.content)
+        if (text) {
+          entries.push({
+            seq: ++seq,
+            role: 'assistant',
+            content: text,
+            ts: msg.timestamp ?? this.createdAt,
+          })
         }
-        // Extract tool use parts
-        const toolUses = msg.content.filter((c) => c.type === 'tool_use')
+
+        const toolUses = msg.content.filter((c) => c.type === 'toolCall' || c.type === 'tool_use')
         for (const tu of toolUses) {
           entries.push({
             seq: ++seq,
             role: 'tool_call',
             content: `Running: ${tu.name}`,
             toolName: tu.name,
-            toolInput: tu.input as Record<string, unknown>,
+            toolInput: (tu.arguments ?? tu.input ?? {}) as Record<string, unknown>,
             toolId: tu.id,
-            ts: this.createdAt,
+            ts: msg.timestamp ?? this.createdAt,
           })
         }
-      } else if (msg.role === 'tool') {
-        const content = Array.isArray(msg.content)
-          ? msg.content
-              .filter((c) => c.type === 'text')
-              .map((c) => c.text ?? '')
-              .join('')
-          : String(msg.content || '')
+      } else if (msg.role === 'toolResult' || msg.role === 'tool') {
         entries.push({
           seq: ++seq,
           role: 'tool_result',
-          content,
-          toolId: msg.tool_use_id,
-          isError: msg.is_error,
-          ts: this.createdAt,
+          content: extractText(msg.content),
+          toolId: msg.toolCallId ?? msg.tool_use_id,
+          toolName: msg.toolName,
+          isError: msg.isError ?? msg.is_error,
+          ts: msg.timestamp ?? this.createdAt,
+          attachments: extractAttachments(msg.content, messageIndex),
         })
       }
     }
@@ -544,8 +686,9 @@ export class Session {
     }
   }
 
-  /** Persist session state to disk. */
+  /** Persist session state to disk. Skipped for ephemeral (sub-agent) sessions. */
   private persist(): void {
+    if (this.ephemeral) return
     const persisted: PersistedSession = {
       id: this.id,
       provider: this.provider,
@@ -556,7 +699,8 @@ export class Session {
       title: this.title,
       compactionState: this.compactionState,
     }
-    saveSession(persisted)
+    const basePath = this.projectId ? getProjectSessionsDir(this.projectId) : undefined
+    saveSession(persisted, basePath)
   }
 
   private translateEvent(piEvent: PiAgentEvent): SessionEvent[] {
@@ -836,6 +980,9 @@ export class Session {
 
   private getSystemPrompt(): string {
     let prompt = SYSTEM_PROMPT
+    if (this.projectContext) {
+      prompt += this.projectContext
+    }
     if (this.config.skills.length > 0) {
       prompt += '\n\n## Active Skills\n'
       for (const skill of this.config.skills) {
@@ -849,29 +996,59 @@ export class Session {
 /**
  * Create a new session from scratch.
  */
+/** Sub-agent event callback — events from child agents, tagged with parent tool call ID. */
+export type SubAgentEventHandler = (event: SessionEvent & { parentToolCallId: string }) => void
+
 export function createSession(
   id: string,
   config: AgentConfig,
-  opts?: { provider?: string; model?: string; apiKey?: string },
+  opts?: {
+    provider?: string
+    model?: string
+    apiKey?: string
+    onSubAgentEvent?: SubAgentEventHandler
+    ephemeral?: boolean
+    projectId?: string
+    projectContext?: string
+    mcpManager?: import('./mcp/mcp-manager.js').McpManager
+  },
 ): Session {
   const provider = opts?.provider || config.defaults.provider
   const model = opts?.model || config.defaults.model
 
   // Holder lets the ask_user tool call the handler set later via setAskUserHandler
   const handlerRef: { askUser?: AskUserHandler } = {}
+  const confirmRef: { handler?: ConfirmHandler } = {}
+
+  const toolCallbacks: ToolCallbacks = {
+    getAskUserHandler: () => handlerRef.askUser,
+    onSubAgentEvent: opts?.onSubAgentEvent,
+    getConfirmHandler: () => confirmRef.handler,
+    clientApiKey: opts?.apiKey,
+  }
+
   const session = new Session({
     id,
     provider,
     model,
     config,
-    tools: buildTools(config, { getAskUserHandler: () => handlerRef.askUser }),
+    tools: buildTools(config, toolCallbacks, opts?.mcpManager),
     apiKey: opts?.apiKey,
+    ephemeral: opts?.ephemeral,
+    projectId: opts?.projectId,
+    projectContext: opts?.projectContext,
   })
   // Wire: when setAskUserHandler is called on session, update the holder
   const origSet = session.setAskUserHandler.bind(session)
   session.setAskUserHandler = (handler: AskUserHandler) => {
     handlerRef.askUser = handler
     origSet(handler)
+  }
+  // Wire: confirm handler ref so sub-agents can use the parent's handler
+  const origConfirmSet = session.setConfirmHandler.bind(session)
+  session.setConfirmHandler = (handler: ConfirmHandler) => {
+    confirmRef.handler = handler
+    origConfirmSet(handler)
   }
   return session
 }
@@ -880,26 +1057,51 @@ export function createSession(
  * Resume a persisted session from disk.
  * Returns null if session doesn't exist.
  */
-export function resumeSession(id: string, config: AgentConfig): Session | null {
-  const persisted = loadSession(id)
+export function resumeSession(
+  id: string,
+  config: AgentConfig,
+  opts?: {
+    onSubAgentEvent?: SubAgentEventHandler
+    projectId?: string
+    projectContext?: string
+    mcpManager?: import('./mcp/mcp-manager.js').McpManager
+  },
+): Session | null {
+  const basePath = opts?.projectId ? getProjectSessionsDir(opts.projectId) : undefined
+  const persisted = loadSession(id, basePath)
   if (!persisted) return null
 
   const handlerRef: { askUser?: AskUserHandler } = {}
+  const confirmRef: { handler?: ConfirmHandler } = {}
+
+  const toolCallbacks: ToolCallbacks = {
+    getAskUserHandler: () => handlerRef.askUser,
+    onSubAgentEvent: opts?.onSubAgentEvent,
+    getConfirmHandler: () => confirmRef.handler,
+  }
+
   const session = new Session({
     id: persisted.id,
     provider: persisted.provider,
     model: persisted.model,
     config,
-    tools: buildTools(config, { getAskUserHandler: () => handlerRef.askUser }),
+    tools: buildTools(config, toolCallbacks, opts?.mcpManager),
     existingMessages: persisted.messages,
     title: persisted.title,
     createdAt: persisted.createdAt,
     compactionState: persisted.compactionState || undefined,
+    projectId: opts?.projectId,
+    projectContext: opts?.projectContext,
   })
   const origSet = session.setAskUserHandler.bind(session)
   session.setAskUserHandler = (handler: AskUserHandler) => {
     handlerRef.askUser = handler
     origSet(handler)
+  }
+  const origConfirmSet = session.setConfirmHandler.bind(session)
+  session.setConfirmHandler = (handler: ConfirmHandler) => {
+    confirmRef.handler = handler
+    origConfirmSet(handler)
   }
   return session
 }

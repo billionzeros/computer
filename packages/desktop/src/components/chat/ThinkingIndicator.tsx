@@ -1,57 +1,49 @@
 import { AnimatePresence, motion } from 'framer-motion'
+import { Loader2 } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { useStore } from '../../lib/store.js'
-import { AntonLogo } from '../AntonLogo.js'
 
-const STATUS_PHRASES = [
-  'Thinking',
-  'Reasoning',
-  'Analyzing',
-  'Musing',
-  'Considering',
-  'Contemplating',
-  'Piecing it together',
-  'Formulating',
-  'Mulling it over',
-  'Working through it',
-]
+function formatElapsed(ms: number): string {
+  const totalSec = Math.floor(ms / 1000)
+  const min = Math.floor(totalSec / 60)
+  const sec = totalSec % 60
+  return min > 0 ? `${min}:${String(sec).padStart(2, '0')}` : `0:${String(sec).padStart(2, '0')}`
+}
 
 export function ThinkingIndicator() {
   const agentStatus = useStore((s) => s.agentStatus)
   const agentStatusDetail = useStore((s) => s.agentStatusDetail)
-  const [phraseIdx, setPhraseIdx] = useState(0)
+  const workingStartedAt = useStore((s) => s.workingStartedAt)
+  const [elapsed, setElapsed] = useState(0)
 
   useEffect(() => {
-    if (agentStatus !== 'working') return
+    if (agentStatus !== 'working' || !workingStartedAt) return
+    setElapsed(Date.now() - workingStartedAt)
     const interval = setInterval(() => {
-      setPhraseIdx((i) => (i + 1) % STATUS_PHRASES.length)
-    }, 2800)
+      setElapsed(Date.now() - workingStartedAt)
+    }, 1000)
     return () => clearInterval(interval)
-  }, [agentStatus])
+  }, [agentStatus, workingStartedAt])
 
   if (agentStatus !== 'working') return null
 
-  const statusText = agentStatusDetail || STATUS_PHRASES[phraseIdx]
+  const statusText = agentStatusDetail || 'Thinking...'
 
   return (
     <AnimatePresence>
       <motion.div
-        initial={{ opacity: 0, y: 8 }}
+        initial={{ opacity: 0, y: 4 }}
         animate={{ opacity: 1, y: 0 }}
         exit={{ opacity: 0, y: -4 }}
-        transition={{ duration: 0.2 }}
+        transition={{ duration: 0.15 }}
         className="thinking-indicator"
       >
-        <div className="thinking-indicator__header">
-          <AntonLogo size={20} thinking className="thinking-indicator__anton" />
-          <span className="thinking-indicator__status">
-            {statusText}
-            <span className="thinking-indicator__dots">
-              <span className="thinking-indicator__dot" />
-              <span className="thinking-indicator__dot" />
-              <span className="thinking-indicator__dot" />
-            </span>
-          </span>
+        <div className="thinking-indicator__left">
+          <Loader2 size={14} strokeWidth={1.5} className="actions-pill__spin" />
+          <span className="thinking-indicator__status">{statusText}</span>
+        </div>
+        <div className="thinking-indicator__right">
+          <span className="thinking-indicator__meta">{formatElapsed(elapsed)}</span>
         </div>
       </motion.div>
     </AnimatePresence>

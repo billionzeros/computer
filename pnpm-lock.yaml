@@ -30,6 +30,9 @@ importers:
 
   packages/agent-config:
     dependencies:
+      '@anton/protocol':
+        specifier: workspace:*
+        version: link:../protocol
       yaml:
         specifier: ^2.6.0
         version: 2.8.2

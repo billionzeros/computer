@@ -58,9 +58,9 @@ export function ToolCallBlock({ message }: Props) {
           className="tool-result__summary"
         >
           {isError ? (
-            <XCircle size={14} style={{ color: '#f87171', flexShrink: 0 }} />
+            <XCircle size={14} strokeWidth={1.5} style={{ color: '#f87171', flexShrink: 0 }} />
           ) : (
-            <CheckCircle size={14} style={{ color: '#4ade80', flexShrink: 0 }} />
+            <CheckCircle size={14} strokeWidth={1.5} style={{ color: '#4ade80', flexShrink: 0 }} />
           )}
           <span
             className={`tool-result__label ${isError ? 'tool-result__label--error' : 'tool-result__label--success'}`}
@@ -80,7 +80,7 @@ export function ToolCallBlock({ message }: Props) {
             {message.content.length > 80 ? '...' : ''}
           </span>
           <span style={{ marginLeft: 'auto', color: 'var(--text-subtle)', flexShrink: 0 }}>
-            {expanded ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+            {expanded ? <ChevronUp size={14} strokeWidth={1.5} /> : <ChevronDown size={14} strokeWidth={1.5} />}
           </span>
         </button>
         <AnimatePresence>
