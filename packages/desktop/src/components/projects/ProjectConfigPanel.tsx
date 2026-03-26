@@ -6,7 +6,6 @@ import {
   FolderOpen,
   Pencil,
   Plus,
-  Trash2,
   Type,
   Upload,
   X,
@@ -101,7 +100,6 @@ function InstructionsModal({
           value={text}
           onChange={(e) => setText(e.target.value)}
           placeholder="Add instructions to tailor the agent's responses for this project...&#10;&#10;Example:&#10;- Always use TypeScript&#10;- Follow existing code patterns&#10;- Run tests before committing"
-          autoFocus
         />
         <div className="context-modal__footer">
           <button type="button" className="button button--secondary" onClick={onClose}>
@@ -151,7 +149,6 @@ function MemoryEditModal({
           value={text}
           onChange={(e) => setText(e.target.value)}
           placeholder="Project memory will build up as you work..."
-          autoFocus
         />
         <div className="context-modal__footer">
           <button type="button" className="button button--secondary" onClick={onClose}>
@@ -197,13 +194,13 @@ function TextFileModal({
     <Modal open={open} onClose={onClose} title="Add Text Content">
       <div className="context-modal">
         <div className="form-field">
-          <label className="form-field__label">Filename</label>
+          <label className="form-field__label" htmlFor="text-file-filename">Filename</label>
           <input
+            id="text-file-filename"
             className="form-field__input"
             value={filename}
             onChange={(e) => setFilename(e.target.value)}
             placeholder="e.g. notes.md, config.json"
-            autoFocus
           />
         </div>
         <textarea
@@ -293,7 +290,7 @@ function FilesSection({ projectId }: { projectId: string }) {
             </button>
             {showMenu && (
               <>
-                <div className="files-add-backdrop" onClick={() => setShowMenu(false)} />
+                <div className="files-add-backdrop" onClick={() => setShowMenu(false)} onKeyDown={(e) => e.key === 'Escape' && setShowMenu(false)} />
                 <div className="files-add-menu">
                   <button
                     type="button"
@@ -381,8 +378,8 @@ export function ProjectConfigPanel({ project, loading }: Props) {
     return (
       <div className="config-panel">
         <div className="config-panel__inner">
-          {Array.from({ length: 4 }, (_, i) => (
-            <div key={i} className="config-section">
+          {['instructions', 'jobs', 'notifications', 'files'].map((section) => (
+            <div key={section} className="config-section">
               <div className="config-section__header" style={{ cursor: 'default' }}>
                 <Skeleton width={18} height={18} variant="rect" />
                 <Skeleton width="60%" height={14} />

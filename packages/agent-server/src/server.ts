@@ -10,6 +10,7 @@
  */
 
 import { execSync } from 'node:child_process'
+import * as pty from 'node-pty'
 import { existsSync, readFileSync } from 'node:fs'
 import { createServer as createHttpServer } from 'node:http'
 import { createServer as createHttpsServer } from 'node:https'
@@ -74,6 +75,7 @@ export class AgentServer {
   private scheduler: Scheduler | null = null
   private updater: Updater = new Updater()
   private mcpManager: McpManager = new McpManager()
+  private ptys: Map<string, pty.IPty> = new Map()
 
   constructor(config: AgentConfig) {
     this.config = config
@@ -242,6 +244,11 @@ export class AgentServer {
           }
         }
         this.activeTurns.clear()
+        // Kill all PTY sessions
+        for (const [id, p] of this.ptys) {
+          try { p.kill() } catch {}
+          this.ptys.delete(id)
+        }
         console.log('Client disconnected — active sessions cancelled & persisted')
       }
     })
@@ -259,11 +266,9 @@ export class AgentServer {
         await this.handleAi(payload)
         break
 
-      case Channel.TERMINAL: {
-        const msg = parseJsonPayload<TerminalMessage>(payload)
-        console.log('Terminal message:', msg.type)
+      case Channel.TERMINAL:
+        this.handleTerminal(payload)
         break
-      }
 
       case Channel.FILESYNC:
         await this.handleFilesync(payload)
@@ -382,6 +387,73 @@ export class AgentServer {
         stage: progress.stage,
         message: progress.message,
       })
+    }
+  }
+
+  // ── Terminal channel ────────────────────────────────────────────
+
+  private handleTerminal(payload: Uint8Array) {
+    const msg = parseJsonPayload<TerminalMessage>(payload)
+
+    switch (msg.type) {
+      case 'pty_spawn': {
+        // Kill existing PTY with same ID if any
+        const existing = this.ptys.get(msg.id)
+        if (existing) {
+          try { existing.kill() } catch {}
+          this.ptys.delete(msg.id)
+        }
+
+        const shell = msg.shell || process.env.SHELL || '/bin/bash'
+        const p = pty.spawn(shell, [], {
+          name: 'xterm-256color',
+          cols: msg.cols || 80,
+          rows: msg.rows || 24,
+          cwd: process.env.HOME || '/',
+          env: process.env as Record<string, string>,
+        })
+
+        this.ptys.set(msg.id, p)
+
+        p.onData((data: string) => {
+          const b64 = Buffer.from(data, 'binary').toString('base64')
+          this.sendToClient(Channel.TERMINAL, { type: 'pty_data', id: msg.id, data: b64 })
+        })
+
+        p.onExit(() => {
+          this.ptys.delete(msg.id)
+          this.sendToClient(Channel.TERMINAL, { type: 'pty_close', id: msg.id })
+        })
+
+        console.log(`PTY spawned: ${msg.id} (${shell})`)
+        break
+      }
+
+      case 'pty_data': {
+        const p = this.ptys.get(msg.id)
+        if (p) {
+          const decoded = Buffer.from(msg.data, 'base64').toString('binary')
+          p.write(decoded)
+        }
+        break
+      }
+
+      case 'pty_resize': {
+        const p = this.ptys.get(msg.id)
+        if (p) {
+          p.resize(msg.cols, msg.rows)
+        }
+        break
+      }
+
+      case 'pty_close': {
+        const p = this.ptys.get(msg.id)
+        if (p) {
+          try { p.kill() } catch {}
+          this.ptys.delete(msg.id)
+        }
+        break
+      }
     }
   }
 
@@ -622,6 +694,18 @@ export class AgentServer {
         model: session.model,
       })
 
+      // Send context info if available
+      if (session.contextInfo) {
+        this.sendToClient(Channel.AI, {
+          type: 'context_info',
+          sessionId: msg.id,
+          globalMemories: session.contextInfo.globalMemories,
+          conversationMemories: session.contextInfo.conversationMemories,
+          crossConversationMemories: session.contextInfo.crossConversationMemories,
+          projectId: session.contextInfo.projectId,
+        })
+      }
+
       console.log(`Session created: ${msg.id} (${session.provider}/${session.model})${msg.projectId ? ` [project: ${msg.projectId}]` : ''}`)
     } catch (err: unknown) {
       this.sendToClient(Channel.AI, {
@@ -640,7 +724,7 @@ export class AgentServer {
       if (!session) {
         // Extract projectId from session ID format (proj_{projectId}_sess_...)
         let projectId: string | undefined
-        const projMatch = msg.id.match(/^proj_([^_]+(?:_[^_]+)?)_sess_/)
+        const projMatch = msg.id.match(/^proj_(.+?)_sess_/)
         if (projMatch) {
           projectId = projMatch[1]
         }
@@ -687,6 +771,18 @@ export class AgentServer {
         messageCount: info.messageCount,
         title: info.title,
       })
+
+      // Send context info if available
+      if (session.contextInfo) {
+        this.sendToClient(Channel.AI, {
+          type: 'context_info',
+          sessionId: msg.id,
+          globalMemories: session.contextInfo.globalMemories,
+          conversationMemories: session.contextInfo.conversationMemories,
+          crossConversationMemories: session.contextInfo.crossConversationMemories,
+          projectId: session.contextInfo.projectId,
+        })
+      }
 
       console.log(`Session resumed: ${msg.id} (${info.messageCount} messages)`)
     } catch (err: unknown) {
@@ -736,13 +832,44 @@ export class AgentServer {
   }
 
   private handleSessionDestroy(msg: { id: string }) {
-    this.sessions.delete(msg.id)
-    deletePersistedSession(msg.id)
+    // Extract projectId before deleting so we can update stats
+    let projectId: string | undefined
+    const session = this.sessions.get(msg.id)
+    if (session?.contextInfo?.projectId) {
+      projectId = session.contextInfo.projectId
+    } else {
+      const projMatch = msg.id.match(/^proj_(.+?)_sess_/)
+      if (projMatch) projectId = projMatch[1]
+    }
+
+    try {
+      this.sessions.delete(msg.id)
+      this.activeTurns.delete(msg.id)
+      deletePersistedSession(msg.id)
+    } catch (err: unknown) {
+      console.error(`Error destroying session ${msg.id}:`, (err as Error).message)
+    }
 
     this.sendToClient(Channel.AI, {
       type: 'session_destroyed',
       id: msg.id,
     })
+
+    // Update project stats so session count reflects the deletion
+    if (projectId) {
+      try {
+        updateProjectStats(projectId)
+        const project = loadProject(projectId)
+        if (project) {
+          this.sendToClient(Channel.AI, {
+            type: 'project_updated',
+            project,
+          })
+        }
+      } catch (e) {
+        console.warn(`Failed to update project stats after session destroy: ${(e as Error).message}`)
+      }
+    }
 
     console.log(`Session destroyed: ${msg.id}`)
   }
@@ -1109,7 +1236,7 @@ export class AgentServer {
         // Try to resume from disk automatically
         // For project sessions (proj_{projectId}_sess_...), try the project directory first
         let projectId: string | undefined
-        const projMatch = sessionId.match(/^proj_([^_]+(?:_[^_]+)?)_sess_/)
+        const projMatch = sessionId.match(/^proj_(.+?)_sess_/)
         if (projMatch) {
           projectId = projMatch[1]
         }
@@ -1160,9 +1287,25 @@ export class AgentServer {
       type: 'agent_status',
       status: 'working',
       detail: 'Processing your request...',
+      sessionId,
     })
 
     console.log(`[${sessionId}] Processing: "${msg.content.slice(0, 50)}"`)
+
+    // Load conversation context on first message (cross-conversation matching uses message text)
+    if (!session.contextInfo) {
+      const contextInfo = session.loadConversationContext(msg.content)
+      if (contextInfo) {
+        this.sendToClient(Channel.AI, {
+          type: 'context_info',
+          sessionId,
+          globalMemories: contextInfo.globalMemories,
+          conversationMemories: contextInfo.conversationMemories,
+          crossConversationMemories: contextInfo.crossConversationMemories,
+          projectId: contextInfo.projectId,
+        })
+      }
+    }
 
     this.activeTurns.add(sessionId)
 
@@ -1178,23 +1321,59 @@ export class AgentServer {
 
         // Emit granular status updates so the client can show step-by-step progress
         if (event.type === 'tool_call') {
+          // Build richer detail: "Running shell: npm test" instead of just "Running shell..."
+          const toolEvent = event as { name: string; input?: Record<string, unknown> }
+          let toolDetail = `Running ${toolEvent.name}...`
+          if (toolEvent.input) {
+            const inp = toolEvent.input
+            if (toolEvent.name === 'shell' && inp.command) {
+              const cmd = String(inp.command).slice(0, 60)
+              toolDetail = `Running: ${cmd}`
+            } else if (toolEvent.name === 'filesystem' && inp.path) {
+              const op = inp.operation || 'reading'
+              const file = String(inp.path).split('/').pop()
+              toolDetail = `${String(op).charAt(0).toUpperCase()}${String(op).slice(1)} ${file}`
+            } else if (toolEvent.name === 'network' && (inp.url || inp.host)) {
+              const host = String(inp.url || inp.host).replace(/^https?:\/\//, '').split('/')[0]
+              toolDetail = `Fetching ${host}`
+            } else if (toolEvent.name === 'browser' && inp.operation) {
+              toolDetail = `Browser: ${inp.operation}`
+            } else if (toolEvent.name === 'code_search' && inp.query) {
+              toolDetail = `Searching: ${String(inp.query).slice(0, 50)}`
+            }
+          }
           this.sendToClient(Channel.EVENTS, {
             type: 'agent_status',
             status: 'working',
-            detail: `Running ${event.name}...`,
+            detail: toolDetail,
+            sessionId,
           })
         } else if (event.type === 'thinking') {
           this.sendToClient(Channel.EVENTS, {
             type: 'agent_status',
             status: 'working',
             detail: 'Thinking...',
+            sessionId,
           })
         } else if (event.type === 'text') {
           this.sendToClient(Channel.EVENTS, {
             type: 'agent_status',
             status: 'working',
             detail: 'Writing response...',
+            sessionId,
           })
+        } else if (event.type === 'tasks_update') {
+          // Use the activeForm of the current in_progress task as status detail
+          const active = (event as { tasks: Array<{ activeForm: string; status: string }> }).tasks
+            .find((t) => t.status === 'in_progress')
+          if (active) {
+            this.sendToClient(Channel.EVENTS, {
+              type: 'agent_status',
+              status: 'working',
+              detail: active.activeForm,
+              sessionId,
+            })
+          }
         }
 
         this.sendToClient(Channel.AI, { ...event, sessionId } as Record<string, unknown>)
@@ -1253,6 +1432,7 @@ export class AgentServer {
     this.sendToClient(Channel.EVENTS, {
       type: 'agent_status',
       status: 'idle',
+      sessionId,
     })
   }
 
@@ -1292,6 +1472,7 @@ export class AgentServer {
     this.sendToClient(Channel.EVENTS, {
       type: 'agent_status',
       status: 'idle',
+      sessionId,
     })
   }
 

@@ -10,10 +10,17 @@ function formatElapsed(ms: number): string {
   return min > 0 ? `${min}:${String(sec).padStart(2, '0')}` : `0:${String(sec).padStart(2, '0')}`
 }
 
+function formatTokens(n: number): string {
+  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`
+  if (n >= 1_000) return `${(n / 1_000).toFixed(1)}k`
+  return String(n)
+}
+
 export function ThinkingIndicator() {
   const agentStatus = useStore((s) => s.agentStatus)
   const agentStatusDetail = useStore((s) => s.agentStatusDetail)
   const workingStartedAt = useStore((s) => s.workingStartedAt)
+  const turnUsage = useStore((s) => s.turnUsage)
   const [elapsed, setElapsed] = useState(0)
 
   useEffect(() => {
@@ -28,6 +35,7 @@ export function ThinkingIndicator() {
   if (agentStatus !== 'working') return null
 
   const statusText = agentStatusDetail || 'Thinking...'
+  const tokenCount = turnUsage?.totalTokens || 0
 
   return (
     <AnimatePresence>
@@ -39,11 +47,14 @@ export function ThinkingIndicator() {
         className="thinking-indicator"
       >
         <div className="thinking-indicator__left">
-          <Loader2 size={14} strokeWidth={1.5} className="actions-pill__spin" />
+          <Loader2 size={14} strokeWidth={1.5} className="tool-tree__spinner" />
           <span className="thinking-indicator__status">{statusText}</span>
         </div>
         <div className="thinking-indicator__right">
-          <span className="thinking-indicator__meta">{formatElapsed(elapsed)}</span>
+          <span className="thinking-indicator__meta">
+            {formatElapsed(elapsed)}
+            {tokenCount > 0 && ` · ↓${formatTokens(tokenCount)} tokens`}
+          </span>
         </div>
       </motion.div>
     </AnimatePresence>

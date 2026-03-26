@@ -1,5 +1,5 @@
 import { motion } from 'framer-motion'
-import { ArrowRight, Clock, FolderOpen, MessageSquare, Plus, Trash2, Zap } from 'lucide-react'
+import { ArrowRight, FolderOpen, MessageSquare, Plus, Trash2, Zap } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { connection } from '../../lib/connection.js'
 import { useStore } from '../../lib/store.js'
@@ -153,8 +153,8 @@ export function ProjectList() {
       {showCreate && <CreateProjectModal onClose={() => setShowCreate(false)} />}
 
       {deleteProject && (
-        <div className="modal-overlay" onClick={() => setDeleteTarget(null)}>
-          <div className="modal-card modal-card--sm" onClick={(e) => e.stopPropagation()}>
+        <div className="modal-overlay" onClick={() => setDeleteTarget(null)} onKeyDown={(e) => e.key === 'Escape' && setDeleteTarget(null)}>
+          <div className="modal-card modal-card--sm" onClick={(e) => e.stopPropagation()} onKeyDown={(e) => e.stopPropagation()}>
             <div className="modal-card__body">
               <h3>Delete "{deleteProject.name}"?</h3>
               <p style={{ color: 'var(--text-muted)', marginTop: '8px' }}>

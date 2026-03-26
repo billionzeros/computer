@@ -26,8 +26,8 @@ export function CreateProjectModal({ onClose }: Props) {
   }
 
   return (
-    <div className="modal-overlay" onClick={onClose}>
-      <div className="modal-card modal-card--create-project" onClick={(e) => e.stopPropagation()}>
+    <div className="modal-overlay" onClick={onClose} onKeyDown={(e) => e.key === 'Escape' && onClose()}>
+      <div className="modal-card modal-card--create-project" onClick={(e) => e.stopPropagation()} onKeyDown={(e) => e.stopPropagation()}>
         <div className="modal-card__header">
           <h2>Create project</h2>
           <button type="button" className="modal-card__close" onClick={onClose}>
@@ -43,24 +43,25 @@ export function CreateProjectModal({ onClose }: Props) {
 
           {/* Project name */}
           <div className="form-field">
-            <label className="form-field__label">Project name</label>
+            <label className="form-field__label" htmlFor="create-project-name">Project name</label>
             <input
+              id="create-project-name"
               className="form-field__input"
               type="text"
               placeholder="Enter the name"
               value={name}
               onChange={(e) => setName(e.target.value)}
-              autoFocus
               onKeyDown={(e) => e.key === 'Enter' && !e.shiftKey && handleCreate()}
             />
           </div>
 
           {/* Instructions */}
           <div className="form-field">
-            <label className="form-field__label">
+            <label className="form-field__label" htmlFor="create-project-instructions">
               Instructions <span className="form-field__optional">(optional)</span>
             </label>
             <textarea
+              id="create-project-instructions"
               className="form-field__textarea"
               placeholder='e.g. "Focus on Python best practices", "Maintain a professional tone", or "Always provide sources for important conclusions".'
               value={instructions}

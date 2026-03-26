@@ -1,5 +1,5 @@
-import { Bell, Settings, Trash2, Zap } from 'lucide-react'
-import { useState } from 'react'
+import { Settings, Trash2, Zap } from 'lucide-react'
+import { useEffect, useState } from 'react'
 import { AnimatePresence } from 'framer-motion'
 import { connection } from '../../lib/connection.js'
 import { useStore } from '../../lib/store.js'
@@ -19,6 +19,20 @@ export function ProjectView() {
   const pendingPlan = useStore((s) => s.pendingPlan)
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
 
+  // Ensure activeConversationId matches the project session when viewing a session.
+  // This handles the case where the user switched to Chat (which changed activeConversationId
+  // to a chat conversation) and then switched back to Projects.
+  useEffect(() => {
+    if (!activeSessionId) return
+    const store = useStore.getState()
+    const activeConv = store.getActiveConversation()
+    if (activeConv?.sessionId === activeSessionId) return // already correct
+    const projConv = store.findConversationBySession(activeSessionId)
+    if (projConv) {
+      store.switchConversation(projConv.id)
+    }
+  }, [activeSessionId])
+
   const project = projects.find((p) => p.id === activeProjectId)
   if (!project) return null
 
@@ -37,6 +51,20 @@ export function ProjectView() {
       model: store.currentModel,
       projectId: project.id,
     })
+
+    // Optimistically add to projectSessions so sidebar updates immediately
+    store.setProjectSessions([
+      {
+        id: sessionId,
+        title: 'New conversation',
+        provider: store.currentProvider,
+        model: store.currentModel,
+        messageCount: 0,
+        createdAt: Date.now(),
+        lastActiveAt: Date.now(),
+      },
+      ...store.projectSessions,
+    ])
 
     const conv = store.findConversationBySession(sessionId)
     if (conv) {
@@ -74,17 +102,24 @@ export function ProjectView() {
     }
 
     connection.sendSessionResume(sessionId)
-    connection.sendSessionHistory(sessionId)
+    // Only fetch history if we have no local messages (first open or cleared localStorage)
+    // switchConversation handles _sessionsNeedingHistoryRefresh for background-completed sessions
+    if (!conv || conv.messages.length === 0) {
+      connection.sendSessionHistory(sessionId)
+    }
     setActiveSessionId(sessionId)
   }
 
   const handleDeleteSession = (sessionId: string) => {
     const store = useStore.getState()
+    // Always tell the server to destroy — session may exist on disk without a local conversation
+    connection.sendSessionDestroy(sessionId)
     const conv = store.findConversationBySession(sessionId)
     if (conv) {
-      connection.sendSessionDestroy(sessionId)
       store.deleteConversation(conv.id)
     }
+    // Optimistically remove from projectSessions so UI updates instantly
+    store.setProjectSessions(store.projectSessions.filter((s) => s.id !== sessionId))
     if (activeSessionId === sessionId) {
       setActiveSessionId(null)
     }
@@ -121,8 +156,8 @@ export function ProjectView() {
         />
 
         {showDeleteConfirm && (
-          <div className="modal-overlay" onClick={() => setShowDeleteConfirm(false)}>
-            <div className="modal-card modal-card--sm" onClick={(e) => e.stopPropagation()}>
+          <div className="modal-overlay" onClick={() => setShowDeleteConfirm(false)} onKeyDown={(e) => e.key === 'Escape' && setShowDeleteConfirm(false)}>
+            <div className="modal-card modal-card--sm" onClick={(e) => e.stopPropagation()} onKeyDown={(e) => e.stopPropagation()}>
               <div className="modal-card__body">
                 <h3>Delete "{project.name}"?</h3>
                 <p style={{ color: 'var(--text-muted)', marginTop: '8px' }}>
@@ -201,8 +236,8 @@ export function ProjectView() {
       </div>
 
       {showDeleteConfirm && (
-        <div className="modal-overlay" onClick={() => setShowDeleteConfirm(false)}>
-          <div className="modal-card modal-card--sm" onClick={(e) => e.stopPropagation()}>
+        <div className="modal-overlay" onClick={() => setShowDeleteConfirm(false)} onKeyDown={(e) => e.key === 'Escape' && setShowDeleteConfirm(false)}>
+          <div className="modal-card modal-card--sm" onClick={(e) => e.stopPropagation()} onKeyDown={(e) => e.stopPropagation()}>
             <div className="modal-card__body">
               <h3>Delete "{project.name}"?</h3>
               <p style={{ color: 'var(--text-muted)', marginTop: '8px' }}>

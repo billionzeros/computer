@@ -5,6 +5,7 @@ import { type ChatMessage, useAgentStatus, useStore } from '../../lib/store.js'
 import { ActionsGroup } from './ActionsGroup.js'
 import { MessageBubble } from './MessageBubble.js'
 import { SubAgentGroup } from './SubAgentGroup.js'
+import { TaskChecklist } from './TaskChecklist.js'
 import { TaskSection } from './TaskSection.js'
 import { ThinkingIndicator } from './ThinkingIndicator.js'
 import { groupMessages } from './groupMessages.js'
@@ -41,6 +42,12 @@ function TurnStats() {
       </span>
     </div>
   )
+}
+
+function TaskChecklistInline() {
+  const currentTasks = useStore((s) => s.currentTasks)
+  if (currentTasks.length === 0) return null
+  return <TaskChecklist tasks={currentTasks} />
 }
 
 export function MessageList({ messages }: Props) {
@@ -121,6 +128,7 @@ export function MessageList({ messages }: Props) {
             )
           })}
         </AnimatePresence>
+        <TaskChecklistInline />
         {agentStatus === 'working' && <ThinkingIndicator />}
         <TurnStats />
         <div ref={bottomRef} />

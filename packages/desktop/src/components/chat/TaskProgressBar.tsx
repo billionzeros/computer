@@ -66,7 +66,7 @@ export function TaskProgressBar({ grouped }: Props) {
         onClick={() => totalTasks > 0 && setExpanded(!expanded)}
       >
         <div className="task-progress-bar__left">
-          <Loader2 size={14} strokeWidth={1.5} className="actions-pill__spin" />
+          <Loader2 size={14} strokeWidth={1.5} className="tool-tree__spinner" />
           <span className="task-progress-bar__task">{currentActivity}</span>
         </div>
         <div className="task-progress-bar__right">
@@ -92,7 +92,7 @@ export function TaskProgressBar({ grouped }: Props) {
                 {task.done ? (
                   <Check size={12} strokeWidth={2} />
                 ) : (
-                  <Loader2 size={12} strokeWidth={1.5} className="actions-pill__spin" />
+                  <Loader2 size={12} strokeWidth={1.5} className="tool-tree__spinner" />
                 )}
               </span>
               <span className="task-progress-bar__item-text">{task.title}</span>

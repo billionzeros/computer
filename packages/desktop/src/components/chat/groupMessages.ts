@@ -76,7 +76,7 @@ export function groupMessages(messages: ChatMessage[]): GroupedItem[] {
   }
 
   // Tool names that should be hidden from the actions timeline
-  const hiddenTools = new Set(['ask_user', 'plan_confirm'])
+  const hiddenTools = new Set(['ask_user', 'plan_confirm', 'task_tracker'])
 
   for (const msg of messages) {
     if (msg.role !== 'tool') {

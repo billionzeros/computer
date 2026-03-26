@@ -5,7 +5,7 @@ import {
   mkdirSync,
   readFileSync,
   readdirSync,
-  rmdirSync,
+  rmSync,
   unlinkSync,
   writeFileSync,
 } from 'node:fs'
@@ -145,33 +145,14 @@ export interface ConnectorConfig {
   enabled: boolean
 }
 
-// ── Legacy config (for migration) ───────────────────────────────────
-
-interface LegacyConfig {
-  agentId: string
-  token: string
-  port: number
-  ai: {
-    provider: string
-    apiKey: string
-    model: string
-    baseUrl?: string
-  }
-  security: {
-    confirmPatterns: string[]
-    forbiddenPaths: string[]
-    networkAllowlist: string[]
-  }
-  skills: SkillConfig[]
-}
-
 // ── Paths ───────────────────────────────────────────────────────────
 
 const ANTON_DIR = join(homedir(), '.anton')
 const CONFIG_PATH = join(ANTON_DIR, 'config.yaml')
-const SESSIONS_DIR = join(ANTON_DIR, 'sessions')
+const CONVERSATIONS_DIR = join(ANTON_DIR, 'conversations')
 const PROMPTS_DIR = join(ANTON_DIR, 'prompts')
 const SYSTEM_PROMPT_PATH = join(PROMPTS_DIR, 'system.md')
+const GLOBAL_MEMORY_DIR = join(ANTON_DIR, 'memory')
 
 // Embedded system prompt — baked in at build time by scripts/embed-prompts.js.
 // This works in both source mode and binary mode (no filesystem read needed).
@@ -240,7 +221,7 @@ function parseCLIFlags(): { port?: number; token?: string } {
 
 export function loadConfig(): AgentConfig {
   mkdirSync(ANTON_DIR, { recursive: true })
-  mkdirSync(SESSIONS_DIR, { recursive: true })
+  mkdirSync(CONVERSATIONS_DIR, { recursive: true })
   mkdirSync(join(ANTON_DIR, 'skills'), { recursive: true })
 
   const flags = parseCLIFlags()
@@ -262,16 +243,6 @@ export function loadConfig(): AgentConfig {
   const raw = readFileSync(CONFIG_PATH, 'utf-8')
   // biome-ignore lint/suspicious/noExplicitAny: yaml parser returns untyped data
   const parsed = parseYaml(raw) as Record<string, any>
-
-  // Migrate legacy single-provider config
-  if (parsed.ai && !parsed.providers) {
-    const migrated = migrateLegacyConfig(parsed as unknown as LegacyConfig)
-    if (tokenOverride) migrated.token = tokenOverride
-    if (flags.port) migrated.port = flags.port
-    saveConfig(migrated)
-    console.log('  Config migrated to multi-provider format.')
-    return migrated
-  }
 
   // Merge parsed config with defaults — any missing fields get filled in.
   // This makes the binary truly zero-config: even a config file with just
@@ -297,40 +268,6 @@ export function loadConfig(): AgentConfig {
 
 export function saveConfig(config: AgentConfig): void {
   writeFileSync(CONFIG_PATH, stringifyYaml(config), 'utf-8')
-}
-
-function migrateLegacyConfig(legacy: LegacyConfig): AgentConfig {
-  const providers: ProvidersMap = { ...DEFAULT_PROVIDERS }
-
-  // Preserve the user's existing key in the right provider
-  const providerName = legacy.ai.provider || 'anthropic'
-  if (providers[providerName]) {
-    providers[providerName].apiKey = legacy.ai.apiKey || providers[providerName].apiKey
-    if (legacy.ai.baseUrl) {
-      providers[providerName].baseUrl = legacy.ai.baseUrl
-    }
-  } else {
-    providers[providerName] = {
-      apiKey: legacy.ai.apiKey,
-      baseUrl: legacy.ai.baseUrl,
-      models: [legacy.ai.model],
-    }
-  }
-
-  return {
-    agentId: legacy.agentId,
-    token: legacy.token,
-    port: legacy.port,
-    providers,
-    defaults: {
-      provider: legacy.ai.provider || 'anthropic',
-      model: legacy.ai.model || 'claude-sonnet-4-6',
-    },
-    security: legacy.security,
-    skills: legacy.skills,
-    connectors: [],
-    sessions: { ttlDays: 7 },
-  }
 }
 
 function pickDefaultProvider(): { provider: string; model: string } {
@@ -462,12 +399,12 @@ export function getProvidersList(config: AgentConfig) {
 }
 
 // ── Session persistence (v2: meta.json + messages.jsonl) ────────────
+// Sessions live under ~/.anton/conversations/
 
-const SESSIONS_DATA_DIR = join(SESSIONS_DIR, 'data')
-const INDEX_PATH = join(SESSIONS_DIR, 'index.json')
+const INDEX_PATH = join(CONVERSATIONS_DIR, 'index.json')
 
 function sessionDir(id: string): string {
-  return join(SESSIONS_DATA_DIR, id)
+  return join(CONVERSATIONS_DIR, id)
 }
 
 function metaPath(id: string): string {
@@ -754,17 +691,6 @@ export function loadSession(id: string, basePath?: string): PersistedSession | n
     }
   }
 
-  // Fall back to v1 format (flat .json file)
-  const v1Path = join(SESSIONS_DIR, `${id}.json`)
-  if (existsSync(v1Path)) {
-    const raw = readFileSync(v1Path, 'utf-8')
-    const v1 = JSON.parse(raw) as PersistedSession
-    // Migrate to v2 on read
-    saveSession(v1)
-    unlinkSync(v1Path)
-    return v1
-  }
-
   return null
 }
 
@@ -813,24 +739,18 @@ export function listSessionMetas(): SessionMeta[] {
 export function deleteSession(id: string): boolean {
   const dir = sessionDir(id)
   if (existsSync(dir)) {
-    for (const entry of readdirSync(dir)) {
-      const entryPath = join(dir, entry)
-      if (entry === 'images') {
-        for (const image of readdirSync(entryPath)) {
-          unlinkSync(join(entryPath, image))
-        }
-        rmdirSync(entryPath)
-        continue
-      }
-      unlinkSync(entryPath)
-    }
-    rmdirSync(dir)
+    rmSync(dir, { recursive: true, force: true })
   }
 
-  // Also remove v1 format if exists
-  const v1Path = join(SESSIONS_DIR, `${id}.json`)
-  if (existsSync(v1Path)) {
-    unlinkSync(v1Path)
+  // Delete from project conversations dir if this is a project session
+  // Session IDs follow the format: proj_{projectId}_sess_{suffix}
+  const projMatch = id.match(/^proj_(.+?)_sess_/)
+  if (projMatch) {
+    const projectId = projMatch[1]
+    const projectSessionDir = join(ANTON_DIR, 'projects', projectId, 'conversations', id)
+    if (existsSync(projectSessionDir)) {
+      rmSync(projectSessionDir, { recursive: true, force: true })
+    }
   }
 
   removeFromIndex(id)
@@ -872,7 +792,7 @@ export function cleanExpiredSessions(ttlDays = 30): number {
 // ── Index management ────────────────────────────────────────────────
 
 function loadIndex(): SessionIndex {
-  mkdirSync(SESSIONS_DIR, { recursive: true })
+  mkdirSync(CONVERSATIONS_DIR, { recursive: true })
   if (existsSync(INDEX_PATH)) {
     try {
       return JSON.parse(readFileSync(INDEX_PATH, 'utf-8')) as SessionIndex
@@ -904,13 +824,15 @@ function removeFromIndex(id: string): void {
   saveIndex(index)
 }
 
-/** Rebuild index by scanning all session data directories */
+/** Rebuild index by scanning conversation directories */
 function rebuildIndex(): SessionIndex {
-  mkdirSync(SESSIONS_DATA_DIR, { recursive: true })
+  mkdirSync(CONVERSATIONS_DIR, { recursive: true })
   const sessions: SessionMeta[] = []
 
-  if (existsSync(SESSIONS_DATA_DIR)) {
-    for (const dir of readdirSync(SESSIONS_DATA_DIR)) {
+  // Scan conversations/ dir (primary location)
+  if (existsSync(CONVERSATIONS_DIR)) {
+    for (const dir of readdirSync(CONVERSATIONS_DIR)) {
+      if (dir === 'index.json') continue
       const meta = metaPath(dir)
       if (existsSync(meta)) {
         try {
@@ -920,45 +842,45 @@ function rebuildIndex(): SessionIndex {
     }
   }
 
-  // Also migrate any v1 flat .json files
-  if (existsSync(SESSIONS_DIR)) {
-    for (const file of readdirSync(SESSIONS_DIR)) {
-      if (file.endsWith('.json') && file !== 'index.json') {
-        const id = file.replace('.json', '')
-        if (!sessions.some((s) => s.id === id)) {
-          // Will be migrated on next loadSession call
-          try {
-            const raw = JSON.parse(readFileSync(join(SESSIONS_DIR, file), 'utf-8'))
-            sessions.push({
-              id: raw.id,
-              title: raw.title || raw.id,
-              provider: raw.provider || 'anthropic',
-              model: raw.model || 'claude-sonnet-4-6',
-              createdAt: raw.createdAt || Date.now(),
-              lastActiveAt: raw.lastActiveAt || Date.now(),
-              messageCount: raw.messages?.length || 0,
-              archived: false,
-              tags: [],
-            })
-          } catch {}
-        }
-      }
-    }
-  }
-
   const index: SessionIndex = { version: 1, sessions }
   saveIndex(index)
   return index
+}
+
+// ── Conversation workspace helpers ──────────────────────────────────
+
+export function getConversationsDir(): string {
+  return CONVERSATIONS_DIR
+}
+
+export function getConversationDir(convId: string): string {
+  return join(CONVERSATIONS_DIR, convId)
+}
+
+export function getConversationWorkspace(convId: string): string {
+  return join(CONVERSATIONS_DIR, convId, 'workspace')
+}
+
+export function getConversationMemoryDir(convId: string): string {
+  return join(CONVERSATIONS_DIR, convId, 'memory')
+}
+
+export function getGlobalMemoryDir(): string {
+  return GLOBAL_MEMORY_DIR
+}
+
+/** Ensure conversation workspace directories exist */
+export function ensureConversationDirs(convId: string): void {
+  const dir = getConversationDir(convId)
+  mkdirSync(join(dir, 'workspace'), { recursive: true })
+  mkdirSync(join(dir, 'memory'), { recursive: true })
+  mkdirSync(join(dir, 'images'), { recursive: true })
 }
 
 // ── Exports ─────────────────────────────────────────────────────────
 
 export function getAntonDir(): string {
   return ANTON_DIR
-}
-
-export function getSessionsDir(): string {
-  return SESSIONS_DIR
 }
 
 // ── System prompt loading ───────────────────────────────────────────

@@ -16,9 +16,9 @@
 import type { AgentConfig } from '@anton/agent-config'
 import { loadSystemPrompt } from '@anton/agent-config'
 import type { AskUserQuestion } from '@anton/protocol'
-import type { AgentTool } from '@mariozechner/pi-agent-core'
+import type { AgentTool, AgentToolResult } from '@mariozechner/pi-agent-core'
 import { Type } from '@mariozechner/pi-ai'
-import type { TextContent } from '@mariozechner/pi-ai'
+import type { Static, TSchema, TextContent } from '@mariozechner/pi-ai'
 import { executeArtifact } from './tools/artifact.js'
 import { executeBrowser } from './tools/browser.js'
 import { executeClipboard } from './tools/clipboard.js'
@@ -35,6 +35,7 @@ import { executeNotification } from './tools/notification.js'
 import { executePlan } from './tools/plan.js'
 import { executeProcess } from './tools/process.js'
 import { executeShell } from './tools/shell.js'
+import { type TasksUpdateCallback, executeTaskTracker } from './tools/task-tracker.js'
 import { executeTodo } from './tools/todo.js'
 
 // Re-export for session.ts
@@ -64,6 +65,19 @@ function toolResult(output: string, isError = false) {
 }
 
 /**
+ * Type-safe tool factory. Infers the params type from the typebox schema
+ * so each execute() gets properly typed params, while the returned tool
+ * is widened to AgentTool<TSchema> for the heterogeneous array.
+ */
+function defineTool<T extends TSchema>(
+  def: Omit<AgentTool<T>, 'execute'> & {
+    execute: (toolCallId: string, params: Static<T>, signal?: AbortSignal) => Promise<AgentToolResult<unknown>>
+  },
+): AgentTool {
+  return def as AgentTool
+}
+
+/**
  * Build the tool set. Shared across all sessions — tools are stateless,
  * only the config (security rules) matters.
  */
@@ -79,13 +93,16 @@ export interface ToolCallbacks {
   getConfirmHandler?: () => import('./session.js').ConfirmHandler | undefined
   /** Client-provided API key to pass through to sub-agent sessions. */
   clientApiKey?: string
+  /** Conversation ID for scoped memory. */
+  conversationId?: string
+  /** Callback when the agent updates its task list. */
+  onTasksUpdate?: TasksUpdateCallback
 }
 
-// biome-ignore lint/suspicious/noExplicitAny: heterogeneous tool array requires any
-export function buildTools(config: AgentConfig, callbacks?: ToolCallbacks, mcpManager?: import('./mcp/mcp-manager.js').McpManager): AgentTool<any>[] {
-  const tools: AgentTool<any>[] = [
+export function buildTools(config: AgentConfig, callbacks?: ToolCallbacks, mcpManager?: import('./mcp/mcp-manager.js').McpManager): AgentTool[] {
+  const tools: AgentTool[] = [
     // ── Core tools ──────────────────────────────────────────────────
-    {
+    defineTool({
       name: 'shell',
       label: 'Shell',
       description:
@@ -102,8 +119,8 @@ export function buildTools(config: AgentConfig, callbacks?: ToolCallbacks, mcpMa
         const output = await executeShell(params, config)
         return toolResult(output)
       },
-    },
-    {
+    }),
+    defineTool({
       name: 'filesystem',
       label: 'Filesystem',
       description:
@@ -129,8 +146,8 @@ export function buildTools(config: AgentConfig, callbacks?: ToolCallbacks, mcpMa
         const output = executeFilesystem(params)
         return toolResult(output)
       },
-    },
-    {
+    }),
+    defineTool({
       name: 'browser',
       label: 'Browser',
       description:
@@ -148,8 +165,8 @@ export function buildTools(config: AgentConfig, callbacks?: ToolCallbacks, mcpMa
         const output = executeBrowser(params)
         return toolResult(output)
       },
-    },
-    {
+    }),
+    defineTool({
       name: 'process',
       label: 'Process',
       description: 'List, inspect, or kill processes. Operations: list, info, kill.',
@@ -164,8 +181,8 @@ export function buildTools(config: AgentConfig, callbacks?: ToolCallbacks, mcpMa
         const output = executeProcess(params)
         return toolResult(output)
       },
-    },
-    {
+    }),
+    defineTool({
       name: 'network',
       label: 'Network',
       description:
@@ -187,10 +204,10 @@ export function buildTools(config: AgentConfig, callbacks?: ToolCallbacks, mcpMa
         const output = executeNetwork(params)
         return toolResult(output)
       },
-    },
+    }),
 
     // ── Artifact ────────────────────────────────────────────────────
-    {
+    defineTool({
       name: 'artifact',
       label: 'Artifact',
       description:
@@ -232,10 +249,10 @@ export function buildTools(config: AgentConfig, callbacks?: ToolCallbacks, mcpMa
         const output = executeArtifact(params)
         return toolResult(output)
       },
-    },
+    }),
 
     // ── Git ─────────────────────────────────────────────────────────
-    {
+    defineTool({
       name: 'git',
       label: 'Git',
       description:
@@ -265,10 +282,10 @@ export function buildTools(config: AgentConfig, callbacks?: ToolCallbacks, mcpMa
         const output = executeGit(params)
         return toolResult(output)
       },
-    },
+    }),
 
     // ── Code search ─────────────────────────────────────────────────
-    {
+    defineTool({
       name: 'code_search',
       label: 'Code Search',
       description:
@@ -292,10 +309,10 @@ export function buildTools(config: AgentConfig, callbacks?: ToolCallbacks, mcpMa
         const output = executeCodeSearch(params)
         return toolResult(output)
       },
-    },
+    }),
 
     // ── HTTP API ────────────────────────────────────────────────────
-    {
+    defineTool({
       name: 'http_api',
       label: 'HTTP API',
       description:
@@ -326,10 +343,10 @@ export function buildTools(config: AgentConfig, callbacks?: ToolCallbacks, mcpMa
         const output = await executeHttpApi(params)
         return toolResult(output)
       },
-    },
+    }),
 
     // ── Database ────────────────────────────────────────────────────
-    {
+    defineTool({
       name: 'database',
       label: 'Database',
       description:
@@ -357,16 +374,19 @@ export function buildTools(config: AgentConfig, callbacks?: ToolCallbacks, mcpMa
         const output = executeDatabase(params)
         return toolResult(output)
       },
-    },
+    }),
 
     // ── Memory ──────────────────────────────────────────────────────
-    {
+    defineTool({
       name: 'memory',
       label: 'Memory',
       description:
         'Persistent memory that survives across sessions. Save facts, preferences, project context. ' +
         'Operations: save (store a memory by key), recall (retrieve by key), list (show all, optionally filtered), forget (delete by key). ' +
-        'Use proactively to remember user preferences and important context.',
+        'Scope: "conversation" (default) stores memory for this conversation only, "global" stores across all conversations. ' +
+        'Use proactively to remember user preferences and important context. ' +
+        'Use scope=global for broadly useful info (user preferences, server configs). ' +
+        'Use scope=conversation for conversation-specific facts.',
       parameters: Type.Object({
         operation: Type.Union(
           [
@@ -380,15 +400,20 @@ export function buildTools(config: AgentConfig, callbacks?: ToolCallbacks, mcpMa
         key: Type.Optional(Type.String({ description: 'Memory key (for save/recall/forget)' })),
         content: Type.Optional(Type.String({ description: 'Content to store (for save)' })),
         query: Type.Optional(Type.String({ description: 'Filter term (for list)' })),
+        scope: Type.Optional(
+          Type.Union([Type.Literal('global'), Type.Literal('conversation')], {
+            description: 'Memory scope: "conversation" (default) for this conversation, "global" for cross-conversation',
+          }),
+        ),
       }),
       async execute(_toolCallId, params) {
-        const output = executeMemory(params)
+        const output = executeMemory(params, callbacks?.conversationId)
         return toolResult(output)
       },
-    },
+    }),
 
     // ── Todo ────────────────────────────────────────────────────────
-    {
+    defineTool({
       name: 'todo',
       label: 'Todo',
       description:
@@ -413,10 +438,39 @@ export function buildTools(config: AgentConfig, callbacks?: ToolCallbacks, mcpMa
         const output = executeTodo(params)
         return toolResult(output)
       },
-    },
+    }),
+
+    // ── Task Tracker (Claude Code–style work plan) ───────────────────
+    defineTool({
+      name: 'task_tracker',
+      label: 'Task Tracker',
+      description:
+        'Track your work plan as a checklist. Use this to break complex tasks into steps, ' +
+        'show progress to the user, and stay organized. ' +
+        'Each call replaces the full task list. Mark tasks as pending/in_progress/completed. ' +
+        'Only one task should be in_progress at a time. ' +
+        'Use proactively when a task requires 3+ distinct steps.',
+      parameters: Type.Object({
+        tasks: Type.Array(
+          Type.Object({
+            content: Type.String({ description: 'What needs to be done (imperative, e.g. "Run tests")' }),
+            activeForm: Type.String({ description: 'Present-continuous form (e.g. "Running tests")' }),
+            status: Type.Union(
+              [Type.Literal('pending'), Type.Literal('in_progress'), Type.Literal('completed')],
+              { description: 'Task status' },
+            ),
+          }),
+          { description: 'The full task list (replaces previous list)' },
+        ),
+      }),
+      async execute(_toolCallId, params) {
+        const output = executeTaskTracker(params, callbacks?.onTasksUpdate)
+        return toolResult(output)
+      },
+    }),
 
     // ── Clipboard ───────────────────────────────────────────────────
-    {
+    defineTool({
       name: 'clipboard',
       label: 'Clipboard',
       description:
@@ -435,10 +489,10 @@ export function buildTools(config: AgentConfig, callbacks?: ToolCallbacks, mcpMa
         const output = executeClipboard(params)
         return toolResult(output)
       },
-    },
+    }),
 
     // ── Notification ────────────────────────────────────────────────
-    {
+    defineTool({
       name: 'notification',
       label: 'Notification',
       description:
@@ -453,10 +507,10 @@ export function buildTools(config: AgentConfig, callbacks?: ToolCallbacks, mcpMa
         const output = executeNotification(params)
         return toolResult(output)
       },
-    },
+    }),
 
     // ── Image ───────────────────────────────────────────────────────
-    {
+    defineTool({
       name: 'image',
       label: 'Image',
       description:
@@ -494,10 +548,10 @@ export function buildTools(config: AgentConfig, callbacks?: ToolCallbacks, mcpMa
         const output = executeImage(params)
         return toolResult(output)
       },
-    },
+    }),
 
     // ── Diff ────────────────────────────────────────────────────────
-    {
+    defineTool({
       name: 'diff',
       label: 'Diff',
       description:
@@ -518,10 +572,10 @@ export function buildTools(config: AgentConfig, callbacks?: ToolCallbacks, mcpMa
         const output = executeDiff(params)
         return toolResult(output)
       },
-    },
+    }),
 
     // ── Ask User ─────────────────────────────────────────────────────
-    {
+    defineTool({
       name: 'ask_user',
       label: 'Ask User',
       description:
@@ -578,10 +632,10 @@ export function buildTools(config: AgentConfig, callbacks?: ToolCallbacks, mcpMa
         const answers = await handler(questions)
         return toolResult(JSON.stringify(answers, null, 2))
       },
-    },
+    }),
 
     // ── Planning ──────────────────────────────────────────────────────
-    {
+    defineTool({
       name: 'plan',
       label: 'Plan',
       description:
@@ -597,12 +651,12 @@ export function buildTools(config: AgentConfig, callbacks?: ToolCallbacks, mcpMa
         const output = executePlan(params)
         return toolResult(output)
       },
-    },
+    }),
   ]
 
   // ── Sub-agent (conditional — excluded for child agents to prevent recursion) ──
   if (!callbacks?.excludeSubAgent) {
-    tools.push({
+    tools.push(defineTool({
       name: 'sub_agent',
       label: 'Sub Agent',
       description:
@@ -616,7 +670,7 @@ export function buildTools(config: AgentConfig, callbacks?: ToolCallbacks, mcpMa
           description: 'Detailed description of the task for the sub-agent to complete',
         }),
       }),
-      async execute(toolCallId: string, params: { task: string }) {
+      async execute(toolCallId, params) {
         const onEvent = callbacks?.onSubAgentEvent
 
         // Emit sub_agent_start
@@ -659,7 +713,7 @@ export function buildTools(config: AgentConfig, callbacks?: ToolCallbacks, mcpMa
           for await (const event of subSession.processMessage(params.task)) {
             // Forward intermediate events to client, tagged with parentToolCallId
             if (onEvent && event.type !== 'done' && event.type !== 'title_update') {
-              onEvent({ ...event, parentToolCallId: toolCallId } as any)
+              onEvent({ ...event, parentToolCallId: toolCallId } as import('./session.js').SessionEvent & { parentToolCallId: string })
             }
 
             // Collect text output for the final tool result
@@ -686,7 +740,7 @@ export function buildTools(config: AgentConfig, callbacks?: ToolCallbacks, mcpMa
 
         return toolResult(finalText || '(sub-agent produced no output)', hadError)
       },
-    })
+    }))
   }
 
   // ── MCP tools (from connected connectors) ─────────────────────────

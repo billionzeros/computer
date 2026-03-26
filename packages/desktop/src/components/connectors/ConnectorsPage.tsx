@@ -1,8 +1,6 @@
 import {
   Check,
   ChevronDown,
-  ChevronUp,
-  ExternalLink,
   Loader2,
   Play,
   Plus,
@@ -232,8 +230,8 @@ function AppSetup({
   }
 
   return (
-    <div className="app-detail-overlay" onClick={onBack}>
-      <div className="app-detail" onClick={(e) => e.stopPropagation()}>
+    <div className="app-detail-overlay" onClick={onBack} onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') onBack() }}>
+      <div className="app-detail" onClick={(e) => e.stopPropagation()} onKeyDown={(e) => e.stopPropagation()}>
         {/* Close */}
         <button type="button" className="app-detail__close" onClick={onBack}>
           <X size={18} strokeWidth={1.5} />
@@ -279,15 +277,15 @@ function AppSetup({
           <div className="app-detail__fields">
             {entry.requiredEnv.map((envKey) => (
               <div key={envKey} className="app-detail__field">
-                <label>{envKey}</label>
+                <label htmlFor={`env-${envKey}`}>{envKey}</label>
                 <input
+                  id={`env-${envKey}`}
                   type="password"
                   placeholder={`Paste your ${envKey.toLowerCase().replace(/_/g, ' ')}`}
                   value={envValues[envKey] || ''}
                   onChange={(e) =>
                     setEnvValues((prev) => ({ ...prev, [envKey]: e.target.value }))
                   }
-                  autoFocus={entry.requiredEnv[0] === envKey}
                 />
               </div>
             ))}
@@ -437,8 +435,9 @@ function CustomApiTab({
       {adding && (
         <div className="connector-form">
           <div className="connector-form__field">
-            <label>Name</label>
+            <label htmlFor="api-name">Name</label>
             <input
+              id="api-name"
               type="text"
               placeholder="e.g. OpenAI"
               value={name}
@@ -446,8 +445,9 @@ function CustomApiTab({
             />
           </div>
           <div className="connector-form__field">
-            <label>Base URL</label>
+            <label htmlFor="api-base-url">Base URL</label>
             <input
+              id="api-base-url"
               type="text"
               placeholder="https://api.example.com"
               value={baseUrl}
@@ -455,8 +455,9 @@ function CustomApiTab({
             />
           </div>
           <div className="connector-form__field">
-            <label>API Key</label>
+            <label htmlFor="api-key">API Key</label>
             <input
+              id="api-key"
               type="password"
               placeholder="sk-..."
               value={apiKey}
@@ -651,8 +652,9 @@ function CustomMcpTab({
             {mode === 'form' ? (
               <>
                 <div className="connector-form__field">
-                  <label>Name</label>
+                  <label htmlFor="mcp-name">Name</label>
                   <input
+                    id="mcp-name"
                     type="text"
                     placeholder="e.g. My MCP Server"
                     value={name}
@@ -660,8 +662,9 @@ function CustomMcpTab({
                   />
                 </div>
                 <div className="connector-form__field">
-                  <label>Command</label>
+                  <label htmlFor="mcp-command">Command</label>
                   <input
+                    id="mcp-command"
                     type="text"
                     placeholder="e.g. npx"
                     value={command}
@@ -669,8 +672,9 @@ function CustomMcpTab({
                   />
                 </div>
                 <div className="connector-form__field">
-                  <label>Arguments (space-separated)</label>
+                  <label htmlFor="mcp-args">Arguments (space-separated)</label>
                   <input
+                    id="mcp-args"
                     type="text"
                     placeholder="e.g. -y @anthropic/mcp-server-slack"
                     value={args}
@@ -678,8 +682,9 @@ function CustomMcpTab({
                   />
                 </div>
                 <div className="connector-form__field">
-                  <label>Environment Variables (one per line: KEY=VALUE)</label>
+                  <label htmlFor="mcp-env">Environment Variables (one per line: KEY=VALUE)</label>
                   <textarea
+                    id="mcp-env"
                     placeholder={'SLACK_BOT_TOKEN=xoxb-...\nSLACK_TEAM_ID=T...'}
                     value={envStr}
                     onChange={(e) => setEnvStr(e.target.value)}
@@ -707,8 +712,9 @@ function CustomMcpTab({
             ) : (
               <>
                 <div className="connector-form__field">
-                  <label>MCP Server Config (JSON)</label>
+                  <label htmlFor="mcp-json-config">MCP Server Config (JSON)</label>
                   <textarea
+                    id="mcp-json-config"
                     placeholder={'{\n  "name": "My Server",\n  "command": "npx",\n  "args": ["-y", "@my/mcp-server"],\n  "env": { "API_KEY": "..." }\n}'}
                     value={jsonConfig}
                     onChange={(e) => setJsonConfig(e.target.value)}

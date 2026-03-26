@@ -1,18 +1,15 @@
 import { AnimatePresence, motion } from 'framer-motion'
 import {
-  Bot,
   Check,
   ChevronDown,
-  ChevronUp,
+  ChevronRight,
   Circle,
   Loader2,
-  Wrench,
 } from 'lucide-react'
 import { useEffect, useState } from 'react'
-import { useStore } from '../../lib/store.js'
 import type { ToolAction } from './groupMessages.js'
 import type { ChatMessage } from '../../lib/store.js'
-import { toolIcons, getStepTitle } from './ActionsGroup.js'
+import { ToolTreeItem, getGroupHeader } from './ActionsGroup.js'
 
 interface Props {
   toolCallId: string
@@ -22,9 +19,8 @@ interface Props {
   defaultExpanded?: boolean
 }
 
-export function SubAgentGroup({ toolCallId, task, actions, result, defaultExpanded = false }: Props) {
+export function SubAgentGroup({ task, actions, result, defaultExpanded = false }: Props) {
   const [expanded, setExpanded] = useState(defaultExpanded)
-  const [expandedRowId, setExpandedRowId] = useState<string | null>(null)
 
   const isPending = !result
   const isError = result?.isError
@@ -38,44 +34,47 @@ export function SubAgentGroup({ toolCallId, task, actions, result, defaultExpand
 
   let statusIcon: React.ReactNode
   if (isPending) {
-    statusIcon = <Loader2 size={16} strokeWidth={1.5} className="actions-pill__spin" />
+    statusIcon = <Loader2 size={14} strokeWidth={1.5} className="tool-tree__spinner" />
   } else if (isError) {
-    statusIcon = <Circle size={16} strokeWidth={1.5} className="actions-pill__status--error" />
+    statusIcon = <Circle size={14} strokeWidth={1.5} className="tool-tree__status--error" />
   } else {
-    statusIcon = <Check size={16} strokeWidth={1.5} className="actions-pill__status--done" />
+    statusIcon = <Check size={14} strokeWidth={1.5} className="tool-tree__status--done" />
   }
+
+  // Build summary: "Agent · Glob · 4 tool calls"
+  const _actionsSummary = actions.length > 0 ? getGroupHeader(actions) : null
 
   return (
     <motion.div
-      initial={{ opacity: 0, y: 6 }}
+      initial={{ opacity: 0, y: 4 }}
       animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.2 }}
-      className="actions-group actions-group--sub-agent"
+      transition={{ duration: 0.15 }}
+      className="tool-tree tool-tree--sub-agent"
     >
       {/* Header */}
       <button
         type="button"
-        className="actions-group__header"
+        className="tool-tree__header"
         onClick={() => setExpanded(!expanded)}
       >
-        <span className="actions-group__status-icon">{statusIcon}</span>
-        <span className="actions-group__header-text">{taskPreview}</span>
+        {expanded ? (
+          <ChevronDown size={14} strokeWidth={1.5} className="tool-tree__chevron" />
+        ) : (
+          <ChevronRight size={14} strokeWidth={1.5} className="tool-tree__chevron" />
+        )}
+        <span className="tool-tree__status-icon">{statusIcon}</span>
+        <span className="tool-tree__header-text">{taskPreview}</span>
         {errorCount > 0 && (
-          <span className="actions-group__error-badge">{errorCount} failed</span>
+          <span className="tool-tree__error-badge">{errorCount} failed</span>
         )}
         {actions.length > 0 && (
-          <span className="actions-group__count">
+          <span className="tool-tree__count">
             {actions.length} step{actions.length !== 1 ? 's' : ''}
           </span>
         )}
-        {expanded ? (
-          <ChevronUp size={14} strokeWidth={1.5} className="actions-group__chevron" />
-        ) : (
-          <ChevronDown size={14} strokeWidth={1.5} className="actions-group__chevron" />
-        )}
       </button>
 
-      {/* Nested tool call pills */}
+      {/* Nested tool call tree */}
       <AnimatePresence>
         {expanded && actions.length > 0 && (
           <motion.div
@@ -85,54 +84,14 @@ export function SubAgentGroup({ toolCallId, task, actions, result, defaultExpand
             transition={{ duration: 0.15 }}
             style={{ overflow: 'hidden' }}
           >
-            <div className="actions-group__pills">
-              {actions.map((action) => {
-                const toolName = action.call.toolName || 'unknown'
-                const Icon = toolIcons[toolName] || Wrench
-                const title = action.call.toolInput
-                  ? getStepTitle(toolName, action.call.toolInput as Record<string, unknown>)
-                  : toolName
-                const isActionError = action.result?.isError
-                const isActionPending = !action.result
-                const isRowExpanded = expandedRowId === action.call.id
-
-                return (
-                  <div key={action.call.id} className="action-pill-wrap">
-                    <button
-                      type="button"
-                      className={`action-pill${isActionError ? ' action-pill--error' : ''}${isActionPending ? ' action-pill--pending' : ''}`}
-                      onClick={() =>
-                        action.result && setExpandedRowId(isRowExpanded ? null : action.call.id)
-                      }
-                    >
-                      <span className="action-pill__icon">
-                        {isActionPending ? (
-                          <Loader2 size={14} strokeWidth={1.5} className="actions-pill__spin" />
-                        ) : (
-                          <Icon size={14} strokeWidth={1.5} />
-                        )}
-                      </span>
-                      <span className="action-pill__text">{title}</span>
-                    </button>
-
-                    <AnimatePresence>
-                      {isRowExpanded && action.result && (
-                        <motion.div
-                          initial={{ height: 0, opacity: 0 }}
-                          animate={{ height: 'auto', opacity: 1 }}
-                          exit={{ height: 0, opacity: 0 }}
-                          transition={{ duration: 0.12 }}
-                          style={{ overflow: 'hidden' }}
-                        >
-                          <pre className="action-pill__result">
-                            {action.result.content}
-                          </pre>
-                        </motion.div>
-                      )}
-                    </AnimatePresence>
-                  </div>
-                )
-              })}
+            <div className="tool-tree__items">
+              {actions.map((action, i) => (
+                <ToolTreeItem
+                  key={action.call.id}
+                  action={action}
+                  isLast={i === actions.length - 1}
+                />
+              ))}
             </div>
           </motion.div>
         )}

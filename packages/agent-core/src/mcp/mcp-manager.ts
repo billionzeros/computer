@@ -53,7 +53,7 @@ export class McpManager {
    * Stop all connectors and clean up.
    */
   async stopAll(): Promise<void> {
-    console.log(`[mcp-manager] stopping all connectors...`)
+    console.log("[mcp-manager] stopping all connectors...")
     const promises = Array.from(this.clients.keys()).map((id) => this.stop(id))
     await Promise.allSettled(promises)
   }
@@ -163,8 +163,8 @@ export class McpManager {
    * Get all tools from all connected MCP servers, as pi SDK AgentTools.
    * This is the key method — called by buildTools() to merge MCP tools.
    */
-  getAllTools(): AgentTool<any>[] {
-    const tools: AgentTool<any>[] = []
+  getAllTools(): AgentTool[] {
+    const tools: AgentTool[] = []
     for (const client of this.clients.values()) {
       if (client.isConnected()) {
         tools.push(...mcpClientToAgentTools(client))

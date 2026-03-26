@@ -1,5 +1,5 @@
 import { motion } from 'framer-motion'
-import { ListChecks, Paperclip, Plus, Send } from 'lucide-react'
+import { ListChecks, Plus, Send } from 'lucide-react'
 import { useRef, useState } from 'react'
 import type { Project } from '@anton/protocol'
 import type { SessionMeta } from '../../lib/store.js'
@@ -147,10 +147,10 @@ export function ProjectLanding({
 
             {sessionsLoading ? (
               <div className="project-landing__sessions-skeleton">
-                {Array.from({ length: 3 }, (_, i) => (
-                  <div key={i} className="session-card session-card--skeleton">
+                {[{ id: 'skel-1', w: '60%' }, { id: 'skel-2', w: '70%' }, { id: 'skel-3', w: '80%' }].map((skel) => (
+                  <div key={skel.id} className="session-card session-card--skeleton">
                     <div className="session-card__content">
-                      <Skeleton width={`${60 + i * 10}%`} height={14} />
+                      <Skeleton width={skel.w} height={14} />
                       <div style={{ display: 'flex', gap: '12px', marginTop: '6px' }}>
                         <Skeleton width={40} height={12} />
                         <Skeleton width={50} height={12} />

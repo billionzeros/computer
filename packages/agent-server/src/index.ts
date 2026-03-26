@@ -28,7 +28,7 @@ async function main() {
    └─────────────────────────────────────┘
   `)
 
-  // Load config (creates default on first run, migrates legacy format)
+  // Load config (creates default on first run)
   const config = loadConfig()
 
   // Load skills from ~/.anton/skills/

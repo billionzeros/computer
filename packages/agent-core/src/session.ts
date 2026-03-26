@@ -10,7 +10,7 @@
  */
 
 import type { AgentConfig, PersistedSession } from '@anton/agent-config'
-import { getProjectSessionsDir, loadSession, saveSession } from '@anton/agent-config'
+import { ensureConversationDirs, getConversationWorkspace, getProjectSessionsDir, loadSession, saveSession } from '@anton/agent-config'
 import type { ChatImageAttachmentInput, SessionImageAttachment, TokenUsage } from '@anton/protocol'
 import { Agent as PiAgent } from '@mariozechner/pi-agent-core'
 import type {
@@ -21,6 +21,7 @@ import type {
 import { completeSimple, getModel } from '@mariozechner/pi-ai'
 import type { Api, ImageContent, Model, TextContent } from '@mariozechner/pi-ai'
 import { type AskUserHandler, SYSTEM_PROMPT, type ToolCallbacks, buildTools } from './agent.js'
+import { type ContextInfo, assembleConversationContext } from './context.js'
 import {
   type CompactionConfig,
   type CompactionState,
@@ -67,6 +68,8 @@ export type SessionEvent =
   | { type: 'error'; message: string }
   | { type: 'sub_agent_start'; toolCallId: string; task: string }
   | { type: 'sub_agent_end'; toolCallId: string; success: boolean }
+  | { type: 'tasks_update'; tasks: import('@anton/protocol').TaskItem[] }
+  | { type: 'token_update'; usage: TokenUsage }
 
 export interface SessionInfo {
   id: string
@@ -98,6 +101,8 @@ export class Session {
   private lastEmittedTextLength = 0 // track delta for streaming
   // Pending tool calls for artifact detection
   private pendingToolCalls = new Map<string, { name: string; input: Record<string, unknown> }>()
+  // Injected event push — set during processMessage so tools can emit events
+  private pushEvent?: (event: SessionEvent) => void
 
   // Token usage tracking
   private lastTurnUsage: TokenUsage | undefined
@@ -118,6 +123,9 @@ export class Session {
   private ephemeral: boolean
   public projectId?: string
   private projectContext?: string
+  private workspacePath?: string
+  private conversationContext?: string
+  public contextInfo?: ContextInfo
 
   constructor(opts: {
     id: string
@@ -145,6 +153,12 @@ export class Session {
     this.ephemeral = opts.ephemeral || false
     this.projectId = opts.projectId
     this.projectContext = opts.projectContext
+
+    // Set up conversation workspace (skip for ephemeral sub-agents)
+    if (!this.ephemeral) {
+      ensureConversationDirs(this.id)
+      this.workspacePath = getConversationWorkspace(this.id)
+    }
 
     // Initialize compaction
     const configCompaction = opts.config.compaction
@@ -294,6 +308,11 @@ export class Session {
     this.askUserHandler = handler
   }
 
+  /** Push a tasks_update event into the live event stream (called by task_tracker tool). */
+  emitTasksUpdate(tasks: import('@anton/protocol').TaskItem[]) {
+    this.pushEvent?.({ type: 'tasks_update', tasks })
+  }
+
   /**
    * Process a user message. Streams events back via async generator.
    * Persists session state after completion.
@@ -351,6 +370,12 @@ export class Session {
     let eventCount = 0
     let textEventCount = 0
 
+    // Allow tools (like task_tracker) to push events into the stream
+    this.pushEvent = (ev: SessionEvent) => {
+      events.push(ev)
+      resolveNext?.()
+    }
+
     const unsub = this.piAgent.subscribe((event: PiAgentEvent) => {
       console.log(`[session ${this.id}] pi event: ${event.type}`)
       const translated = this.translateEvent(event)
@@ -407,10 +432,11 @@ export class Session {
       this.pendingCompactionEvent = null
     }
 
-    // Yield AI-generated title if available
+    // Yield AI-generated title if available and meaningful
     if (aiTitlePromise) {
       const aiTitle = await aiTitlePromise
-      if (aiTitle) {
+      // Skip AI title if it's just "New Conversation" — keep the regex title instead
+      if (aiTitle && aiTitle.toLowerCase() !== 'new conversation') {
         this.title = aiTitle
         yield { type: 'title_update', title: aiTitle }
       }
@@ -787,7 +813,8 @@ export class Session {
           this.cumulativeUsage.cacheReadTokens += this.lastTurnUsage.cacheReadTokens
           this.cumulativeUsage.cacheWriteTokens += this.lastTurnUsage.cacheWriteTokens
         }
-        return []
+        // Emit streaming token update so the client can show live counters
+        return [{ type: 'token_update' as const, usage: this.getCumulativeUsage() }]
       }
 
       case 'agent_end': {
@@ -980,9 +1007,22 @@ export class Session {
 
   private getSystemPrompt(): string {
     let prompt = SYSTEM_PROMPT
+
+    // Conversation workspace
+    if (this.workspacePath) {
+      prompt += `\n\nYour workspace for this conversation is: ${this.workspacePath}/\nUse this directory for any files you need to create or store during this conversation.\n`
+    }
+
+    // Conversation context (memories)
+    if (this.conversationContext) {
+      prompt += this.conversationContext
+    }
+
+    // Project context
     if (this.projectContext) {
       prompt += this.projectContext
     }
+
     if (this.config.skills.length > 0) {
       prompt += '\n\n## Active Skills\n'
       for (const skill of this.config.skills) {
@@ -990,6 +1030,24 @@ export class Session {
       }
     }
     return prompt
+  }
+
+  /**
+   * Load conversation context (memories) for this session.
+   * Call after construction with the first user message for cross-conversation matching.
+   */
+  loadConversationContext(firstMessage?: string): ContextInfo | undefined {
+    if (this.ephemeral) return undefined
+    const { contextBlock, contextInfo } = assembleConversationContext(
+      this.id,
+      firstMessage,
+      this.projectId,
+    )
+    this.conversationContext = contextBlock
+    this.contextInfo = contextInfo
+    // Update system prompt with new context
+    this.piAgent.setSystemPrompt(this.getSystemPrompt())
+    return contextInfo
   }
 }
 
@@ -1019,12 +1077,17 @@ export function createSession(
   // Holder lets the ask_user tool call the handler set later via setAskUserHandler
   const handlerRef: { askUser?: AskUserHandler } = {}
   const confirmRef: { handler?: ConfirmHandler } = {}
+  const sessionRef: { session?: Session } = {}
 
   const toolCallbacks: ToolCallbacks = {
     getAskUserHandler: () => handlerRef.askUser,
     onSubAgentEvent: opts?.onSubAgentEvent,
     getConfirmHandler: () => confirmRef.handler,
     clientApiKey: opts?.apiKey,
+    conversationId: opts?.ephemeral ? undefined : id,
+    onTasksUpdate: (tasks) => {
+      sessionRef.session?.emitTasksUpdate(tasks)
+    },
   }
 
   const session = new Session({
@@ -1038,6 +1101,7 @@ export function createSession(
     projectId: opts?.projectId,
     projectContext: opts?.projectContext,
   })
+  sessionRef.session = session
   // Wire: when setAskUserHandler is called on session, update the holder
   const origSet = session.setAskUserHandler.bind(session)
   session.setAskUserHandler = (handler: AskUserHandler) => {
@@ -1073,11 +1137,16 @@ export function resumeSession(
 
   const handlerRef: { askUser?: AskUserHandler } = {}
   const confirmRef: { handler?: ConfirmHandler } = {}
+  const sessionRef: { session?: Session } = {}
 
   const toolCallbacks: ToolCallbacks = {
     getAskUserHandler: () => handlerRef.askUser,
     onSubAgentEvent: opts?.onSubAgentEvent,
     getConfirmHandler: () => confirmRef.handler,
+    conversationId: persisted.id,
+    onTasksUpdate: (tasks) => {
+      sessionRef.session?.emitTasksUpdate(tasks)
+    },
   }
 
   const session = new Session({
@@ -1093,6 +1162,10 @@ export function resumeSession(
     projectId: opts?.projectId,
     projectContext: opts?.projectContext,
   })
+  sessionRef.session = session
+
+  // Load conversation context on resume
+  session.loadConversationContext()
   const origSet = session.setAskUserHandler.bind(session)
   session.setAskUserHandler = (handler: AskUserHandler) => {
     handlerRef.askUser = handler

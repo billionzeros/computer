@@ -4,6 +4,7 @@ import {
   ChevronRight,
   FolderOpen,
   LayoutGrid,
+  Loader2,
   MessageSquareText,
   Monitor,
   MoreHorizontal,
@@ -26,7 +27,7 @@ interface Props {
   onOpenSettings: () => void
 }
 
-export function Sidebar({ onDisconnect: _onDisconnect, activeView, onViewChange, onOpenSettings }: Props) {
+export function Sidebar({ onViewChange, onOpenSettings }: Props) {
   useConnectionStatus()
   const conversations = useStore((s) => s.conversations)
   const activeId = useStore((s) => s.activeConversationId)
@@ -40,22 +41,30 @@ export function Sidebar({ onDisconnect: _onDisconnect, activeView, onViewChange,
   const activeProjectId = useStore((s) => s.activeProjectId)
   const setActiveProject = useStore((s) => s.setActiveProject)
   const projectSessions = useStore((s) => s.projectSessions)
+  const sessionStatuses = useStore((s) => s.sessionStatuses)
+  const pendingConfirm = useStore((s) => s.pendingConfirm)
+  const pendingAskUser = useStore((s) => s.pendingAskUser)
+  const pendingPlan = useStore((s) => s.pendingPlan)
 
-  const machineName = connection.currentConfig?.host?.replace('.antoncomputer.in', '') ?? ''
   const chatConversations = conversations.filter((c) => !c.projectId)
 
-  const handleNewTask = () => {
-    // If there's already an empty conversation, switch to it instead of creating another
-    const emptyConv = conversations.find((c) => c.messages.length === 0)
-    if (emptyConv) {
-      switchConversation(emptyConv.id)
-      onViewChange('agent')
-      if (currentView !== 'chat') {
-        useStore.getState().setActiveView('chat')
-      }
-      return
+  const getConvStatus = (sessionId: string | undefined) => {
+    if (!sessionId) return null
+    // Check if awaiting user input (confirm, ask_user, or plan review)
+    if (
+      pendingConfirm?.sessionId === sessionId ||
+      pendingAskUser?.sessionId === sessionId ||
+      pendingPlan?.sessionId === sessionId
+    ) {
+      return 'awaiting'
     }
+    // Check if working
+    const status = sessionStatuses.get(sessionId)
+    if (status?.status === 'working') return 'working'
+    return null
+  }
 
+  const handleNewTask = () => {
     const sessionId = `sess_${Date.now().toString(36)}`
     const store = useStore.getState()
     newConversation(undefined, sessionId)
@@ -159,7 +168,9 @@ export function Sidebar({ onDisconnect: _onDisconnect, activeView, onViewChange,
                           switchConversation(conv.id)
                           if (conv.sessionId) {
                             connection.sendSessionResume(conv.sessionId)
-                            connection.sendSessionHistory(conv.sessionId)
+                            if (conv.messages.length === 0) {
+                              connection.sendSessionHistory(conv.sessionId)
+                            }
                           }
                           onViewChange('agent')
                           if (currentView !== 'chat') {
@@ -171,7 +182,9 @@ export function Sidebar({ onDisconnect: _onDisconnect, activeView, onViewChange,
                             switchConversation(conv.id)
                             if (conv.sessionId) {
                               connection.sendSessionResume(conv.sessionId)
-                              connection.sendSessionHistory(conv.sessionId)
+                              if (conv.messages.length === 0) {
+                                connection.sendSessionHistory(conv.sessionId)
+                              }
                             }
                             onViewChange('agent')
                           }
@@ -179,6 +192,12 @@ export function Sidebar({ onDisconnect: _onDisconnect, activeView, onViewChange,
                         className={`sidebar-recent__item${conv.id === activeId ? ' sidebar-recent__item--active' : ''}`}
                       >
                         <span className="sidebar-recent__title">{conv.title}</span>
+                        {getConvStatus(conv.sessionId) === 'working' && (
+                          <Loader2 size={14} strokeWidth={1.5} className="sidebar-status-spinner" />
+                        )}
+                        {getConvStatus(conv.sessionId) === 'awaiting' && (
+                          <span className="sidebar-status-badge">Needs input</span>
+                        )}
                         <ConversationMenu
                           onDelete={(e) => handleDelete(e, conv.id, conv.sessionId)}
                         />
@@ -274,7 +293,7 @@ function ConversationMenu({ onDelete }: { onDelete: (e: React.MouseEvent) => voi
       </button>
       {open && (
         <>
-          <div className="sidebar-conv-menu__backdrop" onClick={(e) => { e.stopPropagation(); setOpen(false) }} />
+          <div className="sidebar-conv-menu__backdrop" onClick={(e) => { e.stopPropagation(); setOpen(false) }} onKeyDown={(e) => { if (e.key === 'Escape') setOpen(false) }} />
           <div className="sidebar-conv-menu">
             <button
               type="button"
@@ -310,7 +329,7 @@ interface ProjectFolderProps {
   onClick: () => void
 }
 
-function ProjectFolder({ projectId, name, icon, isActive, sessions, onClick }: ProjectFolderProps) {
+function ProjectFolder({ projectId, name, isActive, sessions, onClick }: ProjectFolderProps) {
   const activeProjectSessionId = useStore((s) => s.activeProjectSessionId)
   const setActiveProjectSession = useStore((s) => s.setActiveProjectSession)
   const deleteConversation = useStore((s) => s.deleteConversation)
@@ -331,7 +350,10 @@ function ProjectFolder({ projectId, name, icon, isActive, sessions, onClick }: P
 
     // Resume on server
     connection.sendSessionResume(sessionId)
-    connection.sendSessionHistory(sessionId)
+    // Only fetch history if no local messages (switchConversation handles background-completed refresh)
+    if (!conv || conv.messages.length === 0) {
+      connection.sendSessionHistory(sessionId)
+    }
 
     // Set the active project session (triggers embedded chat in ProjectView)
     setActiveProjectSession(sessionId)
@@ -340,9 +362,10 @@ function ProjectFolder({ projectId, name, icon, isActive, sessions, onClick }: P
   const handleDeleteThread = (e: React.MouseEvent, sessionId: string) => {
     e.stopPropagation()
     const store = useStore.getState()
+    // Always tell the server to destroy — session may exist on disk without a local conversation
+    connection.sendSessionDestroy(sessionId)
     const conv = store.findConversationBySession(sessionId)
     if (conv) {
-      connection.sendSessionDestroy(sessionId)
       deleteConversation(conv.id)
     }
     // If this was the active session, clear it
@@ -380,6 +403,19 @@ function ProjectFolder({ projectId, name, icon, isActive, sessions, onClick }: P
                 model: store.currentModel,
                 projectId,
               })
+              // Optimistically add to projectSessions so sidebar updates immediately
+              store.setProjectSessions([
+                {
+                  id: sessionId,
+                  title: 'New conversation',
+                  provider: store.currentProvider,
+                  model: store.currentModel,
+                  messageCount: 0,
+                  createdAt: Date.now(),
+                  lastActiveAt: Date.now(),
+                },
+                ...store.projectSessions,
+              ])
               const conv = store.findConversationBySession(sessionId)
               if (conv) {
                 store.switchConversation(conv.id)
@@ -401,6 +437,7 @@ function ProjectFolder({ projectId, name, icon, isActive, sessions, onClick }: P
               <div
                 key={session.id}
                 onClick={() => handleThreadClick(session.id)}
+                onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') handleThreadClick(session.id) }}
                 className={`sidebar-recent__item${activeProjectSessionId === session.id ? ' sidebar-recent__item--active' : ''}`}
               >
                 <span className="sidebar-recent__title">

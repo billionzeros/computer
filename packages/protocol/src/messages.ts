@@ -163,6 +163,19 @@ export interface SessionResumedMessage {
   title: string
 }
 
+export interface ContextInfoMessage {
+  type: 'context_info'
+  sessionId: string
+  globalMemories: string[]
+  conversationMemories: string[]
+  crossConversationMemories: Array<{
+    fromConversation: string
+    conversationTitle: string
+    memoryKey: string
+  }>
+  projectId?: string
+}
+
 export interface SessionsListMessage {
   type: 'sessions_list'
 }
@@ -402,6 +415,29 @@ export interface AiArtifactMessage {
   content: string
   sessionId?: string
   parentToolCallId?: string
+}
+
+// ── Task tracker (Claude Code–style todo list) ──────────────────────
+export type TaskStatus = 'pending' | 'in_progress' | 'completed'
+
+export interface TaskItem {
+  /** What needs to be done (imperative, e.g. "Run tests") */
+  content: string
+  /** Present-continuous form shown while active (e.g. "Running tests") */
+  activeForm: string
+  status: TaskStatus
+}
+
+export interface AiTasksUpdateMessage {
+  type: 'tasks_update'
+  tasks: TaskItem[]
+  sessionId?: string
+}
+
+export interface AiTokenUpdateMessage {
+  type: 'token_update'
+  usage: TokenUsage // cumulative so far this turn
+  sessionId?: string
 }
 
 export interface AiDoneMessage {
@@ -721,6 +757,7 @@ export type AiMessage =
   | SessionDestroyedMessage
   | SessionHistoryMessage
   | SessionHistoryResponse
+  | ContextInfoMessage
   // Provider management
   | ProvidersListMessage
   | ProvidersListResponse
@@ -743,6 +780,8 @@ export type AiMessage =
   | AiAskUserMessage
   | AiAskUserResponseMessage
   | AiArtifactMessage
+  | AiTasksUpdateMessage
+  | AiTokenUpdateMessage
   | AiDoneMessage
   | AiErrorMessage
   // Sub-agent
@@ -813,6 +852,7 @@ export interface AgentStatusEvent {
   type: 'agent_status'
   status: 'idle' | 'working' | 'error'
   detail?: string
+  sessionId?: string
 }
 
 /** Emitted proactively when the agent detects a newer version is available */

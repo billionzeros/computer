@@ -1,5 +1,16 @@
 import type { ChatMessage } from './store.js'
 
+export interface ConversationContextInfo {
+  globalMemories: string[]
+  conversationMemories: string[]
+  crossConversationMemories: Array<{
+    fromConversation: string
+    conversationTitle: string
+    memoryKey: string
+  }>
+  projectId?: string
+}
+
 export interface Conversation {
   id: string
   sessionId: string // server-side session ID
@@ -8,6 +19,9 @@ export interface Conversation {
   createdAt: number
   updatedAt: number
   projectId?: string // set if this conversation belongs to a project
+  provider?: string // model provider for this conversation
+  model?: string // model name for this conversation
+  contextInfo?: ConversationContextInfo // loaded context/memory info from server
 }
 
 const STORAGE_KEY = 'anton.conversations'
@@ -36,6 +50,8 @@ export function createConversation(
   title?: string,
   sessionId?: string,
   projectId?: string,
+  provider?: string,
+  model?: string,
 ): Conversation {
   const id = `conv_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`
   return {
@@ -46,6 +62,8 @@ export function createConversation(
     createdAt: Date.now(),
     updatedAt: Date.now(),
     projectId,
+    provider,
+    model,
   }
 }
 

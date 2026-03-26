@@ -38,7 +38,7 @@ export function SkeletonLines({ count = 3, gap = 8 }: { count?: number; gap?: nu
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: `${gap}px` }}>
       {Array.from({ length: count }, (_, i) => (
-        <Skeleton key={i} width={widths[i % widths.length]} />
+        <Skeleton key={`skeleton-line-${widths[i % widths.length]}-${i}`} width={widths[i % widths.length]} />
       ))}
     </div>
   )

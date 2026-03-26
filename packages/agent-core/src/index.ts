@@ -26,3 +26,4 @@ export {
   type SessionInfo,
   type SubAgentEventHandler,
 } from './session.js'
+export { type ContextInfo, assembleConversationContext } from './context.js'

@@ -18,7 +18,7 @@ function toolResult(output: string, isError = false) {
 /**
  * Convert a single MCP tool to a pi SDK AgentTool.
  */
-export function mcpToolToAgentTool(mcpTool: McpTool, client: McpClient): AgentTool<any> {
+export function mcpToolToAgentTool(mcpTool: McpTool, client: McpClient): AgentTool {
   const serverId = client.config.id
   const serverName = client.config.name
 
@@ -29,7 +29,7 @@ export function mcpToolToAgentTool(mcpTool: McpTool, client: McpClient): AgentTo
     parameters: jsonSchemaToTypebox(mcpTool.inputSchema),
     async execute(_toolCallId, params) {
       try {
-        const result = await client.callTool(mcpTool.name, params)
+        const result = await client.callTool(mcpTool.name, params as Record<string, unknown>)
         const textParts = (result.content || [])
           .filter((c) => c.type === 'text' && c.text)
           .map((c) => c.text as string)
@@ -45,6 +45,6 @@ export function mcpToolToAgentTool(mcpTool: McpTool, client: McpClient): AgentTo
 /**
  * Convert all tools from an MCP client to pi SDK AgentTools.
  */
-export function mcpClientToAgentTools(client: McpClient): AgentTool<any>[] {
+export function mcpClientToAgentTools(client: McpClient): AgentTool[] {
   return client.getTools().map((tool) => mcpToolToAgentTool(tool, client))
 }

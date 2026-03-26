@@ -1,11 +1,12 @@
 import { motion } from 'framer-motion'
-import { FileCode, ListChecks, X } from 'lucide-react'
+import { Brain, FileCode, ListChecks, X } from 'lucide-react'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useStore } from '../lib/store.js'
+import { ContextPanelContent } from './context/ContextPanelContent.js'
 import { PlanPanel } from './PlanPanel.js'
 import { ArtifactPanelContent } from './artifacts/ArtifactPanel.js'
 
-type PanelView = 'artifacts' | 'plan'
+type PanelView = 'artifacts' | 'plan' | 'context'
 
 interface ViewTab {
   id: PanelView
@@ -69,6 +70,7 @@ export function SidePanel() {
   const views: ViewTab[] = [
     { id: 'artifacts', label: 'Artifacts', icon: FileCode, available: artifacts.length > 0 },
     { id: 'plan', label: 'Plan', icon: ListChecks, available: pendingPlan !== null },
+    { id: 'context', label: 'Context', icon: Brain, available: sidePanelView === 'context' },
   ]
 
   const availableViews = views.filter((v) => v.available)
@@ -119,6 +121,21 @@ export function SidePanel() {
         </div>
       )}
 
+      {/* Single-view close button for context */}
+      {!showTabs && activeView === 'context' && (
+        <div className="side-panel__header-bar">
+          <span className="side-panel__header-title">Conversation Context</span>
+          <button
+            type="button"
+            className="side-panel__close"
+            onClick={() => setArtifactPanelOpen(false)}
+            aria-label="Close panel"
+          >
+            <X size={14} strokeWidth={1.5} />
+          </button>
+        </div>
+      )}
+
       {/* Single-view close button (only for plan view when no tab bar) */}
       {!showTabs && activeView === 'plan' && (
         <div className="side-panel__header-bar">
@@ -138,6 +155,7 @@ export function SidePanel() {
       <div className="side-panel__body">
         {activeView === 'artifacts' && <ArtifactPanelContent />}
         {activeView === 'plan' && <PlanPanel />}
+        {activeView === 'context' && <ContextPanelContent />}
       </div>
     </motion.div>
   )

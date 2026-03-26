@@ -1,6 +1,6 @@
 import { type AskUserQuestion, Channel, type Project, type TokenUsage } from '@anton/protocol'
 import { create } from 'zustand'
-import { type Artifact, extractArtifact } from './artifacts.js'
+import type { Artifact } from './artifacts.js'
 import { type ConnectionStatus, connection } from './connection.js'
 import {
   type Conversation,
@@ -186,31 +186,44 @@ interface AppState {
   // Turn timing
   workingStartedAt: number | null
   lastTurnDurationMs: number | null
+  workingSessionId: string | null // which session is currently processing
 
   // Agent status detail & steps
   agentStatusDetail: string | null
   agentSteps: AgentStep[]
+
+  // Task tracker (Claude Code–style work plan)
+  currentTasks: import('@anton/protocol').TaskItem[]
 
   // Session readiness tracking (race condition fix)
   _sessionResolvers: Map<string, () => void>
 
   // Current assistant message ID (for appending text across tool interruptions)
   _currentAssistantMsgId: string | null
+  // Per-session assistant message tracking (for multi-conversation isolation)
+  _sessionAssistantMsgIds: Map<string, string>
 
   // Artifacts
   artifacts: Artifact[]
   activeArtifactId: string | null
   artifactPanelOpen: boolean
 
+  // Per-session status tracking
+  sessionStatuses: Map<string, { status: AgentStatus; detail?: string }>
+
+  // Session streaming & history tracking
+  _activeStreamingSessions: Set<string>
+  _sessionsNeedingHistoryRefresh: Set<string>
+
   // Pending confirmation
-  pendingConfirm: { id: string; command: string; reason: string } | null
+  pendingConfirm: { id: string; command: string; reason: string; sessionId?: string } | null
 
   // Plan review
-  pendingPlan: { id: string; title: string; content: string } | null
-  sidePanelView: 'artifacts' | 'plan'
+  pendingPlan: { id: string; title: string; content: string; sessionId?: string } | null
+  sidePanelView: 'artifacts' | 'plan' | 'context'
 
   // Ask-user questionnaire
-  pendingAskUser: { id: string; questions: AskUserQuestion[] } | null
+  pendingAskUser: { id: string; questions: AskUserQuestion[]; sessionId?: string } | null
 
   // Version & updates
   agentVersion: string | null
@@ -259,7 +272,7 @@ interface AppState {
 
   // Actions
   setConnectionStatus: (status: ConnectionStatus) => void
-  setAgentStatus: (status: AgentStatus) => void
+  setAgentStatus: (status: AgentStatus, sessionId?: string) => void
   setSidebarTab: (tab: SidebarTab) => void
   setSearchQuery: (query: string) => void
 
@@ -274,7 +287,9 @@ interface AppState {
   switchConversation: (id: string) => void
   deleteConversation: (id: string) => void
   addMessage: (msg: ChatMessage) => void
+  addMessageToSession: (sessionId: string, msg: ChatMessage) => void
   appendAssistantText: (content: string) => void
+  appendAssistantTextToSession: (sessionId: string, content: string) => void
   getActiveConversation: () => Conversation | null
   findConversationBySession: (sessionId: string) => Conversation | undefined
   loadSessionMessages: (sessionId: string, messages: ChatMessage[]) => void
@@ -303,14 +318,15 @@ interface AppState {
   clearArtifacts: () => void
 
   // Confirm actions
-  setPendingConfirm: (confirm: { id: string; command: string; reason: string } | null) => void
+  setPendingConfirm: (confirm: { id: string; command: string; reason: string; sessionId?: string } | null) => void
 
   // Plan actions
-  setPendingPlan: (plan: { id: string; title: string; content: string } | null) => void
-  setSidePanelView: (view: 'artifacts' | 'plan') => void
+  setPendingPlan: (plan: { id: string; title: string; content: string; sessionId?: string } | null) => void
+  setSidePanelView: (view: 'artifacts' | 'plan' | 'context') => void
+  openContextPanel: () => void
 
   // Ask-user actions
-  setPendingAskUser: (ask: { id: string; questions: AskUserQuestion[] } | null) => void
+  setPendingAskUser: (ask: { id: string; questions: AskUserQuestion[]; sessionId?: string } | null) => void
 
   // Update actions
   setAgentVersionInfo: (version: string, gitHash: string) => void
@@ -332,13 +348,19 @@ export const useStore = create<AppState>((set, get) => {
     savedActiveConvId && persisted.some((c) => c.id === savedActiveConvId)
       ? savedActiveConvId
       : null
+  // Prefer per-conversation model over global saved model
+  const activeConvModel = restoredActiveId
+    ? persisted.find((c) => c.id === restoredActiveId)
+    : null
+  const initProvider = activeConvModel?.provider ?? savedModel?.provider ?? 'anthropic'
+  const initModel = activeConvModel?.model ?? savedModel?.model ?? 'claude-sonnet-4-6'
 
   return {
     connectionStatus: 'disconnected',
     agentStatus: 'unknown',
     currentSessionId: null,
-    currentProvider: savedModel?.provider ?? 'anthropic',
-    currentModel: savedModel?.model ?? 'claude-sonnet-4-6',
+    currentProvider: initProvider,
+    currentModel: initModel,
     sessions: [],
     providers: [],
     defaults: { provider: 'anthropic', model: 'claude-sonnet-4-6' },
@@ -352,13 +374,19 @@ export const useStore = create<AppState>((set, get) => {
     sessionUsage: null,
     workingStartedAt: null,
     lastTurnDurationMs: null,
+    workingSessionId: null,
     agentStatusDetail: null,
     agentSteps: [],
+    currentTasks: [],
     _sessionResolvers: new Map(),
     _currentAssistantMsgId: null,
+    _sessionAssistantMsgIds: new Map(),
     artifacts: [],
     activeArtifactId: null,
     artifactPanelOpen: false,
+    sessionStatuses: new Map(),
+    _activeStreamingSessions: new Set(),
+    _sessionsNeedingHistoryRefresh: new Set(),
     pendingConfirm: null,
     pendingPlan: null,
     sidePanelView: 'artifacts' as const,
@@ -440,6 +468,20 @@ export const useStore = create<AppState>((set, get) => {
           }
           return
         }
+      } else if (view === 'projects') {
+        // Restore the project conversation when switching back to projects view.
+        // If there's an active project session, ensure activeConversationId matches it.
+        const state = get()
+        if (state.activeProjectSessionId) {
+          const projConv = state.conversations.find(
+            (c) => c.sessionId === state.activeProjectSessionId
+          )
+          if (projConv && projConv.id !== state.activeConversationId) {
+            localStorage.setItem(ACTIVE_CONV_KEY, projConv.id)
+            set({ activeView: view, activeConversationId: projConv.id })
+            return
+          }
+        }
       }
       set({ activeView: view })
     },
@@ -465,16 +507,16 @@ export const useStore = create<AppState>((set, get) => {
     setConnectorRegistry: (entries) => set({ connectorRegistry: entries }),
 
     setConnectionStatus: (status) => set({ connectionStatus: status }),
-    setAgentStatus: (status) => {
+    setAgentStatus: (status, sessionId?) => {
       const prev = get().agentStatus
       if (status === 'working' && prev !== 'working') {
-        set({ agentStatus: status, workingStartedAt: Date.now(), lastTurnDurationMs: null, turnUsage: null })
+        set({ agentStatus: status, workingStartedAt: Date.now(), lastTurnDurationMs: null, turnUsage: null, workingSessionId: sessionId || null })
       } else if (status === 'idle' && prev === 'working') {
         const started = get().workingStartedAt
         const duration = started ? Date.now() - started : null
-        set({ agentStatus: status, lastTurnDurationMs: duration })
+        set({ agentStatus: status, lastTurnDurationMs: duration, workingSessionId: null })
       } else {
-        set({ agentStatus: status })
+        set({ agentStatus: status, workingSessionId: status === 'working' ? (sessionId || null) : null })
       }
     },
     setSidebarTab: (tab) => set({ sidebarTab: tab }),
@@ -482,7 +524,17 @@ export const useStore = create<AppState>((set, get) => {
 
     setCurrentSession: (id, provider, model) => {
       saveSelectedModel(provider, model)
-      set({ currentSessionId: id, currentProvider: provider, currentModel: model })
+      // Also persist model on the active conversation
+      set((state) => {
+        const activeId = state.activeConversationId
+        const conversations = activeId
+          ? state.conversations.map((c) =>
+              c.id === activeId ? { ...c, provider, model, updatedAt: Date.now() } : c,
+            )
+          : state.conversations
+        if (activeId) saveConversations(conversations)
+        return { currentSessionId: id, currentProvider: provider, currentModel: model, conversations }
+      })
     },
 
     setSessions: (sessions) => set({ sessions }),
@@ -501,18 +553,28 @@ export const useStore = create<AppState>((set, get) => {
     },
 
     newConversation: (title, sessionId, projectId) => {
-      const conv = createConversation(title, sessionId, projectId)
+      const { currentProvider, currentModel } = get()
+      const conv = createConversation(title, sessionId, projectId, currentProvider, currentModel)
       set((state) => {
         const conversations = [conv, ...state.conversations]
         saveConversations(conversations)
         localStorage.setItem(ACTIVE_CONV_KEY, conv.id)
-        return { conversations, activeConversationId: conv.id }
+        return {
+          conversations,
+          activeConversationId: conv.id,
+          agentStatus: 'idle' as AgentStatus,
+          agentStatusDetail: null,
+          workingSessionId: null,
+          workingStartedAt: null,
+          currentTasks: [],
+        }
       })
       return conv.id
     },
 
     appendConversation: (title, sessionId, projectId) => {
-      const conv = createConversation(title, sessionId, projectId)
+      const { currentProvider, currentModel } = get()
+      const conv = createConversation(title, sessionId, projectId, currentProvider, currentModel)
       set((state) => {
         // Append at end instead of prepending — used for syncing server sessions
         // so they don't displace the user's current conversation
@@ -525,7 +587,39 @@ export const useStore = create<AppState>((set, get) => {
 
     switchConversation: (id) => {
       localStorage.setItem(ACTIVE_CONV_KEY, id)
-      set({ activeConversationId: id })
+      // Restore per-conversation model when switching
+      const conv = get().conversations.find((c) => c.id === id)
+      const updates: Partial<AppState> = { activeConversationId: id }
+      if (conv?.provider && conv?.model) {
+        updates.currentProvider = conv.provider
+        updates.currentModel = conv.model
+      }
+
+      // Restore per-session agent status so stale sessions don't show "working"
+      if (conv?.sessionId) {
+        const sessionStatus = get().sessionStatuses.get(conv.sessionId)
+        updates.agentStatus = sessionStatus?.status ?? 'idle'
+        updates.agentStatusDetail = sessionStatus?.detail ?? null
+        updates.workingSessionId = sessionStatus?.status === 'working' ? conv.sessionId : null
+        if (sessionStatus?.status !== 'working') {
+          updates.workingStartedAt = null
+        }
+      } else {
+        updates.agentStatus = 'idle'
+        updates.agentStatusDetail = null
+        updates.workingSessionId = null
+        updates.workingStartedAt = null
+      }
+
+      // If this session completed a turn in the background, fetch fresh history
+      if (conv?.sessionId && get()._sessionsNeedingHistoryRefresh.has(conv.sessionId)) {
+        const needsRefresh = new Set(get()._sessionsNeedingHistoryRefresh)
+        needsRefresh.delete(conv.sessionId)
+        updates._sessionsNeedingHistoryRefresh = needsRefresh
+        connection.sendSessionHistory(conv.sessionId)
+      }
+
+      set(updates)
     },
 
     deleteConversation: (id) => {
@@ -552,6 +646,24 @@ export const useStore = create<AppState>((set, get) => {
 
         const conversations = state.conversations.map((c) => {
           if (c.id !== activeId) return c
+          const messages = [...c.messages, msg]
+          const title =
+            c.messages.length === 0 && msg.role === 'user' ? autoTitle(messages) : c.title
+          return { ...c, messages, title, updatedAt: Date.now() }
+        })
+
+        saveConversations(conversations)
+        return { conversations }
+      })
+    },
+
+    addMessageToSession: (sessionId, msg) => {
+      set((state) => {
+        const conv = state.conversations.find((c) => c.sessionId === sessionId)
+        if (!conv) return state
+
+        const conversations = state.conversations.map((c) => {
+          if (c.sessionId !== sessionId) return c
           const messages = [...c.messages, msg]
           const title =
             c.messages.length === 0 && msg.role === 'user' ? autoTitle(messages) : c.title
@@ -603,6 +715,44 @@ export const useStore = create<AppState>((set, get) => {
       })
     },
 
+    appendAssistantTextToSession: (sessionId, content) => {
+      set((state) => {
+        const conv = state.conversations.find((c) => c.sessionId === sessionId)
+        if (!conv) return state
+
+        let newMsgId: string | null = null
+
+        const conversations = state.conversations.map((c) => {
+          if (c.sessionId !== sessionId) return c
+          const messages = [...c.messages]
+
+          const targetId = state._sessionAssistantMsgIds.get(sessionId) ?? null
+          const idx = targetId ? messages.findIndex((m) => m.id === targetId) : -1
+
+          if (idx >= 0) {
+            const target = messages[idx]
+            messages[idx] = { ...target, content: target.content + content }
+          } else {
+            newMsgId = `msg_${Date.now()}`
+            messages.push({
+              id: newMsgId,
+              role: 'assistant',
+              content,
+              timestamp: Date.now(),
+            })
+          }
+          return { ...c, messages, updatedAt: Date.now() }
+        })
+
+        if (newMsgId) {
+          state._sessionAssistantMsgIds.set(sessionId, newMsgId)
+        }
+
+        saveConversations(conversations)
+        return { conversations }
+      })
+    },
+
     getActiveConversation: () => {
       const { conversations, activeConversationId } = get()
       return conversations.find((c) => c.id === activeConversationId) || null
@@ -612,11 +762,35 @@ export const useStore = create<AppState>((set, get) => {
       return get().conversations.find((c) => c.sessionId === sessionId)
     },
 
-    loadSessionMessages: (sessionId, messages) => {
+    loadSessionMessages: (sessionId, serverMessages) => {
       set((state) => {
+        const conv = state.conversations.find((c) => c.sessionId === sessionId)
+        if (!conv) return state
+
+        const localMessages = conv.messages
+        const isStreaming = state._activeStreamingSessions.has(sessionId)
+
+        let mergedMessages: ChatMessage[]
+
+        if (localMessages.length === 0) {
+          // No local messages — use server history as-is (first load)
+          mergedMessages = serverMessages
+        } else if (isStreaming) {
+          // Session is actively streaming — client has newer data than server.
+          // Skip the server response to avoid overwriting in-progress data.
+          return state
+        } else {
+          // Session is idle. Server is authoritative for completed turns.
+          // Use server data unless local has more (turn just ended but
+          // server response was queued before persist completed)
+          mergedMessages = serverMessages.length >= localMessages.length
+            ? serverMessages
+            : localMessages
+        }
+
         const conversations = state.conversations.map((c) => {
           if (c.sessionId !== sessionId) return c
-          return { ...c, messages, updatedAt: Date.now() }
+          return { ...c, messages: mergedMessages, updatedAt: Date.now() }
         })
         saveConversations(conversations)
         return { conversations }
@@ -695,6 +869,7 @@ export const useStore = create<AppState>((set, get) => {
 
     setPendingPlan: (plan) => set({ pendingPlan: plan }),
     setSidePanelView: (view) => set({ sidePanelView: view }),
+    openContextPanel: () => set({ sidePanelView: 'context', artifactPanelOpen: true }),
     setPendingAskUser: (ask) => set({ pendingAskUser: ask }),
 
     setAgentVersionInfo: (version, gitHash) =>
@@ -717,8 +892,10 @@ export const useStore = create<AppState>((set, get) => {
         sessions: [],
         agentStatus: 'unknown',
         agentStatusDetail: null,
+        workingSessionId: null,
         agentSteps: [],
         _currentAssistantMsgId: null,
+        _sessionAssistantMsgIds: new Map(),
         _sessionResolvers: new Map(),
         pendingConfirm: null,
         pendingPlan: null,
@@ -800,11 +977,24 @@ connection.onMessage((channel, msg) => {
   }
 
   if (channel === Channel.EVENTS && msg.type === 'agent_status') {
-    console.log(`[WS] Agent status: ${msg.status}`, msg.detail || '')
-    store.setAgentStatus(msg.status)
-    store.setAgentStatusDetail(msg.detail || null)
-    if (msg.status === 'idle') {
-      store.clearAgentSteps()
+    console.log(`[WS] Agent status: ${msg.status}`, msg.detail || '', msg.sessionId || '')
+    const sid: string | undefined = msg.sessionId
+
+    // Update per-session status map
+    if (sid) {
+      const statuses = new Map(store.sessionStatuses)
+      statuses.set(sid, { status: msg.status, detail: msg.detail })
+      useStore.setState({ sessionStatuses: statuses })
+    }
+
+    // Update global status only for the active session (or if no sessionId)
+    const activeConv = store.getActiveConversation()
+    if (!sid || sid === activeConv?.sessionId) {
+      store.setAgentStatus(msg.status, sid)
+      store.setAgentStatusDetail(msg.detail || null)
+      if (msg.status === 'idle') {
+        store.clearAgentSteps()
+      }
     }
     return
   }
@@ -814,30 +1004,64 @@ connection.onMessage((channel, msg) => {
     return
   }
 
+  // ── Session-aware message routing ─────────────────────────────
+  // Determine whether this message belongs to the active conversation or another one.
+  // If it has a sessionId that matches a non-active conversation, route it there.
+  const msgSessionId: string | undefined = msg.sessionId
+  const activeConv = store.getActiveConversation()
+  const isForActiveSession = !msgSessionId || activeConv?.sessionId === msgSessionId
+  // Helper: add message to the correct conversation
+  const addMsg = (chatMsg: ChatMessage) => {
+    if (isForActiveSession) {
+      store.addMessage(chatMsg)
+    } else if (msgSessionId) {
+      store.addMessageToSession(msgSessionId, chatMsg)
+    }
+  }
+  const appendText = (content: string) => {
+    if (isForActiveSession) {
+      store.appendAssistantText(content)
+    } else if (msgSessionId) {
+      store.appendAssistantTextToSession(msgSessionId, content)
+    }
+  }
+
   switch (msg.type) {
     // ── Chat messages ──────────────────────────────────────────
-    case 'text':
+    case 'text': {
       console.log(`[WS] AI text chunk: "${msg.content?.slice(0, 80)}..."`)
-      store.appendAssistantText(msg.content)
+      // Track that this session is actively streaming
+      const textSessionId = msgSessionId || activeConv?.sessionId
+      if (textSessionId && !store._activeStreamingSessions.has(textSessionId)) {
+        const streaming = new Set(store._activeStreamingSessions)
+        streaming.add(textSessionId)
+        useStore.setState({ _activeStreamingSessions: streaming })
+      }
+      appendText(msg.content)
       break
+    }
 
     case 'thinking':
-      store.addMessage({
+      addMsg({
         id: `think_${Date.now()}`,
         role: 'system',
         content: msg.text,
         timestamp: Date.now(),
       })
-      store.setAgentStatus('working')
+      store.setAgentStatus('working', msgSessionId)
       break
 
     case 'tool_call':
       // Reset assistant message tracking so any text AFTER this tool call
       // creates a new assistant bubble (shows reasoning between tool groups)
       if (!msg.parentToolCallId) {
-        useStore.setState({ _currentAssistantMsgId: null })
+        if (isForActiveSession) {
+          useStore.setState({ _currentAssistantMsgId: null })
+        } else if (msgSessionId) {
+          store._sessionAssistantMsgIds.delete(msgSessionId)
+        }
       }
-      store.addMessage({
+      addMsg({
         id: `tc_${msg.id}`,
         role: 'tool',
         content: `Running: ${msg.name}`,
@@ -856,7 +1080,7 @@ connection.onMessage((channel, msg) => {
           timestamp: Date.now(),
         })
       }
-      store.setAgentStatus('working')
+      store.setAgentStatus('working', msgSessionId)
       break
 
     case 'tool_result': {
@@ -868,28 +1092,19 @@ connection.onMessage((channel, msg) => {
         timestamp: Date.now(),
         parentToolCallId: msg.parentToolCallId,
       }
-      store.addMessage(resultMsg)
+      addMsg(resultMsg)
       if (!msg.parentToolCallId) {
         store.updateAgentStep(msg.id, {
           status: msg.isError ? 'error' : 'complete',
         })
       }
 
-      // Legacy client-side artifact extraction (fallback if server doesn't emit artifact events)
-      if (!msg.isError && !msg.parentToolCallId) {
-        const conv = store.getActiveConversation()
-        const toolCallMsg = conv?.messages.find((m) => m.id === `tc_${msg.id}`)
-        if (toolCallMsg) {
-          const artifact = extractArtifact(toolCallMsg, resultMsg)
-          if (artifact) store.addArtifact(artifact)
-        }
-      }
       break
     }
 
     // ── Sub-agent lifecycle ──────────────────────────────────────
     case 'sub_agent_start':
-      store.addMessage({
+      addMsg({
         id: `sa_start_${msg.toolCallId}`,
         role: 'tool',
         content: msg.task,
@@ -900,7 +1115,7 @@ connection.onMessage((channel, msg) => {
       break
 
     case 'sub_agent_end':
-      store.addMessage({
+      addMsg({
         id: `sa_end_${msg.toolCallId}`,
         role: 'tool',
         content: msg.success ? 'Sub-agent completed' : 'Sub-agent failed',
@@ -931,6 +1146,7 @@ connection.onMessage((channel, msg) => {
         id: msg.id,
         command: msg.command,
         reason: msg.reason,
+        sessionId: msgSessionId,
       })
       break
 
@@ -939,6 +1155,7 @@ connection.onMessage((channel, msg) => {
         id: msg.id,
         title: msg.title,
         content: msg.content,
+        sessionId: msgSessionId,
       })
       store.setSidePanelView('plan')
       store.setArtifactPanelOpen(true)
@@ -948,11 +1165,12 @@ connection.onMessage((channel, msg) => {
       store.setPendingAskUser({
         id: msg.id,
         questions: msg.questions,
+        sessionId: msgSessionId,
       })
       break
 
-    case 'error':
-      store.addMessage({
+    case 'error': {
+      addMsg({
         id: `err_${Date.now()}`,
         role: 'system',
         content: msg.message,
@@ -960,18 +1178,56 @@ connection.onMessage((channel, msg) => {
         timestamp: Date.now(),
       })
       store.setAgentStatus('error')
+      // Clear streaming flag on error
+      const errSessionId = msgSessionId || activeConv?.sessionId
+      if (errSessionId && store._activeStreamingSessions.has(errSessionId)) {
+        const streaming = new Set(store._activeStreamingSessions)
+        streaming.delete(errSessionId)
+        useStore.setState({ _activeStreamingSessions: streaming })
+      }
       break
+    }
 
     case 'title_update':
+      console.log('[WS] title_update received:', { sessionId: msg.sessionId, title: msg.title })
       if (msg.sessionId) {
+        const matchingConv = store.findConversationBySession(msg.sessionId)
+        console.log('[WS] title_update matching conv:', matchingConv?.id, matchingConv?.sessionId, matchingConv?.title)
         store.updateConversationTitle(msg.sessionId, msg.title)
+        // Also update projectSessions so sidebar reflects the new title
+        if (store.projectSessions.some((s: SessionMeta) => s.id === msg.sessionId)) {
+          store.setProjectSessions(
+            store.projectSessions.map((s: SessionMeta) =>
+              s.id === msg.sessionId ? { ...s, title: msg.title } : s
+            )
+          )
+        }
+      } else {
+        console.warn('[WS] title_update has no sessionId, skipping')
       }
       break
 
+    case 'tasks_update': {
+      if (isForActiveSession && msg.tasks) {
+        useStore.setState({ currentTasks: msg.tasks })
+      }
+      break
+    }
+
+    case 'token_update': {
+      // Streaming token update — update turnUsage live so the UI can show a counter
+      if (isForActiveSession && msg.usage) {
+        store.setUsage(msg.usage, null)
+      }
+      break
+    }
+
     case 'done': {
       // Detect silent failures: server says "done" but never sent any text/tool events
-      const conv = store.getActiveConversation()
-      const lastMsg = conv?.messages[conv.messages.length - 1]
+      const doneConv = msgSessionId
+        ? store.findConversationBySession(msgSessionId)
+        : store.getActiveConversation()
+      const lastMsg = doneConv?.messages[doneConv.messages.length - 1]
       const wasWorking = store.agentStatus === 'working'
       const noResponse = wasWorking && lastMsg?.role === 'user'
       const zeroTokens = msg.usage && msg.usage.inputTokens === 0 && msg.usage.outputTokens === 0
@@ -980,7 +1236,7 @@ connection.onMessage((channel, msg) => {
         console.error(
           '[WS] Silent failure: "done" with zero tokens and no response. Likely missing API key on server.',
         )
-        store.addMessage({
+        addMsg({
           id: `err_silent_${Date.now()}`,
           role: 'system',
           content:
@@ -990,7 +1246,7 @@ connection.onMessage((channel, msg) => {
         })
       } else if (noResponse) {
         console.warn('[WS] Agent completed with no visible response.')
-        store.addMessage({
+        addMsg({
           id: `err_empty_${Date.now()}`,
           role: 'system',
           content: 'Agent finished but produced no response.',
@@ -999,10 +1255,52 @@ connection.onMessage((channel, msg) => {
         })
       }
 
-      store.setAgentStatus('idle')
-      store.clearAgentSteps()
-      store.setAgentStatusDetail(null)
+      // Update per-session status
+      if (msgSessionId) {
+        const statuses = new Map(store.sessionStatuses)
+        statuses.set(msgSessionId, { status: 'idle' })
+        useStore.setState({ sessionStatuses: statuses })
+      }
+
+      // Only update global status if this is the active session or no other session is working
+      if (isForActiveSession) {
+        store.setAgentStatus('idle')
+        store.clearAgentSteps()
+        store.setAgentStatusDetail(null)
+      } else if (msgSessionId) {
+        // Check if any session is still working
+        const anyWorking = Array.from(store.sessionStatuses.values()).some(
+          (s) => s.status === 'working',
+        )
+        if (!anyWorking) {
+          store.setAgentStatus('idle')
+        }
+      } else {
+        store.setAgentStatus('idle')
+        store.clearAgentSteps()
+        store.setAgentStatusDetail(null)
+      }
+
       useStore.setState({ _currentAssistantMsgId: null })
+      if (msgSessionId) {
+        store._sessionAssistantMsgIds.delete(msgSessionId)
+      }
+
+      // Clear streaming flag; if this was a background session, mark it for history refresh
+      const doneSessionId = msgSessionId || activeConv?.sessionId
+      if (doneSessionId) {
+        const streaming = new Set(store._activeStreamingSessions)
+        streaming.delete(doneSessionId)
+        const needsRefresh = new Set(store._sessionsNeedingHistoryRefresh)
+        if (!isForActiveSession) {
+          needsRefresh.add(doneSessionId)
+        }
+        useStore.setState({
+          _activeStreamingSessions: streaming,
+          _sessionsNeedingHistoryRefresh: needsRefresh,
+        })
+      }
+
       if (msg.usage) {
         store.setUsage(msg.usage, msg.cumulativeUsage || null)
       }
@@ -1018,14 +1316,64 @@ connection.onMessage((channel, msg) => {
     }
 
     // ── Session responses ──────────────────────────────────────
-    case 'session_created':
+    case 'session_created': {
+      // Session created — update session ID and persist model on the conversation.
+      // The server echoes back the actual provider/model being used for this session.
+      // Update currentProvider/currentModel since this is a fresh session the user just created.
       store.setCurrentSession(msg.id, msg.provider, msg.model)
       store.resolvePendingSession(msg.id)
       break
+    }
 
-    case 'session_resumed':
-      store.setCurrentSession(msg.id, msg.provider, msg.model)
+    case 'session_resumed': {
+      // Session resumed — update session ID but preserve the user's global model selection.
+      // The resumed session may have been created with a different model, but the user's
+      // current preference (from the model selector) should not be overwritten.
+      // Only update currentSessionId; persist the session's model on its conversation.
+      const resumedConv = store.findConversationBySession(msg.id)
+      if (resumedConv) {
+        // Update the conversation's stored model and title to match what the server has
+        const convs = store.conversations.map((c: Conversation) =>
+          c.sessionId === msg.id
+            ? {
+                ...c,
+                provider: msg.provider,
+                model: msg.model,
+                // Sync title from server if the server has a real title and local is still default
+                ...(msg.title && msg.title !== 'New conversation' && c.title === 'New conversation'
+                  ? { title: msg.title }
+                  : {}),
+                updatedAt: Date.now(),
+              }
+            : c,
+        )
+        saveConversations(convs)
+        useStore.setState({ conversations: convs, currentSessionId: msg.id })
+      } else {
+        useStore.setState({ currentSessionId: msg.id })
+      }
       break
+    }
+
+    case 'context_info': {
+      // Store context info on the conversation linked to this session
+      const convs = store.conversations.map((c: Conversation) =>
+        c.sessionId === msg.sessionId
+          ? {
+              ...c,
+              contextInfo: {
+                globalMemories: msg.globalMemories || [],
+                conversationMemories: msg.conversationMemories || [],
+                crossConversationMemories: msg.crossConversationMemories || [],
+                projectId: msg.projectId,
+              },
+            }
+          : c,
+      )
+      saveConversations(convs)
+      useStore.setState({ conversations: convs })
+      break
+    }
 
     case 'sessions_list_response':
       store.setSessions(msg.sessions)
@@ -1066,6 +1414,10 @@ connection.onMessage((channel, msg) => {
 
     case 'session_destroyed':
       store.setSessions(store.sessions.filter((s: SessionMeta) => s.id !== msg.id))
+      // Also remove from projectSessions so project view updates immediately
+      if (store.projectSessions.some((s: SessionMeta) => s.id === msg.id)) {
+        store.setProjectSessions(store.projectSessions.filter((s: SessionMeta) => s.id !== msg.id))
+      }
       break
 
     // ── Provider responses ─────────────────────────────────────
@@ -1089,7 +1441,7 @@ connection.onMessage((channel, msg) => {
 
     // ── Compaction ──────────────────────────────────────────────
     case 'compaction_start':
-      store.addMessage({
+      addMsg({
         id: `compact_${Date.now()}`,
         role: 'system',
         content: 'Compacting context...',
@@ -1098,7 +1450,7 @@ connection.onMessage((channel, msg) => {
       break
 
     case 'compaction_complete':
-      store.addMessage({
+      addMsg({
         id: `compact_done_${Date.now()}`,
         role: 'system',
         content: `Context compacted: ${msg.compactedMessages} messages summarized (compaction #${msg.totalCompactions})`,
@@ -1176,4 +1528,14 @@ export function useConnectionStatus(): ConnectionStatus {
 
 export function useAgentStatus(): AgentStatus {
   return useStore((s) => s.agentStatus)
+}
+
+/** Returns true if the currently active conversation's session is the one that's working. */
+export function useIsCurrentSessionWorking(): boolean {
+  return useStore((s) => {
+    if (s.agentStatus !== 'working') return false
+    if (!s.workingSessionId) return true // fallback: if no sessionId tracked, assume current
+    const activeConv = s.getActiveConversation()
+    return activeConv?.sessionId === s.workingSessionId
+  })
 }

@@ -1,6 +1,6 @@
 import { motion } from 'framer-motion'
 import { BriefcaseBusiness, Code2, ListChecks, Sparkles } from 'lucide-react'
-import { useMemo, useState } from 'react'
+import { useRef, useState } from 'react'
 import type { Skill } from '../../lib/skills.js'
 import type { ChatImageAttachment } from '../../lib/store.js'
 import { useStore } from '../../lib/store.js'
@@ -43,13 +43,14 @@ const staticSuggestions: Record<Exclude<Category, 'for-you'>, string[]> = {
 export function EmptyState({ onSend, onSkillSelect }: Props) {
   const [activeCategory, setActiveCategory] = useState<Category>('for-you')
   const [draft, setDraft] = useState('')
-  const conversations = useStore((s) => s.conversations)
-
-  // Generate personalized "For you" suggestions from conversation history
-  const forYouSuggestions = useMemo(() => {
-    const personalized = generateSuggestions(conversations)
-    return personalized.map((s) => s.text)
-  }, [conversations])
+  // Generate suggestions once on mount — avoid regenerating every time
+  // a new conversation is created (which mutates the conversations array).
+  const forYouRef = useRef<string[] | null>(null)
+  if (forYouRef.current === null) {
+    const conversations = useStore.getState().conversations
+    forYouRef.current = generateSuggestions(conversations).map((s) => s.text)
+  }
+  const forYouSuggestions = forYouRef.current
 
   const activeSuggestions =
     activeCategory === 'for-you' ? forYouSuggestions : staticSuggestions[activeCategory]

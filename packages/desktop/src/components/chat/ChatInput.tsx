@@ -4,7 +4,7 @@ import type React from 'react'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { Skill } from '../../lib/skills.js'
 import type { ChatImageAttachment } from '../../lib/store.js'
-import { useAgentStatus } from '../../lib/store.js'
+import { useIsCurrentSessionWorking } from '../../lib/store.js'
 import { AskUserDialog } from './AskUserDialog.js'
 import { ModelSelector } from './ModelSelector.js'
 import { SlashCommandMenu } from './SlashCommandMenu.js'
@@ -59,7 +59,7 @@ export function ChatInput({
   const [attachmentError, setAttachmentError] = useState<string | null>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
-  const agentStatus = useAgentStatus()
+  const isCurrentSessionWorking = useIsCurrentSessionWorking()
   const isHero = variant === 'hero'
 
   // Sync external initialValue into input (e.g. from suggestion chips)
@@ -127,7 +127,7 @@ export function ChatInput({
 
   const handleSend = useCallback(() => {
     const text = input.trim()
-    if ((!text && attachments.length === 0) || agentStatus === 'working') return
+    if ((!text && attachments.length === 0) || isCurrentSessionWorking) return
 
     const message = planFirst
       ? `Think step by step and create a plan before doing anything. Once I approve the plan, execute it.${text ? `\n\n${text}` : ''}`
@@ -140,7 +140,7 @@ export function ChatInput({
     setPlanFirst(false)
     setShowSlashMenu(false)
     textareaRef.current?.focus()
-  }, [input, attachments, agentStatus, onSend, planFirst])
+  }, [input, attachments, isCurrentSessionWorking, onSend, planFirst])
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (showSlashMenu) return
@@ -273,7 +273,7 @@ export function ChatInput({
             </div>
             <div className="composer__toolbar-right">
               <ModelSelector />
-              {agentStatus === 'working' ? (
+              {isCurrentSessionWorking ? (
                 <button
                   type="button"
                   className="composer__btn composer__btn--stop"

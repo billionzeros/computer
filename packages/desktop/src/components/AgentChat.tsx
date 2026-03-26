@@ -1,32 +1,50 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { connection } from '../lib/connection.js'
 import type { Skill } from '../lib/skills.js'
 import type { ChatImageAttachment } from '../lib/store.js'
-import { useAgentStatus, useStore } from '../lib/store.js'
+import { useStore } from '../lib/store.js'
 import { ChatInput } from './chat/ChatInput.js'
 import { ConfirmDialog } from './chat/ConfirmDialog.js'
+import { ContextIndicator } from './chat/ContextIndicator.js'
 import { EmptyState } from './chat/EmptyState.js'
 import { MessageList } from './chat/MessageList.js'
-import { TaskProgressBar } from './chat/TaskProgressBar.js'
-import { groupMessages } from './chat/groupMessages.js'
 import { SkillDialog } from './skills/SkillDialog.js'
 
 export function AgentChat() {
   const activeConv = useStore((s) => s.getActiveConversation())
   const addMessage = useStore((s) => s.addMessage)
   const newConversation = useStore((s) => s.newConversation)
-  const pendingConfirm = useStore((s) => s.pendingConfirm)
+  const pendingConfirm = useStore((s) => {
+    const confirm = s.pendingConfirm
+    if (!confirm) return null
+    const active = s.getActiveConversation()
+    // Show confirm only for the active session (or if no sessionId for backward compat)
+    return !confirm.sessionId || confirm.sessionId === active?.sessionId ? confirm : null
+  })
   const setPendingConfirm = useStore((s) => s.setPendingConfirm)
-  const pendingAskUser = useStore((s) => s.pendingAskUser)
+  const pendingAskUser = useStore((s) => {
+    const ask = s.pendingAskUser
+    if (!ask) return null
+    const active = s.getActiveConversation()
+    return !ask.sessionId || ask.sessionId === active?.sessionId ? ask : null
+  })
   const setPendingAskUser = useStore((s) => s.setPendingAskUser)
   const _currentProvider = useStore((s) => s.currentProvider)
   const [selectedSkill, setSelectedSkill] = useState<Skill | null>(null)
 
-  // On mount: resume existing conversation's session, or create a new one
-  useEffect(() => {
-    if (!activeConv) {
-      const store = useStore.getState()
+  // Extract stable identity props so the effect doesn't re-run on every message change
+  const activeConvId = activeConv?.id
+  const activeConvProjectId = activeConv?.projectId
+  const activeConvSessionId = activeConv?.sessionId
 
+  // On mount: resume existing conversation's session, or create a new one
+  // When used inside ProjectView, the active conversation will have a projectId —
+  // in that case we should NOT switch away from it (the project view manages its own sessions).
+  const activeView = useStore((s) => s.activeView)
+  useEffect(() => {
+    const store = useStore.getState()
+
+    if (!activeConvId) {
       // If there are existing conversations (from localStorage or sync), switch to one
       // instead of creating a new one. This prevents duplicates on reconnect/re-render.
       // Only consider non-project conversations — project ones belong in ProjectView.
@@ -43,34 +61,33 @@ export function AgentChat() {
 
       // No conversations at all — create a fresh one
       const sessionId = `sess_${Date.now().toString(36)}`
-      newConversation(undefined, sessionId)
+      store.newConversation(undefined, sessionId)
       store.registerPendingSession(sessionId)
       connection.sendSessionCreate(sessionId, {
         provider: store.currentProvider,
         model: store.currentModel,
       })
-    } else if (activeConv.projectId) {
-      // Active conversation belongs to a project — don't resume it in chat mode.
-      // Switch to a non-project conversation or create a fresh one.
-      const store = useStore.getState()
+    } else if (activeConvProjectId && activeView === 'chat') {
+      // Active conversation belongs to a project but we're in chat mode —
+      // switch to a non-project conversation. Only do this in chat mode;
+      // in projects mode, ProjectView manages the active conversation.
       const chatConvs = store.conversations.filter((c) => !c.projectId)
       if (chatConvs.length > 0) {
         store.switchConversation(chatConvs[0].id)
       } else {
         const sessionId = `sess_${Date.now().toString(36)}`
-        newConversation(undefined, sessionId)
+        store.newConversation(undefined, sessionId)
         store.registerPendingSession(sessionId)
         connection.sendSessionCreate(sessionId, {
           provider: store.currentProvider,
           model: store.currentModel,
         })
       }
-    } else if (activeConv.sessionId && !useStore.getState().currentSessionId) {
+    } else if (activeConvSessionId && !store.currentSessionId) {
       // Restored conversation — resume its server session
-      connection.sendSessionResume(activeConv.sessionId)
+      connection.sendSessionResume(activeConvSessionId)
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeConv?.id])
+  }, [activeConvId, activeConvProjectId, activeConvSessionId, activeView])
 
   const handleSend = useCallback(
     async (text: string, attachments: ChatImageAttachment[] = []) => {
@@ -175,12 +192,10 @@ export function AgentChat() {
   )
 
   const messages = activeConv?.messages || []
-  const agentStatus = useAgentStatus()
-  const grouped = useMemo(() => groupMessages(messages), [messages])
-  const isWorking = agentStatus === 'working'
 
   return (
     <div className="chat-shell">
+      <ContextIndicator contextInfo={activeConv?.contextInfo} sessionId={activeConv?.sessionId} />
       {messages.length === 0 ? (
         <EmptyState onSend={handleSend} onSkillSelect={setSelectedSkill} />
       ) : (
@@ -197,8 +212,6 @@ export function AgentChat() {
           />
         </div>
       )}
-
-      {isWorking && <TaskProgressBar grouped={grouped} />}
 
       {messages.length > 0 && (
         <ChatInput

@@ -36,8 +36,9 @@ export function getProjectDir(id: string): string {
 }
 
 export function getProjectSessionsDir(id: string): string {
-  return join(getProjectDir(id), 'sessions')
+  return join(getProjectDir(id), 'conversations')
 }
+
 
 /** Ensure projects directory and index exist */
 function ensureProjectsDir(): void {
@@ -101,7 +102,7 @@ export function createProject(input: {
   // Create directory structure
   const dir = getProjectDir(id)
   mkdirSync(dir, { recursive: true })
-  mkdirSync(join(dir, 'sessions'), { recursive: true })
+  mkdirSync(join(dir, 'conversations'), { recursive: true })
   mkdirSync(join(dir, 'jobs'), { recursive: true })
   mkdirSync(join(dir, 'notifications'), { recursive: true })
   mkdirSync(join(dir, 'context'), { recursive: true })
@@ -304,21 +305,22 @@ export function deleteProject(id: string): boolean {
 
 /** List sessions belonging to a project */
 export function listProjectSessions(projectId: string): SessionMeta[] {
-  const sessionsDir = getProjectSessionsDir(projectId)
-  if (!existsSync(sessionsDir)) return []
-
-  const entries = readdirSync(sessionsDir, { withFileTypes: true })
   const metas: SessionMeta[] = []
 
-  for (const entry of entries) {
-    if (!entry.isDirectory()) continue
-    const metaPath = join(sessionsDir, entry.name, 'meta.json')
-    if (!existsSync(metaPath)) continue
-    try {
-      const meta: SessionMeta = JSON.parse(readFileSync(metaPath, 'utf-8'))
-      metas.push(meta)
-    } catch {
-      // skip corrupt entries
+  const dir = join(getProjectDir(projectId), 'conversations')
+  if (existsSync(dir)) {
+    const entries = readdirSync(dir, { withFileTypes: true })
+    for (const entry of entries) {
+      if (!entry.isDirectory()) continue
+      if (metas.some((m) => m.id === entry.name)) continue
+      const metaPath = join(dir, entry.name, 'meta.json')
+      if (!existsSync(metaPath)) continue
+      try {
+        const meta: SessionMeta = JSON.parse(readFileSync(metaPath, 'utf-8'))
+        metas.push(meta)
+      } catch {
+        // skip corrupt entries
+      }
     }
   }
 

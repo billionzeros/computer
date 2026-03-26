@@ -1,5 +1,5 @@
 import { AnimatePresence } from 'framer-motion'
-import { FolderOpen, PanelLeft, Share2, Ticket } from 'lucide-react'
+import { FolderOpen, PanelLeft, Ticket } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { AgentChat } from './components/AgentChat.js'
 import { Connect } from './components/Connect.js'
@@ -8,6 +8,7 @@ import { ModeSelector } from './components/ModeSelector.js'
 import { SidePanel } from './components/SidePanel.js'
 import { Sidebar } from './components/Sidebar.js'
 import { SettingsModal } from './components/settings/SettingsModal.js'
+import { FileBrowser } from './components/FileBrowser.js'
 import { Terminal } from './components/Terminal.js'
 import { ProjectList } from './components/projects/ProjectList.js'
 import { ProjectView } from './components/projects/ProjectView.js'
@@ -70,7 +71,8 @@ export function App() {
         const store = useStore.getState()
 
         // Sync server sessions → local conversations
-        // Only create conversations for sessions that don't already have one locally
+        // Create conversations for sessions that don't exist locally,
+        // and sync titles for existing ones that are still "New conversation"
         for (const session of state.sessions) {
           const existing = store.findConversationBySession(session.id)
           if (!existing) {
@@ -85,6 +87,13 @@ export function App() {
             // Use appendConversation to add at end (not top) so they don't
             // displace the user's current/new conversation
             store.appendConversation(session.title || 'New conversation', session.id, projectId)
+          } else if (
+            session.title &&
+            session.title !== 'New conversation' &&
+            existing.title === 'New conversation'
+          ) {
+            // Existing conversation has stale default title — sync from server
+            store.updateConversationTitle(session.id, session.title)
           }
         }
 
@@ -222,7 +231,12 @@ export function App() {
           {activeView === 'projects' && (
             activeProjectId ? <ProjectView /> : <ProjectList />
           )}
-          {activeView === 'terminal' && <Terminal />}
+          {activeView === 'terminal' && (
+            <>
+              <Terminal />
+              <FileBrowser />
+            </>
+          )}
           <AnimatePresence>
             {activeView === 'chat' && sidePanelOpen && <SidePanel />}
           </AnimatePresence>
