@@ -1,6 +1,6 @@
 {
   "version": "1.0.25",
-  "gitHash": "",
+  "gitHash": "9fb3e0d",
   "releaseUrl": "https://github.com/OmGuptaIND/computer/releases",
   "changelog": "Features:\n- redesign AskUserDialog with multi-step navigation, updated option selection, and explicit submit/skip actions.\n\nOther:\n- add projects thing",
   "publishedAt": "2026-03-26T11:44:20.330Z",
