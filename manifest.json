@@ -1,16 +1,16 @@
 {
-  "version": "1.0.24",
-  "gitHash": "7fe0abf",
+  "version": "1.0.25",
+  "gitHash": "",
   "releaseUrl": "https://github.com/OmGuptaIND/computer/releases",
-  "changelog": "Fixes:\n- computer dashboard\n- desktop redirect",
-  "publishedAt": "2026-03-25T11:21:53.377Z",
+  "changelog": "Features:\n- redesign AskUserDialog with multi-step navigation, updated option selection, and explicit submit/skip actions.\n\nOther:\n- add projects thing",
+  "publishedAt": "2026-03-26T11:44:20.330Z",
   "binaries": {
-    "linux-x64": "https://github.com/OmGuptaIND/computer/releases/download/v1.0.24/anton-agent-linux-x64",
-    "linux-arm64": "https://github.com/OmGuptaIND/computer/releases/download/v1.0.24/anton-agent-linux-arm64"
+    "linux-x64": "https://github.com/OmGuptaIND/computer/releases/download/v1.0.25/anton-agent-linux-x64",
+    "linux-arm64": "https://github.com/OmGuptaIND/computer/releases/download/v1.0.25/anton-agent-linux-arm64"
   },
   "sidecar_binaries": {
-    "linux-x64": "https://github.com/OmGuptaIND/computer/releases/download/v1.0.24/anton-sidecar-linux-amd64",
-    "linux-arm64": "https://github.com/OmGuptaIND/computer/releases/download/v1.0.24/anton-sidecar-linux-arm64"
+    "linux-x64": "https://github.com/OmGuptaIND/computer/releases/download/v1.0.25/anton-sidecar-linux-amd64",
+    "linux-arm64": "https://github.com/OmGuptaIND/computer/releases/download/v1.0.25/anton-sidecar-linux-arm64"
   },
-  "cli": "https://github.com/OmGuptaIND/computer/releases/download/v1.0.24/anton-cli.mjs"
+  "cli": "https://github.com/OmGuptaIND/computer/releases/download/v1.0.25/anton-cli.mjs"
 }

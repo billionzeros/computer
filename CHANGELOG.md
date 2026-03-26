@@ -10,6 +10,15 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versioning: [S
 
 ---
 
+## [1.0.25] - 2026-03-26
+
+### Features
+- redesign AskUserDialog with multi-step navigation, updated option selection, and explicit submit/skip actions.
+
+### Other
+- add projects thing
+---
+
 ## [1.0.24] - 2026-03-25
 
 ### Fixes
@@ -136,7 +145,8 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versioning: [S
 
 ---
 
-[Unreleased]: https://github.com/OmGuptaIND/computer/compare/v1.0.24...HEAD
+[Unreleased]: https://github.com/OmGuptaIND/computer/compare/v1.0.25...HEAD
+[1.0.25]: https://github.com/OmGuptaIND/computer/compare/v$(changelog.match(/## [(d+.d+.d+)]/g)[1].match(/d+.d+.d+/)[0])...v1.0.25
 [1.0.24]: https://github.com/OmGuptaIND/computer/compare/v$(changelog.match(/## [(d+.d+.d+)]/g)[1].match(/d+.d+.d+/)[0])...v1.0.24
 [1.0.23]: https://github.com/OmGuptaIND/computer/compare/v$(changelog.match(/## [(d+.d+.d+)]/g)[1].match(/d+.d+.d+/)[0])...v1.0.23
 [1.0.22]: https://github.com/OmGuptaIND/computer/compare/v$(changelog.match(/## [(d+.d+.d+)]/g)[1].match(/d+.d+.d+/)[0])...v1.0.22
