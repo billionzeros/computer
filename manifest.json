@@ -1,6 +1,6 @@
 {
   "version": "1.0.24",
-  "gitHash": "",
+  "gitHash": "7fe0abf",
   "releaseUrl": "https://github.com/OmGuptaIND/computer/releases",
   "changelog": "Fixes:\n- computer dashboard\n- desktop redirect",
   "publishedAt": "2026-03-25T11:21:53.377Z",
