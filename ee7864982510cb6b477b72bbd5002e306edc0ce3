@@ -1,0 +1,117 @@
+packages/desktop/src/components/artifacts/ArtifactListItem.tsx
+  6b6fc9131c9a622b 1,5-10,31
+packages/desktop/src/components/projects/ProjectList.tsx
+  710ae5c029e3c14f 2,59,81,92-93,95,97-98,102,104-105,108-133,135-144,164
+packages/desktop/src/components/projects/ProjectLanding.tsx
+  710ae5c029e3c14f 333
+  7bfaabe7da609db0 5,7,12-13,16,182-185
+packages/desktop/src/components/artifacts/ArtifactRail.tsx
+  6b6fc9131c9a622b 1-81
+packages/desktop/src/components/AgentChat.tsx
+  37da2cda563522ee 158-168,230
+packages/desktop/src/components/chat/ArtifactCard.tsx
+  6b6fc9131c9a622b 2,12-16,32
+packages/desktop/src/lib/connection.ts
+  37da2cda563522ee 173-176
+packages/agent-config/prompts/system.md
+  37da2cda563522ee 54-62
+packages/agent-core/src/session.ts
+  37da2cda563522ee 674-682
+packages/desktop/src/App.tsx
+  6b6fc9131c9a622b 9,266
+packages/agent/prompts/system.md
+  7bfaabe7da609db0 12-31
+packages/desktop/src/components/chat/TaskSection.tsx
+  6b6fc9131c9a622b 8-9,11,23-29,81-89
+packages/protocol/src/messages.ts
+  37da2cda563522ee 308-320,944-945
+packages/desktop/src/components/chat/ChatInput.tsx
+  37da2cda563522ee 15,50,135-144,157,292-293,295-299,303-311
+packages/desktop/src/lib/store.ts
+  37da2cda563522ee 39,1270-1280,1332-1333
+  d2ab8c20617b231b 248-249,466,1367-1368,1376,1378
+packages/agent-server/src/server.ts
+  37da2cda563522ee 712-730
+packages/desktop/src/index.css
+  37da2cda563522ee 978-988,1721-1733
+  6b6fc9131c9a622b 6324-6438
+  710ae5c029e3c14f 7108,7112,7118,7120,7124-7125,7127,7142,7150-7153,7156-7158,7161-7168,7171-7176,7178,7180-7186,7189-7191,7194-7198,7201,7204-7209,7212,7216-7218,7225,7229,7234,7238-7239,7242-7243,7251,7254-7257,7261,7263-7267,7270,7274-7275,7278-7280,7335-7337,7344-7345,7348,7441-7449,7452,7509,7514-7525,8005-8008
+packages/desktop/src/components/chat/groupMessages.ts
+  d2ab8c20617b231b 223,225
+packages/desktop/src/components/SidePanel.tsx
+  6b6fc9131c9a622b 20
+packages/desktop/src/components/chat/SubAgentGroup.tsx
+  6b6fc9131c9a622b 3-4,6,19-25,98-106
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.1.20",
+  "base_commit_sha": "ee7864982510cb6b477b72bbd5002e306edc0ce3",
+  "prompts": {
+    "37da2cda563522ee": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "07181b61-80fc-42a0-90d6-b24c7eaa1f92",
+        "model": "claude-opus-4-6"
+      },
+      "human_author": "Om Gupta <omgupta0720@gmail.com>",
+      "messages": [],
+      "total_additions": 0,
+      "total_deletions": 0,
+      "accepted_lines": 135,
+      "overriden_lines": 0
+    },
+    "6b6fc9131c9a622b": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "b9ddd5ce-6661-4aee-b0a7-a2377ec32896",
+        "model": "claude-opus-4-6"
+      },
+      "human_author": "Om Gupta <omgupta0720@gmail.com>",
+      "messages": [],
+      "total_additions": 228,
+      "total_deletions": 31,
+      "accepted_lines": 252,
+      "overriden_lines": 0
+    },
+    "710ae5c029e3c14f": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "1e12f206-4f43-459f-aa13-6bb6e5c691c9",
+        "model": "claude-opus-4-6"
+      },
+      "human_author": "Om Gupta <omgupta0720@gmail.com>",
+      "messages": [],
+      "total_additions": 0,
+      "total_deletions": 0,
+      "accepted_lines": 162,
+      "overriden_lines": 0
+    },
+    "7bfaabe7da609db0": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "624bb4f7-c4d9-42d0-be78-f54bc6f91991",
+        "model": "claude-opus-4-6"
+      },
+      "human_author": "Om Gupta <omgupta0720@gmail.com>",
+      "messages": [],
+      "total_additions": 6,
+      "total_deletions": 1,
+      "accepted_lines": 30,
+      "overriden_lines": 0
+    },
+    "d2ab8c20617b231b": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "97f5de93-2362-4c55-9ff0-866b022bd89f",
+        "model": "claude-opus-4-6"
+      },
+      "human_author": "Om Gupta <omgupta0720@gmail.com>",
+      "messages": [],
+      "total_additions": 0,
+      "total_deletions": 0,
+      "accepted_lines": 9,
+      "overriden_lines": 0
+    }
+  }
+}
