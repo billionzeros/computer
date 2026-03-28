@@ -2,8 +2,8 @@
   "version": "1.0.26",
   "gitHash": "",
   "releaseUrl": "https://github.com/OmGuptaIND/computer/releases",
-  "changelog": "Features:\n- introduce code mode UI, enhance agent prompts with project types and references, and improve agent shell execution context.\n\nFixes:\n- some serious bugs\n\nOther:\n- refactor: replace job management system with a new agent-based architecture and update UI navigation\n- Agent Sessions and much more\n- Add: multiple features include agent and conversation interrupts\n- Add system prompts for coding agent.",
-  "publishedAt": "2026-03-28T19:08:55.722Z",
+  "changelog": "Fixes:\n- CI issues",
+  "publishedAt": "2026-03-28T19:12:44.047Z",
   "binaries": {
     "linux-x64": "https://github.com/OmGuptaIND/computer/releases/download/v1.0.26/anton-agent-linux-x64",
     "linux-arm64": "https://github.com/OmGuptaIND/computer/releases/download/v1.0.26/anton-agent-linux-arm64"
