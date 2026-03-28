@@ -1,0 +1,31 @@
+scripts/preflight.sh
+  1afb51970bf2ed8c 1-126
+scripts/bundle.sh
+  1afb51970bf2ed8c 35-36,43
+.github/workflows/release.yml
+  1afb51970bf2ed8c 62,69,171,178
+Makefile
+  1afb51970bf2ed8c 26-30
+scripts/esbuild.config.js
+  1afb51970bf2ed8c 1-43
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.1.22",
+  "base_commit_sha": "e7e45f2f2a1894663ccb5a2db4f4dcc929ed0bcf",
+  "prompts": {
+    "1afb51970bf2ed8c": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "6dc1e3e9-b9c9-4a32-bfa5-832f6eb33a2b",
+        "model": "claude-opus-4-6"
+      },
+      "human_author": "Om Gupta <omgupta0720@gmail.com>",
+      "messages": [],
+      "total_additions": 193,
+      "total_deletions": 18,
+      "accepted_lines": 181,
+      "overriden_lines": 0
+    }
+  }
+}
