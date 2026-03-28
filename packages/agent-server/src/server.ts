@@ -732,6 +732,17 @@ export class AgentServer {
         break
       }
 
+      // ── Cancel turn: user clicks stop button ──
+      case 'cancel_turn': {
+        const cancelSessionId = msg.sessionId || DEFAULT_SESSION_ID
+        const cancelSession = this.sessions.get(cancelSessionId)
+        if (cancelSession && this.activeTurns.has(cancelSessionId)) {
+          console.log(`[${cancelSessionId}] Cancelling turn via client request`)
+          cancelSession.cancel()
+        }
+        break
+      }
+
       // ── Confirm response (forwarded to active session) ──
       case 'confirm_response':
         if (msg.id && this.promptResolvers.has(msg.id)) {

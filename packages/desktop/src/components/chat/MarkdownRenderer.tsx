@@ -16,9 +16,7 @@ interface Props {
  * with a cite: scheme so we can intercept them in the `a` component override.
  * Skips code fences and existing markdown links.
  */
-function injectCitationLinks(text: string, hasCitations: boolean): string {
-  if (!hasCitations) return text
-
+function injectCitationLinks(text: string): string {
   // Split by code fences to avoid processing inside code blocks
   const parts = text.split(/(```[\s\S]*?```|`[^`]+`)/g)
   return parts
@@ -27,7 +25,7 @@ function injectCitationLinks(text: string, hasCitations: boolean): string {
       if (i % 2 === 1) return part
       // Replace [n] but not [text](url) patterns
       // Negative lookbehind for ! avoids image syntax ![n]
-      return part.replace(/(?<!!)\[(\d{1,2})\](?!\()/g, '[⁠$1](cite:$1)')
+      return part.replace(/(?<!!)\[(\d+)\](?!\()/g, '[⁠$1](cite:$1)')
     })
     .join('')
 }
@@ -61,7 +59,7 @@ function CitationPill({ index, source }: { index: number; source?: CitationSourc
 }
 
 export function MarkdownRenderer({ content, citations }: Props) {
-  const processedContent = injectCitationLinks(content, !!citations?.length)
+  const processedContent = injectCitationLinks(content)
 
   return (
     <div className="markdown-body">

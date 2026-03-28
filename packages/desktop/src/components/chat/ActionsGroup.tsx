@@ -66,6 +66,8 @@ function getToolTypeLabel(toolName: string, toolInput?: Record<string, unknown>)
       return 'Image'
     case 'diff':
       return 'Diff'
+    case 'job':
+      return 'Agent'
     case 'sub_agent':
       return 'Agent'
     default:
@@ -135,6 +137,12 @@ function getToolTarget(toolName: string, toolInput?: Record<string, unknown>): s
     case 'memory': {
       const key = (toolInput.key as string) || ''
       return key || null
+    }
+    case 'job': {
+      const op = (toolInput.operation as string) || ''
+      const name = (toolInput.name as string) || (toolInput.agentId as string) || ''
+      if (name) return `${op} ${name}`.trim()
+      return op || null
     }
     case 'sub_agent':
       return (toolInput.task as string) || null

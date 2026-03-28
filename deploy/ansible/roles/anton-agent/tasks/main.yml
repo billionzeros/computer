@@ -104,6 +104,14 @@
     group: "{{ anton_user }}"
     mode: "0755"
 
+- name: Create workspace root directory
+  file:
+    path: "/home/{{ anton_user }}/Anton"
+    state: directory
+    owner: "{{ anton_user }}"
+    group: "{{ anton_user }}"
+    mode: "0755"
+
 - name: Check if repo dir exists
   stat:
     path: "{{ anton_repo_dir }}/package.json"

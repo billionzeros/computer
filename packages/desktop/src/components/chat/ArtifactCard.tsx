@@ -3,6 +3,7 @@ import { Braces, ChevronDown, ChevronUp, FileCode, Network, Sparkles, SquareCode
 import type React from 'react'
 import { useState } from 'react'
 import type { Artifact } from '../../lib/artifacts.js'
+import { useStore } from '../../lib/store.js'
 
 interface Props {
   artifact: Artifact
@@ -27,6 +28,9 @@ const typeLabels: Record<string, string> = {
 export function ArtifactCard({ artifact }: Props) {
   const [expanded, setExpanded] = useState(true)
   const [dismissed, setDismissed] = useState(false)
+  const setActiveArtifact = useStore((s) => s.setActiveArtifact)
+  const setArtifactPanelOpen = useStore((s) => s.setArtifactPanelOpen)
+  const setArtifactViewMode = useStore((s) => s.setArtifactViewMode)
 
   const Icon = typeIcons[artifact.renderType] || Braces
   const label = typeLabels[artifact.renderType] || 'File'
@@ -48,7 +52,11 @@ export function ArtifactCard({ artifact }: Props) {
         <button
           type="button"
           className="artifact-card__meta"
-          onClick={() => setExpanded(!expanded)}
+          onClick={() => {
+            setActiveArtifact(artifact.id)
+            setArtifactViewMode('detail')
+            setArtifactPanelOpen(true)
+          }}
         >
           <Icon size={14} strokeWidth={1.5} className="artifact-card__icon" />
           <span className="artifact-card__title">{title}</span>

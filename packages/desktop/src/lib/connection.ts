@@ -182,6 +182,10 @@ export class Connection {
     this.send(Channel.AI, { type: 'steer', content, sessionId })
   }
 
+  sendCancelTurn(sessionId: string) {
+    this.send(Channel.AI, { type: 'cancel_turn', sessionId })
+  }
+
   // ── Provider management ─────────────────────────────────────────
 
   sendProvidersList() {

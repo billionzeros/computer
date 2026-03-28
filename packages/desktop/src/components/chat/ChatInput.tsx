@@ -13,6 +13,7 @@ import { SlashCommandMenu } from './SlashCommandMenu.js'
 interface Props {
   onSend: (text: string, attachments?: ChatImageAttachment[]) => void
   onSteer?: (text: string) => void
+  onCancelTurn?: () => void
   onSkillSelect: (skill: Skill) => void
   variant?: 'docked' | 'hero'
   initialValue?: string
@@ -48,6 +49,7 @@ function attachmentPreviewSrc(attachment: ChatImageAttachment): string | undefin
 export function ChatInput({
   onSend,
   onSteer,
+  onCancelTurn,
   onSkillSelect,
   variant = 'docked',
   initialValue,
@@ -305,6 +307,7 @@ export function ChatInput({
                     type="button"
                     className="composer__btn composer__btn--stop"
                     aria-label="Stop"
+                    onClick={onCancelTurn}
                   >
                     <Square size={18} strokeWidth={1.5} />
                   </button>

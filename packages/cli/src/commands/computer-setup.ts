@@ -137,7 +137,7 @@ RestartSec=5
 # Hardening
 NoNewPrivileges=true
 ProtectSystem=strict
-ProtectHome=read-only
+ProtectHome=false
 ReadWritePaths=${ANTON_DIR}
 PrivateTmp=true
 
@@ -259,6 +259,7 @@ export async function computerSetupCommand(args: ComputerSetupArgs): Promise<voi
       )
     }
     mkdirSync(ANTON_DIR, { recursive: true })
+    mkdirSync(`/home/${ANTON_USER}/Anton`, { recursive: true })
     execSync(`chown -R ${ANTON_USER}:${ANTON_USER} /home/${ANTON_USER}`, { stdio: 'pipe' })
     done('System user created')
   } catch (err) {

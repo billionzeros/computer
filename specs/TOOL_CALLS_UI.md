@@ -105,13 +105,13 @@ Enhanced to include richer context about what's running:
 ## Components
 
 ### ActionsGroup (`ActionsGroup.tsx`)
-Main tree container. Exports shared helpers: `getToolTypeLabel`, `getToolTarget`, `getToolMeta`, `getGroupHeader`, `ToolTreeItem`.
+Main tree container. Renders inline `ArtifactCard` components for artifacts matching tool call IDs. Exports shared helpers: `getToolTypeLabel`, `getToolTarget`, `getToolMeta`, `getGroupHeader`, `ToolTreeItem`.
 
 ### TaskSection (`TaskSection.tsx`)
-Step narration header + nested ToolTreeItem list. Uses same tree layout.
+Step narration header + nested ToolTreeItem list. Renders inline `ArtifactCard` components for matching artifacts (same pattern as ActionsGroup).
 
 ### SubAgentGroup (`SubAgentGroup.tsx`)
-Sub-agent header with task description + nested ToolTreeItem list.
+Sub-agent header with task description + nested ToolTreeItem list. Renders inline `ArtifactCard` components for matching artifacts (same pattern as ActionsGroup).
 
 ### ThinkingIndicator (`ThinkingIndicator.tsx`)
 Shows status text + elapsed time + live token counter while agent is working.

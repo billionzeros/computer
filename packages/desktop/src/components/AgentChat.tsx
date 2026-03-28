@@ -166,6 +166,14 @@ export function AgentChat() {
     [],
   )
 
+  const handleCancelTurn = useCallback(() => {
+    const store = useStore.getState()
+    const conv = store.getActiveConversation()
+    const sessionId = conv?.sessionId || store.currentSessionId
+    if (!sessionId) return
+    connection.sendCancelTurn(sessionId)
+  }, [])
+
   const handleConfirm = useCallback(
     (approved: boolean) => {
       if (!pendingConfirm) return
@@ -228,6 +236,7 @@ export function AgentChat() {
         <ChatInput
           onSend={handleSend}
           onSteer={handleSteer}
+          onCancelTurn={handleCancelTurn}
           onSkillSelect={setSelectedSkill}
           pendingAskUser={pendingAskUser}
           onAskUserSubmit={handleAskUserSubmit}

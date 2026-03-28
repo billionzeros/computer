@@ -128,30 +128,74 @@ interface ArtifactPublishedEvent {
 }
 ```
 
-## Artifact Sidebar Redesign
+## Artifact UI Architecture
 
-The old monolithic `ArtifactPanelContent` (tab bar + toolbar + preview) was replaced with a proper list/detail architecture.
+### Two-Tier Display: Rail + SidePanel
+
+Artifacts are shown in a **persistent rail** (compact sidebar) and a **detail SidePanel** (full preview on click).
+
+```
+┌──────────┬─────────────────────┬────────────┐
+│ Sidebar  │  Chat (AgentChat)   │ Artifact   │
+│ (240px)  │  (flex: 1)          │ Rail       │
+│          │                     │ (180px)    │
+│          │                     │            │
+└──────────┴─────────────────────┴────────────┘
+                                  ↕ SidePanel overlays on artifact click
+```
+
+- **Artifact Rail** — Always visible when artifacts exist. Shows compact list (icon + title + badge). Clicking opens the SidePanel detail view. Dismissible via X button (session-scoped).
+- **SidePanel** — Opens on demand for full artifact preview, search/filter, and publishing. Not auto-opened on artifact creation.
 
 ### Components
 
 | Component | File | Purpose |
 |-----------|------|---------|
-| `ArtifactPanelContent` | `ArtifactPanel.tsx` | Orchestrator: routes to empty/list/detail |
+| `ArtifactRail` | `ArtifactRail.tsx` | Persistent right-side rail: compact artifact list with dismiss |
+| `ArtifactPanelContent` | `ArtifactPanel.tsx` | SidePanel orchestrator: routes to empty/list/detail |
 | `ArtifactEmptyState` | `ArtifactEmptyState.tsx` | Centered empty state with icon + message |
 | `ArtifactListView` | `ArtifactListView.tsx` | Search bar + filter chips + scrollable artifact list |
 | `ArtifactListItem` | `ArtifactListItem.tsx` | Single artifact row: icon, title, badge, time, published dot |
 | `ArtifactDetailView` | `ArtifactDetailView.tsx` | Full preview with back button, actions, publish banner |
 
+### Artifact Type Icons
+
+| Render Type | Icon (lucide-react) |
+|-------------|-------------------|
+| html | `Sparkles` |
+| code | `Braces` |
+| markdown | `FileCode` |
+| svg | `SquareCode` |
+| mermaid | `Network` |
+
+Used consistently across `ArtifactRail`, `ArtifactListItem`, and `ArtifactCard`.
+
+### Inline Chat Display
+
+Artifact cards appear inline in the chat within tool call groups. All three group types render artifacts:
+
+- **ActionsGroup** — matches artifacts by `toolCallId` against action call IDs
+- **TaskSection** — same matching logic (step narration + actions merged groups)
+- **SubAgentGroup** — same matching logic (sub-agent nested groups)
+
+`ArtifactCard` supports:
+- Expand/collapse for HTML/SVG previews (ChevronUp/ChevronDown)
+- Dismiss button (X) to hide individual cards
+- Click meta area to open detail in SidePanel
+
 ### View Flow
 
 ```
-ArtifactPanelContent
+ArtifactRail (persistent, right of chat)
+  └── Click item → opens SidePanel with ArtifactDetailView
+
+ArtifactPanelContent (inside SidePanel)
   ├── artifacts.length === 0 → ArtifactEmptyState
   ├── artifactViewMode === 'list' → ArtifactListView
   └── artifactViewMode === 'detail' → ArtifactDetailView
 ```
 
-### New Store State
+### Store State
 
 ```typescript
 // State
@@ -165,6 +209,8 @@ setArtifactFilterType(type)
 setArtifactViewMode(mode)
 updateArtifactPublishStatus(artifactId, url, slug)
 ```
+
+**Key behavior**: `addArtifact()` sets `activeArtifactId` but does NOT auto-open the SidePanel. The rail provides passive visibility; the SidePanel opens only on explicit user click.
 
 ### Artifact Type Extensions
 
@@ -189,8 +235,9 @@ interface Artifact {
 
 ### SidePanel Changes
 
-- `MAX_WIDTH`: 900 → 1100
-- `DEFAULT_WIDTH`: 480 → 520
+- `MAX_WIDTH`: 1100
+- `DEFAULT_WIDTH`: 440
+- Includes tabs for: Browser, Artifacts, Plan, Context (when available)
 
 ## Security
 
@@ -214,12 +261,16 @@ interface Artifact {
 
 ### Frontend
 - `packages/desktop/src/lib/artifacts.ts` — extended Artifact type, helpers
-- `packages/desktop/src/lib/store.ts` — new state/actions, publish response handler
+- `packages/desktop/src/lib/store.ts` — new state/actions, publish response handler, `addArtifact` no longer auto-opens SidePanel
+- `packages/desktop/src/components/artifacts/ArtifactRail.tsx` — persistent right-side artifact rail (180px, dismissible)
 - `packages/desktop/src/components/artifacts/ArtifactPanel.tsx` — rewritten orchestrator
 - `packages/desktop/src/components/artifacts/ArtifactEmptyState.tsx` — new
 - `packages/desktop/src/components/artifacts/ArtifactListView.tsx` — new
-- `packages/desktop/src/components/artifacts/ArtifactListItem.tsx` — new
+- `packages/desktop/src/components/artifacts/ArtifactListItem.tsx` — new (icons: Sparkles, Braces, FileCode, SquareCode, Network)
 - `packages/desktop/src/components/artifacts/ArtifactDetailView.tsx` — new
-- `packages/desktop/src/components/chat/ArtifactCard.tsx` — published dot, detail mode
-- `packages/desktop/src/components/SidePanel.tsx` — wider defaults
-- `packages/desktop/src/index.css` — all new artifact styles
+- `packages/desktop/src/components/chat/ArtifactCard.tsx` — expand/collapse, dismiss, premium icons
+- `packages/desktop/src/components/chat/TaskSection.tsx` — now renders artifact cards for matching tool calls
+- `packages/desktop/src/components/chat/SubAgentGroup.tsx` — now renders artifact cards for matching tool calls
+- `packages/desktop/src/components/SidePanel.tsx` — DEFAULT_WIDTH 440, browser tab support
+- `packages/desktop/src/App.tsx` — renders ArtifactRail in workspace-body
+- `packages/desktop/src/index.css` — all artifact styles + `.artifact-rail` styles

@@ -79,6 +79,7 @@ if ! id anton &>/dev/null; then
     useradd --system --create-home --shell /usr/sbin/nologin anton
 fi
 mkdir -p "${ANTON_DIR}"
+mkdir -p /home/anton/Anton
 log "USER: anton system user ready"
 
 # ─────────────────────────────────────────────────────────────────
@@ -144,8 +145,8 @@ RestartSec=5
 # Hardening
 NoNewPrivileges=true
 ProtectSystem=strict
-ProtectHome=read-only
-ReadWritePaths=${ANTON_DIR} /home/anton/Anton
+ProtectHome=false
+ReadWritePaths=${ANTON_DIR}
 PrivateTmp=true
 
 [Install]
@@ -153,6 +154,7 @@ WantedBy=multi-user.target
 UNIT
 
 chown -R anton:anton "${ANTON_DIR}"
+chown -R anton:anton /home/anton/Anton
 log "SERVICE: systemd unit created"
 
 # ─────────────────────────────────────────────────────────────────

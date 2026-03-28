@@ -312,6 +312,12 @@ export interface AiSteerMessage {
   sessionId?: string
 }
 
+/** Client requests cancellation of the active turn */
+export interface AiCancelTurnMessage {
+  type: 'cancel_turn'
+  sessionId?: string
+}
+
 export interface AiSteerAckMessage {
   type: 'steer_ack'
   content: string
@@ -953,6 +959,7 @@ export type AiMessage =
   | AiUserMessage
   | AiSteerMessage
   | AiSteerAckMessage
+  | AiCancelTurnMessage
   | AiThinkingMessage
   | AiTextMessage
   | AiToolCallMessage

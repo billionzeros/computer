@@ -192,8 +192,8 @@ Creates `/etc/systemd/system/anton-agent.service` with:
 - **Hardening flags:**
   - `NoNewPrivileges=true` — prevents privilege escalation
   - `ProtectSystem=strict` — mounts `/` read-only except allowed paths
-  - `ProtectHome=read-only` — home dirs are read-only except `~/.anton`
-  - `ReadWritePaths=/home/anton/.anton` — only writable path
+  - `ProtectHome=false` — allows write access to home directory for workspace/project files
+  - `ReadWritePaths=/home/anton/.anton` — writable config path
   - `PrivateTmp=true` — isolated `/tmp`
 
 Enables the service to start on boot and starts it immediately (if `anton_start_on_deploy` is true).
