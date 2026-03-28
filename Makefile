@@ -29,10 +29,19 @@ endif
 release:
 	@echo ""
 	@CURRENT=$$(node -e "console.log(JSON.parse(require('fs').readFileSync('package.json','utf8')).version)"); \
+	MAJOR=$$(echo $$CURRENT | cut -d. -f1); \
+	MINOR=$$(echo $$CURRENT | cut -d. -f2); \
+	PATCH=$$(echo $$CURRENT | cut -d. -f3); \
+	NEXT_PATCH="$$MAJOR.$$MINOR.$$((PATCH + 1))"; \
+	NEXT_MINOR="$$MAJOR.$$((MINOR + 1)).0"; \
 	echo "  Current version: $$CURRENT"; \
 	echo ""; \
-	read -p "  New version: " VERSION; \
-	if [ -z "$$VERSION" ]; then echo "  Aborted."; exit 0; fi; \
+	echo "  Suggestions:"; \
+	echo "    patch → $$NEXT_PATCH"; \
+	echo "    minor → $$NEXT_MINOR"; \
+	echo ""; \
+	read -p "  New version [$$NEXT_PATCH]: " VERSION; \
+	VERSION=$${VERSION:-$$NEXT_PATCH}; \
 	echo ""; \
 	./scripts/release.sh "$$VERSION" --push
 

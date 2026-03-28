@@ -266,6 +266,22 @@ git commit -m "release: v${NEW_VERSION}
 
 $(cat /tmp/anton-release-notes.md)"
 
+if git rev-parse "v${NEW_VERSION}" >/dev/null 2>&1; then
+  echo ""
+  warn "Tag v${NEW_VERSION} already exists."
+  echo ""
+  read -p "  Delete existing tag and re-create? [y/N]: " CONFIRM
+  if [[ "$CONFIRM" =~ ^[Yy]$ ]]; then
+    git tag -d "v${NEW_VERSION}" >/dev/null 2>&1
+    # Also delete remote tag if it exists
+    git push origin ":refs/tags/v${NEW_VERSION}" 2>/dev/null || true
+    ok "Deleted old tag v${NEW_VERSION}"
+  else
+    err "Aborted. Pick a different version or delete the tag manually."
+    exit 1
+  fi
+fi
+
 git tag -a "v${NEW_VERSION}" -m "v${NEW_VERSION}"
 
 ok "Committed and tagged v${NEW_VERSION}"
