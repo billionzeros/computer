@@ -23,7 +23,11 @@ endif
 
 # ── Commands ─────────────────────────────────────────────────────
 
-.PHONY: deploy update sync push release verify status logs restart stop ping check setup help
+.PHONY: deploy update sync push release preflight verify status logs restart stop ping check setup help
+
+## preflight: Verify all CI build steps pass locally before releasing
+preflight:
+	@./scripts/preflight.sh
 
 ## release: Ship a new version (bumps versions, changelog, tags, pushes, triggers CI)
 release:

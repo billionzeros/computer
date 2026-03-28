@@ -59,14 +59,14 @@ jobs:
 
       - name: Bundle with esbuild
         run: |
+          AGENT_EXTERNALS=$(node scripts/esbuild.config.js agent-externals)
           npx esbuild packages/agent-server/dist/index.js \
             --bundle \
             --platform=node \
             --target=node22 \
             --format=cjs \
             --outfile=agent-bundle.js \
-            --external:node-pty \
-            --external:chokidar \
+            $AGENT_EXTERNALS \
             --define:__AGENT_VERSION__=\"${{ steps.agent_version.outputs.version }}\"
 
       - name: Create SEA binary
@@ -168,13 +168,14 @@ jobs:
           mkdir -p .stubs
           echo "export default {};" > .stubs/react-devtools-core.mjs
 
+          CLI_EXTERNALS=$(node scripts/esbuild.config.js cli-externals)
           npx esbuild packages/cli/dist/index.js \
             --bundle \
             --platform=node \
             --target=node22 \
             --format=esm \
             --outfile=anton-cli.mjs \
-            --external:node-pty \
+            $CLI_EXTERNALS \
             --alias:react-devtools-core=./.stubs/react-devtools-core.mjs \
             --define:__CLI_VERSION__=\"${{ steps.cli_version.outputs.version }}\" \
             --banner:js="import{createRequire}from'module';const require=createRequire(import.meta.url);"

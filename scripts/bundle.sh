@@ -32,14 +32,15 @@ fi
 echo "  Bundling with esbuild..."
 mkdir -p dist
 
+AGENT_EXTERNALS=$(node "$REPO_ROOT/scripts/esbuild.config.js" agent-externals)
+
 npx esbuild packages/agent-server/dist/index.js \
   --bundle \
   --platform=node \
   --target=node22 \
   --format=esm \
   --outfile=dist/anton-agent.mjs \
-  --external:node-pty \
-  --external:chokidar \
+  $AGENT_EXTERNALS \
   --banner:js="import{createRequire}from'module';const require=createRequire(import.meta.url);"
 
 chmod +x dist/anton-agent.mjs
