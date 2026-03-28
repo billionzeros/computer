@@ -1,3 +1,4 @@
+import type { JSX } from 'react'
 import { Plug, } from 'lucide-react'
 
 // Brand SVG icons for each built-in connector
