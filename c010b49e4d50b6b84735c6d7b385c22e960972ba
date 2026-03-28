@@ -1,0 +1,131 @@
+deploy/ansible/roles/anton-agent/templates/anton-agent.service.j2
+  f2484aff33fec443 23
+packages/desktop/src/components/chat/ActionsGroup.tsx
+  8d28b2f66a57de62 69-70,141-146
+packages/desktop/src/components/chat/ChatInput.tsx
+  76d273f138e43374 16,52,310
+packages/desktop/src/components/chat/ArtifactCard.tsx
+  c7a9933213aa7b53 6,31-33,55-59
+packages/desktop/src/lib/connection.ts
+  76d273f138e43374 185-186
+deploy/ansible/README.md
+  f2484aff33fec443 195-196
+packages/protocol/src/messages.ts
+  76d273f138e43374 315-320,962
+packages/agent-server/src/server.ts
+  76d273f138e43374 735-745
+deploy/ansible/roles/anton-agent/tasks/main.yml
+  f2484aff33fec443 107-114
+infra-providers/huddle/cloud-init.sh
+  f2484aff33fec443 82,148-149,157
+specs/ARTIFACT_PUBLISHING.md
+  6b6fc9131c9a622b 131,133,135-148,154-155,161-169,171-185,189-192,198,213,238-240,264-265,269,271-276
+specs/browser-automation.md
+  111dee8c4fe9f140 1-248
+specs/TOOL_CALLS_UI.md
+  6b6fc9131c9a622b 108,111,114
+packages/cli/src/commands/computer-setup.ts
+  f2484aff33fec443 140,262
+packages/desktop/src/components/AgentChat.tsx
+  76d273f138e43374 169-176,239
+packages/desktop/src/components/chat/MarkdownRenderer.tsx
+  3c02e3dbf6d7b974 19,28,62
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.1.22",
+  "base_commit_sha": "c010b49e4d50b6b84735c6d7b385c22e960972ba",
+  "prompts": {
+    "111dee8c4fe9f140": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "a882e771-990f-45b3-bfaf-d9270027f5d5",
+        "model": "claude-opus-4-6"
+      },
+      "human_author": "Om Gupta <omgupta0720@gmail.com>",
+      "messages": [],
+      "total_additions": 248,
+      "total_deletions": 0,
+      "accepted_lines": 248,
+      "overriden_lines": 0
+    },
+    "3c02e3dbf6d7b974": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "078369f3-518b-4e41-954a-521c706a15b7",
+        "model": "claude-opus-4-6"
+      },
+      "human_author": "Om Gupta <omgupta0720@gmail.com>",
+      "messages": [],
+      "total_additions": 3,
+      "total_deletions": 5,
+      "accepted_lines": 3,
+      "overriden_lines": 0
+    },
+    "6b6fc9131c9a622b": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "b9ddd5ce-6661-4aee-b0a7-a2377ec32896",
+        "model": "claude-opus-4-6"
+      },
+      "human_author": "Om Gupta <omgupta0720@gmail.com>",
+      "messages": [],
+      "total_additions": 66,
+      "total_deletions": 15,
+      "accepted_lines": 66,
+      "overriden_lines": 0
+    },
+    "76d273f138e43374": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "54bad5c5-bb7c-4f05-a891-f40c5f925ab4",
+        "model": "claude-opus-4-6"
+      },
+      "human_author": "Om Gupta <omgupta0720@gmail.com>",
+      "messages": [],
+      "total_additions": 36,
+      "total_deletions": 2,
+      "accepted_lines": 34,
+      "overriden_lines": 0
+    },
+    "8d28b2f66a57de62": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "33a27aa8-4874-46b2-9b50-b009e62907c8",
+        "model": "claude-opus-4-6"
+      },
+      "human_author": "Om Gupta <omgupta0720@gmail.com>",
+      "messages": [],
+      "total_additions": 8,
+      "total_deletions": 0,
+      "accepted_lines": 8,
+      "overriden_lines": 0
+    },
+    "c7a9933213aa7b53": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "7a8453dc-781f-42fb-871f-a5bd0fbcd7f8",
+        "model": "claude-opus-4-6"
+      },
+      "human_author": "Om Gupta <omgupta0720@gmail.com>",
+      "messages": [],
+      "total_additions": 9,
+      "total_deletions": 1,
+      "accepted_lines": 9,
+      "overriden_lines": 0
+    },
+    "f2484aff33fec443": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "461afd76-9f95-4d22-913d-e23e33fb058a",
+        "model": "claude-opus-4-6"
+      },
+      "human_author": "Om Gupta <omgupta0720@gmail.com>",
+      "messages": [],
+      "total_additions": 21,
+      "total_deletions": 10,
+      "accepted_lines": 19,
+      "overriden_lines": 0
+    }
+  }
+}
