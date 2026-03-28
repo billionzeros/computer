@@ -1,0 +1,25 @@
+Makefile
+  1afb51970bf2ed8c 32-36,39-44
+scripts/release.sh
+  1afb51970bf2ed8c 269-284
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.1.22",
+  "base_commit_sha": "8b3f14061a70cb5e8bd914018d6b60e2857e0049",
+  "prompts": {
+    "1afb51970bf2ed8c": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "6dc1e3e9-b9c9-4a32-bfa5-832f6eb33a2b",
+        "model": "claude-opus-4-6"
+      },
+      "human_author": "Om Gupta <omgupta0720@gmail.com>",
+      "messages": [],
+      "total_additions": 27,
+      "total_deletions": 2,
+      "accepted_lines": 27,
+      "overriden_lines": 0
+    }
+  }
+}
