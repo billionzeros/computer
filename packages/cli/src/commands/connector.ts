@@ -4,7 +4,20 @@ import { join } from 'node:path'
 import { parse as parseYaml, stringify as stringifyYaml } from 'yaml'
 import { theme } from '../lib/theme.js'
 
-const ANTON_DIR = join(homedir(), '.anton')
+/**
+ * Resolve the .anton directory.
+ * Priority: ANTON_DIR env var → /home/anton/.anton (Linux root) → ~/.anton
+ */
+function resolveAntonDir(): string {
+  if (process.env.ANTON_DIR) return process.env.ANTON_DIR
+  // On Linux as root, the agent runs as the 'anton' user — use its home
+  if (process.platform === 'linux' && process.getuid?.() === 0) {
+    return '/home/anton/.anton'
+  }
+  return join(homedir(), '.anton')
+}
+
+const ANTON_DIR = resolveAntonDir()
 const CONFIG_PATH = join(ANTON_DIR, 'config.yaml')
 
 interface ConnectorEntry {

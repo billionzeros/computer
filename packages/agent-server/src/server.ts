@@ -2425,11 +2425,18 @@ export class AgentServer {
     const connected = this.oauthFlow.listConnected()
     if (connected.length === 0) return
 
-    console.log(`  Activating ${connected.length} OAuth connector(s)...`)
-    for (const providerId of connected) {
-      if (this.connectorManager.hasFactory(providerId)) {
-        await this.connectorManager.activate(providerId)
-      }
+    // Only activate connectors that are enabled in config
+    const enabledConnectors = getConnectors(this.config)
+    const enabledIds = new Set(enabledConnectors.filter((c) => c.enabled).map((c) => c.id))
+
+    const toActivate = connected.filter(
+      (id) => this.connectorManager.hasFactory(id) && enabledIds.has(id),
+    )
+    if (toActivate.length === 0) return
+
+    console.log(`  Activating ${toActivate.length} OAuth connector(s)...`)
+    for (const providerId of toActivate) {
+      await this.connectorManager.activate(providerId)
     }
   }
 
@@ -2627,9 +2634,10 @@ export class AgentServer {
   private async handleConnectorToggle(msg: { id: string; enabled: boolean }): Promise<void> {
     try {
       toggleConnectorConfig(this.config, msg.id, msg.enabled)
-      
+
       const isMcpConnector = this.mcpManager.getStatus().some((s) => s.id === msg.id)
-      const isDirectConnector = this.connectorManager.isActive(msg.id) || this.connectorManager.hasFactory(msg.id)
+      const isDirectConnector =
+        this.connectorManager.isActive(msg.id) || this.connectorManager.hasFactory(msg.id)
 
       if (isMcpConnector) {
         await this.mcpManager.toggleConnector(msg.id, msg.enabled)
@@ -2641,7 +2649,19 @@ export class AgentServer {
         })
       } else if (isDirectConnector) {
         if (msg.enabled) {
-          await this.connectorManager.activate(msg.id)
+          const connectorConfig = getConnectors(this.config).find((c) => c.id === msg.id)
+          if (connectorConfig?.type === 'api') {
+            const token =
+              connectorConfig.apiKey ??
+              process.env[`${msg.id.toUpperCase()}_BOT_TOKEN`] ??
+              process.env[`${msg.id.toUpperCase()}_API_KEY`]
+            if (token) {
+              this.connectorManager.activateWithToken(msg.id, token)
+              this.applyConnectorMetadata(msg.id, connectorConfig.metadata)
+            }
+          } else {
+            await this.connectorManager.activate(msg.id)
+          }
         } else {
           this.connectorManager.deactivate(msg.id)
         }
@@ -2695,10 +2715,30 @@ export class AgentServer {
       // Inactive direct connector (has factory but not activated) — try to activate first
       if (this.connectorManager.hasFactory(msg.id)) {
         try {
-          await this.connectorManager.activate(msg.id)
+          // Check if this is an API-key connector — use activateWithToken instead of OAuth
+          const connectorConfig = getConnectors(this.config).find((c) => c.id === msg.id)
+          if (connectorConfig?.type === 'api') {
+            const token =
+              connectorConfig.apiKey ??
+              process.env[`${msg.id.toUpperCase()}_BOT_TOKEN`] ??
+              process.env[`${msg.id.toUpperCase()}_API_KEY`]
+            if (!token) {
+              this.sendToClient(Channel.AI, {
+                type: 'connector_test_response',
+                id: msg.id,
+                success: false,
+                tools: [],
+                error: `No API key configured for ${msg.id}`,
+              })
+              return
+            }
+            this.connectorManager.activateWithToken(msg.id, token)
+            this.applyConnectorMetadata(msg.id, connectorConfig.metadata)
+          } else {
+            await this.connectorManager.activate(msg.id)
+          }
           const result = await this.connectorManager.testConnection(msg.id)
-          const tools =
-            this.connectorManager.getStatus().find((s) => s.id === msg.id)?.tools ?? []
+          const tools = this.connectorManager.getStatus().find((s) => s.id === msg.id)?.tools ?? []
           this.sendToClient(Channel.AI, {
             type: 'connector_test_response',
             id: msg.id,
@@ -2748,8 +2788,16 @@ export class AgentServer {
   private handleConnectorOAuthStart(msg: { provider: string }): void {
     const entry = CONNECTOR_REGISTRY.find((e) => e.id === msg.provider)
     const scopes = entry?.oauthScopes
+
+    // Build provider-specific extra params
+    let extraParams: Record<string, string> | undefined
+    if (entry?.oauthProvider === 'websearch') {
+      const domain = process.env.DOMAIN
+      if (domain) extraParams = { domain }
+    }
+
     // Pass oauthProvider so shared OAuth apps (e.g. 'google') use the correct redirect_uri
-    const url = this.oauthFlow.startFlow(msg.provider, scopes, entry?.oauthProvider)
+    const url = this.oauthFlow.startFlow(msg.provider, scopes, entry?.oauthProvider, extraParams)
     if (!url) {
       this.sendToClient(Channel.AI, {
         type: 'connector_oauth_complete',

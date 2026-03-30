@@ -50,6 +50,7 @@ jobs:
         run: |
           pnpm --filter @anton/protocol build
           pnpm --filter @anton/agent-config build
+          pnpm --filter @anton/connectors build
           pnpm --filter @anton/agent-core build
           pnpm --filter @anton/agent-server build
 

@@ -23,6 +23,12 @@ import {
   step,
 } from './computer-common.js'
 
+function parseFlag(args: string[], flag: string): string | undefined {
+  const idx = args.indexOf(flag)
+  if (idx >= 0 && idx + 1 < args.length) return args[idx + 1]
+  return undefined
+}
+
 // Keys we know about — for display purposes
 const KNOWN_KEYS: Record<string, { label: string; secret: boolean }> = {
   ANTON_TOKEN: { label: 'Agent Token', secret: true },
@@ -103,12 +109,12 @@ export async function computerConfigCommand(args: string[]): Promise<void> {
 
     case 'oauth':
       requireLinuxRoot()
-      await handleOAuth()
+      await handleOAuth(args.slice(1))
       break
 
     case 'braintrust':
       requireLinuxRoot()
-      await handleBraintrust()
+      await handleBraintrust(args.slice(1))
       break
 
     case undefined:
@@ -217,21 +223,32 @@ function handleUnset(key?: string): void {
   console.log()
 }
 
-async function handleOAuth(): Promise<void> {
-  console.log()
-  console.log(`  ${theme.brandBold('anton.computer')} ${theme.dim('— OAuth connector setup')}`)
-  console.log()
-  console.log(`  ${theme.dim('This configures one-click OAuth connectors (Slack, GitHub, etc.)')}`)
-  console.log(`  ${theme.dim('You need a deployed OAuth proxy (Cloudflare Worker).')}`)
-  console.log()
+async function handleOAuth(args: string[] = []): Promise<void> {
+  const flagProxyUrl = parseFlag(args, '--proxy-url')
+  const flagCallbackUrl = parseFlag(args, '--callback-url')
+  const nonInteractive = flagProxyUrl != null || flagCallbackUrl != null
+
+  if (!nonInteractive) {
+    console.log()
+    console.log(`  ${theme.brandBold('anton.computer')} ${theme.dim('— OAuth connector setup')}`)
+    console.log()
+    console.log(
+      `  ${theme.dim('This configures one-click OAuth connectors (Slack, GitHub, etc.)')}`,
+    )
+    console.log(`  ${theme.dim('You need a deployed OAuth proxy (Cloudflare Worker).')}`)
+    console.log()
+  }
 
   const vars = readEnvFile()
 
   // OAuth Proxy URL
   const currentProxy = vars.OAUTH_PROXY_URL || ''
-  const proxyUrl = await promptInput(
-    `  OAuth Proxy URL ${currentProxy ? theme.dim(`(${currentProxy})`) : ''}: `,
-  )
+  let proxyUrl = flagProxyUrl
+  if (!nonInteractive) {
+    proxyUrl = await promptInput(
+      `  OAuth Proxy URL ${currentProxy ? theme.dim(`(${currentProxy})`) : ''}: `,
+    )
+  }
   if (proxyUrl) {
     setEnvVar('OAUTH_PROXY_URL', proxyUrl)
     done('OAUTH_PROXY_URL', proxyUrl)
@@ -239,19 +256,22 @@ async function handleOAuth(): Promise<void> {
     done('OAUTH_PROXY_URL', `keeping ${currentProxy}`)
   } else {
     fail('OAUTH_PROXY_URL', 'skipped — OAuth connectors will not work')
-    console.log()
+    if (!nonInteractive) console.log()
     return
   }
 
   // Callback Base URL — the agent's public URL
   const currentCallback = vars.OAUTH_CALLBACK_BASE_URL || ''
-  console.log()
-  console.log(
-    `  ${theme.dim("  This is your agent's public URL (e.g. https://yourname.antoncomputer.in)")}`,
-  )
-  const callbackUrl = await promptInput(
-    `  Agent Public URL ${currentCallback ? theme.dim(`(${currentCallback})`) : ''}: `,
-  )
+  let callbackUrl = flagCallbackUrl
+  if (!nonInteractive) {
+    console.log()
+    console.log(
+      `  ${theme.dim("  This is your agent's public URL (e.g. https://yourname.antoncomputer.in)")}`,
+    )
+    callbackUrl = await promptInput(
+      `  Agent Public URL ${currentCallback ? theme.dim(`(${currentCallback})`) : ''}: `,
+    )
+  }
   if (callbackUrl) {
     setEnvVar('OAUTH_CALLBACK_BASE_URL', callbackUrl)
     done('OAUTH_CALLBACK_BASE_URL', callbackUrl)
@@ -264,25 +284,34 @@ async function handleOAuth(): Promise<void> {
   console.log()
   restartAgent()
 
-  console.log()
-  console.log(`  ${theme.success('✓')} OAuth connectors configured.`)
-  console.log(
-    `  ${theme.dim('Users can now click "Connect" in the desktop app for Slack, GitHub, etc.')}`,
-  )
-  console.log()
+  if (!nonInteractive) {
+    console.log()
+    console.log(`  ${theme.success('✓')} OAuth connectors configured.`)
+    console.log(
+      `  ${theme.dim('Users can now click "Connect" in the desktop app for Slack, GitHub, etc.')}`,
+    )
+    console.log()
+  }
 }
 
-async function handleBraintrust(): Promise<void> {
-  console.log()
-  console.log(`  ${theme.brandBold('anton.computer')} ${theme.dim('— Braintrust setup')}`)
-  console.log()
+async function handleBraintrust(args: string[] = []): Promise<void> {
+  const flagApiKey = parseFlag(args, '--api-key')
+
+  if (!flagApiKey) {
+    console.log()
+    console.log(`  ${theme.brandBold('anton.computer')} ${theme.dim('— Braintrust setup')}`)
+    console.log()
+  }
 
   const vars = readEnvFile()
   const currentKey = vars.BRAINTRUST_API_KEY || ''
 
-  const apiKey = await promptInput(
-    `  Braintrust API Key ${currentKey ? theme.dim('(press Enter to keep current)') : ''}: `,
-  )
+  let apiKey = flagApiKey
+  if (!apiKey) {
+    apiKey = await promptInput(
+      `  Braintrust API Key ${currentKey ? theme.dim('(press Enter to keep current)') : ''}: `,
+    )
+  }
 
   if (apiKey) {
     setEnvVar('BRAINTRUST_API_KEY', apiKey)

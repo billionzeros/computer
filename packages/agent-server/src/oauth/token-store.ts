@@ -21,6 +21,7 @@ export interface StoredToken {
   accessToken: string
   refreshToken?: string
   expiresAt?: number // unix timestamp (seconds)
+  oauthProvider?: string // the proxy provider key (e.g. 'google') when different from provider
   metadata?: Record<string, string>
 }
 

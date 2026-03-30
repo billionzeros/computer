@@ -513,8 +513,9 @@ export class Session {
       console.log(`[session ${this.id}] pi event: ${event.type}`)
       // Log detailed info for error diagnosis
       if (event.type === 'turn_end' || event.type === 'agent_end') {
-        const msg = (event as unknown as { message?: { stopReason?: string; errorMessage?: string } })
-          .message
+        const msg = (
+          event as unknown as { message?: { stopReason?: string; errorMessage?: string } }
+        ).message
         if (msg?.stopReason === 'error') {
           console.error(
             `[session ${this.id}] LLM ERROR in ${event.type}: ${msg.errorMessage || 'unknown'}`,
@@ -1187,9 +1188,7 @@ export class Session {
         }
         // Surface LLM errors (e.g. invalid API key, rate limits) that the pi SDK captures
         if (msg?.stopReason === 'error' && msg?.errorMessage) {
-          console.error(
-            `[session ${this.id}] LLM error: ${msg.errorMessage}`,
-          )
+          console.error(`[session ${this.id}] LLM error: ${msg.errorMessage}`)
         }
         // Emit streaming token update so the client can show live counters
         const events: SessionEvent[] = [

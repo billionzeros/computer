@@ -1218,22 +1218,15 @@ export interface ConnectorRegistryEntry {
 export const CONNECTOR_REGISTRY: ConnectorRegistryEntry[] = [
   {
     id: 'exa-search',
-    name: 'Web Search (Exa)',
+    name: 'Web Search',
     description:
       'Semantic web search powered by Exa. Returns full page content, summaries, and highlights.',
     icon: '🔍',
     category: 'productivity',
-    type: 'api',
-    requiredEnv: ['EXA_PROXY_TOKEN'],
+    type: 'oauth',
+    oauthProvider: 'websearch',
+    requiredEnv: [],
     featured: true,
-    setupGuide: {
-      steps: [
-        'Anton provides a shared search proxy — no personal API key needed.',
-        'Paste the proxy token provided by your Anton administrator.',
-      ],
-      url: 'https://exa.ai',
-      urlLabel: 'Exa Docs',
-    },
   },
   {
     id: 'telegram',

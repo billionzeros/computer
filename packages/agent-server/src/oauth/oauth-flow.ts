@@ -8,7 +8,7 @@
  */
 
 import { randomBytes } from 'node:crypto'
-import type { AgentConfig } from '@anton/agent-config'
+import { type AgentConfig, CONNECTOR_REGISTRY } from '@anton/agent-config'
 import type { StoredToken, TokenStore } from './token-store.js'
 
 interface PendingFlow {
@@ -36,7 +36,12 @@ export class OAuthFlow {
    * @param scopes       - OAuth scopes to request
    * @param oauthProvider - The OAuth proxy provider key (e.g. 'google'). Defaults to connectorId.
    */
-  startFlow(connectorId: string, scopes?: string[], oauthProvider?: string): string | null {
+  startFlow(
+    connectorId: string,
+    scopes?: string[],
+    oauthProvider?: string,
+    extraParams?: Record<string, string>,
+  ): string | null {
     const proxyUrl = this.getProxyUrl()
     if (!proxyUrl) return null
 
@@ -67,6 +72,13 @@ export class OAuthFlow {
     // Pass connector-specific scopes so the proxy doesn't use its own defaults
     if (scopes && scopes.length > 0) {
       params.set('scope', scopes.join(' '))
+    }
+
+    // Provider-specific extra params (e.g. domain for websearch)
+    if (extraParams) {
+      for (const [k, v] of Object.entries(extraParams)) {
+        params.set(k, v)
+      }
     }
 
     return `${proxyUrl}/oauth/${effectiveProvider}/authorize?${params.toString()}`
@@ -105,6 +117,8 @@ export class OAuthFlow {
       accessToken: body.access_token,
       refreshToken: body.refresh_token,
       expiresAt: body.expires_in ? Math.floor(Date.now() / 1000) + body.expires_in : undefined,
+      oauthProvider:
+        pending.oauthProvider !== pending.connectorId ? pending.oauthProvider : undefined,
       metadata: body.metadata,
     }
 
@@ -134,7 +148,15 @@ export class OAuthFlow {
         throw new Error('Cannot refresh token: oauth proxy URL not configured')
       }
 
-      const res = await fetch(`${proxyUrl}/oauth/${provider}/refresh`, {
+      // Use the stored oauthProvider (e.g. 'google') for the proxy URL, not the connectorId
+      // (e.g. 'google-calendar'). Fall back to registry lookup for tokens saved before this field
+      // existed, then to provider for 1:1 mappings like 'gmail'.
+      const refreshProvider =
+        stored.oauthProvider ||
+        CONNECTOR_REGISTRY.find((e) => e.id === provider)?.oauthProvider ||
+        provider
+
+      const res = await fetch(`${proxyUrl}/oauth/${refreshProvider}/refresh`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ refresh_token: stored.refreshToken }),

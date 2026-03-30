@@ -38,7 +38,11 @@ export class ConnectorManager {
 
   /** Deactivate a connector. */
   deactivate(providerId: string): void {
-    this.connectors.delete(providerId)
+    const connector = this.connectors.get(providerId)
+    if (connector) {
+      console.log(`[ConnectorManager] Deactivated: ${connector.name}`)
+      this.connectors.delete(providerId)
+    }
   }
 
   /** Check if a provider has a direct connector factory. */

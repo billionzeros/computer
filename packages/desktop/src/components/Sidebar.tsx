@@ -50,6 +50,33 @@ export function Sidebar({ onViewChange, onOpenSettings, onOpenMachineInfo }: Pro
 
   const chatConversations = conversations.filter((c) => !c.projectId)
 
+  // Group conversations by date
+  const groupConversationsByDate = () => {
+    const now = new Date()
+    const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime()
+    const yesterdayStart = todayStart - 86400000
+
+    const today: typeof chatConversations = []
+    const yesterday: typeof chatConversations = []
+    const older: typeof chatConversations = []
+
+    // Sort by updatedAt descending first
+    const sorted = [...chatConversations].sort(
+      (a, b) => (b.updatedAt || b.createdAt) - (a.updatedAt || a.createdAt),
+    )
+
+    for (const conv of sorted) {
+      const t = conv.updatedAt || conv.createdAt
+      if (t >= todayStart) today.push(conv)
+      else if (t >= yesterdayStart) yesterday.push(conv)
+      else older.push(conv)
+    }
+
+    return { today, yesterday, older }
+  }
+
+  const grouped = groupConversationsByDate()
+
   const getConvStatus = (sessionId: string | undefined) => {
     if (!sessionId) return null
     // Check if awaiting user input (confirm, ask_user, or plan review)
@@ -157,44 +184,79 @@ export function Sidebar({ onViewChange, onOpenSettings, onOpenMachineInfo }: Pro
               // ── Chat mode: show only non-project conversations ──
               chatConversations.length > 0 ? (
                 <>
-                  <div className="sidebar-section-label">Recent</div>
                   <div className="sidebar-recent__list">
-                    {chatConversations.map((conv) => (
-                      <div
-                        key={conv.id}
-                        onClick={() => {
-                          switchConversation(conv.id)
-                          if (conv.sessionId) {
-                            useStore.getState().requestSessionHistory(conv.sessionId)
-                          }
-                          onViewChange('agent')
-                          if (currentView !== 'chat') {
-                            useStore.getState().setActiveView('chat')
-                          }
-                        }}
-                        onKeyDown={(e) => {
-                          if (e.key === 'Enter' || e.key === ' ') {
-                            switchConversation(conv.id)
-                            if (conv.sessionId) {
-                              useStore.getState().requestSessionHistory(conv.sessionId)
-                            }
-                            onViewChange('agent')
-                          }
-                        }}
-                        className={`sidebar-recent__item${conv.id === activeId ? ' sidebar-recent__item--active' : ''}`}
-                      >
-                        <span className="sidebar-recent__title">{conv.title}</span>
-                        {getConvStatus(conv.sessionId) === 'working' && (
-                          <Loader2 size={14} strokeWidth={1.5} className="sidebar-status-spinner" />
-                        )}
-                        {getConvStatus(conv.sessionId) === 'awaiting' && (
-                          <span className="sidebar-status-badge">Needs input</span>
-                        )}
-                        <ConversationMenu
-                          onDelete={(e) => handleDelete(e, conv.id, conv.sessionId)}
-                        />
-                      </div>
-                    ))}
+                    {grouped.today.length > 0 && (
+                      <>
+                        <div className="sidebar-section-label">Today</div>
+                        {grouped.today.map((conv) => (
+                          <ConversationItem
+                            key={conv.id}
+                            conv={conv}
+                            isActive={conv.id === activeId}
+                            status={getConvStatus(conv.sessionId)}
+                            onSelect={() => {
+                              switchConversation(conv.id)
+                              if (conv.sessionId) {
+                                useStore.getState().requestSessionHistory(conv.sessionId)
+                              }
+                              onViewChange('agent')
+                              if (currentView !== 'chat') {
+                                useStore.getState().setActiveView('chat')
+                              }
+                            }}
+                            onDelete={(e) => handleDelete(e, conv.id, conv.sessionId)}
+                          />
+                        ))}
+                      </>
+                    )}
+                    {grouped.yesterday.length > 0 && (
+                      <>
+                        <div className="sidebar-section-label">Yesterday</div>
+                        {grouped.yesterday.map((conv) => (
+                          <ConversationItem
+                            key={conv.id}
+                            conv={conv}
+                            isActive={conv.id === activeId}
+                            status={getConvStatus(conv.sessionId)}
+                            onSelect={() => {
+                              switchConversation(conv.id)
+                              if (conv.sessionId) {
+                                useStore.getState().requestSessionHistory(conv.sessionId)
+                              }
+                              onViewChange('agent')
+                              if (currentView !== 'chat') {
+                                useStore.getState().setActiveView('chat')
+                              }
+                            }}
+                            onDelete={(e) => handleDelete(e, conv.id, conv.sessionId)}
+                          />
+                        ))}
+                      </>
+                    )}
+                    {grouped.older.length > 0 && (
+                      <>
+                        <div className="sidebar-section-label">Older</div>
+                        {grouped.older.map((conv) => (
+                          <ConversationItem
+                            key={conv.id}
+                            conv={conv}
+                            isActive={conv.id === activeId}
+                            status={getConvStatus(conv.sessionId)}
+                            onSelect={() => {
+                              switchConversation(conv.id)
+                              if (conv.sessionId) {
+                                useStore.getState().requestSessionHistory(conv.sessionId)
+                              }
+                              onViewChange('agent')
+                              if (currentView !== 'chat') {
+                                useStore.getState().setActiveView('chat')
+                              }
+                            }}
+                            onDelete={(e) => handleDelete(e, conv.id, conv.sessionId)}
+                          />
+                        ))}
+                      </>
+                    )}
                   </div>
                 </>
               ) : (
@@ -275,6 +337,39 @@ export function Sidebar({ onViewChange, onOpenSettings, onOpenMachineInfo }: Pro
         </div>
       </div>
     </motion.aside>
+  )
+}
+
+// ── Conversation item ──
+
+function ConversationItem({
+  conv,
+  isActive,
+  status,
+  onSelect,
+  onDelete,
+}: {
+  conv: { id: string; sessionId: string; title: string }
+  isActive: boolean
+  status: string | null
+  onSelect: () => void
+  onDelete: (e: React.MouseEvent) => void
+}) {
+  return (
+    <div
+      onClick={onSelect}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' || e.key === ' ') onSelect()
+      }}
+      className={`sidebar-recent__item${isActive ? ' sidebar-recent__item--active' : ''}`}
+    >
+      <span className="sidebar-recent__title">{conv.title}</span>
+      {status === 'working' && (
+        <Loader2 size={14} strokeWidth={1.5} className="sidebar-status-spinner" />
+      )}
+      {status === 'awaiting' && <span className="sidebar-status-badge">Needs input</span>}
+      <ConversationMenu onDelete={onDelete} />
+    </div>
   )
 }
 
