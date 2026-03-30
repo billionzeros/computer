@@ -1,0 +1,50 @@
+packages/desktop/src/components/connectors/ConnectorsPage.tsx
+  3cd511b71c04d9e1 302
+packages/desktop/src/components/chat/groupMessages.ts
+  e5953d0a2cee17a5 181-184
+packages/agent-core/src/session.ts
+  e5953d0a2cee17a5 514-523,1169-1172,1188-1193,1198-1204,1244-1254
+packages/agent-server/src/server.ts
+  e5953d0a2cee17a5 2608-2613,2631-2632,2634-2635,2642-2665,2695-2720
+specs/connectors.md
+  e5953d0a2cee17a5 226-281
+packages/agent-core/src/agent.ts
+  e5953d0a2cee17a5 1192-1212
+packages/desktop/src/components/chat/ToolCallBlock.tsx
+  e5953d0a2cee17a5 72
+packages/connectors/src/github/api.ts
+  e5953d0a2cee17a5 42-49
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.1.22",
+  "base_commit_sha": "fcc1bf74cf4556bdbb0eb1a068f3235ac18a11ba",
+  "prompts": {
+    "3cd511b71c04d9e1": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "1b8ffcc7-d610-4c79-acb4-fdb2d186bbc2",
+        "model": "claude-opus-4-6"
+      },
+      "human_author": "Om Gupta <omgupta0720@gmail.com>",
+      "messages": [],
+      "total_additions": 2,
+      "total_deletions": 2,
+      "accepted_lines": 1,
+      "overriden_lines": 0
+    },
+    "e5953d0a2cee17a5": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "60274e00-083e-4778-85f0-1a0add4d3876",
+        "model": "claude-opus-4-6"
+      },
+      "human_author": "Om Gupta <omgupta0720@gmail.com>",
+      "messages": [],
+      "total_additions": 195,
+      "total_deletions": 78,
+      "accepted_lines": 190,
+      "overriden_lines": 0
+    }
+  }
+}
