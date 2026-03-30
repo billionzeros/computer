@@ -22,12 +22,12 @@ Anton is an open-source AI agent that lives on your server and does real work au
 Most AI tools give you text. Anton gives you **execution**. It runs on a dedicated machine you control — a VPS, a homelab box, a cloud instance — with full shell access and persistent memory.
 
 - **Autonomous work** — Schedule tasks, run cron jobs, monitor systems. Anton works while you sleep.
-- **Real execution** — 17+ tools: shell, filesystem, git, browser, database, networking, and more.
+- **Real execution** — 20+ tools: shell, filesystem, git, browser, database, networking, and more.
 - **Self-hosted** — Your server, your data. Zero vendor lock-in.
 - **Multi-provider** — Claude, GPT-4, Gemini, Ollama (local), Groq, Together, Mistral, Bedrock, OpenRouter.
 - **Desktop + CLI** — Native Tauri app or terminal client. Your choice.
 - **Persistent memory** — Remembers projects, files, and context across sessions.
-- **Extensible** — Add custom tools and skills in TypeScript + YAML.
+- **Extensible** — Add custom tools and connectors in TypeScript.
 
 ## What can Anton do?
 
@@ -43,17 +43,26 @@ Anton doesn't generate code for you to copy-paste. It runs the commands, creates
 
 ## Quick Start
 
-### Prerequisites
+### Option A: One-line install (recommended)
+
+```bash
+# On your VPS
+curl -fsSL https://antoncomputer.in/install | bash
+```
+
+The install script handles everything: downloads the agent binary, sets up systemd, configures your API key, and starts the service.
+
+### Option B: Build from source
+
+#### Prerequisites
 
 - [Node.js](https://nodejs.org/) 22+
 - [pnpm](https://pnpm.io/) 9+
 - An AI provider API key (Anthropic, OpenAI, etc.)
 
-### Install & Run
-
 ```bash
 git clone https://github.com/OmGuptaIND/computer.git
-cd anton.computer
+cd computer
 pnpm install
 pnpm dev          # builds protocol, runs agent + desktop concurrently
 ```
@@ -65,12 +74,16 @@ Open the desktop app, enter your agent's host (e.g. `203.0.113.10:9876`) and tok
 Or use the CLI:
 
 ```bash
-pnpm cli:dev -- connect 203.0.113.10 --token ak_your_token_here
+# Install the CLI
+curl -fsSL https://antoncomputer.in/install | bash --cli
+
+# Connect to your agent
+anton connect 203.0.113.10 --token ak_your_token_here
 ```
 
 ## Deploy to Your Server
 
-### Option A: Ansible (recommended)
+### Option A: Ansible (recommended for teams)
 
 ```bash
 # 1. Install Ansible
@@ -100,21 +113,39 @@ export ANTHROPIC_API_KEY=sk-ant-...
 ~/.anton/start.sh
 ```
 
+### Option C: Docker
+
+```bash
+# Clone and configure
+git clone https://github.com/OmGuptaIND/computer.git
+cd computer
+
+# Set your API key
+export ANTHROPIC_API_KEY=sk-ant-...
+
+# Run with Docker Compose
+docker compose -f deploy/docker-compose.yml up -d
+```
+
 ## Architecture
 
 ```
-anton.computer/
+computer/
 ├── packages/
 │   ├── agent-server/      # WebSocket server (Node.js daemon)
 │   ├── agent-core/        # AI engine, tools, system prompt
 │   ├── agent-config/      # Config loading & validation
-│   ├── agent/             # Agent entry point
+│   ├── agent/             # Agent entry point & binary
 │   ├── cli/               # Terminal client (Ink + WebSocket)
 │   ├── desktop/           # Native app (Tauri v2 + React 19)
 │   └── protocol/          # Shared types & binary codec
+├── desktop/               # Desktop app assets & config
 ├── deploy/
 │   ├── ansible/           # Production deployment playbook
+│   ├── Dockerfile         # Docker image
+│   ├── docker-compose.yml # Docker Compose setup
 │   └── install.sh         # One-command VPS setup
+├── infra-providers/       # Cloud provider Terraform configs
 ├── specs/                 # Protocol & architecture specs
 └── Makefile               # Deploy, sync, manage commands
 ```
@@ -123,11 +154,15 @@ anton.computer/
 
 | Category | Tools |
 |----------|-------|
-| **System** | `shell`, `filesystem`, `process`, `network`, `clipboard`, `notification` |
+| **System** | `shell`, `filesystem`, `process`, `network`, `clipboard`, `notification`, `image` |
 | **Development** | `git`, `code_search`, `diff`, `http_api` |
-| **Data** | `database` (SQLite), `memory` (persistent KV), `todo` |
-| **Content** | `browser` (fetch + scrape), `image`, `artifact` (HTML/SVG/Mermaid) |
-| **Interaction** | `plan`, `ask_user` |
+| **Data** | `database` (SQLite), `memory` (persistent KV), `todo`, `task_tracker` |
+| **Content** | `browser` (fetch + scrape), `artifact` (HTML/SVG/Mermaid), `publish`, `web_search` |
+| **Interaction** | `plan`, `ask_user`, `sub_agent` |
+
+### Go Sidecar
+
+Anton ships with a lightweight Go sidecar binary that handles agent health checks, status reporting, and system diagnostics. It runs alongside the Node.js agent and is included in all binary releases for both `linux-x64` and `linux-arm64`.
 
 ### Protocol
 
@@ -154,7 +189,7 @@ port: 9876
 
 ai:
   provider: anthropic    # anthropic | openai | google | ollama | groq | together | openrouter | bedrock | mistral
-  model: claude-sonnet-4-6
+  model: claude-3-5-sonnet-20241022
   apiKey: ""             # or set ANTHROPIC_API_KEY env var
 ```
 
@@ -173,11 +208,13 @@ make status                   # check service health
 make logs HOST=myserver       # tail agent logs
 make restart                  # restart agent service
 make verify                   # full health check
+make release                  # cut a new release (interactive)
 
 # Quality
 pnpm typecheck                # run type checking
 pnpm check                    # lint + format check
 pnpm check:fix                # auto-fix lint/format issues
+pnpm verify                   # typecheck + lint (run before PRs)
 ```
 
 ## Contributing
@@ -187,7 +224,7 @@ We welcome contributions! Anton is open source because we believe AI agents shou
 ### Getting Started
 
 1. **Fork** the repository
-2. **Clone** your fork: `git clone https://github.com/YOUR_USERNAME/anton.computer.git`
+2. **Clone** your fork: `git clone https://github.com/YOUR_USERNAME/computer.git`
 3. **Install** dependencies: `pnpm install`
 4. **Create a branch**: `git checkout -b feat/your-feature`
 5. **Make your changes**
@@ -198,7 +235,6 @@ We welcome contributions! Anton is open source because we believe AI agents shou
 ### What to Contribute
 
 - **New tools** — Add capabilities to the agent in `packages/agent-core/src/tools/`
-- **Skills** — Create reusable YAML-defined automation workflows
 - **Desktop UI** — Improve the Tauri app in `packages/desktop/`
 - **CLI features** — Enhance the terminal client in `packages/cli/`
 - **Deployment** — Better Docker support, new cloud providers, Kubernetes
