@@ -1,0 +1,40 @@
+packages/connectors/src/reddit/api.ts
+  e3d48e58c8d8e897 121,166,169
+packages/connectors/src/reddit/tools.ts
+  e3d48e58c8d8e897 26-27,80-82,90,104,110,123,196-198,207,220,223,336-338,342,353,377-379,387,399,402
+packages/agent-config/src/config.ts
+  e3d48e58c8d8e897 1544
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.1.23",
+  "base_commit_sha": "50da7808881608cd39e62aef714bd7a8b66cb20f",
+  "prompts": {
+    "5bac39ad2f6a2461": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "7f8db636-25d4-4410-948e-79d2295fab1e",
+        "model": "claude-opus-4-6"
+      },
+      "human_author": "Om Gupta <omgupta0720@gmail.com>",
+      "messages": [],
+      "total_additions": 3,
+      "total_deletions": 1,
+      "accepted_lines": 3,
+      "overriden_lines": 0
+    },
+    "e3d48e58c8d8e897": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "9928c541-4036-4d3b-8581-39ce1e2b44c0",
+        "model": "claude-opus-4-6"
+      },
+      "human_author": "Om Gupta <omgupta0720@gmail.com>",
+      "messages": [],
+      "total_additions": 30,
+      "total_deletions": 12,
+      "accepted_lines": 30,
+      "overriden_lines": 0
+    }
+  }
+}
