@@ -1,6 +1,6 @@
 {
   "version": "1.0.28",
-  "gitHash": "",
+  "gitHash": "04639d9",
   "releaseUrl": "https://github.com/OmGuptaIND/computer/releases",
   "changelog": "Fixes:\n- tool calling issues",
   "publishedAt": "2026-03-30T18:42:06.334Z",
