@@ -1,7 +1,9 @@
 import { Check, Download, Loader2, X } from 'lucide-react'
 import { useEffect } from 'react'
 import { connection } from '../lib/connection.js'
+import { semverGt } from '../lib/semver.js'
 import { useConnectionStatus, useStore } from '../lib/store.js'
+import { FRONTEND_VERSION } from '../lib/version.js'
 import { AntonLogo } from './AntonLogo.js'
 
 /**
@@ -20,6 +22,13 @@ export function UpdateBanner() {
   const updateDismissed = useStore((s) => s.updateDismissed)
   const dismissUpdate = useStore((s) => s.dismissUpdate)
   const agentVersion = useStore((s) => s.agentVersion)
+
+  // When a forced update is active, the ForceUpdateGate handles the UI
+  const isForceUpdate =
+    agentVersion !== null &&
+    FRONTEND_VERSION !== '0.0.0' &&
+    semverGt(FRONTEND_VERSION, agentVersion)
+  if (isForceUpdate) return null
 
   // Auto-dismiss "done" state after 4 seconds
   useEffect(() => {

@@ -16,7 +16,7 @@ import {
   Trash2,
   X,
 } from 'lucide-react'
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { connection } from '../lib/connection.js'
 import { useConnectionStatus, useStore } from '../lib/store.js'
 import { AntonLogo } from './AntonLogo.js'
@@ -49,6 +49,28 @@ export function Sidebar({ onViewChange, onOpenSettings, onOpenMachineInfo }: Pro
   const pendingPlan = useStore((s) => s.pendingPlan)
 
   const chatConversations = conversations.filter((c) => !c.projectId)
+
+  // Lazy-load "Older" conversations when the user scrolls down
+  const [showOlder, setShowOlder] = useState(false)
+  const olderSentinelRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    if (showOlder) return // already revealed
+    const el = olderSentinelRef.current
+    if (!el) return
+
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (entry.isIntersecting) {
+          setShowOlder(true)
+          observer.disconnect()
+        }
+      },
+      { rootMargin: '100px' },
+    )
+    observer.observe(el)
+    return () => observer.disconnect()
+  }, [showOlder, chatConversations.length])
 
   // Group conversations by date
   const groupConversationsByDate = () => {
@@ -233,7 +255,11 @@ export function Sidebar({ onViewChange, onOpenSettings, onOpenMachineInfo }: Pro
                         ))}
                       </>
                     )}
-                    {grouped.older.length > 0 && (
+                    {/* Sentinel for lazy-loading older conversations */}
+                    {grouped.older.length > 0 && !showOlder && (
+                      <div ref={olderSentinelRef} style={{ height: 1 }} />
+                    )}
+                    {grouped.older.length > 0 && showOlder && (
                       <>
                         <div className="sidebar-section-label">Older</div>
                         {grouped.older.map((conv) => (

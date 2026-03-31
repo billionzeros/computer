@@ -297,6 +297,7 @@ export interface WsProvidersListResponse {
   type: 'providers_list_response'
   providers: ProviderInfo[]
   defaults: { provider: string; model: string }
+  onboarding?: { completed: boolean; role?: string }
 }
 
 export interface WsProviderSetDefaultResponse {

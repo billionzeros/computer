@@ -567,6 +567,10 @@ export class AgentServer {
           this.config.security = value as typeof this.config.security
           saveConfig(this.config)
           break
+        case 'onboarding':
+          this.config.onboarding = value as typeof this.config.onboarding
+          saveConfig(this.config)
+          break
         default:
           throw new Error(`Unknown config key: ${key}`)
       }
@@ -1404,6 +1408,7 @@ export class AgentServer {
       type: 'providers_list_response',
       providers: getProvidersList(this.config),
       defaults: this.config.defaults,
+      onboarding: this.config.onboarding,
     })
   }
 

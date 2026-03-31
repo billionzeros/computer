@@ -151,6 +151,11 @@ export interface AgentConfig {
     sampleRate?: number // fraction of sessions to score online (default: 0.1)
     onlineScoring?: boolean // enable online heuristic + sampled scoring (default: false)
   }
+
+  onboarding?: {
+    completed: boolean
+    role?: string // user-selected role from onboarding flow
+  }
 }
 
 export interface SkillConfig {

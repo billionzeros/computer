@@ -12,8 +12,10 @@ import { Terminal } from './components/Terminal.js'
 import { DebugOverlay } from './components/chat/DebugOverlay.js'
 import { ProjectList } from './components/projects/ProjectList.js'
 import { ProjectView } from './components/projects/ProjectView.js'
+import { ForceUpdateGate } from './components/ForceUpdateGate.js'
 import { UpdateBanner } from './components/UpdateBanner.js'
 import { SettingsModal } from './components/settings/SettingsModal.js'
+import { WelcomeModal } from './components/WelcomeModal.js'
 import { connection } from './lib/connection.js'
 import { useConnectionStatus, useStore } from './lib/store.js'
 
@@ -41,8 +43,12 @@ export function App() {
   const projects = useStore((s) => s.projects)
   const theme = useStore((s) => s.theme)
   const devMode = useStore((s) => s.devMode)
+  const onboardingLoaded = useStore((s) => s.onboardingLoaded)
+  const onboardingCompleted = useStore((s) => s.onboardingCompleted)
+  const setOnboardingCompleted = useStore((s) => s.setOnboardingCompleted)
   const setArtifactPanelOpen = useStore((s) => s.setArtifactPanelOpen)
   const setSidePanelView = useStore((s) => s.setSidePanelView)
+  const showWelcome = onboardingLoaded && !onboardingCompleted
 
   // Apply theme on mount + listen for system preference changes
   useEffect(() => {
@@ -136,10 +142,16 @@ export function App() {
           }
         }
 
-        // If no active conversation, activate the latest non-project session
+        // On connect, always land on a fresh empty conversation.
+        // If one already exists, switch to it; otherwise create one.
         const currentStore = useStore.getState()
-        if (!currentStore.activeConversationId) {
-          // Prefer a non-project session for the default chat view
+        const chatConvs = currentStore.conversations.filter((c) => !c.projectId)
+        const emptyConv = chatConvs.find((c) => c.messages.length === 0)
+
+        if (emptyConv) {
+          currentStore.switchConversation(emptyConv.id)
+        } else if (!currentStore.activeConversationId) {
+          // No empty conversation and nothing active — pick the latest
           const chatSession = state.sessions.find((s) => !s.id.match(/^proj_/))
           const latest = chatSession || state.sessions[0]
           if (latest) {
@@ -200,7 +212,8 @@ export function App() {
   }
 
   return (
-    <div className="app-shell">
+    <ForceUpdateGate>
+      <div className="app-shell">
       <Sidebar
         onDisconnect={handleDisconnect}
         activeView={sidebarView}
@@ -333,6 +346,16 @@ export function App() {
         initialConnectorId={settingsConnectorId}
       />
       <DebugOverlay />
-    </div>
+      <WelcomeModal
+        open={showWelcome}
+        onClose={(role) => setOnboardingCompleted(role)}
+        onOpenSettings={(role) => {
+          setOnboardingCompleted(role)
+          setSettingsPage('models')
+          setShowSettings(true)
+        }}
+      />
+      </div>
+    </ForceUpdateGate>
   )
 }

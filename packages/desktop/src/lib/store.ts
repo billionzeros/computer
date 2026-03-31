@@ -419,6 +419,12 @@ interface AppState {
   resolvedTheme: 'light' | 'dark'
   setTheme: (theme: 'light' | 'dark' | 'system') => void
 
+  // Onboarding
+  onboardingLoaded: boolean
+  onboardingCompleted: boolean
+  onboardingRole: string | null
+  setOnboardingCompleted: (role?: string) => void
+
   // Dev Mode
   devMode: boolean
   setDevMode: (enabled: boolean) => void
@@ -663,6 +669,18 @@ export const useStore = create<AppState>((set, get) => {
           : theme
       document.documentElement.setAttribute('data-theme', resolved)
       set({ theme, resolvedTheme: resolved })
+    },
+
+    onboardingLoaded: false,
+    onboardingCompleted: false,
+    onboardingRole: null,
+    setOnboardingCompleted: (role?: string) => {
+      set({ onboardingCompleted: true, onboardingRole: role ?? null })
+      connection.send(Channel.CONTROL, {
+        type: 'config_update',
+        key: 'onboarding',
+        value: { completed: true, role: role ?? undefined },
+      })
     },
 
     devMode: localStorage.getItem('anton-devmode') === 'true',
@@ -2427,6 +2445,11 @@ function handleWsMessage(channel: number, msg: WsPayload) {
     case 'providers_list_response': {
       const m = msg as unknown as WsProvidersListResponse
       store.setProviders(m.providers, m.defaults)
+      useStore.setState({
+        onboardingLoaded: true,
+        onboardingCompleted: !!m.onboarding?.completed,
+        onboardingRole: m.onboarding?.role ?? null,
+      })
       break
     }
 
