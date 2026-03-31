@@ -1,0 +1,268 @@
+packages/connectors/src/linkedin/index.ts
+  291647f9be469ef8 1-38,40-60
+  30dde2223b85202d 39
+specs/CONVERSATION_WORKSPACES.md
+  e6b9feb5b96e45aa 88
+packages/agent-core/src/evals/scorers/tool-selection.ts
+  0f610ab779120dbf 1-26
+packages/desktop/src/components/chat/ConnectorToolbar.tsx
+  976e084e67c919d5 25,27-31
+specs/SESSIONS.md
+  e6b9feb5b96e45aa 178,191
+packages/connectors/src/airtable/tools.ts
+  976e084e67c919d5 1-196
+specs/PROJECT_CONTEXT_SYSTEM.md
+  e6b9feb5b96e45aa 39,42-45,47,50,53,59,73,102
+packages/agent-core/package.json
+  0f610ab779120dbf 9-13,22,31
+packages/desktop/src/components/UpdateBanner.tsx
+  d3546fc5e2515797 1-173
+packages/agent-core/src/tools/browser.ts
+  1dcf990142bd4fd8 1-4,97-98,122-161,370-371,377-378
+  0f610ab779120dbf 100-112,115-118,171,176-179,189-194
+packages/desktop/src/components/settings/SettingsModal.tsx
+  1dcf990142bd4fd8 48-49,126-149
+specs/ARCHITECTURE.md
+  e6b9feb5b96e45aa 150,184
+packages/desktop/src/index.css
+  1dcf990142bd4fd8 11767-11950
+  87b8ac6eaaefbac3 808,7002-7007,7011-7013,7017-7018,7024-7025,7031,7039,7052-7053,7057,7073-7074,7098-7099,7103-7104,7110,7115-7117,7123,7126,7132-7133
+  d3546fc5e2515797 587,3417-3528
+specs/PRODUCTION-AUDIT.md
+  0f610ab779120dbf 1-152
+packages/agent-core/src/evals/runner.ts
+  30dde2223b85202d 100
+  0f610ab779120dbf 1-99,101-131
+packages/agent-core/src/evals/types.ts
+  0f610ab779120dbf 1-44
+packages/agent-core/src/evals/datasets/tool-selection.ts
+  0f610ab779120dbf 1-224
+packages/agent-core/src/evals/datasets/response-quality.ts
+  0f610ab779120dbf 1-83
+packages/agent-core/src/tools/network.ts
+  0f610ab779120dbf 1-8,10-11,60-65,68,86-92,94-97,99-113,115,120-134,140-147
+packages/connectors/src/index.ts
+  291647f9be469ef8 18,21,53
+  976e084e67c919d5 17,20,52
+specs/UPDATES.md
+  e6b9feb5b96e45aa 230,233-237,253-255
+packages/agent-core/src/index.ts
+  0f610ab779120dbf 40
+  e6b9feb5b96e45aa 1,31-36
+packages/desktop/src/components/devmode/DevModePanel.tsx
+  1dcf990142bd4fd8 1-161
+packages/agent-core/src/tools/http-api.ts
+  0f610ab779120dbf 4-5,8,48,50,55-57
+packages/agent-core/src/evals/scorers/factuality.ts
+  0f610ab779120dbf 1-51
+packages/agent-core/src/evals/scorers/safety.ts
+  0f610ab779120dbf 1-60
+packages/desktop/src/components/connectors/ConnectorIcons.tsx
+  976e084e67c919d5 249-258,297
+  291647f9be469ef8 259-280,298
+packages/desktop/src/lib/store.ts
+  1dcf990142bd4fd8 422-427,668-688,1576-1582
+  296cdb28312867ab 551,1471-1521
+  d3546fc5e2515797 193-194,1416-1418,1423,1448-1450,1543-1555
+packages/desktop/src/components/AgentChat.tsx
+  87b8ac6eaaefbac3 184-189
+packages/agent-core/src/evals/index.ts
+  0f610ab779120dbf 1-157
+specs/agents.md
+  e6b9feb5b96e45aa 72,89
+packages/agent-core/src/tools/filesystem.ts
+  0f610ab779120dbf 1-8,12,57-62,69-74
+packages/agent-core/src/session.ts
+  0f610ab779120dbf 49-57,176-180,215,237,317,324-341,358,379-428,585-611,614-616,648-649,662,716-776,806-807,816-818,1715-1718,1786,1873
+  30dde2223b85202d 1630
+  1dcf990142bd4fd8 1603-1607
+  e6b9feb5b96e45aa 20-21,35-39,48,170,1593-1602,1609-1611,1613-1614,1616,1618-1619,1622-1623,1625-1629,1631-1632,1634-1660,1663,1665-1667,1670-1671,1674-1687,1690,1694,1698,1704,1707,1709,1711,1713,1729,1734
+packages/desktop/src/components/connectors/ConnectorsPage.tsx
+  976e084e67c919d5 36,38-42
+packages/agent-config/src/config.ts
+  291647f9be469ef8 1509-1529
+  976e084e67c919d5 1488-1508
+  0f610ab779120dbf 151-152
+  e6b9feb5b96e45aa 1112-1114,1116,1119-1120,1122-1127,1131,1141-1142,1146-1147,1149-1162
+packages/agent-server/src/server.ts
+  1dcf990142bd4fd8 13,44-46,470,487,499-512,514-547
+  d3546fc5e2515797 280-289
+  30dde2223b85202d 513
+  0f610ab779120dbf 121-135
+specs/TASK_TRACKER.md
+  e6b9feb5b96e45aa 240-249
+packages/desktop/src/lib/connection.ts
+  1dcf990142bd4fd8 211-212
+packages/connectors/src/airtable/api.ts
+  30dde2223b85202d 96,98,101
+  976e084e67c919d5 1-95,97,99-100,102-155
+packages/agent-server/src/index.ts
+  0f610ab779120dbf 19,82-83
+packages/connectors/src/airtable/index.ts
+  976e084e67c919d5 1-30
+packages/agent-core/src/tools/database.ts
+  0f610ab779120dbf 4-6,9,12,27-44,47-48,59-64,70-72,74-78,80-84,86-87,89-98,101-105
+packages/desktop/src/App.tsx
+  1dcf990142bd4fd8 2,43-45,263-275
+  87b8ac6eaaefbac3 37-38
+  d3546fc5e2515797 15,187,216-220
+  291647f9be469ef8 297
+packages/agent-core/src/agent.ts
+  e6b9feb5b96e45aa 17,89-92,94,324
+  0f610ab779120dbf 29,161-162,171-173,887-888
+  1dcf990142bd4fd8 231-234
+packages/agent-config/prompts/system.md
+  1dcf990142bd4fd8 10-12
+  e6b9feb5b96e45aa 210-223
+packages/agent-core/src/tools/security.ts
+  0f610ab779120dbf 1-103,105-118,120-163
+  30dde2223b85202d 104,119
+packages/desktop/src/components/SidePanel.tsx
+  1dcf990142bd4fd8 2,9,11,73-74,81,192-206,213
+packages/connectors/src/linkedin/tools.ts
+  291647f9be469ef8 1-371
+packages/agent-server/src/updater.ts
+  d3546fc5e2515797 43-45,98,102-107
+packages/protocol/src/messages.ts
+  1dcf990142bd4fd8 38-40
+packages/desktop/src/components/Connect.tsx
+  296cdb28312867ab 40,43-47,50,52-54
+packages/agent-core/src/tracing.ts
+  0f610ab779120dbf 9,11,18-24,35-36,44-45,65-77,83-99,101-147,149-250
+packages/agent-core/src/context.ts
+  e6b9feb5b96e45aa 238-261,264,270,279,285-288,292-306,326
+packages/desktop/src/components/chat/MessageList.tsx
+  291647f9be469ef8 44
+packages/agent-core/src/evals/datasets/safety.ts
+  0f610ab779120dbf 1-103
+specs/EVALS.md
+  0f610ab779120dbf 1-214
+packages/agent-config/src/projects.ts
+  e6b9feb5b96e45aa 418-419,422-426,428-431,433,435,438,447-449,452,457-458,466-467
+packages/connectors/src/linkedin/api.ts
+  291647f9be469ef8 1-7,9-38,41,43-58,61,63-72,75-80,82-87,91-112,114-118,120-123,126-128,130-131,133-147,149-150,152-154,156,158,160-161,163,167-182,185-188,191-198,200-214,216-241,243-249,252-277,279-322
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.1.23",
+  "base_commit_sha": "52cf71f20908b7c476ec01e0ac98b329aa9eedc7",
+  "prompts": {
+    "0f610ab779120dbf": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "662b3c83-b950-468d-87ce-32b5307de83f",
+        "model": "claude-opus-4-6"
+      },
+      "human_author": "Om Gupta <omgupta0720@gmail.com>",
+      "messages": [],
+      "total_additions": 2093,
+      "total_deletions": 143,
+      "accepted_lines": 2034,
+      "overriden_lines": 0
+    },
+    "1dcf990142bd4fd8": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "f6c4ef6e-40e6-4781-ac1f-0517d73275a2",
+        "model": "claude-opus-4-6"
+      },
+      "human_author": "Om Gupta <omgupta0720@gmail.com>",
+      "messages": [],
+      "total_additions": 627,
+      "total_deletions": 86,
+      "accepted_lines": 565,
+      "overriden_lines": 0
+    },
+    "291647f9be469ef8": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "bba7616b-656c-4da6-899f-ce65c96f4c78",
+        "model": "claude-opus-4-6"
+      },
+      "human_author": "Om Gupta <omgupta0720@gmail.com>",
+      "messages": [],
+      "total_additions": 861,
+      "total_deletions": 162,
+      "accepted_lines": 772,
+      "overriden_lines": 0
+    },
+    "296cdb28312867ab": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "248ec7ab-f2aa-4c56-bc56-ac42e5e34b28",
+        "model": "claude-opus-4-6"
+      },
+      "human_author": "Om Gupta <omgupta0720@gmail.com>",
+      "messages": [],
+      "total_additions": 62,
+      "total_deletions": 3,
+      "accepted_lines": 62,
+      "overriden_lines": 0
+    },
+    "30dde2223b85202d": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "df6ead43-7e93-4ffb-a783-ac2a5ed34543",
+        "model": "claude-opus-4-6"
+      },
+      "human_author": "Om Gupta <omgupta0720@gmail.com>",
+      "messages": [],
+      "total_additions": 10,
+      "total_deletions": 13,
+      "accepted_lines": 10,
+      "overriden_lines": 0
+    },
+    "87b8ac6eaaefbac3": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "607250d7-c382-4cad-9434-82dd7ad4e023",
+        "model": "claude-opus-4-6"
+      },
+      "human_author": "Om Gupta <omgupta0720@gmail.com>",
+      "messages": [],
+      "total_additions": 41,
+      "total_deletions": 30,
+      "accepted_lines": 41,
+      "overriden_lines": 0
+    },
+    "976e084e67c919d5": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "468ef25d-504d-4b87-8cfc-2f0c5f456804",
+        "model": "claude-opus-4-6"
+      },
+      "human_author": "Om Gupta <omgupta0720@gmail.com>",
+      "messages": [],
+      "total_additions": 438,
+      "total_deletions": 16,
+      "accepted_lines": 425,
+      "overriden_lines": 0
+    },
+    "d3546fc5e2515797": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "2cad24cf-ec56-4659-9bc8-2905597a46fa",
+        "model": "claude-opus-4-6"
+      },
+      "human_author": "Om Gupta <omgupta0720@gmail.com>",
+      "messages": [],
+      "total_additions": 469,
+      "total_deletions": 141,
+      "accepted_lines": 336,
+      "overriden_lines": 0
+    },
+    "e6b9feb5b96e45aa": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "573f1d59-9b22-4012-9a21-ffd89c22bb31",
+        "model": "claude-opus-4-6"
+      },
+      "human_author": "Om Gupta <omgupta0720@gmail.com>",
+      "messages": [],
+      "total_additions": 267,
+      "total_deletions": 162,
+      "accepted_lines": 264,
+      "overriden_lines": 0
+    }
+  }
+}
