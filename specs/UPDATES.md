@@ -227,12 +227,14 @@ For production releases, CI (or `./scripts/build-binary.sh`) takes the bundle an
 
 #### Embedded assets
 
-The system prompt (`prompts/system.md`) is embedded into the bundle at build time. The build step `scripts/embed-prompts.js` reads the prompt file and generates `src/embedded-prompts.ts` with the content as a string constant. esbuild then inlines it into the bundle.
+The core system prompt (`prompts/system.md`) is embedded into the bundle at build time. The build step `scripts/embed-prompts.js` reads the prompt file and generates `src/embedded-prompts.ts` with the content as a string constant. esbuild then inlines it into the bundle.
 
 This means:
-- The binary/bundle always has the correct prompt — no fallback needed
-- On first run, the prompt is written to `~/.anton/prompts/system.md` so users can customize it
-- Users can edit their copy; it won't be overwritten on updates
+- The binary/bundle always has the correct core prompt — identical for all deployments
+- On first run, the prompt is written to `~/.anton/prompts/system.md` for user reference
+- The core prompt is always synced from the embedded version (not user-editable)
+- User customizations go in `append.md` and `rules/*.md` — injected as separate `<system-reminder>` blocks
+- Workspace-level rules go in `.anton.md` in the project directory (like CLAUDE.md)
 - When you update the prompt in source, the next build/release includes the new version
 
 #### What's on the VM
@@ -248,9 +250,9 @@ This means:
 ├── sessions/                ← Session data (auto-created)
 ├── skills/                  ← User skills (auto-created)
 ├── prompts/
-│   ├── system.md            ← Seeded from embedded prompt on first run
-│   ├── append.md            ← Optional user additions
-│   └── rules/               ← Optional rule files
+│   ├── system.md            ← Synced from embedded prompt (for reference)
+│   ├── append.md            ← Optional user rules (injected as <system-reminder>)
+│   └── rules/               ← Optional rule files (injected as <system-reminder>)
 └── certs/                   ← TLS certs
 ```
 

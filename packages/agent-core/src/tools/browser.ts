@@ -1,4 +1,7 @@
-import { execSync } from 'node:child_process'
+import { execSync, execFile } from 'node:child_process'
+import { promisify } from 'node:util'
+
+const execFileAsync = promisify(execFile)
 import type { BrowserAction } from '@anton/protocol'
 import { Readability } from '@mozilla/readability'
 import { parseHTML } from 'linkedom'
@@ -91,21 +94,71 @@ interface BrowserSession {
 
 /** Single shared browser session (one at a time per agent-core process). */
 let session: BrowserSession | null = null
+/** Set to true during first launch if chromium needs installing — lets tool result inform the user. */
+let chromiumJustInstalled = false
+
+/** Idle timeout — auto-close browser after 5 minutes of no activity. */
+const BROWSER_IDLE_TIMEOUT_MS = 5 * 60 * 1000
+let idleTimer: ReturnType<typeof setTimeout> | null = null
+
+function resetIdleTimer(): void {
+  if (idleTimer) clearTimeout(idleTimer)
+  idleTimer = setTimeout(() => {
+    if (session) {
+      console.log('[browser] Auto-closing browser after 5 minutes idle')
+      closeBrowser().catch(() => {})
+    }
+  }, BROWSER_IDLE_TIMEOUT_MS)
+}
 
 async function ensureBrowser(): Promise<BrowserSession> {
-  if (session) return session
+  if (session) {
+    resetIdleTimer()
+    return session
+  }
 
   // Dynamic import — playwright is heavy, only load when needed
   const pw = await import('playwright')
-  const browser = await pw.chromium.launch({
-    headless: true,
-    args: [
-      '--disable-blink-features=AutomationControlled',
-      '--no-first-run',
-      '--no-default-browser-check',
-      '--disable-dev-shm-usage',
-    ],
-  })
+
+  // Auto-install chromium if not found
+  let browser: Browser
+  try {
+    browser = await pw.chromium.launch({
+      headless: true,
+      args: [
+        '--disable-blink-features=AutomationControlled',
+        '--no-first-run',
+        '--no-default-browser-check',
+        '--disable-dev-shm-usage',
+      ],
+    })
+  } catch (launchErr: unknown) {
+    const msg = (launchErr as Error).message || ''
+    if (msg.includes("Executable doesn't exist") || msg.includes('browserType.launch')) {
+      // Chromium not installed — install it async using playwright's own CLI
+      console.log('[browser] Chromium not found, installing...')
+      chromiumJustInstalled = true
+      // Use playwright's CLI from the installed package (not npx)
+      const playwrightCli = require.resolve('playwright/cli')
+      await execFileAsync(process.execPath, [playwrightCli, 'install', 'chromium'], {
+        timeout: 120_000,
+      })
+      console.log('[browser] Chromium installed successfully')
+      // Retry launch after install
+      browser = await pw.chromium.launch({
+        headless: true,
+        args: [
+          '--disable-blink-features=AutomationControlled',
+          '--no-first-run',
+          '--no-default-browser-check',
+          '--disable-dev-shm-usage',
+        ],
+      })
+    } else {
+      throw launchErr
+    }
+  }
+
   const context = await browser.newContext({
     viewport: { width: 1280, height: 800 },
     userAgent:
@@ -115,10 +168,15 @@ async function ensureBrowser(): Promise<BrowserSession> {
   const cdp = await page.context().newCDPSession(page)
   await cdp.send('Accessibility.enable')
   session = { browser, context, page, cdp, refs: new Map() }
+  resetIdleTimer()
   return session
 }
 
 async function closeBrowser(): Promise<void> {
+  if (idleTimer) {
+    clearTimeout(idleTimer)
+    idleTimer = null
+  }
   if (!session) return
   try {
     await session.browser.close()
@@ -126,6 +184,14 @@ async function closeBrowser(): Promise<void> {
     // Best-effort
   }
   session = null
+}
+
+/**
+ * Close the browser if open. Called during server/session shutdown.
+ * Safe to call multiple times or when no browser is open.
+ */
+export async function closeBrowserSession(): Promise<void> {
+  await closeBrowser()
 }
 
 // ── Accessibility tree → refs ────────────────────────────────────────
@@ -301,12 +367,15 @@ export async function executeBrowser(
       case 'open': {
         if (!url) return 'Error: url is required for open'
         const s = await ensureBrowser()
+        const wasInstalled = chromiumJustInstalled
+        chromiumJustInstalled = false
         await s.page.goto(url, { waitUntil: 'domcontentloaded', timeout: 30_000 })
         // Wait a bit for JS to settle
         await s.page.waitForLoadState('networkidle').catch(() => {})
         const action = makeAction('open', url)
         await emitState(action, callbacks)
-        return `Opened ${url} — title: "${await s.page.title()}"`
+        const prefix = wasInstalled ? '(Chromium was auto-installed on first use.) ' : ''
+        return `${prefix}Opened ${url} — title: "${await s.page.title()}"`
       }
 
       case 'snapshot': {

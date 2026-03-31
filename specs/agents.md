@@ -69,7 +69,7 @@ Each run creates a **fresh conversation** with agent instructions + memory in th
 2. Collects all due agents, then runs them **sequentially with await**
 3. `runAgent()` loads `memory.md` from disk
 4. Server creates a fresh ephemeral session (`agent-run--{agentId}--{timestamp}`)
-5. System prompt includes `<agent_instructions>` + `<agent_memory>` blocks
+5. System prompt includes an "Agent Context" `<system-reminder>` block with standing instructions + run history
 6. Short trigger message sent (not the full instructions)
 7. Agent runs autonomously (auto-approve confirms, skip ask_user)
 8. On completion: extracts last assistant text as summary, saves to `memory.md`
@@ -86,7 +86,7 @@ Agents have a `memory.md` file that persists across runs. After each successful 
 - What happened in the last run (success/failure, key metrics)
 - What to re-use vs what to rebuild
 
-The memory is injected into the system prompt via `<agent_memory>` block. The agent sees its instructions + memory + a short trigger — enough context to execute without rebuilding.
+The memory is injected into the system prompt via the "## Run History" section inside the "Agent Context" `<system-reminder>` block. The agent sees its instructions + run history + a short trigger — enough context to execute without rebuilding.
 
 ### First Run vs Subsequent Runs
 

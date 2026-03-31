@@ -415,26 +415,27 @@ export function listProjectSessions(projectId: string): SessionMeta[] {
 }
 
 /**
- * Build a context string to inject into a project session's system prompt.
- * Includes project metadata, summary, notes, and recent session history.
+ * Build project context for injection into a system-reminder block.
+ * Returns clean content without bracket wrappers — session.ts wraps in <system-reminder> tags.
  */
 export function buildProjectContext(project: Project, projectId: string): string {
-  let ctx = `\n\n[PROJECT CONTEXT: ${project.name}]`
-  if (project.description) {
-    ctx += `\nDescription: ${project.description}`
-  }
-  if (project.type) {
-    ctx += `\nType: ${project.type}`
-  }
+  const lines: string[] = []
+
+  lines.push(`- Project: ${project.name}`)
+  if (project.description) lines.push(`- Description: ${project.description}`)
+  if (project.type) lines.push(`- Type: ${project.type}`)
   if (project.workspacePath) {
-    ctx += `\nWorkspace: ${project.workspacePath}/`
-    ctx += `\nIMPORTANT: Use ${project.workspacePath}/ as the working directory for all shell commands and file operations in this project.`
+    lines.push(`- Project workspace: ${project.workspacePath}/`)
+    lines.push(
+      `- IMPORTANT: Use ${project.workspacePath}/ as the working directory for all shell commands and file operations in this project.`,
+    )
   }
+
   if (project.context.summary) {
-    ctx += `\n\nProject Summary:\n${project.context.summary}`
+    lines.push(`\n## Project Summary\n${project.context.summary}`)
   }
   if (project.context.notes) {
-    ctx += `\n\nProject Notes:\n${project.context.notes}`
+    lines.push(`\n## Project Notes\n${project.context.notes}`)
   }
 
   // Load recent session history (last 5 sessions)
@@ -443,15 +444,18 @@ export function buildProjectContext(project: Project, projectId: string): string
     try {
       const raw = readFileSync(historyPath, 'utf-8').trim()
       if (raw) {
-        const lines = raw.split('\n').slice(-5)
-        ctx += '\n\nRecent Sessions:'
-        for (const line of lines) {
+        const entries = raw.split('\n').slice(-5)
+        const sessionLines: string[] = []
+        for (const line of entries) {
           try {
             const entry = JSON.parse(line)
-            ctx += `\n- ${entry.title}: ${entry.summary}`
+            sessionLines.push(`- ${entry.title}: ${entry.summary}`)
           } catch {
             // skip malformed lines
           }
+        }
+        if (sessionLines.length > 0) {
+          lines.push(`\n## Recent Sessions\n${sessionLines.join('\n')}`)
         }
       }
     } catch {
@@ -459,9 +463,8 @@ export function buildProjectContext(project: Project, projectId: string): string
     }
   }
 
-  ctx += '\n\nYou are working within this project. Use the context above to inform your responses.'
-  ctx += '\n[END PROJECT CONTEXT]\n'
-  return ctx
+  lines.push('\nYou are working within this project. Use the context above to inform your responses.')
+  return lines.join('\n')
 }
 
 /** Append a session summary to the project's session history */

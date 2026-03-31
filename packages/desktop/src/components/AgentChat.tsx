@@ -181,6 +181,12 @@ export function AgentChat() {
     const conv = store.getActiveConversation()
     const sessionId = conv?.sessionId || store.currentSessionId
     if (!sessionId) return
+    // If a plan is pending, reject it and clear it
+    const plan = store.pendingPlan
+    if (plan && (!plan.sessionId || plan.sessionId === sessionId)) {
+      connection.sendPlanResponse(plan.id, false, 'Cancelled by user')
+      store.setPendingPlan(null)
+    }
     connection.sendCancelTurn(sessionId)
   }, [])
 

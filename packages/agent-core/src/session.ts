@@ -17,6 +17,8 @@ import {
   loadProjectTypePrompt,
   loadReferences,
   loadSession,
+  loadUserRules,
+  loadWorkspaceRules,
   saveSession,
   saveSessionTasks,
 } from '@anton/agent-config'
@@ -30,7 +32,12 @@ import type {
 } from '@mariozechner/pi-agent-core'
 import { completeSimple, getModel } from '@mariozechner/pi-ai'
 import type { Api, ImageContent, Model, TextContent } from '@mariozechner/pi-ai'
-import { type AskUserHandler, SYSTEM_PROMPT, type ToolCallbacks, buildTools } from './agent.js'
+import {
+  type AskUserHandler,
+  CORE_SYSTEM_PROMPT,
+  type ToolCallbacks,
+  buildTools,
+} from './agent.js'
 import {
   type CompactionConfig,
   type CompactionState,
@@ -38,8 +45,17 @@ import {
   createInitialCompactionState,
   getDefaultCompactionConfig,
 } from './compaction.js'
-import { type ContextInfo, assembleConversationContext } from './context.js'
-import { type Span, startTrace } from './tracing.js'
+import { type ContextInfo, type MemoryData, assembleConversationContext } from './context.js'
+import {
+  type Span,
+  startTrace,
+  startChildTrace,
+  estimateCost,
+  categorizeError,
+  computeHeuristicScores,
+  logScore,
+  hashPromptVersion,
+} from './tracing.js'
 
 export type ConfirmHandler = (command: string, reason: string) => Promise<boolean>
 export type PlanConfirmHandler = (
@@ -151,11 +167,16 @@ export class Session {
   private projectContext?: string
   private projectType?: string
   private workspacePath?: string
-  private conversationContext?: string
+  private memoryData?: MemoryData
   private agentInstructions?: string
   private agentMemory?: string
   private firstMessage?: string
   public contextInfo?: ContextInfo
+
+  // Braintrust tracing
+  private parentTraceSpan?: Span // when this is a sub-agent, inherit parent's span
+  currentTraceSpan?: Span // current turn's trace span (exposed for sub-agent threading)
+  private _promptVersion?: string // hash of assembled system prompt
 
   // Safety limits
   private maxTokenBudget: number
@@ -191,6 +212,7 @@ export class Session {
     maxTokenBudget?: number // max total tokens before aborting (0 = unlimited)
     maxDurationMs?: number // max wall-clock time for processMessage (0 = unlimited)
     maxTurns?: number // max LLM turns per processMessage call (0 = unlimited)
+    parentTraceSpan?: Span // for sub-agents: nest under parent's trace
   }) {
     this.id = opts.id
     this.provider = opts.provider
@@ -212,6 +234,7 @@ export class Session {
     this.maxTokenBudget = opts.maxTokenBudget ?? 0
     this.maxDurationMs = opts.maxDurationMs ?? 0
     this.maxTurns = opts.maxTurns ?? 0
+    this.parentTraceSpan = opts.parentTraceSpan
 
     // Set up conversation workspace (skip for ephemeral sub-agents)
     if (!this.ephemeral) {
@@ -291,12 +314,31 @@ export class Session {
 
           this.compactionState = state
 
-          // If compaction happened, queue an event
+          // If compaction happened, queue an event and trace it
           if (state.compactionCount > prevCount) {
             this.pendingCompactionEvent = {
               type: 'compaction',
               compactedMessages: state.compactedMessageCount,
               totalCompactions: state.compactionCount,
+            }
+
+            // Braintrust: log compaction as a child span
+            if (this.currentTraceSpan) {
+              try {
+                const compSpan = this.currentTraceSpan.startSpan({ name: 'compaction' })
+                compSpan.log({
+                  metadata: {
+                    messagesBefore: messages.length,
+                    messagesAfter: compacted.length,
+                    compactedMessageCount: state.compactedMessageCount,
+                    layer: state.summary ? 'llm_summarization' : 'tool_trimming',
+                    compactionNumber: state.compactionCount,
+                  },
+                })
+                compSpan.end()
+              } catch (spanErr) {
+                console.error('[tracing] Failed to log compaction span:', spanErr)
+              }
             }
           }
 
@@ -313,6 +355,7 @@ export class Session {
         }
       },
       beforeToolCall: async (ctx) => {
+        // Shell: check for dangerous command patterns
         if (ctx.toolCall.name === 'shell') {
           const args = ctx.args as { command: string }
           const { needsConfirmation } = await import('./tools/shell.js')
@@ -333,6 +376,56 @@ export class Session {
             }
           }
         }
+
+        // Database: check for destructive SQL (DROP, DELETE, TRUNCATE)
+        if (ctx.toolCall.name === 'database') {
+          const args = ctx.args as { operation: string; sql?: string }
+          if (args.sql) {
+            const { isDangerousSql } = await import('./tools/security.js')
+            if (isDangerousSql(args.sql)) {
+              if (this.confirmHandler) {
+                const approved = await this.confirmHandler(
+                  args.sql,
+                  'SQL statement is destructive (DROP/DELETE/TRUNCATE)',
+                )
+                if (!approved) {
+                  return { block: true, reason: 'SQL statement denied by user.' }
+                }
+              } else {
+                return {
+                  block: true,
+                  reason: 'Destructive SQL requires confirmation but no handler available.',
+                }
+              }
+            }
+          }
+        }
+
+        // Filesystem write: check for dangerous target paths
+        if (ctx.toolCall.name === 'filesystem') {
+          const args = ctx.args as { operation: string; path: string }
+          if (args.operation === 'write') {
+            const { isDangerousFsWrite } = await import('./tools/security.js')
+            if (isDangerousFsWrite(args.path)) {
+              if (this.confirmHandler) {
+                const approved = await this.confirmHandler(
+                  `Write to ${args.path}`,
+                  'Writing to a critical system directory',
+                )
+                if (!approved) {
+                  return { block: true, reason: 'File write denied by user.' }
+                }
+              } else {
+                return {
+                  block: true,
+                  reason: 'Write to system directory requires confirmation but no handler available.',
+                }
+              }
+            }
+          }
+        }
+
+        // Plan: user approval flow
         if (ctx.toolCall.name === 'plan') {
           const args = ctx.args as { title: string; content: string }
           if (this.planConfirmHandler) {
@@ -489,19 +582,38 @@ export class Session {
     let textEventCount = 0
     let assistantText = ''
 
-    // Braintrust tracing: start a parent span for this turn
-    const traceSpan = startTrace({
-      name: 'agent-turn',
-      input: { message: userMessage, attachments: attachments.length },
-      metadata: {
-        sessionId: this.id,
-        provider: this.provider,
-        model: this.model,
-        ephemeral: this.ephemeral,
-      },
-    })
+    // Braintrust tracing: start a span for this turn (nested under parent if sub-agent)
+    const traceSpan = this.parentTraceSpan
+      ? startChildTrace(this.parentTraceSpan, {
+          name: 'sub-agent-turn',
+          input: { message: userMessage, attachments: attachments.length },
+          metadata: {
+            sessionId: this.id,
+            provider: this.provider,
+            model: this.model,
+            ephemeral: this.ephemeral,
+            turnNumber: this._turnCount,
+            promptVersion: this._promptVersion,
+          },
+        })
+      : startTrace({
+          name: 'agent-turn',
+          input: { message: userMessage, attachments: attachments.length },
+          metadata: {
+            sessionId: this.id,
+            provider: this.provider,
+            model: this.model,
+            ephemeral: this.ephemeral,
+            turnNumber: this._turnCount,
+            promptVersion: this._promptVersion,
+          },
+        })
+    this.currentTraceSpan = traceSpan ?? undefined
     // Track active tool spans by toolCallId
     const toolSpans = new Map<string, Span>()
+    const usedToolNames = new Set<string>()
+    let toolCallCount = 0
+    let toolErrorCount = 0
 
     // Allow tools (like task_tracker) to push events into the stream
     this.pushEvent = (ev: SessionEvent) => {
@@ -533,6 +645,8 @@ export class Session {
 
         // Braintrust: start a child span for each tool call
         if (traceSpan && ev.type === 'tool_call') {
+          usedToolNames.add(ev.name)
+          toolCallCount++
           const toolSpan = traceSpan.startSpan({
             name: ev.name,
             event: {
@@ -545,6 +659,7 @@ export class Session {
 
         // Braintrust: end the child span when the tool finishes
         if (traceSpan && ev.type === 'tool_result') {
+          if (ev.isError) toolErrorCount++
           const toolSpan = toolSpans.get(ev.id)
           if (toolSpan) {
             toolSpan.log({
@@ -598,6 +713,67 @@ export class Session {
       unsub()
     }
 
+    // Helper: close the trace span safely — called in normal flow AND finally block
+    let spanClosed = false
+    const closeTraceSpan = (errorMessage?: string) => {
+      if (spanClosed || !traceSpan) return
+      spanClosed = true
+      try {
+        // End any orphaned tool spans
+        for (const [, s] of toolSpans) {
+          try { s.end() } catch { /* best-effort cleanup */ }
+        }
+        toolSpans.clear()
+
+        // Cost estimation
+        const cost =
+          this.lastTurnUsage && this.model
+            ? estimateCost(this.model, this.lastTurnUsage)
+            : undefined
+
+        traceSpan.log({
+          output: assistantText.slice(0, 4000),
+          metadata: {
+            eventCount,
+            textEventCount,
+            title: this.title,
+            turnNumber: this._turnCount,
+            toolsUsed: [...usedToolNames],
+            toolCallCount,
+            toolErrorCount,
+            compactionCount: this.compactionState.compactionCount,
+            promptVersion: this._promptVersion,
+            ...(errorMessage ? { errorMessage, errorCategory: categorizeError(errorMessage) } : {}),
+          },
+          metrics: this.lastTurnUsage
+            ? {
+                inputTokens: this.lastTurnUsage.inputTokens,
+                outputTokens: this.lastTurnUsage.outputTokens,
+                totalTokens: this.lastTurnUsage.totalTokens,
+                ...(cost ? { cost: cost.totalCost } : {}),
+              }
+            : undefined,
+        })
+
+        // Heuristic scores — zero cost, logged on every traced turn
+        const heuristics = computeHeuristicScores({
+          toolCallCount,
+          toolErrorCount,
+          responseText: assistantText,
+          cost: cost?.totalCost ?? 0,
+        })
+        logScore(traceSpan, 'tool_success_rate', heuristics.toolSuccessRate)
+        logScore(traceSpan, 'response_length', heuristics.responseLength)
+        if (cost) logScore(traceSpan, 'cost', cost.totalCost)
+
+        traceSpan.end()
+      } catch (spanErr) {
+        console.error('[tracing] Failed to close trace span:', spanErr)
+      }
+      this.currentTraceSpan = undefined
+    }
+
+    try {
     // Yield any pending compaction event
     if (this.pendingCompactionEvent) {
       yield this.pendingCompactionEvent
@@ -627,31 +803,8 @@ export class Session {
     // but this ensures we capture any title or compaction state changes)
     this.persist()
 
-    // Braintrust: close the parent trace span with output + usage
-    if (traceSpan) {
-      // End any orphaned tool spans
-      for (const [, s] of toolSpans) {
-        s.end()
-      }
-      toolSpans.clear()
-
-      traceSpan.log({
-        output: assistantText.slice(0, 4000),
-        metadata: {
-          eventCount,
-          textEventCount,
-          title: this.title,
-        },
-        metrics: this.lastTurnUsage
-          ? {
-              inputTokens: this.lastTurnUsage.inputTokens,
-              outputTokens: this.lastTurnUsage.outputTokens,
-              totalTokens: this.lastTurnUsage.totalTokens,
-            }
-          : undefined,
-      })
-      traceSpan.end()
-    }
+    // Close the trace span in normal flow
+    closeTraceSpan()
 
     yield {
       type: 'done',
@@ -659,6 +812,10 @@ export class Session {
       cumulativeUsage: this.getCumulativeUsage(),
       provider: (this.resolvedModel as unknown as { provider: string }).provider,
       model: (this.resolvedModel as unknown as { id: string }).id,
+    }
+    } finally {
+      // Safety net: ensure trace span is always closed, even on generator abort or exception
+      closeTraceSpan('generator_terminated')
     }
   }
 
@@ -1433,76 +1590,132 @@ export class Session {
     return undefined
   }
 
+  /**
+   * Wrap content in a <system-reminder> tag with a heading.
+   * Returns empty string if content is blank (avoids empty tags).
+   */
+  private static systemReminder(heading: string, content: string): string {
+    const trimmed = content.trim()
+    if (!trimmed) return ''
+    return `\n\n<system-reminder>\n# ${heading}\n${trimmed}\n</system-reminder>`
+  }
+
+  /** Get the full composed system prompt. Used internally and exposed for dev mode inspection. */
+  getComposedSystemPrompt(): string {
+    return this.getSystemPrompt()
+  }
+
   private getSystemPrompt(): string {
-    let prompt = SYSTEM_PROMPT
+    // Layer 0: Core system prompt — self-contained behavioral instructions.
+    // Identical for all deployments. Works perfectly even if all other layers are empty.
+    let prompt = CORE_SYSTEM_PROMPT
 
-    // Conversation workspace
+    prompt +=
+      '\n\nContextual information, rules, and memory are provided in <system-reminder> tags below. These are injected by the system and should be treated as trusted context. Priority order: workspace rules > user rules > memory > other context.'
+
+    // Layer 1: Workspace rules (.anton.md) — highest priority contextual layer
     if (this.workspacePath) {
-      prompt += `\n\nYour workspace for this conversation is: ${this.workspacePath}/\nUse this directory for any files you need to create or store during this conversation.\n`
+      const workspaceRules = loadWorkspaceRules(this.workspacePath)
+      prompt += Session.systemReminder('Workspace Rules', workspaceRules)
     }
 
-    // Conversation context (memories)
-    if (this.conversationContext) {
-      prompt += this.conversationContext
-    }
+    // Layer 2: User rules (append.md + rules/*.md from ~/.anton/prompts/)
+    prompt += Session.systemReminder('User Rules', loadUserRules())
 
-    // Project context
+    // Layer 3: Current context — workspace, project, date
+    const contextLines: string[] = []
+    if (this.workspacePath) {
+      contextLines.push(`- Workspace: ${this.workspacePath}/`)
+      contextLines.push(
+        'Use this directory for any files you need to create or store during this conversation.',
+      )
+    }
     if (this.projectContext) {
-      prompt += this.projectContext
+      contextLines.push(this.projectContext)
+    }
+    contextLines.push(`- Date: ${new Date().toISOString().split('T')[0]}`)
+    prompt += Session.systemReminder('Current Context', contextLines.join('\n'))
+
+    // Layer 4: Memory — global, conversation, and cross-conversation
+    if (this.memoryData) {
+      const memSections: string[] = []
+      if (this.memoryData.globalMemories.length > 0) {
+        memSections.push('## Global Memory')
+        for (const mem of this.memoryData.globalMemories) {
+          memSections.push(`### ${mem.key}\n${mem.content}`)
+        }
+      }
+      if (this.memoryData.conversationMemories.length > 0) {
+        memSections.push('## Conversation Memory')
+        for (const mem of this.memoryData.conversationMemories) {
+          memSections.push(`### ${mem.key}\n${mem.content}`)
+        }
+      }
+      if (this.memoryData.crossConversationMemories.length > 0) {
+        memSections.push('## Relevant Context (from other conversations)')
+        for (const mem of this.memoryData.crossConversationMemories) {
+          memSections.push(`### ${mem.key} (from: ${mem.source})\n${mem.content}`)
+        }
+      }
+      prompt += Session.systemReminder('Memory', memSections.join('\n\n'))
     }
 
-    // Instruct LLM to update project memory when in a project session
+    // Layer 5: Project memory instructions
     if (this.projectId) {
-      prompt += `\n\n[PROJECT MEMORY]
-When you have completed meaningful work in this session (e.g. implemented a feature, fixed a bug, made a significant decision), call the update_project_context tool once near the end of the conversation with:
+      prompt += Session.systemReminder(
+        'Project Memory Instructions',
+        `When you have completed meaningful work in this session (e.g. implemented a feature, fixed a bug, made a significant decision), call the update_project_context tool once near the end of the conversation with:
 - session_summary: A 1-2 sentence summary of what was accomplished
 - project_summary: An updated overall project summary (only if something significant changed about the project's state, goals, or architecture)
-Do not call this on every turn — only once per session when there is something worth remembering.`
+Do not call this on every turn — only once per session when there is something worth remembering.`,
+      )
     }
 
-    // Agent standing instructions (scheduled agents — always present in system prompt)
-    if (this.agentInstructions) {
-      prompt += `\n\n<agent_instructions>
-You are a scheduled agent. The following are your standing instructions — execute them on every run.
-Do NOT re-create scripts or tooling that you have already built in previous runs. Re-use existing work.
-If something is broken, fix it. If everything works, just run it.
-
-${this.agentInstructions}
-</agent_instructions>`
+    // Layer 6: Agent context — standing instructions + run history (scheduled agents only)
+    if (this.agentInstructions || this.agentMemory) {
+      const agentSections: string[] = []
+      if (this.agentInstructions) {
+        agentSections.push(
+          `## Standing Instructions\nYou are a scheduled agent. Execute these instructions on every run.\nDo NOT re-create scripts or tooling that you have already built in previous runs. Re-use existing work.\nIf something is broken, fix it. If everything works, just run it.\n\n${this.agentInstructions}`,
+        )
+      }
+      if (this.agentMemory) {
+        agentSections.push(
+          `## Run History\nThis is your memory from previous runs. Use it to know what you've already built, where scripts are, and what happened last time. Do NOT rebuild things that already exist.\n\n${this.agentMemory}`,
+        )
+      }
+      prompt += Session.systemReminder('Agent Context', agentSections.join('\n\n'))
     }
 
-    // Agent memory from previous runs
-    if (this.agentMemory) {
-      prompt += `\n\n<agent_memory>
-This is your memory from previous runs. Use it to know what you've already built, where scripts are, and what happened last time. Do NOT rebuild things that already exist.
-
-${this.agentMemory}
-</agent_memory>`
-    }
-
-    // Project-type prompt module (code.md, document.md, etc.)
+    // Layer 7: Project type guidelines (code.md, document.md, etc.)
     if (this.projectType) {
       const typePrompt = loadProjectTypePrompt(this.projectType as ProjectType)
       if (typePrompt) {
-        prompt += `\n\n${typePrompt}`
+        prompt += Session.systemReminder('Project Type Guidelines', typePrompt)
       }
     }
 
-    // Reference knowledge — contextual coding guides loaded by project type and task
+    // Layer 8: Reference knowledge — auto-selected coding guides
     const refs = loadReferences({
       projectType: this.projectType,
       firstMessage: this.firstMessage,
     })
     if (refs) {
-      prompt += `\n\n## Reference Knowledge\n\n${refs}`
+      prompt += Session.systemReminder('Reference Knowledge', refs)
     }
 
+    // Layer 9: Active skills
     if (this.config.skills.length > 0) {
-      prompt += '\n\n## Active Skills\n'
+      let skillBlock = ''
       for (const skill of this.config.skills) {
-        prompt += `\n### ${skill.name}\n${skill.description}\n${skill.prompt}\n`
+        skillBlock += `### ${skill.name}\n${skill.description}\n${skill.prompt}\n\n`
       }
+      prompt += Session.systemReminder('Active Skills', skillBlock)
     }
+
+    // Compute prompt version hash for tracing
+    this._promptVersion = hashPromptVersion(prompt)
+
     return prompt
   }
 
@@ -1513,12 +1726,12 @@ ${this.agentMemory}
   loadConversationContext(firstMessage?: string): ContextInfo | undefined {
     if (firstMessage) this.firstMessage = firstMessage
     if (this.ephemeral) return undefined
-    const { contextBlock, contextInfo } = assembleConversationContext(
+    const { memoryData, contextInfo } = assembleConversationContext(
       this.id,
       firstMessage,
       this.projectId,
     )
-    this.conversationContext = contextBlock
+    this.memoryData = memoryData
     this.contextInfo = contextInfo
     // Update system prompt with new context
     this.piAgent.setSystemPrompt(this.getSystemPrompt())
@@ -1570,6 +1783,7 @@ export function createSession(
     getAskUserHandler: () => handlerRef.askUser,
     onSubAgentEvent: opts?.onSubAgentEvent,
     getConfirmHandler: () => confirmRef.handler,
+    getParentTraceSpan: () => sessionRef.session?.currentTraceSpan,
     clientApiKey: opts?.apiKey,
     conversationId: opts?.ephemeral ? undefined : id,
     onTasksUpdate: (tasks) => {
@@ -1656,6 +1870,7 @@ export function resumeSession(
     getAskUserHandler: () => handlerRef.askUser,
     onSubAgentEvent: opts?.onSubAgentEvent,
     getConfirmHandler: () => confirmRef.handler,
+    getParentTraceSpan: () => sessionRef.session?.currentTraceSpan,
     conversationId: persisted.id,
     onTasksUpdate: (tasks) => {
       sessionRef.session?.emitTasksUpdate(tasks)

@@ -14,7 +14,11 @@ export { GranolaConnector } from './granola/index.js'
 export { GoogleDocsConnector } from './google-docs/index.js'
 export { GoogleSheetsConnector } from './google-sheets/index.js'
 export { GoogleSearchConsoleConnector } from './google-search-console/index.js'
+export { AirtableConnector } from './airtable/index.js'
+export { LinkedInConnector } from './linkedin/index.js'
 
+import { AirtableConnector } from './airtable/index.js'
+import { LinkedInConnector } from './linkedin/index.js'
 import { ExaConnector } from './exa/index.js'
 import { GitHubConnector } from './github/index.js'
 import { GmailConnector } from './gmail/index.js'
@@ -45,4 +49,6 @@ export const CONNECTOR_FACTORIES: Record<string, ConnectorFactory> = {
   'google-docs': () => new GoogleDocsConnector(),
   'google-sheets': () => new GoogleSheetsConnector(),
   'google-search-console': () => new GoogleSearchConsoleConnector(),
+  airtable: () => new AirtableConnector(),
+  linkedin: () => new LinkedInConnector(),
 }

@@ -1,4 +1,4 @@
-export { SYSTEM_PROMPT, buildTools, needsConfirmation, type ToolCallbacks } from './agent.js'
+export { CORE_SYSTEM_PROMPT, buildTools, needsConfirmation, type ToolCallbacks } from './agent.js'
 export type { JobActionHandler, JobToolInput } from './tools/job.js'
 export type { DeliverResultHandler } from './tools/deliver-result.js'
 export { McpClient, McpManager, type McpServerConfig, type ConnectorStatus } from './mcp/index.js'
@@ -28,6 +28,13 @@ export {
   type SessionInfo,
   type SubAgentEventHandler,
 } from './session.js'
-export { type ContextInfo, assembleConversationContext } from './context.js'
+export {
+  type ContextInfo,
+  type MemoryData,
+  type MemoryItem,
+  type MemoryItemWithSource,
+  assembleConversationContext,
+} from './context.js'
 export { executePublish, type PublishInput } from './tools/publish.js'
 export { initTracing, flushTraces } from './tracing.js'
+export { closeBrowserSession } from './tools/browser.js'

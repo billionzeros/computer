@@ -16,7 +16,7 @@
 
 import { loadConfig, loadProjects, loadSkills } from '@anton/agent-config'
 import { GIT_HASH, VERSION } from '@anton/agent-config'
-import { flushTraces, initTracing } from '@anton/agent-core'
+import { closeBrowserSession, flushTraces, initTracing } from '@anton/agent-core'
 import { AgentManager } from './agents/index.js'
 import { Scheduler } from './scheduler.js'
 import { AgentServer } from './server.js'
@@ -79,6 +79,8 @@ async function main() {
     console.log('\nShutting down...')
     scheduler.stop()
     agentManager.shutdown()
+    await server.shutdown() // Stop MCP servers, kill PTYs, release resources
+    await closeBrowserSession() // Close Playwright browser if open
     await flushTraces()
     process.exit(0)
   }

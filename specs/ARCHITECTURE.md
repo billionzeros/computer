@@ -147,7 +147,7 @@ Each session is an independent pi SDK Agent:
 Session "sess_abc123"
 ├── pi SDK Agent
 │   ├── Model: claude-sonnet-4-6 (Anthropic)
-│   ├── System Prompt: SYSTEM_PROMPT + active skills
+│   ├── System Prompt: CORE_SYSTEM_PROMPT + <system-reminder> layers
 │   ├── Tools: shell, filesystem, browser, process, network
 │   └── Messages: [user, assistant, tool, ...] (in memory)
 │
@@ -181,7 +181,7 @@ Layer 2: LLM Summarization
   - Triggers at 80% context window usage
   - Splits: older messages | recent 20 messages
   - Sends older to LLM for summarization
-  - Replaces older with [CONVERSATION SUMMARY] message
+  - Replaces older with a conversation summary message
   - Emits compaction_start + compaction_complete events
 
 Token estimation: ~4 chars/token heuristic

@@ -40,6 +40,9 @@ export class Updater {
   private checkTimer: ReturnType<typeof setInterval> | null = null
   private updating = false
 
+  /** Called when a periodic check discovers a new version (not on explicit update_check) */
+  onUpdateFound?: (manifest: UpdateManifest) => void
+
   /** Start periodic update checks */
   start() {
     // Load cached manifest from disk (persists across restarts)
@@ -92,9 +95,16 @@ export class Updater {
       const manifest = (await res.json()) as UpdateManifest
 
       if (semverGt(manifest.version, VERSION)) {
+        const isNew = !this.cachedManifest || this.cachedManifest.version !== manifest.version
         this.cachedManifest = manifest
         this.saveCachedManifest()
         console.log(`  Update available: v${VERSION} → v${manifest.version}`)
+
+        // Notify server to broadcast to connected clients
+        if (isNew && this.onUpdateFound) {
+          this.onUpdateFound(manifest)
+        }
+
         return { updateAvailable: true, manifest }
       }
 

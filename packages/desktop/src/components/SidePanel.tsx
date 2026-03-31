@@ -1,13 +1,14 @@
 import { motion } from 'framer-motion'
-import { Brain, Globe, Layers, ListChecks, X } from 'lucide-react'
+import { Brain, Code, Globe, Layers, ListChecks, X } from 'lucide-react'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useStore } from '../lib/store.js'
 import { PlanPanel } from './PlanPanel.js'
 import { ArtifactPanelContent } from './artifacts/ArtifactPanel.js'
 import { BrowserViewerContent } from './browser/BrowserViewerContent.js'
 import { ContextPanelContent } from './context/ContextPanelContent.js'
+import { DevModePanel } from './devmode/DevModePanel.js'
 
-type PanelView = 'artifacts' | 'plan' | 'context' | 'browser'
+type PanelView = 'artifacts' | 'plan' | 'context' | 'browser' | 'devmode'
 
 interface ViewTab {
   id: PanelView
@@ -69,12 +70,15 @@ export function SidePanel() {
     }
   }, [])
 
+  const devMode = useStore((s) => s.devMode)
+
   const views: ViewTab[] = [
     { id: 'browser', label: 'Browser', icon: Globe, available: browserState !== null },
     { id: 'artifacts', label: 'Artifacts', icon: Layers, available: artifacts.length > 0 },
     // Plan now shows as inline overlay above chat input, not in side panel
     { id: 'plan', label: 'Plan', icon: ListChecks, available: false },
     { id: 'context', label: 'Context', icon: Brain, available: sidePanelView === 'context' },
+    { id: 'devmode', label: 'Dev', icon: Code, available: devMode && sidePanelView === 'devmode' },
   ]
 
   const availableViews = views.filter((v) => v.available)
@@ -185,12 +189,28 @@ export function SidePanel() {
         </div>
       )}
 
+      {/* Single-view close button for devmode */}
+      {!showTabs && activeView === 'devmode' && (
+        <div className="side-panel__header-bar">
+          <span className="side-panel__header-title">Developer Tools</span>
+          <button
+            type="button"
+            className="side-panel__close"
+            onClick={() => setArtifactPanelOpen(false)}
+            aria-label="Close panel"
+          >
+            <X size={14} strokeWidth={1.5} />
+          </button>
+        </div>
+      )}
+
       {/* Panel content */}
       <div className="side-panel__body">
         {activeView === 'browser' && <BrowserViewerContent />}
         {activeView === 'artifacts' && <ArtifactPanelContent />}
         {activeView === 'plan' && <PlanPanel />}
         {activeView === 'context' && <ContextPanelContent />}
+        {activeView === 'devmode' && <DevModePanel />}
       </div>
     </motion.div>
   )

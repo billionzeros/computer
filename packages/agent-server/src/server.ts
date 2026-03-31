@@ -10,7 +10,7 @@
  */
 
 import { type ChildProcess, execSync, spawn } from 'node:child_process'
-import { existsSync, readFileSync } from 'node:fs'
+import { existsSync, readFileSync, readdirSync } from 'node:fs'
 import { createServer as createHttpServer } from 'node:http'
 import { createServer as createHttpsServer } from 'node:https'
 import { join } from 'node:path'
@@ -41,6 +41,9 @@ import {
   updateProject,
   updateProjectContext,
   updateProjectStats,
+  getConversationMemoryDir,
+  getGlobalMemoryDir,
+  loadUserRules,
 } from '@anton/agent-config'
 import { GIT_HASH, VERSION } from '@anton/agent-config'
 import {
@@ -113,6 +116,21 @@ export class AgentServer {
 
   setScheduler(scheduler: Scheduler) {
     this.scheduler = scheduler
+  }
+
+  /** Graceful shutdown: stop MCP servers, close connections, release resources. */
+  async shutdown(): Promise<void> {
+    try {
+      await this.mcpManager.stopAll()
+      console.log('[server] MCP servers stopped')
+    } catch (err) {
+      console.error('[server] Error stopping MCP servers:', err)
+    }
+    // Kill any active PTY sessions
+    for (const [id, pty] of this.ptys) {
+      try { pty.kill() } catch { /* best-effort */ }
+      this.ptys.delete(id)
+    }
   }
 
   setAgentManager(agentManager: import('./agents/agent-manager.js').AgentManager) {
@@ -259,7 +277,16 @@ export class AgentServer {
       }
     }
 
-    // Start update checker
+    // Start update checker — broadcast to connected client when periodic check finds new version
+    this.updater.onUpdateFound = (manifest) => {
+      this.sendToClient(Channel.EVENTS, {
+        type: 'update_available',
+        currentVersion: VERSION,
+        latestVersion: manifest.version,
+        changelog: manifest.changelog,
+        releaseUrl: manifest.releaseUrl,
+      })
+    }
     this.updater.start()
 
     // Start MCP connectors
@@ -440,7 +467,7 @@ export class AgentServer {
         break
 
       case 'config_query':
-        this.handleConfigQuery(msg.key)
+        this.handleConfigQuery(msg.key, msg.sessionId)
         break
 
       case 'config_update':
@@ -457,7 +484,7 @@ export class AgentServer {
     }
   }
 
-  private handleConfigQuery(key: string) {
+  private handleConfigQuery(key: string, sessionId?: string) {
     let value: unknown
     switch (key) {
       case 'providers':
@@ -469,6 +496,55 @@ export class AgentServer {
       case 'security':
         value = this.config.security
         break
+      case 'system_prompt': {
+        // If a session is active, return the full composed prompt (what the model actually sees)
+        if (sessionId) {
+          const session = this.sessions.get(sessionId)
+          if (session) {
+            value = session.getComposedSystemPrompt()
+            break
+          }
+        }
+        // Fallback: base prompt + user rules (no session context)
+        // loadCoreSystemPrompt() writes to disk on every call — read the file directly instead
+        const promptPath = join(getAntonDir(), 'prompts', 'system.md')
+        const base = existsSync(promptPath) ? readFileSync(promptPath, 'utf-8') : '(system prompt not found)'
+        const userRules = loadUserRules()
+        value = userRules ? `${base}\n\n${userRules}` : base
+        break
+      }
+      case 'memories': {
+        // Global memories
+        const globalDir = getGlobalMemoryDir()
+        const memories: { name: string; content: string; scope: 'global' | 'conversation' }[] = []
+        try {
+          const files = readdirSync(globalDir).filter((f) => f.endsWith('.md'))
+          for (const f of files) {
+            memories.push({
+              name: f,
+              content: readFileSync(join(globalDir, f), 'utf-8'),
+              scope: 'global',
+            })
+          }
+        } catch { /* no global memories */ }
+
+        // Conversation-scoped memories (if sessionId provided)
+        if (sessionId) {
+          const convMemDir = getConversationMemoryDir(sessionId)
+          try {
+            const files = readdirSync(convMemDir).filter((f) => f.endsWith('.md'))
+            for (const f of files) {
+              memories.push({
+                name: f,
+                content: readFileSync(join(convMemDir, f), 'utf-8'),
+                scope: 'conversation',
+              })
+            }
+          } catch { /* no conversation memories */ }
+        }
+        value = memories
+        break
+      }
       default:
         value = null
     }

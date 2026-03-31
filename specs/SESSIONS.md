@@ -175,7 +175,7 @@ Long-running sessions accumulate messages that eventually exceed the model's con
 - Triggers when estimated tokens exceed `threshold × maxContextTokens` (default: 80% of context window)
 - Splits messages into two groups: **older** (to summarize) and **recent** (to preserve)
 - Sends older messages to the LLM with a summarization prompt
-- Replaces older messages with a single `[CONVERSATION SUMMARY]` system message
+- Replaces older messages with a single conversation summary message
 - Returns: `[summaryMessage, ...recentMessages]`
 
 ### Compaction Flow
@@ -188,7 +188,7 @@ Every LLM call:
      a. Split: olderMessages | recentMessages (last 20)
      b. Serialize olderMessages to text
      c. Call LLM with summarization prompt
-     d. Create summary message: "[CONVERSATION SUMMARY]\n{summary}"
+     d. Create summary message: "[CONVERSATION SUMMARY — This conversation was compacted...]\n{summary}"
      e. Return [summaryMessage, ...recentMessages]
   4. If tokens < threshold:
      Return trimmedMessages as-is

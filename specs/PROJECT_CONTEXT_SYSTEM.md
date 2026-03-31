@@ -36,27 +36,27 @@ Project memory gives each project persistent context that carries across session
 
 ## How Context Gets Into Sessions
 
-On `session_create` with a `projectId`, the server calls `buildProjectContext()` which assembles:
+On `session_create` with a `projectId`, the server calls `buildProjectContext()` which assembles clean content:
 
 ```
-[PROJECT CONTEXT: {name}]
-Description: ...
-Type: ...
-Workspace: ...
+- Project: {name}
+- Description: ...
+- Type: ...
+- Project workspace: ...
 
-Project Summary:
+## Project Summary
 {context.summary}
 
-Project Notes:
+## Project Notes
 {context/notes.md}
 
-Recent Sessions:
+## Recent Sessions
 - {title}: {summary}
 - {title}: {summary}
 ... (last 5)
 ```
 
-This block is appended to the system prompt for every message in the session (`session.ts → getSystemPrompt()`).
+This content is injected into the "Current Context" `<system-reminder>` block by `session.ts → getSystemPrompt()`.
 
 ## How Memory Gets Built
 
@@ -70,7 +70,7 @@ The tool is a passthrough — it returns the input as JSON. The **server** captu
 
 ### System Prompt Instruction
 
-When `projectId` is set, `session.ts` appends a `[PROJECT MEMORY]` instruction telling the LLM to call the tool once per session when meaningful work has been done. This is the critical piece — without it, the LLM never calls the tool on its own.
+When `projectId` is set, `session.ts` appends a "Project Memory Instructions" `<system-reminder>` block telling the LLM to call the tool once per session when meaningful work has been done. This is the critical piece — without it, the LLM never calls the tool on its own.
 
 ### Server-Side Capture (server.ts)
 
@@ -99,4 +99,4 @@ After the turn completes:
 
 3. **Session history as fallback context** — Even if the LLM never calls the tool, session titles still get appended to `session-history.jsonl` and injected into future sessions. The memory field stays empty but sessions still have some continuity.
 
-4. **Single system prompt instruction** — The `[PROJECT MEMORY]` block in the system prompt is what makes the LLM actually call the tool. The tool description alone was not sufficient — LLMs need explicit behavioral instructions, not just tool availability.
+4. **Single system prompt instruction** — The "Project Memory Instructions" `<system-reminder>` block in the system prompt is what makes the LLM actually call the tool. The tool description alone was not sufficient — LLMs need explicit behavioral instructions, not just tool availability.

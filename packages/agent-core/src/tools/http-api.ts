@@ -1,7 +1,11 @@
 /**
  * HTTP API tool — structured HTTP client with JSON parsing.
  * Better than raw curl: proper JSON handling, auth headers, response extraction.
+ *
+ * Security: SSRF protection blocks requests to private/internal IPs.
  */
+
+import { isPrivateHost } from './security.js'
 
 export interface HttpApiInput {
   method: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE'
@@ -41,10 +45,16 @@ export async function executeHttpApi(input: HttpApiInput): Promise<string> {
   const { method, url, headers = {}, body, extract } = input
 
   // Validate URL
+  let parsedUrl: URL
   try {
-    new URL(url)
+    parsedUrl = new URL(url)
   } catch {
     return `Error: invalid URL "${url}".`
+  }
+
+  // SSRF protection: block private/internal IPs
+  if (isPrivateHost(parsedUrl.hostname)) {
+    return `Error: requests to private/internal addresses are blocked for security (${parsedUrl.hostname})`
   }
 
   try {

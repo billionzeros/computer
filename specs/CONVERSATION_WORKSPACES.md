@@ -85,7 +85,7 @@ When a conversation starts or resumes, anton assembles context from multiple lay
 - On first message, extract keywords from the user's text and the conversation title
 - Scan other conversations' `memory/` directories for matching keys
 - Match: case-insensitive substring match of keywords against memory filenames and first-line headers
-- Inject up to 5 most relevant matches as `[RELEVANT CONTEXT]` block
+- Inject up to 5 most relevant matches into the Memory `<system-reminder>` block under "## Relevant Context (from other conversations)"
 - Only runs on conversation start (not every message)
 
 ### context.json

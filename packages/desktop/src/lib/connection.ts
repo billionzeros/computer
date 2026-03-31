@@ -208,8 +208,8 @@ export class Connection {
 
   // ── Config management ───────────────────────────────────────────
 
-  sendConfigQuery(key: 'providers' | 'defaults' | 'security') {
-    this.send(Channel.CONTROL, { type: 'config_query', key })
+  sendConfigQuery(key: 'providers' | 'defaults' | 'security' | 'system_prompt' | 'memories', sessionId?: string) {
+    this.send(Channel.CONTROL, { type: 'config_query', key, ...(sessionId && { sessionId }) })
   }
 
   // ── Update management ──────────────────────────────────────────

@@ -1,6 +1,15 @@
+/**
+ * Filesystem tool — read, write, list, search, tree files.
+ *
+ * Security:
+ * - Forbidden path enforcement blocks access to sensitive system/credential files
+ * - Path validation prevents traversal to critical system directories
+ */
+
 import { execSync } from 'node:child_process'
 import { mkdirSync, readFileSync, readdirSync, statSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
+import { checkForbiddenPath } from './security.js'
 
 export interface FsToolInput {
   operation: 'read' | 'write' | 'list' | 'search' | 'tree'
@@ -45,10 +54,24 @@ export const fsToolDefinition = {
   },
 }
 
+/** Forbidden paths from config — set by the tool builder. */
+let _forbiddenPaths: string[] = []
+
+/** Set forbidden paths from config. Called during tool initialization. */
+export function setForbiddenPaths(paths: string[]): void {
+  _forbiddenPaths = paths
+}
+
 export function executeFilesystem(input: FsToolInput): string {
   const { operation, path, content, pattern, maxDepth = 3 } = input
 
   try {
+    // Enforce forbidden path restrictions on read and write operations
+    if (operation === 'read' || operation === 'write') {
+      const forbidden = checkForbiddenPath(path, _forbiddenPaths)
+      if (forbidden) return `Error: ${forbidden}`
+    }
+
     switch (operation) {
       case 'read': {
         const data = readFileSync(path, 'utf-8')

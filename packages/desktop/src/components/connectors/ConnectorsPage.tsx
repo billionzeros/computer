@@ -33,10 +33,13 @@ export function ConnectorsPage({ initialConnectorId }: { initialConnectorId?: st
   const connectors = useStore((s) => s.connectors)
   const registry = useStore((s) => s.connectorRegistry)
 
+  const connectionStatus = useStore((s) => s.connectionStatus)
   useEffect(() => {
-    connection.sendConnectorsList()
-    connection.sendConnectorRegistryList()
-  }, [])
+    if (connectionStatus === 'connected') {
+      connection.sendConnectorsList()
+      connection.sendConnectorRegistryList()
+    }
+  }, [connectionStatus])
 
   const tabs: { key: Tab; label: string }[] = [
     { key: 'apps', label: 'Apps' },

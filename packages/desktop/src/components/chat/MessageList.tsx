@@ -41,7 +41,7 @@ function TurnStats() {
   return (
     <div className="turn-stats">
       <span className="turn-stats__text">
-        {formatElapsed(lastTurnDurationMs)} · ↓{formatTokens(turnUsage.totalTokens)} tokens
+        {formatElapsed(lastTurnDurationMs)} · ↓{formatTokens(turnUsage.outputTokens)} tokens
       </span>
     </div>
   )

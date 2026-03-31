@@ -190,6 +190,8 @@ export interface UpdateInfo {
 }
 
 export type UpdateStage =
+  | 'downloading'
+  | 'replacing'
   | 'pulling'
   | 'installing'
   | 'building'
@@ -417,6 +419,12 @@ interface AppState {
   resolvedTheme: 'light' | 'dark'
   setTheme: (theme: 'light' | 'dark' | 'system') => void
 
+  // Dev Mode
+  devMode: boolean
+  setDevMode: (enabled: boolean) => void
+  devModeData: { systemPrompt: string | null; memories: { name: string; content: string; scope?: string }[]; lastFetched: number }
+  setDevModeData: (data: { systemPrompt?: string | null; memories?: { name: string; content: string; scope?: string }[] }) => void
+
   // Sidebar
   sidebarCollapsed: boolean
   setSidebarCollapsed: (collapsed: boolean) => void
@@ -540,6 +548,7 @@ interface AppState {
 
   // Reset actions
   resetForDisconnect: () => void
+  resetForMachineSwitch: () => void
 }
 
 export const useStore = create<AppState>((set, get) => {
@@ -655,6 +664,27 @@ export const useStore = create<AppState>((set, get) => {
       document.documentElement.setAttribute('data-theme', resolved)
       set({ theme, resolvedTheme: resolved })
     },
+
+    devMode: localStorage.getItem('anton-devmode') === 'true',
+    setDevMode: (enabled) => {
+      localStorage.setItem('anton-devmode', String(enabled))
+      set({ devMode: enabled })
+      if (!enabled) {
+        // Close dev panel if open
+        const s = get()
+        if (s.sidePanelView === 'devmode') {
+          set({ artifactPanelOpen: false })
+        }
+      }
+    },
+    devModeData: { systemPrompt: null, memories: [], lastFetched: 0 },
+    setDevModeData: (data) => set((s) => ({
+      devModeData: {
+        systemPrompt: data.systemPrompt !== undefined ? data.systemPrompt : s.devModeData.systemPrompt,
+        memories: data.memories !== undefined ? data.memories : s.devModeData.memories,
+        lastFetched: Date.now(),
+      },
+    })),
 
     sidebarCollapsed: false,
     setSidebarCollapsed: (collapsed) => set({ sidebarCollapsed: collapsed }),
@@ -1383,14 +1413,73 @@ export const useStore = create<AppState>((set, get) => {
     dismissUpdate: () => set({ updateDismissed: true }),
 
     resetForDisconnect: () => {
+      const { updateStage, updateInfo, updateMessage } = get()
+      const isUpdating = updateStage === 'restarting'
+
       set({
         // KEEP: conversations, activeConversationId — user's chat history persists
         // KEEP: projects, activeProjectId — project context persists
         // KEEP: activeView — don't reset navigation
+        // KEEP: update state if agent is restarting for an update (expected disconnect)
 
         // Clear transient session/connection state
         currentSessionId: null,
         sessions: [],
+        agentStatus: 'idle',
+        agentStatusDetail: null,
+        workingSessionId: null,
+        agentSteps: [],
+        _currentAssistantMsgId: null,
+        _sessionAssistantMsgIds: new Map(),
+        _sessionResolvers: new Map(),
+        pendingConfirm: null,
+        pendingPlan: null,
+        pendingAskUser: null,
+        turnUsage: null,
+        sessionUsage: null,
+        workingStartedAt: null,
+        lastTurnDurationMs: null,
+        turnStatsConversationId: null,
+        lastResponseProvider: null,
+        lastResponseModel: null,
+        providers: [],
+        agentVersion: null,
+        agentGitHash: null,
+        updateInfo: isUpdating ? updateInfo : null,
+        updateStage: isUpdating ? updateStage : null,
+        updateMessage: isUpdating ? updateMessage : null,
+        updateDismissed: false,
+        projectSessions: [],
+        projectSessionsLoading: false,
+        projectFiles: [],
+        projectFilesLoading: false,
+        projectAgents: [],
+        projectAgentsLoading: false,
+        selectedAgentId: null,
+        // Clear stale streaming/sync state so reconnection doesn't think
+        // old sessions are still streaming (which would block history sync)
+        _activeStreamingSessions: new Set(),
+        _sessionsNeedingHistoryRefresh: new Set(),
+        _syncingSessionIds: new Set(),
+        _pendingSyncMessages: new Map(),
+        _sessionHasMore: new Map(),
+        _loadingOlderSessions: new Set(),
+      })
+      // DO NOT clear conversations or active conversation — preserve chat history
+      // On reconnect, session_history will sync the server's persisted state
+    },
+
+    resetForMachineSwitch: () => {
+      // Full flush when switching to a different machine.
+      // The new server will re-sync its sessions on connect.
+      set({
+        conversations: [],
+        activeConversationId: null,
+        currentSessionId: null,
+        sessions: [],
+        projects: [],
+        activeProjectId: null,
+        activeView: 'chat',
         agentStatus: 'idle',
         agentStatusDetail: null,
         workingSessionId: null,
@@ -1422,8 +1511,6 @@ export const useStore = create<AppState>((set, get) => {
         projectAgents: [],
         projectAgentsLoading: false,
         selectedAgentId: null,
-        // Clear stale streaming/sync state so reconnection doesn't think
-        // old sessions are still streaming (which would block history sync)
         _activeStreamingSessions: new Set(),
         _sessionsNeedingHistoryRefresh: new Set(),
         _syncingSessionIds: new Set(),
@@ -1431,8 +1518,6 @@ export const useStore = create<AppState>((set, get) => {
         _sessionHasMore: new Map(),
         _loadingOlderSessions: new Set(),
       })
-      // DO NOT clear conversations or active conversation — preserve chat history
-      // On reconnect, session_history will sync the server's persisted state
     },
   }
 })
@@ -1455,8 +1540,19 @@ function handleWsMessage(channel: number, msg: WsPayload) {
     if (msg.type === 'auth_ok') {
       const m = msg as unknown as WsAuthOk
       store.setAgentVersionInfo(m.version || '', m.gitHash || '')
-      // If agent already knows about an update, store it
-      if (m.updateAvailable) {
+
+      // Reconnected after an update restart — mark update as done
+      if (store.updateStage === 'restarting') {
+        store.setUpdateProgress('done', `Updated to v${m.version}`)
+        store.setUpdateInfo({
+          currentVersion: m.version,
+          latestVersion: m.version,
+          updateAvailable: false,
+          changelog: store.updateInfo?.changelog ?? null,
+          releaseUrl: store.updateInfo?.releaseUrl ?? null,
+        })
+      } else if (m.updateAvailable) {
+        // If agent already knows about an update, store it
         store.setUpdateInfo({
           currentVersion: m.version,
           latestVersion: m.updateAvailable.version,
@@ -1477,6 +1573,13 @@ function handleWsMessage(channel: number, msg: WsPayload) {
     } else if (msg.type === 'update_progress') {
       const m = msg as unknown as WsUpdateProgress
       store.setUpdateProgress(m.stage, m.message)
+    } else if (msg.type === 'config_query_response') {
+      const m = msg as { key: string; value: unknown }
+      if (m.key === 'system_prompt' && typeof m.value === 'string') {
+        store.setDevModeData({ systemPrompt: m.value })
+      } else if (m.key === 'memories' && Array.isArray(m.value)) {
+        store.setDevModeData({ memories: m.value as { name: string; content: string; scope?: string }[] })
+      }
     }
     // Don't return — let other control messages fall through for ping/pong etc.
   }

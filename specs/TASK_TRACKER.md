@@ -237,9 +237,14 @@ For reference, here's how a user query flows through the system:
 10. Components re-render with streaming text, tool actions, task checklist
 ```
 
-The system prompt seen by the LLM is assembled from:
-- Base: `~/.anton/prompts/system.md` (+ optional `append.md` + `rules/*.md`)
-- Workspace path for the conversation
-- Conversation memories (global + conversation-scoped + cross-conversation keyword matches)
-- Project context (if session is scoped to a project)
+The system prompt seen by the LLM is assembled in layers, each wrapped in `<system-reminder>` tags:
+- Core: `CORE_SYSTEM_PROMPT` (embedded, identical for all deployments)
+- Workspace rules (`.anton.md` from workspace directory)
+- User rules (`~/.anton/prompts/append.md` + `rules/*.md`)
+- Current context (workspace path, project info, date)
+- Memory (global + conversation-scoped + cross-conversation keyword matches)
+- Project memory instructions (if session is scoped to a project)
+- Agent context (scheduled agents: standing instructions + run history)
+- Project type guidelines (code.md, document.md, etc.)
+- Reference knowledge (auto-selected coding guides)
 - Active skills

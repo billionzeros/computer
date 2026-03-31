@@ -1,5 +1,5 @@
 import { AnimatePresence } from 'framer-motion'
-import { FolderOpen, PanelLeft, Ticket } from 'lucide-react'
+import { Code, FolderOpen, PanelLeft, Ticket } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { AgentChat } from './components/AgentChat.js'
 import { Connect } from './components/Connect.js'
@@ -12,6 +12,7 @@ import { Terminal } from './components/Terminal.js'
 import { DebugOverlay } from './components/chat/DebugOverlay.js'
 import { ProjectList } from './components/projects/ProjectList.js'
 import { ProjectView } from './components/projects/ProjectView.js'
+import { UpdateBanner } from './components/UpdateBanner.js'
 import { SettingsModal } from './components/settings/SettingsModal.js'
 import { connection } from './lib/connection.js'
 import { useConnectionStatus, useStore } from './lib/store.js'
@@ -31,14 +32,17 @@ export function App() {
   const activeConv = useStore((s) => s.getActiveConversation())
   const hasMessages = (activeConv?.messages?.length || 0) > 0
   const artifactPanelOpen = useStore((s) => s.artifactPanelOpen)
-  const pendingPlan = useStore((s) => s.pendingPlan)
   const sidebarCollapsed = useStore((s) => s.sidebarCollapsed)
   const toggleSidebar = useStore((s) => s.toggleSidebar)
-  const sidePanelOpen = artifactPanelOpen || pendingPlan !== null
+  const updateStage = useStore((s) => s.updateStage)
+  const sidePanelOpen = artifactPanelOpen
   const _machineName = connection.currentConfig?.host?.replace('.antoncomputer.in', '') ?? ''
   const activeProjectId = useStore((s) => s.activeProjectId)
   const projects = useStore((s) => s.projects)
   const theme = useStore((s) => s.theme)
+  const devMode = useStore((s) => s.devMode)
+  const setArtifactPanelOpen = useStore((s) => s.setArtifactPanelOpen)
+  const setSidePanelView = useStore((s) => s.setSidePanelView)
 
   // Apply theme on mount + listen for system preference changes
   useEffect(() => {
@@ -180,6 +184,7 @@ export function App() {
   }
 
   const isDisconnected = status === 'disconnected' || status === 'error'
+  const isDisconnectedForUpdate = isDisconnected && updateStage === 'restarting'
 
   const formatTokens = (n: number): string => {
     if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`
@@ -208,8 +213,11 @@ export function App() {
       />
 
       <div className="workspace-shell">
-        {/* Reconnecting banner — non-blocking overlay */}
-        {isDisconnected && (
+        {/* Update notification overlay */}
+        <UpdateBanner />
+
+        {/* Reconnecting banner — hidden when disconnecting for an update */}
+        {isDisconnected && !isDisconnectedForUpdate && (
           <div className="reconnect-banner">
             <span className="reconnect-banner__dot" />
             <span>Reconnecting to your machine...</span>
@@ -252,6 +260,19 @@ export function App() {
           <ModeSelector />
 
           <div className="workspace-topbar__actions">
+            {devMode && (
+              <button
+                type="button"
+                className="workspace-topbar__devmode"
+                onClick={() => {
+                  setSidePanelView('devmode')
+                  setArtifactPanelOpen(true)
+                }}
+                title="Developer Tools"
+              >
+                <Code size={18} strokeWidth={1.5} />
+              </button>
+            )}
             <button
               type="button"
               className="workspace-topbar__connection"
@@ -273,7 +294,7 @@ export function App() {
             {sessionUsage && activeView === 'chat' && (
               <div className="workspace-topbar__credits">
                 <Ticket size={14} strokeWidth={1.5} className="workspace-topbar__creditsIcon" />
-                <span>{formatTokens(sessionUsage.totalTokens)}</span>
+                <span>{formatTokens(sessionUsage.outputTokens)}</span>
               </div>
             )}
           </div>

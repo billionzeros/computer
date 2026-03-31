@@ -45,6 +45,8 @@ type AppearanceMode = 'light' | 'dark' | 'system'
 function GeneralPage() {
   const theme = useStore((s) => s.theme)
   const setTheme = useStore((s) => s.setTheme)
+  const devMode = useStore((s) => s.devMode)
+  const setDevMode = useStore((s) => s.setDevMode)
 
   const appearanceOptions: { key: AppearanceMode; label: string; icon: React.ReactNode }[] = [
     { key: 'light', label: 'Light', icon: <Sun size={16} strokeWidth={1.5} /> },
@@ -119,6 +121,30 @@ function GeneralPage() {
             </div>
           </div>
           <ToggleSwitch defaultChecked />
+        </div>
+      </section>
+
+      <div className="settings-divider" />
+
+      {/* Developer Mode */}
+      <section className="settings-section">
+        <div className="settings-section__label">Advanced</div>
+        <div className="settings-toggle-row">
+          <div className="settings-toggle-row__info">
+            <div className="settings-toggle-row__title">Developer Mode</div>
+            <div className="settings-toggle-row__desc">
+              Show a developer tools button in the toolbar to inspect the system prompt and memories.
+            </div>
+          </div>
+          <button
+            type="button"
+            className={`settings-toggle${devMode ? ' settings-toggle--on' : ''}`}
+            onClick={() => setDevMode(!devMode)}
+            role="switch"
+            aria-checked={devMode}
+          >
+            <span className="settings-toggle__knob" />
+          </button>
         </div>
       </section>
     </div>

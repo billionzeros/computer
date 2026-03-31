@@ -37,14 +37,21 @@ export function Connect({ onConnected }: { onConnected: () => void }) {
     (config: ConnectionConfig, machineName?: string) => {
       setError('')
 
-      // Clear stale session data if connecting to a different machine
+      // Detect machine switch BEFORE connect() which calls localStorage.clear()
       const machineId = `${config.host}:${config.port}`
       const lastMachineId = localStorage.getItem(LAST_MACHINE_KEY)
-      if (lastMachineId && lastMachineId !== machineId) {
+      const isMachineSwitch = lastMachineId && lastMachineId !== machineId
+
+      if (isMachineSwitch) {
+        // Flush all stale state from previous machine.
+        // The new server will re-sync its sessions on connect.
         saveConversations([])
         localStorage.removeItem('anton.activeConversationId')
-        useStore.getState().resetForDisconnect()
+        useStore.getState().resetForMachineSwitch()
       }
+
+      // connect() calls localStorage.clear() but preserves lastMachineId
+      connection.connect(config)
       localStorage.setItem(LAST_MACHINE_KEY, machineId)
 
       const unsub = connection.onStatusChange((s, detail) => {

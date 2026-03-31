@@ -14,7 +14,7 @@
  */
 
 import type { AgentConfig } from '@anton/agent-config'
-import { loadSystemPrompt } from '@anton/agent-config'
+import { loadCoreSystemPrompt } from '@anton/agent-config'
 import type { AskUserQuestion } from '@anton/protocol'
 import type { AgentTool, AgentToolResult } from '@mariozechner/pi-agent-core'
 import { Type } from '@mariozechner/pi-ai'
@@ -26,7 +26,7 @@ import { executeCodeSearch } from './tools/code-search.js'
 import { executeDatabase } from './tools/database.js'
 import type { DeliverResultHandler } from './tools/deliver-result.js'
 import { executeDiff } from './tools/diff.js'
-import { executeFilesystem } from './tools/filesystem.js'
+import { executeFilesystem, setForbiddenPaths } from './tools/filesystem.js'
 import { executeGit } from './tools/git.js'
 import { executeHttpApi } from './tools/http-api.js'
 import { executeImage } from './tools/image.js'
@@ -86,17 +86,12 @@ function humanizeCron(expr: string): string {
 export type AskUserHandler = (questions: AskUserQuestion[]) => Promise<Record<string, string>>
 
 /**
- * System prompt — loaded from ~/.anton/prompts/system.md at startup.
- * Editable on the server, persists across agent updates.
- *
- * Prompt layering:
- *   ~/.anton/prompts/system.md     — base prompt (seeded from packages/agent/prompts/system.md)
- *   ~/.anton/prompts/append.md     — appended after base (optional, for user customization)
- *   ~/.anton/prompts/rules/*.md    — rules appended as sections (optional)
- *
- * Skills are appended automatically by session.ts.
+ * Core system prompt — self-contained behavioral instructions.
+ * Loaded from the embedded prompt (identical for all deployments).
+ * Contextual data (rules, memory, project context, skills) is injected
+ * separately via <system-reminder> tags in session.ts.
  */
-export const SYSTEM_PROMPT = loadSystemPrompt()
+export const CORE_SYSTEM_PROMPT = loadCoreSystemPrompt()
 
 /**
  * Wrap a string result into the AgentToolResult format pi SDK expects.
@@ -163,6 +158,8 @@ export interface ToolCallbacks {
   }) => void
   /** Callback when the browser is closed. */
   onBrowserClose?: () => void
+  /** Get current trace span for sub-agent nesting in Braintrust. */
+  getParentTraceSpan?: () => import('./tracing.js').Span | undefined
 }
 
 export function buildTools(
@@ -171,6 +168,9 @@ export function buildTools(
   mcpManager?: import('./mcp/mcp-manager.js').McpManager,
   connectorManager?: { getAllTools(): AgentTool[] },
 ): AgentTool[] {
+  // Initialize security settings for tools
+  setForbiddenPaths(config.security?.forbiddenPaths ?? [])
+
   const tools: AgentTool[] = [
     // ── Core tools ──────────────────────────────────────────────────
     defineTool({
@@ -228,10 +228,10 @@ export function buildTools(
       label: 'Browser',
       description:
         'Web browsing and browser automation. Two modes:\n' +
-        '• **fetch/extract** — Fast, lightweight. Use for reading articles, docs, APIs. No JS execution.\n' +
-        '• **open/snapshot/click/fill/scroll/screenshot/get/wait/close** — Full browser automation via agent-browser. ' +
-        'Use ONLY when you need to interact with a page (click buttons, fill forms, navigate JS-heavy SPAs, take screenshots, automate workflows). ' +
-        'The real browser is heavier — prefer fetch for simple content retrieval.\n' +
+        '• **fetch/extract** — Fast, lightweight. Use for reading articles, docs, APIs behind the scenes. No JS execution.\n' +
+        '• **open/snapshot/click/fill/scroll/screenshot/get/wait/close** — Full browser with live screenshots shown in the user sidebar. ' +
+        'Use `open` when the user asks to visit, browse, scrape, or interact with a website. ' +
+        'Chromium auto-installs on first use.\n' +
         'For local files, use the filesystem tool.',
       parameters: Type.Object({
         operation: Type.Union(
@@ -321,7 +321,7 @@ export function buildTools(
         body: Type.Optional(Type.String({ description: 'Request body' })),
       }),
       async execute(_toolCallId, params) {
-        const output = executeNetwork(params)
+        const output = await executeNetwork(params)
         return toolResult(output)
       },
     }),
@@ -884,6 +884,8 @@ export function buildTools(
               maxTokenBudget: 100_000,
               maxDurationMs: 600_000, // 10 minutes
               maxTurns: 50,
+              // Thread Braintrust trace span so sub-agent appears nested under parent
+              parentTraceSpan: callbacks?.getParentTraceSpan?.(),
             })
 
             // Wire confirm handler from parent so sub-agent shell commands can be approved

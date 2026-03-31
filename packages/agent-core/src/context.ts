@@ -235,16 +235,39 @@ function findCrossConversationMemories(
     }))
 }
 
+// ── Structured memory data ──────────────────────────────────────────
+
+export interface MemoryItem {
+  key: string
+  content: string
+}
+
+export interface MemoryItemWithSource extends MemoryItem {
+  source: string
+}
+
+export interface MemoryData {
+  globalMemories: MemoryItem[]
+  conversationMemories: MemoryItem[]
+  crossConversationMemories: MemoryItemWithSource[]
+}
+
+/**
+ * Strip frontmatter (first 3 lines) from a memory file's content.
+ */
+function stripFrontmatter(content: string): string {
+  return content.split('\n').slice(3).join('\n').trim()
+}
+
 /**
  * Assemble context for a conversation.
- * Returns the context string to inject into the system prompt,
- * and the ContextInfo for transparency.
+ * Returns structured memory data and context info for transparency.
  */
 export function assembleConversationContext(
   conversationId: string,
   firstMessage?: string,
   projectId?: string,
-): { contextBlock: string; contextInfo: ContextInfo } {
+): { memoryData: MemoryData; contextInfo: ContextInfo } {
   const globalMemories = loadMemoriesFromDir(getGlobalMemoryDir())
   const convMemories = loadMemoriesFromDir(getConversationMemoryDir(conversationId))
 
@@ -253,41 +276,34 @@ export function assembleConversationContext(
   const crossConvMemories = findCrossConversationMemories(keywords, conversationId)
 
   // Load cross-conversation memory content
-  const crossConvContent: MemoryEntry[] = []
+  const crossConvContent: (MemoryEntry & { resolvedSource: string })[] = []
   for (const ref of crossConvMemories) {
     const memDir = getConversationMemoryDir(ref.fromConversation)
     const entries = loadMemoriesFromDir(memDir)
     const match = entries.find((e) => e.key === ref.memoryKey)
     if (match) {
-      crossConvContent.push({ ...match, source: `${ref.conversationTitle}/${match.source}` })
+      crossConvContent.push({
+        ...match,
+        resolvedSource: `${ref.conversationTitle}/${match.source}`,
+      })
     }
   }
 
-  // Build context block
-  let block = ''
-
-  if (globalMemories.length > 0) {
-    block += '\n\n[GLOBAL MEMORY]\n'
-    for (const mem of globalMemories) {
-      block += `\n### ${mem.key}\n${mem.content.split('\n').slice(3).join('\n').trim()}\n`
-    }
-    block += '[/GLOBAL MEMORY]\n'
-  }
-
-  if (convMemories.length > 0) {
-    block += '\n\n[CONVERSATION MEMORY]\n'
-    for (const mem of convMemories) {
-      block += `\n### ${mem.key}\n${mem.content.split('\n').slice(3).join('\n').trim()}\n`
-    }
-    block += '[/CONVERSATION MEMORY]\n'
-  }
-
-  if (crossConvContent.length > 0) {
-    block += '\n\n[RELEVANT CONTEXT from other conversations]\n'
-    for (const mem of crossConvContent) {
-      block += `\n### ${mem.key} (from: ${mem.source})\n${mem.content.split('\n').slice(3).join('\n').trim()}\n`
-    }
-    block += '[/RELEVANT CONTEXT]\n'
+  // Build structured memory data
+  const memoryData: MemoryData = {
+    globalMemories: globalMemories.map((m) => ({
+      key: m.key,
+      content: stripFrontmatter(m.content),
+    })),
+    conversationMemories: convMemories.map((m) => ({
+      key: m.key,
+      content: stripFrontmatter(m.content),
+    })),
+    crossConversationMemories: crossConvContent.map((m) => ({
+      key: m.key,
+      content: stripFrontmatter(m.content),
+      source: m.resolvedSource,
+    })),
   }
 
   // Build context info for transparency
@@ -307,5 +323,5 @@ export function assembleConversationContext(
     } catch {}
   }
 
-  return { contextBlock: block, contextInfo }
+  return { memoryData, contextInfo }
 }

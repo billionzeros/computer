@@ -584,6 +584,7 @@ button {
    ═══════════════════════════════════════════════════════════════════ */
 
 .workspace-shell {
+  position: relative;
   min-width: 0;
   flex: 1;
   display: flex;
@@ -804,6 +805,7 @@ button {
   flex: 1;
   display: flex;
   flex-direction: column;
+  position: relative;
 }
 
 .chat-shell__confirm {
@@ -3410,6 +3412,118 @@ button {
   color: var(--text-muted);
   margin-bottom: 20px;
   line-height: 1.5;
+}
+
+/* ── Update banner (centered card overlay) ── */
+
+.update-banner {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 100;
+  background: rgba(10, 10, 10, 0.94);
+}
+
+.update-banner__card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+  padding: 36px 48px;
+  min-width: 340px;
+  max-width: 420px;
+  background: #262727;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: var(--radius-lg);
+  box-shadow: 0 12px 48px rgba(0, 0, 0, 0.5);
+  color: var(--text);
+  text-align: center;
+}
+
+.update-banner__version {
+  font-size: 16px;
+  font-weight: 500;
+  color: var(--text);
+}
+
+.update-banner__version--error {
+  color: var(--danger);
+}
+
+.update-banner__changelog {
+  font-size: 13px;
+  color: var(--text-muted);
+  line-height: 1.4;
+  max-width: 280px;
+}
+
+.update-banner__action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  width: 100%;
+  padding: 10px 20px;
+  margin-top: 4px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-strong);
+  background: var(--bg-strong);
+  color: var(--text);
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.update-banner__action:hover {
+  background: var(--bg-subtle);
+  border-color: var(--text-muted);
+}
+
+.update-banner__dismiss {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border: none;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.update-banner__dismiss:hover {
+  background: var(--bg-strong);
+  color: var(--text);
+}
+
+.update-banner__spinner {
+  color: var(--text-muted);
+}
+
+.update-banner__check {
+  color: var(--success);
+}
+
+@keyframes update-spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.update-banner__spin {
+  animation: update-spin 1s linear infinite;
 }
 
 /* ── Reconnecting banner (non-blocking overlay) ── */
@@ -6885,33 +6999,36 @@ button {
 /* ── Plan Review Overlay (inline above chat input) ─────────────── */
 
 .plan-overlay {
-  padding: 0 24px 0;
-  max-width: 680px;
-  margin: 0 auto;
-  width: 100%;
+  position: absolute;
+  inset: 0;
+  z-index: 20;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg);
 }
 
 .plan-overlay__card {
-  border: 1px solid var(--border);
-  border-radius: 16px;
-  background: var(--bg-elevated);
+  border: none;
+  border-radius: 0;
+  background: var(--bg);
   overflow: hidden;
   display: flex;
   flex-direction: column;
-  max-height: 420px;
+  flex: 1;
+  min-height: 0;
 }
 
 .plan-overlay__header {
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 12px 16px;
+  gap: 12px;
+  padding: 16px 24px;
   border-bottom: 1px solid var(--border);
   flex-shrink: 0;
 }
 
 .plan-overlay__label {
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.04em;
@@ -6919,7 +7036,7 @@ button {
 }
 
 .plan-overlay__title {
-  font-size: 13px;
+  font-size: 15px;
   font-weight: 500;
   color: var(--text);
 }
@@ -6932,12 +7049,12 @@ button {
 }
 
 .plan-overlay__toc {
-  width: 180px;
-  min-width: 160px;
+  width: 220px;
+  min-width: 200px;
   flex-shrink: 0;
   overflow-y: auto;
   border-right: 1px solid var(--border);
-  padding: 10px 0;
+  padding: 14px 0;
 }
 
 .plan-overlay__toc ul {
@@ -6953,8 +7070,8 @@ button {
 .plan-overlay__toc-item {
   display: block;
   width: 100%;
-  padding: 5px 14px;
-  font-size: 12px;
+  padding: 6px 18px;
+  font-size: 13px;
   color: var(--text-muted);
   background: none;
   border: none;
@@ -6978,41 +7095,42 @@ button {
 }
 
 .plan-overlay__toc-item--l2 {
-  padding-left: 24px;
-  font-size: 11.5px;
+  padding-left: 30px;
+  font-size: 12.5px;
 }
 
 .plan-overlay__toc-item--l3 {
-  padding-left: 34px;
-  font-size: 11px;
+  padding-left: 42px;
+  font-size: 12px;
 }
 
 .plan-overlay__content {
   flex: 1;
   overflow-y: auto;
-  padding: 14px 18px;
+  padding: 24px 32px;
   min-width: 0;
 }
 
 .plan-overlay__content .markdown-content {
-  font-size: 13px;
-  line-height: 1.6;
+  font-size: 14px;
+  line-height: 1.7;
+  max-width: 720px;
 }
 
 .plan-overlay__footer {
   flex-shrink: 0;
   border-top: 1px solid var(--border);
-  padding: 10px 14px;
+  padding: 14px 24px;
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 10px;
 }
 
 .plan-overlay__approve {
   display: flex;
   align-items: center;
-  gap: 5px;
-  padding: 7px 14px;
+  gap: 6px;
+  padding: 9px 18px;
   font-size: 13px;
   font-weight: 500;
   border-radius: 10px;
@@ -11645,4 +11763,188 @@ button {
 .usage-table__model-small code {
   font-size: 11px;
   color: var(--text-muted);
+}
+
+/* ── Dev Mode ────────────────────────────────────────────────────── */
+
+.workspace-topbar__devmode {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  color: var(--text-muted);
+  transition: background 0.15s, color 0.15s;
+}
+
+.workspace-topbar__devmode:hover {
+  background: rgba(var(--overlay), 0.08);
+  color: var(--text);
+}
+
+.devmode-panel {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  overflow: hidden;
+}
+
+.devmode-panel__tabs {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
+.devmode-panel__tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 10px;
+  border-radius: 6px;
+  border: none;
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+
+.devmode-panel__tab:hover {
+  background: rgba(var(--overlay), 0.06);
+  color: var(--text);
+}
+
+.devmode-panel__tab--active {
+  background: rgba(var(--overlay), 0.1);
+  color: var(--text);
+}
+
+.devmode-panel__tabs-spacer {
+  flex: 1;
+}
+
+.devmode-panel__refresh {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
+  border: none;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+
+.devmode-panel__refresh:hover {
+  background: rgba(var(--overlay), 0.08);
+  color: var(--text);
+}
+
+.devmode-panel__content {
+  flex: 1;
+  overflow-y: auto;
+  min-height: 0;
+}
+
+.devmode-panel__prompt {
+  margin: 0;
+  padding: 12px;
+  font-family: 'SF Mono', 'Fira Code', 'JetBrains Mono', monospace;
+  font-size: 11px;
+  line-height: 1.6;
+  color: var(--text);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.devmode-panel__empty {
+  padding: 24px 12px;
+  text-align: center;
+  color: var(--text-muted);
+  font-size: 13px;
+}
+
+.devmode-panel__memories {
+  display: flex;
+  flex-direction: column;
+}
+
+.devmode-panel__memory {
+  border-bottom: 1px solid var(--border);
+}
+
+.devmode-panel__memory-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  padding: 10px 12px;
+  border: none;
+  background: transparent;
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  text-align: left;
+  transition: background 0.15s;
+}
+
+.devmode-panel__memory-header:hover {
+  background: rgba(var(--overlay), 0.04);
+}
+
+.devmode-panel__memory-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.devmode-panel__memory-content {
+  margin: 0;
+  padding: 0 12px 12px 32px;
+  font-family: 'SF Mono', 'Fira Code', 'JetBrains Mono', monospace;
+  font-size: 11px;
+  line-height: 1.5;
+  color: var(--text-muted);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.devmode-panel__prompt-wrap {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+.devmode-panel__prompt-badge {
+  padding: 6px 12px;
+  font-size: 11px;
+  color: var(--text-muted);
+  background: rgba(var(--overlay), 0.04);
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
+.devmode-panel__memory-group {
+  border-bottom: 1px solid var(--border);
+}
+
+.devmode-panel__memory-group-label {
+  padding: 6px 12px;
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-muted);
+  background: rgba(var(--overlay), 0.03);
 }

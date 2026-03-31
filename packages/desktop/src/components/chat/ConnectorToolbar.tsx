@@ -22,10 +22,13 @@ export function ConnectorPill() {
     direction: 'up',
   })
 
+  const connectionStatus = useStore((s) => s.connectionStatus)
   useEffect(() => {
-    connection.sendConnectorsList()
-    connection.sendConnectorRegistryList()
-  }, [])
+    if (connectionStatus === 'connected') {
+      connection.sendConnectorsList()
+      connection.sendConnectorRegistryList()
+    }
+  }, [connectionStatus])
 
   // Compute position when opening
   const updatePosition = useCallback(() => {

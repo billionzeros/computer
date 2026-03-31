@@ -246,6 +246,38 @@ function ExaSearchIcon({ size = 24 }: { size?: number }) {
   )
 }
 
+function AirtableIcon({ size = 24 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <path d="M11.5 3.2l-8 3.1c-.3.1-.5.4-.5.7v.2l8.5 3.3c.3.1.7.1 1 0l8.5-3.3v-.2c0-.3-.2-.6-.5-.7l-8-3.1a1.5 1.5 0 00-1 0z" fill="#FCB400" />
+      <path d="M12.5 12.2V21c0 .4.4.7.8.5l8.4-4.2c.2-.1.3-.3.3-.5V8.7c0-.4-.4-.7-.8-.5l-8.4 3.5a.6.6 0 00-.3.5z" fill="#18BFFF" />
+      <path d="M11.5 12.2V21c0 .4-.4.7-.8.5L2.3 17.3c-.2-.1-.3-.3-.3-.5V8.7c0-.4.4-.7.8-.5l8.4 3.5a.6.6 0 01.3.5z" fill="#F82B60" />
+    </svg>
+  )
+}
+
+function LinkedInIcon({ size = 24 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <rect x="1" y="1" width="22" height="22" rx="4" fill="#0A66C2" />
+      <path
+        d="M7.5 9.5v7M7.5 6.5v.01"
+        stroke="white"
+        strokeWidth="2"
+        strokeLinecap="round"
+      />
+      <path
+        d="M11 16.5v-4c0-1.1.9-2 2-2s2 .9 2 2v4"
+        stroke="white"
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <path d="M11 12.5v4" stroke="white" strokeWidth="2" strokeLinecap="round" />
+    </svg>
+  )
+}
+
 // Map connector IDs to their brand icon components
 const ICON_MAP: Record<string, (props: { size?: number }) => JSX.Element> = {
   brave: BraveIcon,
@@ -262,6 +294,8 @@ const ICON_MAP: Record<string, (props: { size?: number }) => JSX.Element> = {
   'google-docs': GoogleDocsIcon,
   'google-sheets': GoogleSheetsIcon,
   'google-search-console': GoogleSearchConsoleIcon,
+  airtable: AirtableIcon,
+  linkedin: LinkedInIcon,
 }
 
 /**

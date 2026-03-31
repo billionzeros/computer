@@ -35,7 +35,9 @@ export interface PongMessage {
 
 export interface ConfigQueryMessage {
   type: 'config_query'
-  key: 'providers' | 'defaults' | 'security'
+  key: 'providers' | 'defaults' | 'security' | 'system_prompt' | 'memories'
+  /** Optional session ID — when provided, system_prompt returns the full composed prompt and memories includes conversation-scoped ones. */
+  sessionId?: string
 }
 
 export interface ConfigQueryResponse {

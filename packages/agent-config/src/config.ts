@@ -148,6 +148,8 @@ export interface AgentConfig {
   braintrust?: {
     apiKey?: string // or use BRAINTRUST_API_KEY env var
     projectName?: string // defaults to "anton-agent"
+    sampleRate?: number // fraction of sessions to score online (default: 0.1)
+    onlineScoring?: boolean // enable online heuristic + sampled scoring (default: false)
   }
 }
 
@@ -1107,34 +1109,28 @@ export function getProjectPublicDir(projectName: string): string {
 // ── System prompt loading ───────────────────────────────────────────
 
 /**
- * Load the system prompt from ~/.anton/prompts/system.md.
- * If it doesn't exist, copies the bundled default there first.
- *
- * Prompt layering (highest priority wins):
- *   1. ~/.anton/prompts/system.md      (user-editable, persists across updates)
- *   2. Bundled prompts/system.md       (shipped with package, used as seed)
- *   3. Hardcoded fallback              (last resort)
- *
- * Users can also place additional context in:
- *   ~/.anton/prompts/append.md         (appended after system prompt)
- *   ~/.anton/prompts/rules/*.md        (project rules, appended as sections)
+ * Load the core system prompt — embedded behavioral instructions only.
+ * This is the self-contained base prompt that ships identically everywhere.
+ * Also syncs to ~/.anton/prompts/system.md for user reference.
  */
-export function loadSystemPrompt(): string {
+export function loadCoreSystemPrompt(): string {
   mkdirSync(PROMPTS_DIR, { recursive: true })
-
-  // Always sync the base system prompt from the embedded version.
-  // Users should use append.md and rules/ for customizations.
   writeFileSync(SYSTEM_PROMPT_PATH, EMBEDDED_SYSTEM_PROMPT, 'utf-8')
+  return EMBEDDED_SYSTEM_PROMPT
+}
 
-  let prompt = readFileSync(SYSTEM_PROMPT_PATH, 'utf-8')
+/**
+ * Load user rules from ~/.anton/prompts/append.md and ~/.anton/prompts/rules/*.md.
+ * Returns combined content or empty string if nothing exists.
+ */
+export function loadUserRules(): string {
+  let rules = ''
 
-  // Append extra context if present
   const appendPath = join(PROMPTS_DIR, 'append.md')
   if (existsSync(appendPath)) {
-    prompt += `\n\n${readFileSync(appendPath, 'utf-8')}`
+    rules += readFileSync(appendPath, 'utf-8')
   }
 
-  // Append rules
   const rulesDir = join(PROMPTS_DIR, 'rules')
   if (existsSync(rulesDir)) {
     const ruleFiles = readdirSync(rulesDir)
@@ -1142,11 +1138,28 @@ export function loadSystemPrompt(): string {
       .sort()
     for (const file of ruleFiles) {
       const content = readFileSync(join(rulesDir, file), 'utf-8')
-      prompt += `\n\n## ${file.replace('.md', '')}\n\n${content}`
+      if (rules) rules += '\n\n'
+      rules += `## ${file.replace('.md', '')}\n\n${content}`
     }
   }
 
-  return prompt
+  return rules
+}
+
+/**
+ * Load workspace-level rules from .anton.md in the given directory.
+ * Analogous to CLAUDE.md in Claude Code or .cursorrules in Cursor.
+ */
+export function loadWorkspaceRules(workspacePath: string): string {
+  const antonMdPath = join(workspacePath, '.anton.md')
+  if (existsSync(antonMdPath)) {
+    try {
+      return readFileSync(antonMdPath, 'utf-8')
+    } catch {
+      return ''
+    }
+  }
+  return ''
 }
 
 // ── Connector management ────────────────────────────────────────────
@@ -1470,6 +1483,48 @@ export const CONNECTOR_REGISTRY: ConnectorRegistryEntry[] = [
       ],
       url: 'https://search.google.com/search-console',
       urlLabel: 'Search Console',
+    },
+  },
+  {
+    id: 'airtable',
+    name: 'Airtable',
+    description: 'Manage bases, tables, and records in Airtable',
+    icon: '📊',
+    category: 'productivity',
+    type: 'oauth',
+    oauthProvider: 'airtable',
+    oauthScopes: [
+      'data.records:read',
+      'data.records:write',
+      'schema.bases:read',
+    ],
+    requiredEnv: [],
+    featured: true,
+    setupGuide: {
+      steps: ['Click Connect to authorize with your Airtable account'],
+      url: 'https://airtable.com',
+      urlLabel: 'Airtable',
+    },
+  },
+  {
+    id: 'linkedin',
+    name: 'LinkedIn',
+    description:
+      'Search people, send messages, manage connections, and create posts on LinkedIn. Supports multiple accounts.',
+    icon: '💼',
+    category: 'social',
+    type: 'oauth',
+    oauthProvider: 'linkedin',
+    oauthScopes: [],
+    requiredEnv: [],
+    featured: true,
+    setupGuide: {
+      steps: [
+        'Click Connect to authenticate with your LinkedIn account',
+        'You can connect up to 3 LinkedIn accounts',
+      ],
+      url: 'https://www.linkedin.com',
+      urlLabel: 'LinkedIn',
     },
   },
 ]
