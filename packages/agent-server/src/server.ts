@@ -75,6 +75,49 @@ import { Updater } from './updater.js'
 
 const DEFAULT_SESSION_ID = 'default'
 
+/**
+ * Buffers text chunks from the AI stream and flushes them on a timer (~80ms)
+ * or immediately before any non-text event. This coalesces many small token-level
+ * WS frames into fewer, larger updates (~12/sec instead of 30-50+).
+ */
+class TextStreamBuffer {
+  private pending = ''
+  private timer: ReturnType<typeof setTimeout> | null = null
+  private readonly INTERVAL_MS = 80
+  private destroyed = false
+
+  constructor(private send: (text: string) => void) {}
+
+  /** Accumulate a text chunk. Starts the flush timer if not already running. */
+  push(text: string): void {
+    if (this.destroyed) return
+    this.pending += text
+    if (!this.timer) {
+      this.timer = setTimeout(() => this.flush(), this.INTERVAL_MS)
+    }
+  }
+
+  /** Send whatever is buffered now. Safe to call anytime (no-ops if empty). */
+  flush(): void {
+    if (this.timer) {
+      clearTimeout(this.timer)
+      this.timer = null
+    }
+    if (this.pending) {
+      this.send(this.pending)
+      this.pending = ''
+    }
+  }
+
+  /** Flush remaining text, clear timer, prevent further use. */
+  destroy(): void {
+    if (this.destroyed) return
+    this.flush()
+    this.destroyed = true
+    this.send = () => {}
+  }
+}
+
 export class AgentServer {
   private wss: WebSocketServer | null = null
   private config: AgentConfig
@@ -612,6 +655,7 @@ export class AgentServer {
 
   private async handleUpdateStart() {
     for await (const progress of this.updater.selfUpdate()) {
+      console.log(`[update] ${progress.stage}: ${progress.message}`)
       this.sendToClient(Channel.CONTROL, {
         type: 'update_progress',
         stage: progress.stage,
@@ -2155,6 +2199,12 @@ export class AgentServer {
     this.activeTurns.add(sessionId)
     let eventCount = 0
 
+    // Buffer text chunks and flush every ~80ms (or before any non-text event)
+    // Hoisted above try so catch/finally can access it
+    const textBuffer = new TextStreamBuffer((text) => {
+      this.sendToClient(Channel.AI, { type: 'text', content: text, sessionId })
+    })
+
     try {
       const turnStartMs = Date.now()
       let accumulatedText = ''
@@ -2163,10 +2213,32 @@ export class AgentServer {
       const pendingToolNames = new Map<string, string>()
       let projectContextUpdate: { sessionSummary?: string; projectSummary?: string } | null = null
       let lastProjectSummary: string | undefined
+      let writingStatusSent = false
 
       for await (const event of session.processMessage(msg.content, msg.attachments || [])) {
-        if (event.type === 'text') accumulatedText += event.content
         eventCount++
+
+        // ── Text events: buffer instead of sending immediately ──
+        if (event.type === 'text') {
+          accumulatedText += event.content
+          textBuffer.push(event.content)
+
+          // Send "Writing response..." status only once per text block, not per token
+          if (!writingStatusSent) {
+            this.sendToClient(Channel.EVENTS, {
+              type: 'agent_status',
+              status: 'working',
+              detail: 'Writing response...',
+              sessionId,
+            })
+            writingStatusSent = true
+          }
+          continue
+        }
+
+        // ── Non-text event: force flush buffer to preserve ordering ──
+        textBuffer.flush()
+        writingStatusSent = false
 
         // Track tool call names for result matching
         if (event.type === 'tool_call') {
@@ -2237,13 +2309,6 @@ export class AgentServer {
             detail: 'Thinking...',
             sessionId,
           })
-        } else if (event.type === 'text') {
-          this.sendToClient(Channel.EVENTS, {
-            type: 'agent_status',
-            status: 'working',
-            detail: 'Writing response...',
-            sessionId,
-          })
         } else if (event.type === 'tasks_update') {
           // Use the activeForm of the current in_progress task as status detail
           const active = (
@@ -2261,6 +2326,9 @@ export class AgentServer {
 
         this.sendToClient(Channel.AI, { ...event, sessionId } as Record<string, unknown>)
       }
+
+      // Flush any remaining buffered text after the loop
+      textBuffer.destroy()
       const turnDurationMs = Date.now() - turnStartMs
       console.log(
         `[${sessionId}] Turn complete: ${eventCount} events, ${toolCallCount} tool calls, ` +
@@ -2298,6 +2366,8 @@ export class AgentServer {
     } catch (err: unknown) {
       const errMsg = (err as Error).message
       console.error(`[${sessionId}] Error:`, errMsg)
+      // Flush any buffered text before sending error so partial response isn't lost
+      textBuffer.destroy()
       this.sendToClient(Channel.AI, {
         type: 'error',
         message: errMsg,
@@ -2309,6 +2379,9 @@ export class AgentServer {
         sessionId,
       })
     } finally {
+      // Safety net: destroy is idempotent, ensures timer is cleared even if
+      // the try block exited without reaching textBuffer.destroy()
+      textBuffer.destroy()
       this.activeTurns.delete(sessionId)
       this.sendToClient(Channel.EVENTS, {
         type: 'agent_status',

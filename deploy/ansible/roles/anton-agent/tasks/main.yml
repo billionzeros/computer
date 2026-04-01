@@ -1,5 +1,6 @@
 ---
 # Anton Agent Deployment Role
+# Uses the `anton` CLI to set up and configure the agent — same as cloud-init.
 
 # ── System Dependencies ──────────────────────────────────────────
 
@@ -7,282 +8,216 @@
   apt:
     name:
       - curl
-      - git
-      - openssl
-      - build-essential
-      - python3
+      - jq
+      - dnsutils
+      - debian-keyring
+      - debian-archive-keyring
+      - apt-transport-https
       - ufw
     state: present
     update_cache: true
     cache_valid_time: 3600
   when: ansible_facts["os_family"] == "Debian"
 
-- name: Install system packages (RHEL/Fedora)
-  dnf:
-    name:
-      - curl
-      - git
-      - openssl
-      - gcc
-      - gcc-c++
-      - make
-      - python3
-      - firewalld
-    state: present
-  when: ansible_facts["os_family"] == "RedHat"
+# ── Node.js 22 (required to run the CLI) ────────────────────────
 
-# ── Node.js 22 ───────────────────────────────────────────────────
-
-- name: Check if Node.js is installed
+- name: Check Node.js version
   command: node --version
-  register: node_version_check
+  register: node_check
   ignore_errors: true
   changed_when: false
 
-- name: Check Node.js major version
-  set_fact:
-    node_needs_install: >-
-      {{ node_version_check.rc != 0 or
-         (node_version_check.stdout | regex_replace('^v', '') | split('.') | first | int) < (node_major_version | int) }}
-
-- name: Add NodeSource repo (Debian/Ubuntu)
-  shell: curl -fsSL https://deb.nodesource.com/setup_{{ node_major_version }}.x | bash -
+- name: Add NodeSource repo
+  shell: curl -fsSL https://deb.nodesource.com/setup_22.x | bash -
   args:
     creates: /etc/apt/sources.list.d/nodesource.list
-  when: node_needs_install and ansible_facts["os_family"] == "Debian"
+  when: >
+    node_check.rc != 0 or
+    (node_check.stdout | regex_replace('^v', '') | split('.') | first | int) < 22
 
-- name: Install Node.js (Debian/Ubuntu)
+- name: Install Node.js
   apt:
     name: nodejs
     state: present
     update_cache: true
-  when: node_needs_install and ansible_facts["os_family"] == "Debian"
+  when: >
+    node_check.rc != 0 or
+    (node_check.stdout | regex_replace('^v', '') | split('.') | first | int) < 22
 
-- name: Add NodeSource repo (RHEL/Fedora)
-  shell: curl -fsSL https://rpm.nodesource.com/setup_{{ node_major_version }}.x | bash -
-  args:
-    creates: /etc/yum.repos.d/nodesource-el9.repo
-  when: node_needs_install and ansible_facts["os_family"] == "RedHat"
+# ── Anton CLI ────────────────────────────────────────────────────
 
-- name: Install Node.js (RHEL/Fedora)
-  dnf:
-    name: nodejs
-    state: present
-  when: node_needs_install and ansible_facts["os_family"] == "RedHat"
+- name: Fetch manifest for CLI version
+  uri:
+    url: "https://raw.githubusercontent.com/OmGuptaIND/computer/main/manifest.json"
+    return_content: true
+  register: manifest_response
 
-# ── pnpm ─────────────────────────────────────────────────────────
+- name: Parse CLI version from manifest
+  set_fact:
+    cli_version: "{{ (manifest_response.content | from_json).version }}"
 
-- name: Check if pnpm is installed
-  command: pnpm --version
-  register: pnpm_check
-  ignore_errors: true
-  changed_when: false
-
-- name: Install pnpm globally
-  npm:
-    name: pnpm
-    global: true
-    state: present
-  when: pnpm_check.rc != 0
-
-# ── Anton user ───────────────────────────────────────────────────
-
-- name: Create anton user
-  user:
-    name: "{{ anton_user }}"
-    shell: /bin/bash
-    create_home: true
-    state: present
-
-# ── Clone / update repo ─────────────────────────────────────────
-
-- name: Create install directory
-  file:
-    path: "{{ anton_install_dir }}"
-    state: directory
-    owner: "{{ anton_user }}"
-    group: "{{ anton_user }}"
+- name: Download CLI
+  get_url:
+    url: "https://github.com/OmGuptaIND/computer/releases/download/v{{ cli_version }}/anton-cli.mjs"
+    dest: /usr/local/bin/anton-cli.mjs
     mode: "0755"
-
-- name: Create workspace root directory
-  file:
-    path: "/home/{{ anton_user }}/Anton"
-    state: directory
-    owner: "{{ anton_user }}"
-    group: "{{ anton_user }}"
-    mode: "0755"
-
-- name: Check if repo dir exists
-  stat:
-    path: "{{ anton_repo_dir }}/package.json"
-  register: repo_exists
-
-- name: Check if repo dir is a git repo
-  stat:
-    path: "{{ anton_repo_dir }}/.git"
-  register: repo_git_dir
-  when: repo_exists.stat.exists
-
-- name: Mark repo as git safe directory
-  command: git config --global --add safe.directory {{ anton_repo_dir }}
-  changed_when: false
-  when: repo_git_dir.stat.exists | default(false)
-
-- name: Remove non-git dir (left by rsync/sync)
-  file:
-    path: "{{ anton_repo_dir }}"
-    state: absent
-  when: repo_exists.stat.exists and not (repo_git_dir.stat.exists | default(false))
-
-- name: Clone or update anton.computer repo
-  git:
-    repo: "{{ anton_repo_url }}"
-    dest: "{{ anton_repo_dir }}"
-    version: "{{ anton_branch }}"
-    depth: 1
     force: true
-  notify: restart anton-agent
 
-- name: Set repo ownership
-  file:
-    path: "{{ anton_repo_dir }}"
-    owner: "{{ anton_user }}"
-    group: "{{ anton_user }}"
-    recurse: true
+- name: Install anton wrapper script
+  copy:
+    dest: /usr/local/bin/anton
+    mode: "0755"
+    content: |
+      #!/usr/bin/env bash
+      exec node /usr/local/bin/anton-cli.mjs "$@"
 
-# ── Build ────────────────────────────────────────────────────────
+# ── Agent Setup via CLI ──────────────────────────────────────────
 
-- name: Install dependencies and build all packages
-  shell: >
-    sudo -u {{ anton_user }} bash -c '
-    cd {{ anton_repo_dir }} &&
-    pnpm install --no-frozen-lockfile &&
-    pnpm --filter @anton/protocol build &&
-    pnpm --filter @anton/agent-config build &&
-    pnpm --filter @anton/agent-core build &&
-    pnpm --filter @anton/agent-server build &&
-    pnpm --filter @anton/agent build'
+- name: Read existing token from env file (if any)
+  shell: "grep '^ANTON_TOKEN=' /home/anton/.anton/agent.env 2>/dev/null | cut -d= -f2 || echo ''"
+  register: existing_token
+  changed_when: false
+  ignore_errors: true
+
+- name: Resolve agent token (existing > provided > auto-generate)
+  set_fact:
+    resolved_token: "{{ existing_token.stdout | trim or anton_token }}"
+
+- name: Run agent setup
+  command: >
+    anton computer setup
+    --port {{ anton_port }}
+    --yes
+    {% if resolved_token | length > 0 %}--token {{ resolved_token }}{% endif %}
   changed_when: true
   notify: restart anton-agent
 
-# ── Version manifest ──────────────────────────────────────────────
+# ── Configure via CLI ────────────────────────────────────────────
 
-- name: Get git commit hash
-  command: git rev-parse --short HEAD
-  args:
-    chdir: "{{ anton_repo_dir }}"
-  register: git_hash
-  changed_when: false
-
-- name: Get package version
-  shell: "node -e \"console.log(JSON.parse(require('fs').readFileSync('packages/agent-config/package.json','utf8')).version)\""
-  args:
-    chdir: "{{ anton_repo_dir }}"
-  register: pkg_version
-  changed_when: false
-
-- name: Write version manifest
-  copy:
-    content: |
-      {
-        "version": "{{ pkg_version.stdout }}",
-        "gitHash": "{{ git_hash.stdout }}",
-        "branch": "{{ anton_branch }}",
-        "deployedAt": "{{ ansible_date_time.iso8601 }}",
-        "deployedBy": "ansible"
-      }
-    dest: "{{ anton_install_dir }}/version.json"
-    owner: "{{ anton_user }}"
-    group: "{{ anton_user }}"
-    mode: "0644"
-
-# ── Environment file for API keys ────────────────────────────────
-
-- name: Create environment file
-  template:
-    src: anton-agent.env.j2
-    dest: "{{ anton_install_dir }}/agent.env"
-    owner: "{{ anton_user }}"
-    group: "{{ anton_user }}"
-    mode: "0600"
+- name: Set ANTHROPIC_API_KEY
+  command: anton computer config set ANTHROPIC_API_KEY {{ anthropic_api_key }}
+  when: anthropic_api_key | length > 0
+  changed_when: true
+  no_log: true
   notify: restart anton-agent
 
-# ── Systemd service ─────────────────────────────────────────────
+- name: Set DOMAIN
+  command: anton computer config set DOMAIN {{ anton_domain }}
+  when: anton_domain | length > 0
+  changed_when: true
 
-- name: Install systemd service
-  template:
-    src: anton-agent.service.j2
-    dest: /etc/systemd/system/anton-agent.service
-    owner: root
-    group: root
-    mode: "0644"
-  notify:
-    - reload systemd
-    - restart anton-agent
+- name: Configure OAuth
+  command: >
+    anton computer config oauth
+    --proxy-url https://oauth.antoncomputer.in
+    --callback-url https://{{ anton_domain }}
+  when: anton_domain | length > 0
+  changed_when: true
 
-- name: Enable anton-agent service
-  systemd:
-    name: anton-agent
-    enabled: true
-    daemon_reload: true
-
-- name: Start anton-agent service
-  systemd:
-    name: anton-agent
-    state: started
-  when: anton_start_on_deploy
+- name: Configure Braintrust
+  command: anton computer config braintrust --api-key {{ braintrust_api_key }}
+  when: braintrust_api_key | length > 0
+  changed_when: true
+  no_log: true
 
 # ── Firewall ────────────────────────────────────────────────────
 
-- name: Open agent port (UFW)
+- name: Allow SSH (UFW)
   ufw:
     rule: allow
-    port: "{{ anton_port }}"
+    port: "22"
     proto: tcp
   when: anton_configure_firewall and ansible_facts["os_family"] == "Debian"
   ignore_errors: true
 
-- name: Open agent plain WS fallback port (UFW)
+- name: Open HTTP port (UFW)
   ufw:
     rule: allow
-    port: "{{ anton_port + 1 }}"
+    port: "80"
     proto: tcp
   when: anton_configure_firewall and ansible_facts["os_family"] == "Debian"
   ignore_errors: true
 
-- name: Open agent port (firewalld)
-  firewalld:
-    port: "{{ anton_port }}/tcp"
-    permanent: true
-    immediate: true
+- name: Open HTTPS port (UFW)
+  ufw:
+    rule: allow
+    port: "443"
+    proto: tcp
+  when: anton_configure_firewall and ansible_facts["os_family"] == "Debian"
+  ignore_errors: true
+
+- name: Enable UFW
+  ufw:
     state: enabled
-  when: anton_configure_firewall and ansible_facts["os_family"] == "RedHat"
+  when: anton_configure_firewall and ansible_facts["os_family"] == "Debian"
   ignore_errors: true
+
+# ── Caddy ────────────────────────────────────────────────────────
+
+- name: Check if Caddy is installed
+  command: caddy version
+  register: caddy_check
+  ignore_errors: true
+  changed_when: false
+
+- name: Add Caddy GPG key
+  shell: curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/gpg.key' | gpg --dearmor -o /usr/share/keyrings/caddy-stable-archive-keyring.gpg
+  args:
+    creates: /usr/share/keyrings/caddy-stable-archive-keyring.gpg
+  when: caddy_check.rc != 0 and ansible_facts["os_family"] == "Debian"
+
+- name: Add Caddy apt repository
+  shell: curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/debian.deb.txt' | tee /etc/apt/sources.list.d/caddy-stable.list
+  args:
+    creates: /etc/apt/sources.list.d/caddy-stable.list
+  when: caddy_check.rc != 0 and ansible_facts["os_family"] == "Debian"
+
+- name: Install Caddy
+  apt:
+    name: caddy
+    state: present
+    update_cache: true
+  when: caddy_check.rc != 0 and ansible_facts["os_family"] == "Debian"
+
+- name: Deploy Caddyfile
+  template:
+    src: Caddyfile.j2
+    dest: /etc/caddy/Caddyfile
+    owner: root
+    group: root
+    mode: "0644"
+    backup: true
+  when: anton_domain | length > 0
+  notify: reload caddy
+
+- name: Enable and start Caddy
+  systemd:
+    name: caddy
+    enabled: true
+    state: started
+    daemon_reload: true
+  when: anton_domain | length > 0
 
 # ── Print connection info ────────────────────────────────────────
 
-- name: Get agent token from config
-  shell: "grep '^token:' {{ anton_install_dir }}/config.yaml 2>/dev/null | awk '{print $2}' || echo 'not-yet-generated'"
-  register: anton_token
+- name: Read final token
+  shell: "grep '^ANTON_TOKEN=' /home/anton/.anton/agent.env 2>/dev/null | cut -d= -f2 || echo 'check agent.env'"
+  register: final_token
   changed_when: false
   ignore_errors: true
+
+- name: Set connection info
+  set_fact:
+    anton_connect: "{{ 'https://' + anton_domain if anton_domain | length > 0 else ansible_host | default(inventory_hostname) + ':' + anton_port | string }}"
 
 - name: Print deployment info
   debug:
     msg: |
-      ✓ Anton Agent deployed successfully!
+      Anton Agent deployed successfully!
 
-      Version: {{ pkg_version.stdout }} ({{ git_hash.stdout }})
-      Branch:  {{ anton_branch }}
-
-      Host:  {{ ansible_host | default(inventory_hostname) }}
-      Port:  {{ anton_port }}
-      Token: {{ anton_token.stdout | default('will be generated on first run') }}
-
-      Connect from desktop app:
-        Host: {{ ansible_host | default(inventory_hostname) }}:{{ anton_port }}
-
-      Version manifest: {{ anton_install_dir }}/version.json
+      CLI:     v{{ cli_version }}
+      Connect: {{ anton_connect }}
+      Token:   {{ final_token.stdout | default('check /home/anton/.anton/agent.env') }}
 
       Service commands:
         sudo systemctl status anton-agent

@@ -74,18 +74,18 @@ export function CreateProjectModal({ onClose }: Props) {
             />
           </div>
 
-          {/* Instructions */}
+          {/* Description */}
           <div className="form-field">
-            <label className="form-field__label" htmlFor="create-project-instructions">
-              Instructions <span className="form-field__optional">(optional)</span>
+            <label className="form-field__label" htmlFor="create-project-description">
+              Description <span className="form-field__optional">(optional)</span>
             </label>
             <textarea
-              id="create-project-instructions"
+              id="create-project-description"
               className="form-field__textarea"
-              placeholder='e.g. "Focus on Python best practices", "Maintain a professional tone", or "Always provide sources for important conclusions".'
+              placeholder='e.g. "Cloud infrastructure platform", "Personal blog built with Next.js", or "Data pipeline for analytics".'
               value={instructions}
               onChange={(e) => setInstructions(e.target.value)}
-              rows={5}
+              rows={3}
             />
           </div>
         </div>

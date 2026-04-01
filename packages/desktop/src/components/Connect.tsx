@@ -77,7 +77,6 @@ export function Connect({ onConnected }: { onConnected: () => void }) {
         }
       })
 
-      connection.connect(config)
     },
     [remember, onConnected],
   )

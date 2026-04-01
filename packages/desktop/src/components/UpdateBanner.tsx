@@ -2,7 +2,7 @@ import { Check, Download, Loader2, X } from 'lucide-react'
 import { useEffect } from 'react'
 import { connection } from '../lib/connection.js'
 import { semverGt } from '../lib/semver.js'
-import { useConnectionStatus, useStore } from '../lib/store.js'
+import { updateStageLabel, useConnectionStatus, useStore } from '../lib/store.js'
 import { FRONTEND_VERSION } from '../lib/version.js'
 import { AntonLogo } from './AntonLogo.js'
 
@@ -42,9 +42,6 @@ export function UpdateBanner() {
 
   // Determine which state to show
   const isUpdating =
-    updateStage === 'pulling' ||
-    updateStage === 'installing' ||
-    updateStage === 'building' ||
     updateStage === 'downloading' ||
     updateStage === 'replacing' ||
     updateStage === 'restarting'
@@ -53,25 +50,6 @@ export function UpdateBanner() {
   const hasUpdate = updateInfo?.updateAvailable && !updateDismissed && !updateStage
 
   const visible = hasUpdate || isUpdating || isDone || isError
-
-  const stageLabel = (stage: string | null): string => {
-    switch (stage) {
-      case 'downloading':
-        return 'Downloading update...'
-      case 'pulling':
-        return 'Pulling latest code...'
-      case 'replacing':
-        return 'Installing binary...'
-      case 'installing':
-        return 'Installing dependencies...'
-      case 'building':
-        return 'Building...'
-      case 'restarting':
-        return 'Restarting your machine...'
-      default:
-        return 'Updating...'
-    }
-  }
 
   // When disconnected during restarting phase, override the label
   const isDisconnectedForUpdate =
@@ -120,7 +98,7 @@ export function UpdateBanner() {
             <div className="update-banner__version">
               {isDisconnectedForUpdate
                 ? 'Restarting your machine...'
-                : stageLabel(updateStage)}
+                : updateStageLabel(updateStage)}
             </div>
             <div className="update-banner__changelog">
               {isDisconnectedForUpdate

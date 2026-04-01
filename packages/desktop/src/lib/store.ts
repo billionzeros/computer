@@ -192,13 +192,24 @@ export interface UpdateInfo {
 export type UpdateStage =
   | 'downloading'
   | 'replacing'
-  | 'pulling'
-  | 'installing'
-  | 'building'
   | 'restarting'
   | 'done'
   | 'error'
   | null
+
+export function updateStageLabel(stage: string | null): string {
+  switch (stage) {
+    case 'downloading':
+      return 'Downloading update...'
+    case 'replacing':
+      return 'Installing binary...'
+    case 'restarting':
+      return 'Restarting your machine...'
+    default:
+      return 'Updating...'
+  }
+}
+
 export type SidebarTab = 'history' | 'skills'
 
 // ── Saved machines (localStorage) ───────────────────────────────────

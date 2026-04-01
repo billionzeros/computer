@@ -1,0 +1,24 @@
+{{ anton_domain }} {
+    handle /_anton/oauth/* {
+        reverse_proxy localhost:{{ anton_port }}
+    }
+    handle /_anton/telegram/* {
+        reverse_proxy localhost:{{ anton_port }}
+    }
+    handle /a/* {
+        uri strip_prefix /a
+        root * /home/{{ anton_user }}/.anton/published
+        file_server
+    }
+    handle /p/* {
+        uri strip_prefix /p
+        root * /home/{{ anton_user }}/Anton
+        file_server
+    }
+    handle_path /_anton/* {
+        reverse_proxy localhost:9878
+    }
+    handle {
+        reverse_proxy localhost:{{ anton_port }}
+    }
+}

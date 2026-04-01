@@ -26,6 +26,37 @@ interface Props {
 
 // ── Helpers ──────────────────────────────────────────────────────────
 
+// ── Description with 3-line clamp, bottom blur, and "show more" on hover ──
+
+function DescriptionClamp({ text }: { text: string }) {
+  const ref = useRef<HTMLDivElement>(null)
+  const [clamped, setClamped] = useState(false)
+  const [expanded, setExpanded] = useState(false)
+
+  useEffect(() => {
+    const el = ref.current
+    if (el) setClamped(el.scrollHeight > el.clientHeight)
+  }, [text])
+
+  return (
+    <div
+      className={`project-landing__desc-wrap${clamped && !expanded ? ' project-landing__desc-wrap--clamped' : ''}`}
+      onMouseEnter={() => clamped && setExpanded(true)}
+      onMouseLeave={() => setExpanded(false)}
+    >
+      <p
+        ref={ref}
+        className={`project-landing__desc${expanded ? '' : ' project-landing__desc--clamp'}`}
+      >
+        {text}
+      </p>
+      {clamped && !expanded && (
+        <span className="project-landing__desc-more">Show more</span>
+      )}
+    </div>
+  )
+}
+
 // ── Agent Card (clickable — opens conversation) ─────────────────────
 
 function AgentCard({
@@ -315,8 +346,10 @@ export function ProjectLanding({
               </div>
               <div className="project-landing__info">
                 <h1 className="project-landing__name">{project.name}</h1>
+                {project.description && (
+                  <DescriptionClamp text={project.description} />
+                )}
                 <span className="project-landing__meta">
-                  {project.description && `${project.description} · `}
                   {formatDate(project.updatedAt)}
                 </span>
               </div>

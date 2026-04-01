@@ -49,18 +49,13 @@ function parseSemver(v: string): [number, number, number] {
   return [parts[0] || 0, parts[1] || 0, parts[2] || 0]
 }
 
-/** Returns true if `a` >= `b` (semver) */
-export function semverGte(a: string, b: string): boolean {
+/** Returns true if `a` > `b` (semver) */
+export function semverGt(a: string, b: string): boolean {
   const [aMaj, aMin, aPat] = parseSemver(a)
   const [bMaj, bMin, bPat] = parseSemver(b)
   if (aMaj !== bMaj) return aMaj > bMaj
   if (aMin !== bMin) return aMin > bMin
-  return aPat >= bPat
-}
-
-/** Returns true if `a` > `b` (semver) */
-export function semverGt(a: string, b: string): boolean {
-  return semverGte(a, b) && a !== b
+  return aPat > bPat
 }
 
 // ── Runtime version resolution ────────────────────────────────────

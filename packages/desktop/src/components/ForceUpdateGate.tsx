@@ -2,7 +2,7 @@ import { AlertTriangle, Download, Loader2, RotateCw } from 'lucide-react'
 import type { ReactNode } from 'react'
 import { connection } from '../lib/connection.js'
 import { semverGt } from '../lib/semver.js'
-import { useConnectionStatus, useStore } from '../lib/store.js'
+import { updateStageLabel, useConnectionStatus, useStore } from '../lib/store.js'
 import { FRONTEND_VERSION } from '../lib/version.js'
 import { AntonLogo } from './AntonLogo.js'
 
@@ -24,9 +24,6 @@ export function ForceUpdateGate({ children }: { children: ReactNode }) {
     semverGt(FRONTEND_VERSION, agentVersion)
 
   const isUpdating =
-    updateStage === 'pulling' ||
-    updateStage === 'installing' ||
-    updateStage === 'building' ||
     updateStage === 'downloading' ||
     updateStage === 'replacing' ||
     updateStage === 'restarting'
@@ -45,25 +42,6 @@ export function ForceUpdateGate({ children }: { children: ReactNode }) {
 
   const isDisconnectedForUpdate =
     updateStage === 'restarting' && (status === 'disconnected' || status === 'connecting')
-
-  const stageLabel = (stage: string | null): string => {
-    switch (stage) {
-      case 'downloading':
-        return 'Downloading update...'
-      case 'pulling':
-        return 'Pulling latest code...'
-      case 'replacing':
-        return 'Installing binary...'
-      case 'installing':
-        return 'Installing dependencies...'
-      case 'building':
-        return 'Building...'
-      case 'restarting':
-        return 'Restarting your machine...'
-      default:
-        return 'Updating...'
-    }
-  }
 
   return (
     <div className="force-update-gate">
@@ -98,7 +76,7 @@ export function ForceUpdateGate({ children }: { children: ReactNode }) {
               <Loader2 size={36} strokeWidth={1.5} className="update-banner__spin" />
             </div>
             <div className="update-banner__version">
-              {isDisconnectedForUpdate ? 'Restarting your machine...' : stageLabel(updateStage)}
+              {isDisconnectedForUpdate ? 'Restarting your machine...' : updateStageLabel(updateStage)}
             </div>
             <div className="update-banner__changelog">
               {isDisconnectedForUpdate

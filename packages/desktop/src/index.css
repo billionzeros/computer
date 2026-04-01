@@ -8131,6 +8131,53 @@ button {
   display: block;
 }
 
+/* ── Description clamp ── */
+
+.project-landing__desc-wrap {
+  position: relative;
+  margin-top: 6px;
+  max-width: 640px;
+}
+
+.project-landing__desc-wrap--clamped {
+  cursor: pointer;
+}
+
+.project-landing__desc {
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--text-secondary);
+  margin: 0;
+  white-space: pre-wrap;
+  word-break: break-word;
+  overflow-wrap: break-word;
+}
+
+.project-landing__desc--clamp {
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.project-landing__desc-wrap--clamped::after {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 24px;
+  background: linear-gradient(transparent, var(--bg-primary));
+  pointer-events: none;
+}
+
+.project-landing__desc-more {
+  font-size: 12px;
+  color: var(--text-subtle);
+  position: relative;
+  z-index: 1;
+}
+
 /* ── Chat input (Manus-style) ── */
 
 .project-landing__input-wrap {
@@ -9339,6 +9386,8 @@ button {
   -webkit-box-orient: vertical;
   overflow: hidden;
   white-space: pre-wrap;
+  word-break: break-word;
+  overflow-wrap: break-word;
 }
 
 /* Context edit modals (instructions, memory, text file) */
