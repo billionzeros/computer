@@ -1,0 +1,129 @@
+packages/agent-server/src/agents/agent-manager.ts
+  7db6a5542e8df7a2 53-54,91,181,221,243,339
+packages/desktop/src/components/workflows/WorkflowDetailPage.tsx
+  7b82cbdeefcec3fb 80-85,93
+packages/connectors/package.json
+  7db6a5542e8df7a2 13
+packages/logger/src/index.ts
+  7db6a5542e8df7a2 1-2
+packages/agent-core/package.json
+  7db6a5542e8df7a2 17
+packages/agent-server/src/scheduler.ts
+  7db6a5542e8df7a2 13-14,70,85-87,121,141,152,179
+packages/desktop/src/components/agents/AgentListView.tsx
+  7b82cbdeefcec3fb 181,359-361,437-438,449,452-460
+packages/desktop/src/lib/store/handlers/projectHandler.ts
+  7b82cbdeefcec3fb 74-77,139,141-142,144-151
+packages/agent-core/src/mcp/mcp-manager.ts
+  7db6a5542e8df7a2 11,16,44,51,60,80,86,89,96,101,112,224,228
+packages/agent-core/src/agent.ts
+  7db6a5542e8df7a2 18,20-21,1183,1192,1210,1212
+packages/desktop/src/components/home/HomeView.tsx
+  7b82cbdeefcec3fb 8
+package.json
+  7db6a5542e8df7a2 8
+packages/agent-server/src/index.ts
+  7db6a5542e8df7a2 20,34-37,46,52-59,85,99
+packages/desktop/src/components/home/TaskDetailView.tsx
+  7b82cbdeefcec3fb 114
+packages/desktop/src/components/workflows/WorkflowPipelineView.tsx
+  7b82cbdeefcec3fb 1-142
+packages/agent-server/package.json
+  7db6a5542e8df7a2 18
+packages/agent-server/src/telegram-bot.ts
+  7db6a5542e8df7a2 13-14,52,54,72
+packages/agent-server/src/updater.ts
+  7db6a5542e8df7a2 29-30,42,47,88
+packages/agent-server/src/server.ts
+  7db6a5542e8df7a2 91-92,173,185,187,225,234,239-245,254,257,320,342,345,373,382,422,448,458-460,471,476,498,524,717,772,870,1055-1057,1071,1209,1211-1216,1437,1457-1459,1464,1513-1522,1575,1593-1595,1598,1608,1627,1825,1972,1979,2459,2473,2499,2650-2658,2686,2691,2726,2738-2744,2747,2900,2918,2947,2983,3050,3057,3106,3310,3357,3385,3401,3404,3413-3415,3419,3421,3445,3454
+packages/desktop/src/components/agents/AgentsView.tsx
+  7b82cbdeefcec3fb 4,10,15,20,59-64,68,110-140
+packages/agent-server/src/workflows/builtin/lead-qualification/agents/bootstrap.md
+  7b82cbdeefcec3fb 5,7,9,11,13,15,17-18,20,22-27,29,31-51,53,55,57-61,63,65,67-70,72-93,95,97,99,101-105,107,109-116,118-119,123-127
+packages/agent-core/src/tools/browser.ts
+  7db6a5542e8df7a2 3,6,110,141,148
+packages/protocol/src/workflows.ts
+  7b82cbdeefcec3fb 99-123
+packages/logger/tsconfig.json
+  7db6a5542e8df7a2 1-14
+packages/logger/src/logger.ts
+  7db6a5542e8df7a2 1-104
+packages/agent-core/src/session.ts
+  7db6a5542e8df7a2 141-142,149,238,304,306,355,363,582,641,648,789,811,813,902,1362
+packages/connectors/src/connector-manager.ts
+  7db6a5542e8df7a2 1,5,25,34,36,44,102,113
+packages/logger/package.json
+  7db6a5542e8df7a2 1-19
+packages/desktop/src/index.css
+  7b82cbdeefcec3fb 13323-13353,14271-14275,15345,15544-15738
+  fd460a0b48ea8f50 13700,13705-13706,13714-13715,13717,13721-13722
+packages/agent-core/src/mcp/mcp-client.ts
+  7db6a5542e8df7a2 11,74,79,116,121,127,149-151,186-188
+packages/agent-core/src/tracing.ts
+  7db6a5542e8df7a2 10,14,31,40,263
+packages/agent-server/src/oauth/token-store.ts
+  7db6a5542e8df7a2 9-11,70
+packages/agent-server/src/workflows/builtin/lead-qualification/workflow.json
+  7b82cbdeefcec3fb 114-164
+packages/agent-core/src/compaction.ts
+  7db6a5542e8df7a2 10,12-13,303,310,349,364-371
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.2.5",
+  "base_commit_sha": "2d06ab226edb9a3174b591dba4eb982a643e15d5",
+  "prompts": {
+    "7b82cbdeefcec3fb": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "40d7e693-24ab-4dbd-89db-cfab867db69e",
+        "model": "claude-opus-4-6"
+      },
+      "human_author": "Om Gupta",
+      "messages": [],
+      "total_additions": 0,
+      "total_deletions": 0,
+      "accepted_lines": 630,
+      "overriden_lines": 0
+    },
+    "7db6a5542e8df7a2": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "8700b575-4604-4341-9345-f9f95f62b11e",
+        "model": "claude-opus-4-6"
+      },
+      "human_author": "Om Gupta",
+      "messages": [],
+      "total_additions": 0,
+      "total_deletions": 0,
+      "accepted_lines": 384,
+      "overriden_lines": 0
+    },
+    "b86c1b79f0b75756": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "9ea7e932-7812-4d56-8f40-5115d6521554",
+        "model": "claude-opus-4-6"
+      },
+      "human_author": "Om Gupta",
+      "messages": [],
+      "total_additions": 0,
+      "total_deletions": 0,
+      "accepted_lines": 112,
+      "overriden_lines": 0
+    },
+    "fd460a0b48ea8f50": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "6618c15f-76ee-4417-8dd3-ebf0168409ff",
+        "model": "claude-opus-4-6"
+      },
+      "human_author": "Om Gupta",
+      "messages": [],
+      "total_additions": 0,
+      "total_deletions": 0,
+      "accepted_lines": 10,
+      "overriden_lines": 0
+    }
+  }
+}
