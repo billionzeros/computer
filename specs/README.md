@@ -62,3 +62,4 @@ Production readiness, monitoring, and evaluation.
 |------|-------------|
 | [PRODUCTION-AUDIT.md](operations/PRODUCTION-AUDIT.md) | Security gaps, timeline, production readiness (6/10) |
 | [EVALS.md](operations/EVALS.md) | Evaluation framework via Braintrust, failure categories |
+| [LOGGING.md](operations/LOGGING.md) | Structured logging standard via @anton/logger (pino) |
