@@ -101,16 +101,16 @@ export function buildWorkflowAgentContext(
 function buildMetadataHeader(manifest: WorkflowManifest, workflowDir: string): string {
   return [
     `# Workflow: ${manifest.name}`,
-    ``,
+    '',
     `> ${manifest.description}`,
-    ``,
+    '',
     `**Workflow directory:** ${workflowDir}`,
     `**Scripts directory:** ${workflowDir}/scripts/`,
     `**Version:** ${manifest.version}`,
-    ``,
-    `You are a workflow agent. Follow the orchestrator instructions below precisely.`,
-    `You have access to connector tools (Gmail, Sheets, Slack, Exa) and can run code via the shell tool.`,
-    `Scripts are pre-written in the scripts/ directory — use them. You can also write new code as needed.`,
+    '',
+    'You are a workflow agent. Follow the orchestrator instructions below precisely.',
+    'You have access to connector tools (Gmail, Sheets, Slack, Exa) and can run code via the shell tool.',
+    'Scripts are pre-written in the scripts/ directory — use them. You can also write new code as needed.',
   ].join('\n')
 }
 
@@ -177,10 +177,10 @@ function buildScriptsSection(manifest: WorkflowManifest, workflowDir: string): s
   if (scripts.size === 0) return null
 
   const lines = [
-    `\n---\n## Available Scripts`,
-    ``,
-    `These scripts are pre-written and tested. Run them via the shell tool.`,
-    ``,
+    '\n---\n## Available Scripts',
+    '',
+    'These scripts are pre-written and tested. Run them via the shell tool.',
+    '',
   ]
 
   for (const script of scripts) {
@@ -188,7 +188,7 @@ function buildScriptsSection(manifest: WorkflowManifest, workflowDir: string): s
     lines.push(`- \`python3 ${fullPath}\` — ${script.split('/').pop()}`)
   }
 
-  lines.push(``)
+  lines.push('')
   lines.push(
     `You can also write new scripts as needed. Save them to ${workflowDir}/scripts/ for reuse.`,
   )

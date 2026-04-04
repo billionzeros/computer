@@ -95,17 +95,17 @@ export class WorkflowInstaller {
       if (bootstrapPrompt) {
         const instructions = [
           `# Workflow Bootstrap: ${manifest.name}`,
-          ``,
+          '',
           `This project is powered by the "${manifest.name}" workflow.`,
-          `The workflow agent is PAUSED until you complete this setup.`,
-          ``,
-          `## Your Task`,
-          `Guide the user through the setup process below. When setup is complete:`,
-          `1. Save all configuration to memory`,
-          `2. Tell the user the workflow is ready and the scheduled agent will now activate`,
-          ``,
-          `---`,
-          ``,
+          'The workflow agent is PAUSED until you complete this setup.',
+          '',
+          '## Your Task',
+          'Guide the user through the setup process below. When setup is complete:',
+          '1. Save all configuration to memory',
+          '2. Tell the user the workflow is ready and the scheduled agent will now activate',
+          '',
+          '---',
+          '',
           bootstrapPrompt,
         ].join('\n')
 

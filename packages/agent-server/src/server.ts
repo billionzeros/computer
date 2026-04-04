@@ -1842,8 +1842,8 @@ export class AgentServer {
     if (!manifest) {
       this.sendToClient(Channel.AI, {
         type: 'error',
-        error: `Workflow "${msg.workflowId}" not found in registry`,
-      } as any)
+        message: `Workflow "${msg.workflowId}" not found in registry`,
+      })
       return
     }
 
@@ -1875,8 +1875,8 @@ export class AgentServer {
     if (!this.agentManager) {
       this.sendToClient(Channel.AI, {
         type: 'error',
-        error: 'Agent manager not available',
-      } as any)
+        message: 'Agent manager not available',
+      })
       return
     }
 
@@ -1884,8 +1884,8 @@ export class AgentServer {
     if (!sourcePath) {
       this.sendToClient(Channel.AI, {
         type: 'error',
-        error: `Workflow "${msg.workflowId}" not found`,
-      } as any)
+        message: `Workflow "${msg.workflowId}" not found`,
+      })
       return
     }
 
@@ -1893,8 +1893,8 @@ export class AgentServer {
     if (!manifest) {
       this.sendToClient(Channel.AI, {
         type: 'error',
-        error: `Cannot load manifest for "${msg.workflowId}"`,
-      } as any)
+        message: `Cannot load manifest for "${msg.workflowId}"`,
+      })
       return
     }
 
@@ -1911,8 +1911,8 @@ export class AgentServer {
     } catch (err) {
       this.sendToClient(Channel.AI, {
         type: 'error',
-        error: `Install failed: ${err instanceof Error ? err.message : String(err)}`,
-      } as any)
+        message: `Install failed: ${err instanceof Error ? err.message : String(err)}`,
+      })
     }
   }
 
@@ -2288,7 +2288,7 @@ export class AgentServer {
   }
 
   private handleProjectPreferenceAdd(msg: { projectId: string; title: string; content: string }) {
-    const pref = addProjectPreference(msg.projectId, msg.title, msg.content)
+    addProjectPreference(msg.projectId, msg.title, msg.content)
     // Send back the full list
     const preferences = loadProjectPreferences(msg.projectId)
     this.sendToClient(Channel.AI, {

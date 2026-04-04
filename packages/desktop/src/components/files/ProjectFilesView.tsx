@@ -88,17 +88,6 @@ function formatSize(bytes: number): string {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
 }
 
-function formatDate(ts: number): string {
-  const now = new Date()
-  const date = new Date(ts)
-  const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime()
-  const yesterdayStart = todayStart - 86400000
-
-  if (ts >= todayStart) return 'Today'
-  if (ts >= yesterdayStart) return 'Yesterday'
-  return date.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })
-}
-
 const FILTER_LABELS: Record<FileTypeFilter, string> = {
   all: 'All types',
   code: 'Code',
@@ -223,7 +212,15 @@ export function ProjectFilesView() {
               </button>
               {filterOpen && (
                 <>
-                  <div className="pf-filter__backdrop" onClick={() => setFilterOpen(false)} />
+                  <div
+                    className="pf-filter__backdrop"
+                    onClick={() => setFilterOpen(false)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Escape') setFilterOpen(false)
+                    }}
+                    role="button"
+                    tabIndex={-1}
+                  />
                   <div className="pf-filter__dropdown">
                     {(Object.keys(FILTER_LABELS) as FileTypeFilter[]).map((key) => (
                       <button
@@ -319,8 +316,18 @@ export function ProjectFilesView() {
 
         {/* Delete confirmation */}
         {deleteTarget && (
-          <div className="modal-overlay" onClick={() => setDeleteTarget(null)}>
-            <div className="modal-card modal-card--sm" onClick={(e) => e.stopPropagation()}>
+          <div
+            className="modal-overlay"
+            onClick={() => setDeleteTarget(null)}
+            onKeyDown={(e) => {
+              if (e.key === 'Escape') setDeleteTarget(null)
+            }}
+          >
+            <div
+              className="modal-card modal-card--sm"
+              onClick={(e) => e.stopPropagation()}
+              onKeyDown={(e) => e.stopPropagation()}
+            >
               <div className="modal-card__body">
                 <h3>Delete "{deleteTarget}"?</h3>
                 <p style={{ color: 'var(--text-muted)', marginTop: '8px' }}>

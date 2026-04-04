@@ -62,7 +62,7 @@ export function MemoryView() {
   const activeProjectId = projectStore((s) => s.activeProjectId)
   const projects = projectStore((s) => s.projects)
   const projectInstructions = projectStore((s) => s.projectInstructions)
-  const projectInstructionsLoading = projectStore((s) => s.projectInstructionsLoading)
+  projectStore((s) => s.projectInstructionsLoading)
   const projectPreferences = projectStore((s) => s.projectPreferences)
 
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set())
@@ -176,6 +176,7 @@ export function MemoryView() {
                 onChange={(e) => setInstructionsDraft(e.target.value)}
                 placeholder="e.g. Always use Python 3.12. Output as CSV. Be concise."
                 rows={6}
+                // biome-ignore lint/a11y/noAutofocus: editing context requires immediate focus
                 autoFocus
               />
               <div className="instructions-editor__actions">
@@ -202,6 +203,12 @@ export function MemoryView() {
               onClick={() => {
                 setInstructionsDraft(projectInstructions)
                 setEditingInstructions(true)
+              }}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  setInstructionsDraft(projectInstructions)
+                  setEditingInstructions(true)
+                }
               }}
             >
               {projectInstructions}
@@ -234,6 +241,7 @@ export function MemoryView() {
           <div className="memory-section__list">
             {projectPreferences.map((pref) => (
               <div key={pref.id} className="memory-card">
+                {/* biome-ignore lint/a11y/useKeyWithClickEvents: expandable card header */}
                 <div className="memory-card__header" onClick={() => toggleExpand(pref.id)}>
                   <span className="memory-card__chevron">
                     {expandedIds.has(pref.id) ? (
@@ -268,6 +276,7 @@ export function MemoryView() {
                   placeholder="Preference title..."
                   value={newPrefTitle}
                   onChange={(e) => setNewPrefTitle(e.target.value)}
+                  // biome-ignore lint/a11y/noAutofocus: form field needs immediate focus
                   autoFocus
                 />
                 <textarea
@@ -352,6 +361,7 @@ export function MemoryView() {
               const ScopeIcon = mem.scope === 'global' ? Globe : MessageSquare
               return (
                 <div key={`${mem.scope}-${mem.name}`} className="memory-card">
+                  {/* biome-ignore lint/a11y/useKeyWithClickEvents: expandable card header */}
                   <div className="memory-card__header" onClick={() => toggleExpand(mem.name)}>
                     <span className="memory-card__chevron">
                       {expandedIds.has(mem.name) ? (

@@ -37,7 +37,7 @@ interface Props {
   onOpenMachineInfo: () => void
 }
 
-export function Sidebar({ onViewChange, onOpenSettings, onOpenMachineInfo }: Props) {
+export function Sidebar({ onViewChange, onOpenSettings }: Props) {
   useConnectionStatus()
   const devMode = uiStore((s) => s.devMode)
   const conversations = useStore((s) => s.conversations)
@@ -357,11 +357,8 @@ export function Sidebar({ onViewChange, onOpenSettings, onOpenMachineInfo }: Pro
               <div className="sidebar-panel__inner">
                 {!sessionsLoaded ? (
                   <div className="sidebar-recent__list">
-                    {Array.from({ length: 5 }, (_, i) => (
-                      <div
-                        key={`skel-${i}`}
-                        className="sidebar-conv-item sidebar-conv-item--skeleton"
-                      >
+                    {['skel-0', 'skel-1', 'skel-2', 'skel-3', 'skel-4'].map((id, i) => (
+                      <div key={id} className="sidebar-conv-item sidebar-conv-item--skeleton">
                         <div style={{ flex: 1, minWidth: 0 }}>
                           <Skeleton width={`${50 + (i % 3) * 20}%`} height={13} />
                         </div>

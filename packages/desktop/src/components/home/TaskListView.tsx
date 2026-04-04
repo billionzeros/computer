@@ -49,7 +49,14 @@ const STATUS_LABELS: Record<TaskStatus, string> = {
 function StatusIcon({ status }: { status: TaskStatus }) {
   if (status === 'completed') {
     return (
-      <svg className="status-icon" width="16" height="16" viewBox="0 0 16 16" fill="none">
+      <svg
+        className="status-icon"
+        width="16"
+        height="16"
+        viewBox="0 0 16 16"
+        fill="none"
+        aria-hidden="true"
+      >
         <circle cx="8" cy="8" r="7" fill="var(--success)" opacity="0.15" />
         <circle cx="8" cy="8" r="7" stroke="var(--success)" strokeWidth="1" />
         <path
@@ -67,7 +74,14 @@ function StatusIcon({ status }: { status: TaskStatus }) {
   }
   if (status === 'error') {
     return (
-      <svg className="status-icon" width="16" height="16" viewBox="0 0 16 16" fill="none">
+      <svg
+        className="status-icon"
+        width="16"
+        height="16"
+        viewBox="0 0 16 16"
+        fill="none"
+        aria-hidden="true"
+      >
         <circle cx="8" cy="8" r="7" fill="var(--danger)" opacity="0.15" />
         <circle cx="8" cy="8" r="7" stroke="var(--danger)" strokeWidth="1" />
         <path
@@ -81,14 +95,17 @@ function StatusIcon({ status }: { status: TaskStatus }) {
   }
   // idle
   return (
-    <svg className="status-icon" width="16" height="16" viewBox="0 0 16 16" fill="none">
+    <svg
+      className="status-icon"
+      width="16"
+      height="16"
+      viewBox="0 0 16 16"
+      fill="none"
+      aria-hidden="true"
+    >
       <circle cx="8" cy="8" r="6.5" stroke="var(--text-subtle)" strokeWidth="1.2" opacity="0.6" />
     </svg>
   )
-}
-
-function StatusDot({ status }: { status: TaskStatus }) {
-  return <span className={`task-row__dot task-row__dot--${status}`} />
 }
 
 function getStatusDetail(
@@ -248,7 +265,7 @@ function SelectionCheckbox({
       aria-label={checked ? 'Deselect task' : 'Select task'}
     >
       {checked && (
-        <svg width="10" height="8" viewBox="0 0 10 8" fill="none">
+        <svg width="10" height="8" viewBox="0 0 10 8" fill="none" aria-hidden="true">
           <path
             d="M1 4L3.5 6.5L9 1"
             stroke="currentColor"
@@ -265,8 +282,8 @@ function SelectionCheckbox({
 function TaskTableSkeleton({ rows = 6 }: { rows?: number }) {
   return (
     <div className="task-table__body">
-      {Array.from({ length: rows }, (_, i) => (
-        <div key={`skel-${i}`} className="task-table__row task-table__row--skeleton">
+      {Array.from({ length: rows }, (_, i) => `skel-${i}`).map((id, i) => (
+        <div key={id} className="task-table__row task-table__row--skeleton">
           <div className="task-table__col task-table__col--check">
             <Skeleton variant="rect" width={16} height={16} borderRadius={4} />
           </div>
@@ -290,8 +307,8 @@ function TaskTableSkeleton({ rows = 6 }: { rows?: number }) {
 function TaskRowSkeleton({ rows = 5 }: { rows?: number }) {
   return (
     <>
-      {Array.from({ length: rows }, (_, i) => (
-        <div key={`skel-${i}`} className="task-row task-row--skeleton">
+      {Array.from({ length: rows }, (_, i) => `row-skel-${i}`).map((id, i) => (
+        <div key={id} className="task-row task-row--skeleton">
           <div className="task-row__clickable">
             <Skeleton variant="circle" width={16} height={16} />
             <div className="task-row__content">
@@ -496,6 +513,7 @@ export function TaskListView({ mode }: Props) {
                   const status = getTaskStatus(conv.sessionId, sessionStates, conv.messages)
                   const isSelected = selectedIds.has(conv.id)
                   return (
+                    // biome-ignore lint/a11y/useKeyWithClickEvents: table row selection
                     <div
                       key={conv.id}
                       className={`task-table__row${isSelected ? ' task-table__row--selected' : ''}`}

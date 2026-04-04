@@ -44,7 +44,14 @@ const STATUS_LABELS: Record<DisplayStatus, string> = {
 function AgentStatusIcon({ status }: { status: DisplayStatus }) {
   if (status === 'completed' || status === 'scheduled') {
     return (
-      <svg className="status-icon" width="16" height="16" viewBox="0 0 16 16" fill="none">
+      <svg
+        className="status-icon"
+        width="16"
+        height="16"
+        viewBox="0 0 16 16"
+        fill="none"
+        aria-hidden="true"
+      >
         <circle cx="8" cy="8" r="7" fill="var(--success)" opacity="0.15" />
         <circle cx="8" cy="8" r="7" stroke="var(--success)" strokeWidth="1" />
         <path
@@ -62,7 +69,14 @@ function AgentStatusIcon({ status }: { status: DisplayStatus }) {
   }
   if (status === 'error') {
     return (
-      <svg className="status-icon" width="16" height="16" viewBox="0 0 16 16" fill="none">
+      <svg
+        className="status-icon"
+        width="16"
+        height="16"
+        viewBox="0 0 16 16"
+        fill="none"
+        aria-hidden="true"
+      >
         <circle cx="8" cy="8" r="7" fill="var(--danger)" opacity="0.15" />
         <circle cx="8" cy="8" r="7" stroke="var(--danger)" strokeWidth="1" />
         <path
@@ -75,7 +89,14 @@ function AgentStatusIcon({ status }: { status: DisplayStatus }) {
     )
   }
   return (
-    <svg className="status-icon" width="16" height="16" viewBox="0 0 16 16" fill="none">
+    <svg
+      className="status-icon"
+      width="16"
+      height="16"
+      viewBox="0 0 16 16"
+      fill="none"
+      aria-hidden="true"
+    >
       <circle cx="8" cy="8" r="6.5" stroke="var(--text-subtle)" strokeWidth="1" opacity="0.4" />
     </svg>
   )
@@ -315,6 +336,7 @@ export function AgentListView({ mode, selectedId, onSelect }: Props) {
                 filtered.map((agent) => {
                   const status = getDisplayStatus(agent)
                   return (
+                    // biome-ignore lint/a11y/useKeyWithClickEvents: table row selection
                     <div
                       key={agent.sessionId}
                       className={`task-table__row${selectedId === agent.sessionId ? ' task-table__row--selected' : ''}`}

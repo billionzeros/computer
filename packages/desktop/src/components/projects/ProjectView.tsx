@@ -120,9 +120,7 @@ export function ProjectView() {
     // Show the agent info panel (AgentEmptyState) with stats, scheduler debug, run history.
     // Run logs are accessed via the modal when clicking a run entry.
     const store = useStore.getState()
-    const agent = projectStore
-      .getState()
-      .projectAgents.find((a: any) => a.sessionId === agentSessionId)
+    const agent = projectStore.getState().projectAgents.find((a) => a.sessionId === agentSessionId)
     const title = agent ? agent.agent.name : 'Agent'
 
     // Check if an agent info conversation already exists — don't create duplicates

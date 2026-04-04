@@ -102,7 +102,7 @@ function getActionLabel(toolName: string, toolInput?: Record<string, unknown>): 
     case 'shell': {
       const cmd = ((toolInput.command as string) || '').trim()
       // Shorten long commands
-      if (cmd.length > 80) return cmd.slice(0, 77) + '...'
+      if (cmd.length > 80) return `${cmd.slice(0, 77)}...`
       return cmd || 'Running command'
     }
     case 'filesystem': {
@@ -147,7 +147,7 @@ function getActionLabel(toolName: string, toolInput?: Record<string, unknown>): 
         case 'fetch':
           return `Fetching ${((toolInput.url as string) || '').slice(0, 50)}`
         case 'extract':
-          return `Extracting from page`
+          return 'Extracting from page'
         default:
           return `Browser: ${op}`
       }
@@ -187,7 +187,6 @@ function getActionLabel(toolName: string, toolInput?: Record<string, unknown>): 
 // ── Tool Call (the action line) ──
 
 export function ToolCallBlock({ message }: Props) {
-  const [expanded, setExpanded] = useState(false)
   const isResult = message.id.startsWith('tr_')
   const isError = message.isError
 

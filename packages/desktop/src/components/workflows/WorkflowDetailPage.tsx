@@ -95,6 +95,7 @@ function InstallModal({
   return (
     <>
       {/* Backdrop */}
+      {/* biome-ignore lint/a11y/useKeyWithClickEvents: modal backdrop dismiss */}
       <div
         onClick={!installing ? onClose : undefined}
         style={{
@@ -108,6 +109,7 @@ function InstallModal({
         }}
       >
         {/* Modal */}
+        {/* biome-ignore lint/a11y/useKeyWithClickEvents: stop propagation only */}
         <div
           onClick={(e) => e.stopPropagation()}
           style={{
@@ -147,7 +149,7 @@ function InstallModal({
                 'The workflow starts running on schedule automatically',
               ].map((step, i) => (
                 <div
-                  key={i}
+                  key={step}
                   style={{
                     display: 'flex',
                     alignItems: 'flex-start',

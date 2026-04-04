@@ -16,27 +16,9 @@ export function AskUserInline({ questions, onSubmit }: Props) {
   const [customInputs, setCustomInputs] = useState<Record<string, string>>({})
   const [showCustom, setShowCustom] = useState<Record<string, boolean>>({})
 
-  const allAnswered = questions.every(
-    (q) => answers[q.question] || customInputs[q.question]?.trim(),
-  )
-
-  const handleSelect = (question: string, label: string) => {
-    setAnswers((prev) => ({ ...prev, [question]: label }))
-    setShowCustom((prev) => ({ ...prev, [question]: false }))
-    setCustomInputs((prev) => ({ ...prev, [question]: '' }))
-  }
-
   const handleCustom = (question: string) => {
     setShowCustom((prev) => ({ ...prev, [question]: true }))
     setAnswers((prev) => ({ ...prev, [question]: '' }))
-  }
-
-  const handleSubmit = () => {
-    const final: Record<string, string> = {}
-    for (const q of questions) {
-      final[q.question] = customInputs[q.question]?.trim() || answers[q.question] || ''
-    }
-    onSubmit(final)
   }
 
   // Auto-submit when all questions have answers (and there are answers)
@@ -117,6 +99,7 @@ export function AskUserInline({ questions, onSubmit }: Props) {
                       checkAutoSubmit(answers, newCustom)
                     }
                   }}
+                  // biome-ignore lint/a11y/noAutofocus: UX requires focus on custom input
                   autoFocus
                 />
               )}

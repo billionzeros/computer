@@ -42,17 +42,18 @@ export function App() {
   const [showCreateProject, setShowCreateProject] = useState(false)
   const status = useConnectionStatus()
   const activeView = uiStore((s) => s.activeView)
-  const activeMode = uiStore((s) => s.activeMode)
+  // Subscribe to reactive state for re-renders
+  uiStore((s) => s.activeMode)
   const setActiveView = uiStore((s) => s.setActiveView)
   const sessionUsage = sessionStore((s) => s.sessionUsage)
   const activeConv = useStore((s) => s.getActiveConversation())
   const hasMessages = (activeConv?.messages?.length || 0) > 0
   const artifactPanelOpen = artifactStore((s) => s.artifactPanelOpen)
-  const sidebarCollapsed = uiStore((s) => s.sidebarCollapsed)
-  const toggleSidebar = uiStore((s) => s.toggleSidebar)
+  uiStore((s) => s.sidebarCollapsed)
+  uiStore((s) => s.toggleSidebar)
   const updateStage = updateStore((s) => s.updateStage)
   const sidePanelOpen = artifactPanelOpen
-  const activeProjectId = projectStore((s) => s.activeProjectId)
+  projectStore((s) => s.activeProjectId)
   const projects = projectStore((s) => s.projects)
   const theme = uiStore((s) => s.theme)
   const devMode = uiStore((s) => s.devMode)

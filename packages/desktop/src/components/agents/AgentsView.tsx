@@ -57,14 +57,6 @@ export function AgentsView() {
     setRightPanel({ view: 'home' })
   }, [])
 
-  const handleBack = useCallback(() => {
-    if (rightPanel.view === 'run') {
-      setRightPanel({ view: 'home' })
-    } else {
-      setSelectedAgentId(null)
-    }
-  }, [rightPanel])
-
   const handleViewRun = useCallback((run: AgentRunRecord) => {
     setRightPanel({ view: 'run', run })
   }, [])

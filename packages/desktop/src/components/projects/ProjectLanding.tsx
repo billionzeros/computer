@@ -34,6 +34,7 @@ function DescriptionClamp({ text }: { text: string }) {
   const [clamped, setClamped] = useState(false)
   const [expanded, setExpanded] = useState(false)
 
+  // biome-ignore lint/correctness/useExhaustiveDependencies: re-check clamp when text changes
   useEffect(() => {
     const el = ref.current
     if (el) setClamped(el.scrollHeight > el.clientHeight)

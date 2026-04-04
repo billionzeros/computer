@@ -169,8 +169,8 @@ export function TaskDetailView() {
                   />
                   <div className="conv-panel__todo-dropdown">
                     <div className="conv-panel__todo-title">{activeConv?.title || 'Tasks'}</div>
-                    {currentTasks.map((task, i) => (
-                      <div key={i} className="conv-panel__todo-item">
+                    {currentTasks.map((task) => (
+                      <div key={task.content} className="conv-panel__todo-item">
                         <span
                           className={`conv-panel__todo-icon conv-panel__todo-icon--${task.status}`}
                         >
