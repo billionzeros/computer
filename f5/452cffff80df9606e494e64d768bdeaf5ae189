@@ -1,0 +1,81 @@
+packages/desktop/src/lib/store/handlers/index.ts
+  b86c1b79f0b75756 1-129
+packages/desktop/src/lib/store/handlers/interactionHandler.ts
+  b86c1b79f0b75756 1-274
+packages/desktop/src/components/projects/CreateProjectModal.tsx
+  b86c1b79f0b75756 3,28
+packages/desktop/src/components/agents/AgentListView.tsx
+  b86c1b79f0b75756 215
+packages/desktop/src/lib/store/handlers/toolHandler.ts
+  b86c1b79f0b75756 1-130
+packages/desktop/src/lib/store/projectStore.ts
+  b86c1b79f0b75756 145-150,299-302
+packages/desktop/src/lib/store/handlers/citationParser.ts
+  b86c1b79f0b75756 1-42
+packages/desktop/src/components/UpdateBanner.tsx
+  b86c1b79f0b75756 75,136
+packages/desktop/src/components/workflows/WorkflowStatusBanner.tsx
+  b86c1b79f0b75756 3,36,40-41
+packages/desktop/src/lib/store/sessionStore.ts
+  b86c1b79f0b75756 11,198-201,203-207,209,436-441
+packages/desktop/src/components/agents/AgentDetailView.tsx
+  b86c1b79f0b75756 31,208
+packages/desktop/src/lib/store/handlers/providerHandler.ts
+  b86c1b79f0b75756 1-6,8-50
+packages/desktop/src/components/ForceUpdateGate.tsx
+  b86c1b79f0b75756 63,105
+packages/desktop/src/components/chat/AgentChatHeader.tsx
+  b86c1b79f0b75756 4,40-41
+packages/desktop/src/lib/store/uiStore.ts
+  b86c1b79f0b75756 64-69,174-179
+packages/desktop/src/components/home/TaskListView.tsx
+  b86c1b79f0b75756 419
+packages/desktop/src/components/memory/MemoryView.tsx
+  b86c1b79f0b75756 14,90
+packages/desktop/src/components/Terminal.tsx
+  b86c1b79f0b75756 8,21-22,25,71,74,89
+packages/desktop/src/lib/store/handlers/projectHandler.ts
+  b86c1b79f0b75756 1-13,15-19,21-225
+packages/desktop/src/components/projects/ProjectConfigPanel.tsx
+  b86c1b79f0b75756 91,137
+packages/desktop/src/components/FileBrowser.tsx
+  b86c1b79f0b75756 15,63
+packages/desktop/src/components/AgentChat.tsx
+  b86c1b79f0b75756 177,180,191
+packages/desktop/src/lib/store.ts
+  b86c1b79f0b75756 3,14,307,813
+packages/desktop/src/lib/store/handlers/sessionHandler.ts
+  b86c1b79f0b75756 1-281
+packages/desktop/src/components/connectors/ConnectorsPage.tsx
+  b86c1b79f0b75756 216,275,307,309,328,569,609,703,726,781,789
+packages/desktop/src/components/home/TaskDetailView.tsx
+  b86c1b79f0b75756 55,65
+packages/desktop/src/components/devmode/DevModePanel.tsx
+  b86c1b79f0b75756 4,19-20
+packages/desktop/src/lib/store/handlers/connectorHandler.ts
+  b86c1b79f0b75756 1-63
+packages/desktop/src/components/developer/DeveloperView.tsx
+  b86c1b79f0b75756 269,306
+packages/desktop/src/components/projects/ProjectView.tsx
+  b86c1b79f0b75756 95
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.2.5",
+  "base_commit_sha": "f5452cffff80df9606e494e64d768bdeaf5ae189",
+  "prompts": {
+    "b86c1b79f0b75756": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "9ea7e932-7812-4d56-8f40-5115d6521554",
+        "model": "claude-opus-4-6"
+      },
+      "human_author": "Om Gupta",
+      "messages": [],
+      "total_additions": 1312,
+      "total_deletions": 203,
+      "accepted_lines": 1400,
+      "overriden_lines": 5
+    }
+  }
+}
