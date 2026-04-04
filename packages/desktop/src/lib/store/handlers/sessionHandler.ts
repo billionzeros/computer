@@ -3,19 +3,11 @@
  * session_history_response, context_info, usage_stats_response.
  */
 
+import type { AiMessage, SessionHistoryEntry } from '@anton/protocol'
 import type { ArtifactRenderType } from '../../artifacts.js'
 import { extractArtifact } from '../../artifacts.js'
-import type { WsPayload } from '../../connection.js'
 import { type Conversation, saveConversations } from '../../conversations.js'
 import { useStore } from '../../store.js'
-import type {
-  WsContextInfo,
-  WsSessionCreated,
-  WsSessionDestroyed,
-  WsSessionHistoryResponse,
-  WsSessionsListResponse,
-  WsUsageStatsResponse,
-} from '../../ws-messages.js'
 import { artifactStore } from '../artifactStore.js'
 import { connectionStore } from '../connectionStore.js'
 import { projectStore } from '../projectStore.js'
@@ -24,34 +16,27 @@ import type { ChatImageAttachment, ChatMessage, SessionMeta } from '../types.js'
 import { usageStore } from '../usageStore.js'
 import { parseCitationSources } from './citationParser.js'
 
-export function handleSessionMessage(msg: WsPayload): boolean {
+export function handleSessionMessage(msg: AiMessage): boolean {
   switch (msg.type) {
     case 'session_created': {
-      const m = msg as unknown as WsSessionCreated
       const ss = sessionStore.getState()
-      ss.setCurrentSession(m.id, m.provider, m.model)
-      ss.resolvePendingSession(m.id)
-      useStore.getState().setCurrentSession(m.id, m.provider, m.model)
+      ss.setCurrentSession(msg.id, msg.provider, msg.model)
+      ss.resolvePendingSession(msg.id)
+      useStore.getState().setCurrentSession(msg.id, msg.provider, msg.model)
       return true
     }
 
     case 'context_info': {
-      const m = msg as unknown as WsContextInfo
       const store = useStore.getState()
       const convs: Conversation[] = store.conversations.map((c) =>
-        c.sessionId === m.sessionId
+        c.sessionId === msg.sessionId
           ? {
               ...c,
               contextInfo: {
-                globalMemories: (m.globalMemories as string[]) || [],
-                conversationMemories: (m.conversationMemories as string[]) || [],
-                crossConversationMemories:
-                  (m.crossConversationMemories as unknown as Array<{
-                    fromConversation: string
-                    conversationTitle: string
-                    memoryKey: string
-                  }>) || [],
-                projectId: m.projectId as string,
+                globalMemories: msg.globalMemories || [],
+                conversationMemories: msg.conversationMemories || [],
+                crossConversationMemories: msg.crossConversationMemories || [],
+                projectId: msg.projectId as string,
               },
             }
           : c,
@@ -62,40 +47,29 @@ export function handleSessionMessage(msg: WsPayload): boolean {
     }
 
     case 'sessions_list_response': {
-      const m = msg as unknown as WsSessionsListResponse
-      sessionStore.getState().setSessions(m.sessions)
+      sessionStore.getState().setSessions(msg.sessions)
       connectionStore.getState().markSynced('sessions')
       return true
     }
 
     case 'usage_stats_response': {
-      const m = msg as unknown as WsUsageStatsResponse
       usageStore.getState().setUsageStats({
-        totals: m.totals,
-        byModel: m.byModel,
-        byDay: m.byDay,
-        sessions: m.sessions,
+        totals: msg.totals,
+        byModel: msg.byModel,
+        byDay: msg.byDay,
+        sessions: msg.sessions,
       })
       return true
     }
 
     case 'session_history_response': {
-      const m = msg as unknown as WsSessionHistoryResponse
-      type HistoryEntry = {
-        seq: number
-        role: string
-        content: string
-        ts: number
-        toolName?: string
-        toolInput?: Record<string, unknown>
-        toolId?: string
-        isError?: boolean
+      type HistoryEntry = SessionHistoryEntry & {
         attachments?: ChatImageAttachment[]
       }
 
       const uiOnlyHistoryTools = new Set(['ask_user', 'task_tracker', 'plan_confirm'])
       const hiddenHistoryIds = new Set<string>()
-      for (const entry of m.messages as HistoryEntry[]) {
+      for (const entry of msg.messages as HistoryEntry[]) {
         if (
           entry.role === 'tool_call' &&
           entry.toolName &&
@@ -108,9 +82,9 @@ export function handleSessionMessage(msg: WsPayload): boolean {
 
       // Build ask_user Q&A summary messages
       const askUserSummaries: ChatMessage[] = []
-      for (const entry of m.messages as HistoryEntry[]) {
+      for (const entry of msg.messages as HistoryEntry[]) {
         if (entry.role === 'tool_result' && entry.toolId && hiddenHistoryIds.has(entry.toolId)) {
-          const call = (m.messages as HistoryEntry[]).find(
+          const call = (msg.messages as HistoryEntry[]).find(
             (e: HistoryEntry) => e.role === 'tool_call' && e.toolId === entry.toolId,
           )
           if (call?.toolName === 'ask_user' && entry.content) {
@@ -134,7 +108,7 @@ export function handleSessionMessage(msg: WsPayload): boolean {
         }
       }
 
-      const historyMessages: ChatMessage[] = (m.messages as HistoryEntry[])
+      const historyMessages: ChatMessage[] = (msg.messages as HistoryEntry[])
         .filter((entry: HistoryEntry) => {
           if (entry.toolId && hiddenHistoryIds.has(entry.toolId)) return false
           return true
@@ -172,21 +146,21 @@ export function handleSessionMessage(msg: WsPayload): boolean {
       )
 
       const histSs = sessionStore.getState()
-      const isFirstPage = !histSs.getSessionState(m.id).isLoadingOlder
-      histSs.updateSessionState(m.id, { hasMore: (m.hasMore ?? false) as boolean })
+      const isFirstPage = !histSs.getSessionState(msg.id).isLoadingOlder
+      histSs.updateSessionState(msg.id, { hasMore: (msg.hasMore ?? false) as boolean })
 
       const store = useStore.getState()
       if (isFirstPage) {
-        store.loadSessionMessages(m.id, allMessages)
+        store.loadSessionMessages(msg.id, allMessages)
       } else {
-        store.prependSessionMessages(m.id, allMessages)
+        store.prependSessionMessages(msg.id, allMessages)
       }
 
       // Reconstruct artifacts from server or messages
       const as = artifactStore.getState()
-      if (m.artifacts && Array.isArray(m.artifacts) && m.artifacts.length > 0) {
+      if (msg.artifacts && Array.isArray(msg.artifacts) && msg.artifacts.length > 0) {
         as.clearArtifacts()
-        for (const _a of m.artifacts as unknown[]) {
+        for (const _a of msg.artifacts) {
           const a = _a as {
             id: string
             type: string
@@ -265,12 +239,11 @@ export function handleSessionMessage(msg: WsPayload): boolean {
     }
 
     case 'session_destroyed': {
-      const m = msg as unknown as WsSessionDestroyed
       const ss = sessionStore.getState()
-      ss.setSessions(ss.sessions.filter((s: SessionMeta) => s.id !== m.id))
+      ss.setSessions(ss.sessions.filter((s: SessionMeta) => s.id !== msg.id))
       const ps = projectStore.getState()
-      if (ps.projectSessions.some((s: SessionMeta) => s.id !== m.id)) {
-        ps.setProjectSessions(ps.projectSessions.filter((s: SessionMeta) => s.id !== m.id))
+      if (ps.projectSessions.some((s: SessionMeta) => s.id !== msg.id)) {
+        ps.setProjectSessions(ps.projectSessions.filter((s: SessionMeta) => s.id !== msg.id))
       }
       return true
     }

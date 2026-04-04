@@ -3,7 +3,7 @@
  * Provides session routing helpers used by all AI channel handlers.
  */
 
-import type { WsPayload } from '../../connection.js'
+import type { AiMessage } from '@anton/protocol'
 import type { ChatMessage } from '../types.js'
 
 export interface MessageContext {
@@ -15,6 +15,6 @@ export interface MessageContext {
   addMsg: (msg: ChatMessage) => void
   /** Append text to the current assistant message in the correct conversation */
   appendText: (content: string) => void
-  /** The raw WS payload */
-  msg: WsPayload
+  /** The raw AI message */
+  msg: AiMessage
 }

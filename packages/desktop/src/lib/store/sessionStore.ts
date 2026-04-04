@@ -7,13 +7,13 @@
  */
 
 import type {
+  AiMessage,
   AskUserQuestion,
   ChatImageAttachmentInput,
   TaskItem,
   TokenUsage,
 } from '@anton/protocol'
 import { create } from 'zustand'
-import type { WsPayload } from '../connection.js'
 import { connection } from '../connection.js'
 import type { AgentStatus, AgentStep, ProviderInfo, SessionMeta } from './types.js'
 
@@ -26,7 +26,7 @@ export interface SessionState {
   isStreaming: boolean
   needsHistoryRefresh: boolean
   isSyncing: boolean
-  pendingSyncMessages: WsPayload[]
+  pendingSyncMessages: AiMessage[]
   hasMore: boolean
   isLoadingOlder: boolean
   assistantMsgId: string | null

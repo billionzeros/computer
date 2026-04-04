@@ -1,12 +1,13 @@
 /**
  * Message handler router.
  *
- * Replaces the monolithic handleWsMessage switch statement in store.ts.
  * Routes messages by channel, then by message type to domain handlers.
+ * Uses protocol discriminated unions — handlers get properly typed messages
+ * with zero unsafe casts.
  */
 
-import { Channel } from '@anton/protocol'
-import type { WsPayload } from '../../connection.js'
+import { type AiMessage, Channel, type ControlMessage, type EventMessage } from '@anton/protocol'
+import type { IncomingMessage } from '../../connection.js'
 import { useStore } from '../../store.js'
 import { sessionStore } from '../sessionStore.js'
 import { uiStore } from '../uiStore.js'
@@ -21,18 +22,18 @@ import { handleSessionMessage } from './sessionHandler.js'
 import type { MessageContext } from './shared.js'
 import { handleToolMessage } from './toolHandler.js'
 
-export function handleWsMessage(channel: number, msg: WsPayload): void {
+export function handleWsMessage(channel: number, msg: IncomingMessage): void {
   console.log(`[WS] ch=${channel} type=${msg.type}`, msg)
 
   // ── CONTROL channel ──
   if (channel === Channel.CONTROL) {
-    handleControlMessage(msg)
+    handleControlMessage(msg as ControlMessage)
     return
   }
 
   // ── EVENTS channel ──
   if (channel === Channel.EVENTS) {
-    handleEventsMessage(msg)
+    handleEventsMessage(msg as EventMessage)
     return
   }
 
@@ -42,9 +43,12 @@ export function handleWsMessage(channel: number, msg: WsPayload): void {
     return
   }
 
+  const aiMsg = msg as AiMessage
+
   // ── Session-aware message routing ──
   const store = useStore.getState()
-  const msgSessionId: string | undefined = msg.sessionId as string | undefined
+  const msgSessionId: string | undefined =
+    'sessionId' in aiMsg ? (aiMsg.sessionId as string) : undefined
   const activeConv = store.getActiveConversation()
   const isForActiveSession = !msgSessionId || activeConv?.sessionId === msgSessionId
 
@@ -77,36 +81,42 @@ export function handleWsMessage(channel: number, msg: WsPayload): void {
   if (
     msgSessionId &&
     sessionStore.getState().getSessionState(msgSessionId).isSyncing &&
-    !syncExempt.has(msg.type)
+    !syncExempt.has(aiMsg.type)
   ) {
     const ss = sessionStore.getState().getSessionState(msgSessionId)
     sessionStore.getState().updateSessionState(msgSessionId, {
-      pendingSyncMessages: [...ss.pendingSyncMessages, msg],
+      pendingSyncMessages: [...ss.pendingSyncMessages, aiMsg],
     })
-    console.log(`[Sync] Queued ${msg.type} for ${msgSessionId} (syncing)`)
+    console.log(`[Sync] Queued ${aiMsg.type} for ${msgSessionId} (syncing)`)
     return
   }
 
   // ── Dev event logging ──
-  if (
-    ['tool_call', 'done', 'error', 'thinking', 'session_created', 'session_destroyed'].includes(
-      msg.type,
-    )
-  ) {
-    const m = msg as Record<string, unknown>
-    const summary =
-      msg.type === 'tool_call'
-        ? `Tool call: ${(m.name as string) || 'unknown'}`
-        : msg.type === 'done'
-          ? `Turn complete${m.usage ? ` (${(m.usage as { totalTokens: number }).totalTokens} tokens)` : ''}`
-          : msg.type === 'error'
-            ? `Error: ${(m.message as string) || (m.content as string) || 'unknown'}`
-            : msg.type === 'thinking'
-              ? 'Thinking...'
-              : msg.type === 'session_created'
-                ? `Session created: ${(m.sessionId as string)?.slice(0, 12) || ''}`
-                : `Session destroyed: ${(m.sessionId as string)?.slice(0, 12) || ''}`
-    uiStore.getState().appendEventLog(msg.type, summary)
+  {
+    let summary: string | null = null
+    switch (aiMsg.type) {
+      case 'tool_call':
+        summary = `Tool call: ${aiMsg.name || 'unknown'}`
+        break
+      case 'done':
+        summary = `Turn complete${aiMsg.usage ? ` (${aiMsg.usage.totalTokens} tokens)` : ''}`
+        break
+      case 'error':
+        summary = `Error: ${aiMsg.message || 'unknown'}`
+        break
+      case 'thinking':
+        summary = 'Thinking...'
+        break
+      case 'session_created':
+        summary = `Session created: ${aiMsg.id?.slice(0, 12) || ''}`
+        break
+      case 'session_destroyed':
+        summary = `Session destroyed: ${aiMsg.id?.slice(0, 12) || ''}`
+        break
+    }
+    if (summary) {
+      uiStore.getState().appendEventLog(aiMsg.type, summary)
+    }
   }
 
   // ── Build message context for AI channel handlers ──
@@ -115,15 +125,15 @@ export function handleWsMessage(channel: number, msg: WsPayload): void {
     isForActiveSession,
     addMsg,
     appendText,
-    msg,
+    msg: aiMsg,
   }
 
   // ── Dispatch to domain handlers (first match wins) ──
-  if (handleChatMessage(msg, ctx)) return
-  if (handleToolMessage(msg, ctx)) return
-  if (handleInteractionMessage(msg, ctx)) return
-  if (handleSessionMessage(msg)) return
-  if (handleProviderMessage(msg)) return
-  if (handleProjectMessage(msg)) return
-  if (handleConnectorMessage(msg)) return
+  if (handleChatMessage(aiMsg, ctx)) return
+  if (handleToolMessage(aiMsg, ctx)) return
+  if (handleInteractionMessage(aiMsg, ctx)) return
+  if (handleSessionMessage(aiMsg)) return
+  if (handleProviderMessage(aiMsg)) return
+  if (handleProjectMessage(aiMsg)) return
+  if (handleConnectorMessage(aiMsg)) return
 }

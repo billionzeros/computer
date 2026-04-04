@@ -171,17 +171,19 @@ export interface SessionsListMessage {
   type: 'sessions_list'
 }
 
+export interface SessionMeta {
+  id: string
+  title: string
+  provider: string
+  model: string
+  messageCount: number
+  createdAt: number
+  lastActiveAt: number
+}
+
 export interface SessionsListResponse {
   type: 'sessions_list_response'
-  sessions: {
-    id: string
-    title: string
-    provider: string
-    model: string
-    messageCount: number
-    createdAt: number
-    lastActiveAt: number
-  }[]
+  sessions: SessionMeta[]
 }
 
 export interface SessionDestroyMessage {
@@ -263,15 +265,19 @@ export interface ProvidersListMessage {
   type: 'providers_list'
 }
 
+export interface ProviderInfoPayload {
+  name: string
+  models: string[]
+  defaultModels?: string[]
+  hasApiKey: boolean
+  baseUrl?: string
+}
+
 export interface ProvidersListResponse {
   type: 'providers_list_response'
-  providers: {
-    name: string
-    models: string[]
-    hasApiKey: boolean
-    baseUrl?: string
-  }[]
+  providers: ProviderInfoPayload[]
   defaults: { provider: string; model: string }
+  onboarding?: { completed: boolean; role?: string }
 }
 
 export interface ProviderSetKeyMessage {
@@ -510,13 +516,22 @@ export interface AiDoneMessage {
   sessionId?: string
   usage?: TokenUsage
   cumulativeUsage?: TokenUsage
+  provider?: string
+  model?: string
 }
 
 export interface AiErrorMessage {
   type: 'error'
   message: string
+  code?: string
   sessionId?: string
   parentToolCallId?: string
+}
+
+export interface AiTitleUpdateMessage {
+  type: 'title_update'
+  sessionId: string
+  title: string
 }
 
 // Sub-agent lifecycle events
@@ -740,15 +755,7 @@ export interface ProjectSessionsListMessage {
 export interface ProjectSessionsListResponse {
   type: 'project_sessions_list_response'
   projectId: string
-  sessions: {
-    id: string
-    title: string
-    provider: string
-    model: string
-    messageCount: number
-    createdAt: number
-    lastActiveAt: number
-  }[]
+  sessions: SessionMeta[]
 }
 
 // ── Agent management ─────────────────────────────────────────────────
@@ -1160,6 +1167,7 @@ export type AiMessage =
   | AiTextReplaceMessage
   | AiDoneMessage
   | AiErrorMessage
+  | AiTitleUpdateMessage
   // Sub-agent
   | AiSubAgentStartMessage
   | AiSubAgentEndMessage
@@ -1291,6 +1299,11 @@ export interface ArtifactPublishedEvent {
   publicUrl: string
 }
 
+export interface JobEvent {
+  type: 'job_event'
+  projectId: string
+}
+
 export type EventMessage =
   | FileChangedEvent
   | PortChangedEvent
@@ -1298,3 +1311,4 @@ export type EventMessage =
   | AgentStatusEvent
   | UpdateAvailableEvent
   | ArtifactPublishedEvent
+  | JobEvent

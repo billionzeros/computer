@@ -8,15 +8,20 @@
  *   Port 9877 → wss:// when "Use TLS" is checked
  */
 
-import { Channel, type ChatImageAttachmentInput } from '@anton/protocol'
+import {
+  type AiMessage,
+  Channel,
+  type ChatImageAttachmentInput,
+  type ControlMessage,
+  type EventMessage,
+  type TerminalMessage,
+} from '@anton/protocol'
 
 /**
- * Loose type for decoded WS payloads — all messages have a `type` discriminant.
- * Callers narrow via switch on `msg.type` and cast to specific message shapes.
+ * Union of all typed protocol messages across all channels.
+ * Decoded once at the WS boundary — handlers receive properly typed unions.
  */
-export interface WsPayload extends Record<string, unknown> {
-  type: string
-}
+export type IncomingMessage = ControlMessage | AiMessage | EventMessage | TerminalMessage
 
 // We inline the codec here to avoid Uint8Array issues in browser context
 function encodeFrame(channel: number, payload: object): ArrayBuffer {
@@ -29,12 +34,12 @@ function encodeFrame(channel: number, payload: object): ArrayBuffer {
   return frame.buffer
 }
 
-function decodeFrame(data: ArrayBuffer): { channel: number; payload: WsPayload } {
+function decodeFrame(data: ArrayBuffer): { channel: number; payload: IncomingMessage } {
   const bytes = new Uint8Array(data)
   const channel = bytes[0]
   const payloadBytes = bytes.slice(1)
   const text = new TextDecoder().decode(payloadBytes)
-  return { channel, payload: JSON.parse(text) }
+  return { channel, payload: JSON.parse(text) as IncomingMessage }
 }
 
 export type ConnectionStatus =
@@ -51,12 +56,17 @@ export interface ConnectionConfig {
   useTLS: boolean // wss:// vs ws://
 }
 
-export type MessageHandler = (channel: number, message: WsPayload) => void
+export type MessageHandler = (channel: number, message: IncomingMessage) => void
+
+/** Untyped handler for channels not yet in the protocol union (e.g. FILESYNC) */
+type RawPayload = { type: string; [key: string]: unknown }
+type RawMessageHandler = (channel: number, payload: RawPayload) => void
 
 export class Connection {
   private ws: WebSocket | null = null
   private config: ConnectionConfig | null = null
   private handlers: MessageHandler[] = []
+  private rawHandlers: RawMessageHandler[] = []
   private statusListeners: ((status: ConnectionStatus, detail?: string) => void)[] = []
   private _status: ConnectionStatus = 'disconnected'
   private reconnectTimer: number | null = null
@@ -79,6 +89,14 @@ export class Connection {
     this.handlers.push(handler)
     return () => {
       this.handlers = this.handlers.filter((h) => h !== handler)
+    }
+  }
+
+  /** Register a handler for channels not in the typed protocol union (e.g. FILESYNC) */
+  onRawMessage(handler: RawMessageHandler) {
+    this.rawHandlers.push(handler)
+    return () => {
+      this.rawHandlers = this.rawHandlers.filter((h) => h !== handler)
     }
   }
 
@@ -449,13 +467,18 @@ export class Connection {
       error?: string,
     ) => void,
   ) {
-    return this.onMessage((channel, msg) => {
-      if (channel === Channel.FILESYNC && msg.type === 'fs_list_response') {
-        if (msg.error) {
-          handler([], msg.error as string)
+    // Filesystem channel messages aren't in the protocol union yet — use raw listener
+    return this.onRawMessage((channel, payload) => {
+      if (channel === Channel.FILESYNC && payload.type === 'fs_list_response') {
+        if (payload.error) {
+          handler([], payload.error as string)
         } else {
           handler(
-            (msg.entries || []) as { name: string; type: 'file' | 'dir' | 'link'; size: string }[],
+            (payload.entries || []) as {
+              name: string
+              type: 'file' | 'dir' | 'link'
+              size: string
+            }[],
           )
         }
       }
@@ -491,19 +514,27 @@ export class Connection {
         console.log(`[WS RAW] channel=${channel} payload.type=${payload.type}`, payload)
 
         // Handle auth response
-        if (channel === Channel.CONTROL && payload.type === 'auth_ok') {
-          this.agentId = payload.agentId as string
-          this.agentVersion = payload.version as string
-          this.setStatus('connected', `Agent: ${this.agentId}`)
-        } else if (channel === Channel.CONTROL && payload.type === 'auth_error') {
-          this.setStatus('error', `Auth failed: ${payload.reason}`)
-          this.ws?.close()
-          return
+        if (channel === Channel.CONTROL) {
+          if (payload.type === 'auth_ok') {
+            const m = payload as import('@anton/protocol').AuthOkMessage
+            this.agentId = m.agentId
+            this.agentVersion = m.version
+            this.setStatus('connected', `Agent: ${this.agentId}`)
+          } else if (payload.type === 'auth_error') {
+            const m = payload as import('@anton/protocol').AuthErrorMessage
+            this.setStatus('error', `Auth failed: ${m.reason}`)
+            this.ws?.close()
+            return
+          }
         }
 
-        // Dispatch to handlers
+        // Dispatch to typed handlers
         for (const handler of this.handlers) {
           handler(channel, payload)
+        }
+        // Dispatch to raw handlers (for channels not in the typed union)
+        for (const handler of this.rawHandlers) {
+          handler(channel, payload as unknown as RawPayload)
         }
       } catch (err) {
         console.error('Failed to decode message:', err)

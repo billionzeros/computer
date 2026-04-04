@@ -2,28 +2,18 @@
  * AI channel: text, thinking, text_replace, steer_ack, sub_agent_* messages.
  */
 
-import type { WsPayload } from '../../connection.js'
+import type { AiMessage } from '@anton/protocol'
 import { useStore } from '../../store.js'
-import type {
-  WsSteerAck,
-  WsSubAgentEnd,
-  WsSubAgentProgress,
-  WsSubAgentStart,
-  WsText,
-  WsTextReplace,
-  WsThinking,
-} from '../../ws-messages.js'
 import { sessionStore } from '../sessionStore.js'
 import type { MessageContext } from './shared.js'
 
-export function handleChatMessage(msg: WsPayload, ctx: MessageContext): boolean {
+export function handleChatMessage(msg: AiMessage, ctx: MessageContext): boolean {
   switch (msg.type) {
     case 'steer_ack': {
-      const m = msg as unknown as WsSteerAck
       ctx.addMsg({
         id: `steer_${Date.now()}`,
         role: 'user',
-        content: m.content,
+        content: msg.content,
         timestamp: Date.now(),
         isSteering: true,
       })
@@ -31,8 +21,7 @@ export function handleChatMessage(msg: WsPayload, ctx: MessageContext): boolean 
     }
 
     case 'text': {
-      const m = msg as unknown as WsText
-      const textContent = m.content ?? ''
+      const textContent = msg.content ?? ''
       if (!textContent) return true
       const textSessionId =
         ctx.msgSessionId || useStore.getState().getActiveConversation()?.sessionId
@@ -47,11 +36,10 @@ export function handleChatMessage(msg: WsPayload, ctx: MessageContext): boolean 
     }
 
     case 'thinking': {
-      const m = msg as unknown as WsThinking
       ctx.addMsg({
         id: `think_${Date.now()}`,
         role: 'system',
-        content: m.text,
+        content: msg.text,
         timestamp: Date.now(),
       })
       sessionStore.getState().setAgentStatus('working', ctx.msgSessionId)
@@ -59,47 +47,43 @@ export function handleChatMessage(msg: WsPayload, ctx: MessageContext): boolean 
     }
 
     case 'text_replace': {
-      const m = msg as unknown as WsTextReplace
-      if (m.remove) {
-        useStore.getState().replaceAssistantText(m.remove, '', ctx.msgSessionId)
+      if (msg.remove) {
+        useStore.getState().replaceAssistantText(msg.remove, '', ctx.msgSessionId)
       }
       return true
     }
 
     case 'sub_agent_start': {
-      const m = msg as unknown as WsSubAgentStart
       ctx.addMsg({
-        id: `sa_start_${m.toolCallId}`,
+        id: `sa_start_${msg.toolCallId}`,
         role: 'tool',
-        content: m.task,
+        content: msg.task,
         toolName: 'sub_agent',
-        toolInput: { task: m.task },
+        toolInput: { task: msg.task },
         timestamp: Date.now(),
       })
       return true
     }
 
     case 'sub_agent_end': {
-      const m = msg as unknown as WsSubAgentEnd
       ctx.addMsg({
-        id: `sa_end_${m.toolCallId}`,
+        id: `sa_end_${msg.toolCallId}`,
         role: 'tool',
-        content: m.success ? 'Sub-agent completed' : 'Sub-agent failed',
-        isError: !m.success,
+        content: msg.success ? 'Sub-agent completed' : 'Sub-agent failed',
+        isError: !msg.success,
         timestamp: Date.now(),
-        parentToolCallId: m.toolCallId,
+        parentToolCallId: msg.toolCallId,
       })
       return true
     }
 
     case 'sub_agent_progress': {
-      const m = msg as unknown as WsSubAgentProgress
       ctx.addMsg({
-        id: `sa_progress_${m.toolCallId}_${Date.now()}`,
+        id: `sa_progress_${msg.toolCallId}_${Date.now()}`,
         role: 'assistant',
-        content: m.content,
+        content: msg.content,
         timestamp: Date.now(),
-        parentToolCallId: m.toolCallId,
+        parentToolCallId: msg.toolCallId,
       })
       return true
     }

@@ -3,7 +3,14 @@
  * Extracted from the original monolithic store.ts.
  */
 
-import type { AskUserQuestion, TokenUsage } from '@anton/protocol'
+import type {
+  AskUserQuestion,
+  ConnectorRegistryEntryPayload,
+  ConnectorStatusPayload,
+  SessionMeta as ProtocolSessionMeta,
+  ProviderInfoPayload,
+  TokenUsage,
+} from '@anton/protocol'
 
 // ── Chat types ─────────────────────────────────────────────────────
 
@@ -36,27 +43,13 @@ export interface ChatImageAttachment {
   storagePath?: string
 }
 
-// ── Provider types ─────────────────────────────────────────────────
+// ── Provider types (aliased from protocol) ────────────────────────
 
-export interface ProviderInfo {
-  name: string
-  models: string[]
-  defaultModels?: string[]
-  hasApiKey: boolean
-  baseUrl?: string
-}
+export type ProviderInfo = ProviderInfoPayload
 
-// ── Session types ──────────────────────────────────────────────────
+// ── Session types (aliased from protocol) ─────────────────────────
 
-export interface SessionMeta {
-  id: string
-  title: string
-  provider: string
-  model: string
-  messageCount: number
-  createdAt: number
-  lastActiveAt: number
-}
+export type SessionMeta = ProtocolSessionMeta
 
 export type AgentStatus = 'idle' | 'working' | 'error' | 'unknown'
 
@@ -69,41 +62,10 @@ export interface AgentStep {
   timestamp: number
 }
 
-// ── Connector types ────────────────────────────────────────────────
+// ── Connector types (aliased from protocol) ───────────────────────
 
-export interface ConnectorStatusInfo {
-  id: string
-  name: string
-  description?: string
-  icon?: string
-  type: 'mcp' | 'api' | 'oauth'
-  connected: boolean
-  enabled: boolean
-  toolCount: number
-  tools: string[]
-  error?: string
-}
-
-export interface ConnectorRegistryInfo {
-  id: string
-  name: string
-  description: string
-  icon: string
-  category: string
-  type: 'mcp' | 'api' | 'oauth'
-  command?: string
-  args?: string[]
-  requiredEnv: string[]
-  optionalFields?: { key: string; label: string; hint?: string }[]
-  featured?: boolean
-  oauthProvider?: string
-  oauthScopes?: string[]
-  setupGuide?: {
-    steps: string[]
-    url: string
-    urlLabel?: string
-  }
-}
+export type ConnectorStatusInfo = ConnectorStatusPayload
+export type ConnectorRegistryInfo = ConnectorRegistryEntryPayload
 
 // ── Update types ───────────────────────────────────────────────────
 

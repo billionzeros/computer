@@ -14,6 +14,7 @@ import { connectorStore } from './store/connectorStore.js'
 import { handleWsMessage } from './store/handlers/index.js'
 import { projectStore } from './store/projectStore.js'
 import { sessionStore } from './store/sessionStore.js'
+import type { AgentStatus } from './store/types.js'
 import { uiStore } from './store/uiStore.js'
 import { updateStore } from './store/updateStore.js'
 import { usageStore } from './store/usageStore.js'
@@ -49,23 +50,8 @@ export interface ChatImageAttachment {
   storagePath?: string
 }
 
-export interface ProviderInfo {
-  name: string
-  models: string[]
-  defaultModels?: string[]
-  hasApiKey: boolean
-  baseUrl?: string
-}
-
-export interface SessionMeta {
-  id: string
-  title: string
-  provider: string
-  model: string
-  messageCount: number
-  createdAt: number
-  lastActiveAt: number
-}
+// Re-export protocol-backed types for backward compat with existing imports
+export type { ProviderInfo, SessionMeta } from './store/types.js'
 
 export interface SavedMachine {
   id: string
@@ -76,73 +62,15 @@ export interface SavedMachine {
   useTLS: boolean
 }
 
-export interface AgentStep {
-  id: string
-  type: 'thinking' | 'tool_call' | 'tool_result'
-  label: string
-  toolName?: string
-  status: 'active' | 'complete' | 'error'
-  timestamp: number
-}
-
-export type AgentStatus = 'idle' | 'working' | 'error' | 'unknown'
-
-export interface ConnectorStatusInfo {
-  id: string
-  name: string
-  description?: string
-  icon?: string
-  type: 'mcp' | 'api' | 'oauth'
-  connected: boolean
-  enabled: boolean
-  toolCount: number
-  tools: string[]
-  error?: string
-}
-
-export interface ConnectorRegistryInfo {
-  id: string
-  name: string
-  description: string
-  icon: string
-  category: string
-  type: 'mcp' | 'api' | 'oauth'
-  command?: string
-  args?: string[]
-  requiredEnv: string[]
-  optionalFields?: { key: string; label: string; hint?: string }[]
-  featured?: boolean
-  oauthProvider?: string
-  oauthScopes?: string[]
-  setupGuide?: {
-    steps: string[]
-    url: string
-    urlLabel?: string
-  }
-}
-
-export interface UpdateInfo {
-  currentVersion: string
-  latestVersion: string | null
-  updateAvailable: boolean
-  changelog: string | null
-  releaseUrl: string | null
-}
-
-export type UpdateStage = 'downloading' | 'replacing' | 'restarting' | 'done' | 'error' | null
-
-export function updateStageLabel(stage: string | null): string {
-  switch (stage) {
-    case 'downloading':
-      return 'Downloading update...'
-    case 'replacing':
-      return 'Installing binary...'
-    case 'restarting':
-      return 'Restarting your machine...'
-    default:
-      return 'Updating...'
-  }
-}
+export type {
+  AgentStep,
+  AgentStatus,
+  ConnectorStatusInfo,
+  ConnectorRegistryInfo,
+  UpdateInfo,
+  UpdateStage,
+} from './store/types.js'
+export { updateStageLabel } from './store/types.js'
 
 export type SidebarTab = 'history'
 

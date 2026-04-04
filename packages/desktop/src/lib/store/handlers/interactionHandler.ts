@@ -2,20 +2,8 @@
  * AI channel: confirm, plan_confirm, ask_user, browser_*, tasks_update, done, error, title_update, token_update, compaction.
  */
 
-import type { WsPayload } from '../../connection.js'
+import type { AiMessage } from '@anton/protocol'
 import { useStore } from '../../store.js'
-import type {
-  WsAskUser,
-  WsBrowserState,
-  WsCompactionComplete,
-  WsConfirm,
-  WsDone,
-  WsError,
-  WsPlanConfirm,
-  WsTasksUpdate,
-  WsTitleUpdate,
-  WsTokenUpdate,
-} from '../../ws-messages.js'
 import { artifactStore } from '../artifactStore.js'
 import { projectStore } from '../projectStore.js'
 import { sessionStore } from '../sessionStore.js'
@@ -23,48 +11,44 @@ import type { SessionMeta } from '../types.js'
 import { uiStore } from '../uiStore.js'
 import type { MessageContext } from './shared.js'
 
-export function handleInteractionMessage(msg: WsPayload, ctx: MessageContext): boolean {
+export function handleInteractionMessage(msg: AiMessage, ctx: MessageContext): boolean {
   switch (msg.type) {
     case 'confirm': {
-      const m = msg as unknown as WsConfirm
       sessionStore.getState().setPendingConfirm({
-        id: m.id,
-        command: m.command,
-        reason: m.reason,
+        id: msg.id,
+        command: msg.command,
+        reason: msg.reason,
         sessionId: ctx.msgSessionId,
       })
       return true
     }
 
     case 'plan_confirm': {
-      const m = msg as unknown as WsPlanConfirm
       sessionStore.getState().setPendingPlan({
-        id: m.id,
-        title: m.title,
-        content: m.content,
+        id: msg.id,
+        title: msg.title,
+        content: msg.content,
         sessionId: ctx.msgSessionId,
       })
       return true
     }
 
     case 'ask_user': {
-      const m = msg as unknown as WsAskUser
       sessionStore.getState().setPendingAskUser({
-        id: m.id,
-        questions: m.questions,
+        id: msg.id,
+        questions: msg.questions,
         sessionId: ctx.msgSessionId,
       })
       return true
     }
 
     case 'error': {
-      const m = msg as unknown as WsError
       const ss = sessionStore.getState()
       if (ctx.msgSessionId && ss.getSessionState(ctx.msgSessionId).isSyncing) {
         ss.updateSessionState(ctx.msgSessionId, { isSyncing: false, pendingSyncMessages: [] })
       }
 
-      if (m.code === 'session_not_found' && ctx.msgSessionId) {
+      if (msg.code === 'session_not_found' && ctx.msgSessionId) {
         const store = useStore.getState()
         const staleConv = store.conversations.find((c) => c.sessionId === ctx.msgSessionId)
         if (staleConv) {
@@ -77,14 +61,14 @@ export function handleInteractionMessage(msg: WsPayload, ctx: MessageContext): b
         ctx.addMsg({
           id: `err_${Date.now()}`,
           role: 'system',
-          content: m.message,
+          content: msg.message,
           isError: true,
           timestamp: Date.now(),
         })
       } else {
         console.warn(
           '[WS] Received error without sessionId, not adding to conversation:',
-          m.message,
+          msg.message,
         )
       }
       if (ctx.isForActiveSession && ctx.msgSessionId) {
@@ -99,15 +83,14 @@ export function handleInteractionMessage(msg: WsPayload, ctx: MessageContext): b
     }
 
     case 'title_update': {
-      const m = msg as unknown as WsTitleUpdate
-      if (m.sessionId) {
+      if (msg.sessionId) {
         const store = useStore.getState()
-        store.updateConversationTitle(m.sessionId, m.title)
+        store.updateConversationTitle(msg.sessionId, msg.title)
         const ps = projectStore.getState()
-        if (ps.projectSessions.some((s: SessionMeta) => s.id === m.sessionId)) {
+        if (ps.projectSessions.some((s: SessionMeta) => s.id === msg.sessionId)) {
           ps.setProjectSessions(
             ps.projectSessions.map((s: SessionMeta) =>
-              s.id === m.sessionId ? { ...s, title: m.title } : s,
+              s.id === msg.sessionId ? { ...s, title: msg.title } : s,
             ),
           )
         }
@@ -116,30 +99,28 @@ export function handleInteractionMessage(msg: WsPayload, ctx: MessageContext): b
     }
 
     case 'tasks_update': {
-      const m = msg as unknown as WsTasksUpdate
-      if (m.tasks) {
+      if (msg.tasks) {
         const ss = sessionStore.getState()
         if (ctx.msgSessionId) {
-          ss.updateSessionState(ctx.msgSessionId, { tasks: m.tasks })
+          ss.updateSessionState(ctx.msgSessionId, { tasks: msg.tasks })
         }
         if (ctx.isForActiveSession) {
-          ss.setCurrentTasks(m.tasks)
+          ss.setCurrentTasks(msg.tasks)
         }
       }
       return true
     }
 
     case 'browser_state': {
-      const m = msg as unknown as WsBrowserState
       if (ctx.isForActiveSession) {
         const as = artifactStore.getState()
         const wasActive = as.browserState?.active
         as.setBrowserState({
-          url: m.url,
-          title: m.title,
-          screenshot: m.screenshot,
-          lastAction: m.lastAction,
-          elementCount: m.elementCount,
+          url: msg.url,
+          title: msg.title,
+          screenshot: msg.screenshot,
+          lastAction: msg.lastAction,
+          elementCount: msg.elementCount,
         })
         if (!wasActive) {
           uiStore.setState({ sidePanelView: 'browser' })
@@ -157,15 +138,13 @@ export function handleInteractionMessage(msg: WsPayload, ctx: MessageContext): b
     }
 
     case 'token_update': {
-      const m = msg as unknown as WsTokenUpdate
-      if (ctx.isForActiveSession && m.usage) {
-        sessionStore.getState().setUsage(m.usage, null)
+      if (ctx.isForActiveSession && msg.usage) {
+        sessionStore.getState().setUsage(msg.usage, null)
       }
       return true
     }
 
     case 'done': {
-      const m = msg as unknown as WsDone
       const ss = sessionStore.getState()
       const store = useStore.getState()
       const activeConv = store.getActiveConversation()
@@ -176,7 +155,7 @@ export function handleInteractionMessage(msg: WsPayload, ctx: MessageContext): b
       const lastMsg = doneConv?.messages[doneConv.messages.length - 1]
       const wasWorking = ss.agentStatus === 'working'
       const noResponse = wasWorking && lastMsg?.role === 'user'
-      const zeroTokens = m.usage && m.usage.inputTokens === 0 && m.usage.outputTokens === 0
+      const zeroTokens = msg.usage && msg.usage.inputTokens === 0 && msg.usage.outputTokens === 0
 
       if (noResponse && zeroTokens) {
         ctx.addMsg({
@@ -239,11 +218,11 @@ export function handleInteractionMessage(msg: WsPayload, ctx: MessageContext): b
         store._sessionAssistantMsgIds.delete(ctx.msgSessionId)
       }
 
-      if (m.usage) {
-        ss.setUsage(m.usage, m.cumulativeUsage || null)
+      if (msg.usage) {
+        ss.setUsage(msg.usage, msg.cumulativeUsage || null)
       }
-      if (m.provider && m.model) {
-        ss.setLastResponseModel(m.provider, m.model)
+      if (msg.provider && msg.model) {
+        ss.setLastResponseModel(msg.provider, msg.model)
       }
       return true
     }
@@ -258,11 +237,10 @@ export function handleInteractionMessage(msg: WsPayload, ctx: MessageContext): b
       return true
 
     case 'compaction_complete': {
-      const m = msg as unknown as WsCompactionComplete
       ctx.addMsg({
         id: `compact_done_${Date.now()}`,
         role: 'system',
-        content: `Context compacted: ${m.compactedMessages} messages summarized (compaction #${m.totalCompactions})`,
+        content: `Context compacted: ${msg.compactedMessages} messages summarized (compaction #${msg.totalCompactions})`,
         timestamp: Date.now(),
       })
       return true
