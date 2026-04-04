@@ -1,0 +1,53 @@
+packages/desktop/src/lib/store/handlers/eventsHandler.ts
+  b86c1b79f0b75756 5,13-19,22-31,33-39,41-42,44-45,47-60,62
+packages/desktop/src/lib/store/handlers/controlHandler.ts
+  b86c1b79f0b75756 5,11-15,17-46,48-53,56-68
+packages/desktop/src/lib/store/handlers/sessionHandler.ts
+  b86c1b79f0b75756 6,19,23-25,32,36-39,50,57-60,66,72,85,87,111,149-150,154,156,161,163,243,245-246
+packages/desktop/src/lib/store/handlers/projectHandler.ts
+  b86c1b79f0b75756 5,12,17-19,24,30,35,40-41,47-48,54-55,61-62,70-71,73-74,81-83,86-88,96,106-107,112,118,124-127,134,138-139,144,146,154,160
+packages/desktop/src/lib/store/types.ts
+  b86c1b79f0b75756 8-10,12,46,48,50,52,65,67-68
+packages/desktop/src/lib/store/sessionStore.ts
+  b86c1b79f0b75756 10,29
+packages/protocol/src/messages.ts
+  b86c1b79f0b75756 174-183,186,268-275,278,280,519-520,526,531-534,758,1170,1302-1306,1314
+packages/desktop/src/lib/store/handlers/providerHandler.ts
+  b86c1b79f0b75756 5,11,14,18,21,28,32,36,38-39
+packages/desktop/src/lib/store/handlers/toolHandler.ts
+  b86c1b79f0b75756 5,13,18-19,24,31,33,35-37,39,41-42,44,46,48-49,60-61,64,66,68-69,71,74,77-80,86-87,94-102,111,114
+packages/desktop/src/lib/store/handlers/connectorHandler.ts
+  b86c1b79f0b75756 5,9,12,18,23,28,33-36,42
+packages/desktop/src/lib/store/handlers/chatHandler.ts
+  b86c1b79f0b75756 5,10,16,24,42,50-51,58,60,62,70,72-73,75,82,84,86
+packages/desktop/src/lib/store/handlers/interactionHandler.ts
+  b86c1b79f0b75756 5,14,18-20,28-30,38-39,51,64,71,86,88,90,93,102,105,108,119-123,141-142,158,221-222,224-225,243
+packages/desktop/src/lib/connection.ts
+  b86c1b79f0b75756 11-17,21-22,24,37,42,59,61-63,69,95-102,470-474,477-481,517-528,531,535-537
+packages/desktop/src/lib/store/handlers/shared.ts
+  b86c1b79f0b75756 6,18-19
+packages/desktop/src/lib/store.ts
+  b86c1b79f0b75756 53-54,66-70,72-73
+packages/desktop/src/lib/store/handlers/index.ts
+  b86c1b79f0b75756 5-6,9-10,25,30,36,46-47,51,84,88,90,96-119,128,132-138
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.2.5",
+  "base_commit_sha": "823f679d7e09ab90a016144e9c791fd7dbb806f8",
+  "prompts": {
+    "b86c1b79f0b75756": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "9ea7e932-7812-4d56-8f40-5115d6521554",
+        "model": "claude-opus-4-6"
+      },
+      "human_author": "Om Gupta",
+      "messages": [],
+      "total_additions": 457,
+      "total_deletions": 666,
+      "accepted_lines": 556,
+      "overriden_lines": 1
+    }
+  }
+}
