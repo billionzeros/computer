@@ -1,6 +1,6 @@
 import type { AgentSession, InstalledWorkflow } from '@anton/protocol'
 import { Clock, Pause, Play, Zap } from 'lucide-react'
-import { connection } from '../../lib/connection.js'
+import { projectStore } from '../../lib/store/projectStore.js'
 
 function formatRelativeTime(ts: number): string {
   const diff = Date.now() - ts
@@ -33,15 +33,17 @@ export function WorkflowStatusBanner({
   const schedule = agent?.agent.schedule?.cron
 
   const handleRunNow = () => {
-    if (agent) connection.sendAgentAction(workflow.projectId, agent.sessionId, 'start')
+    if (agent) projectStore.getState().sendAgentAction(workflow.projectId, agent.sessionId, 'start')
   }
   const handlePause = () => {
     if (agent) {
-      connection.sendAgentAction(
-        workflow.projectId,
-        agent.sessionId,
-        status === 'paused' ? 'resume' : 'pause',
-      )
+      projectStore
+        .getState()
+        .sendAgentAction(
+          workflow.projectId,
+          agent.sessionId,
+          status === 'paused' ? 'resume' : 'pause',
+        )
     }
   }
 

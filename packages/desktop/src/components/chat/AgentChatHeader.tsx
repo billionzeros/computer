@@ -1,7 +1,7 @@
 import type { AgentSession } from '@anton/protocol'
 import { Calendar, Play, Square } from 'lucide-react'
 import { cronToHuman } from '../../lib/agent-utils.js'
-import { connection } from '../../lib/connection.js'
+import { projectStore } from '../../lib/store/projectStore.js'
 
 interface Props {
   agent: AgentSession
@@ -37,11 +37,9 @@ export function AgentChatHeader({ agent }: Props) {
           type="button"
           className="agent-chat-header__action"
           onClick={() => {
-            connection.sendAgentAction(
-              agent.projectId,
-              agent.sessionId,
-              isRunning ? 'stop' : 'start',
-            )
+            projectStore
+              .getState()
+              .sendAgentAction(agent.projectId, agent.sessionId, isRunning ? 'stop' : 'start')
           }}
           aria-label={isRunning ? 'Stop agent' : 'Run agent'}
         >

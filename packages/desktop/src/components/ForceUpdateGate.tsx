@@ -1,6 +1,5 @@
 import { AlertTriangle, Download, Loader2, RotateCw } from 'lucide-react'
 import type { ReactNode } from 'react'
-import { connection } from '../lib/connection.js'
 import { semverGt } from '../lib/semver.js'
 import { useConnectionStatus } from '../lib/store.js'
 import { updateStageLabel } from '../lib/store/types.js'
@@ -61,7 +60,7 @@ export function ForceUpdateGate({ children }: { children: ReactNode }) {
             <button
               type="button"
               className="update-banner__action"
-              onClick={() => connection.sendUpdateStart()}
+              onClick={() => updateStore.getState().startUpdate()}
             >
               <Download size={16} strokeWidth={1.5} />
               Update now
@@ -103,7 +102,7 @@ export function ForceUpdateGate({ children }: { children: ReactNode }) {
               className="update-banner__action"
               onClick={() => {
                 updateStore.getState().setUpdateProgress(null, null)
-                connection.sendUpdateStart()
+                updateStore.getState().startUpdate()
               }}
             >
               <RotateCw size={16} strokeWidth={1.5} />

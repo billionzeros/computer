@@ -4,16 +4,12 @@
 
 import type { WsPayload } from '../../connection.js'
 import { connection } from '../../connection.js'
-import type {
-  WsAgentStatusMsg,
-  WsJobEvent,
-  WsUpdateAvailable,
-} from '../../ws-messages.js'
+import { useStore } from '../../store.js'
+import type { WsAgentStatusMsg, WsJobEvent, WsUpdateAvailable } from '../../ws-messages.js'
 import { projectStore } from '../projectStore.js'
 import { sessionStore } from '../sessionStore.js'
 import { uiStore } from '../uiStore.js'
 import { updateStore } from '../updateStore.js'
-import { useStore } from '../../store.js'
 
 export function handleEventsMessage(msg: WsPayload): void {
   if (msg.type === 'job_event') {

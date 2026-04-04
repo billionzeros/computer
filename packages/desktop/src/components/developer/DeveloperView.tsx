@@ -13,7 +13,6 @@ import {
   Zap,
 } from 'lucide-react'
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { connection } from '../../lib/connection.js'
 import { useConnectionStatus, useStore } from '../../lib/store.js'
 import { sessionStore } from '../../lib/store/sessionStore.js'
 import { uiStore } from '../../lib/store/uiStore.js'
@@ -267,7 +266,7 @@ function PromptTab() {
   const sessionId = activeConv?.id
 
   const refresh = useCallback(() => {
-    connection.sendConfigQuery('system_prompt', sessionId)
+    sessionStore.getState().sendConfigQuery('system_prompt', sessionId)
   }, [sessionId])
 
   useEffect(() => {
@@ -304,7 +303,7 @@ function MemoriesTab() {
   const [expanded, setExpanded] = useState<Set<string>>(new Set())
 
   const refresh = useCallback(() => {
-    connection.sendConfigQuery('memories', sessionId)
+    sessionStore.getState().sendConfigQuery('memories', sessionId)
   }, [sessionId])
 
   useEffect(() => {

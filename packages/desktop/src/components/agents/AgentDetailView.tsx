@@ -24,11 +24,11 @@ import {
   formatDuration,
   formatRelativeTime,
 } from '../../lib/agent-utils.js'
-import { connection } from '../../lib/connection.js'
 import type { Skill } from '../../lib/skills.js'
 import type { ChatImageAttachment } from '../../lib/store.js'
 import { useStore } from '../../lib/store.js'
 import { projectStore } from '../../lib/store/projectStore.js'
+import { sessionStore } from '../../lib/store/sessionStore.js'
 import { ChatInput } from '../chat/ChatInput.js'
 
 // ── Run Logs Modal ─────────────────────────────────────────────────
@@ -205,7 +205,7 @@ export function AgentDetailView({ agentId, onBack, onViewRun }: Props) {
         content: text,
         timestamp: Date.now(),
       })
-      connection.sendAiMessageToSession(text, agent.sessionId)
+      sessionStore.getState().sendAiMessageToSession(text, agent.sessionId)
     },
     [agent, addMessage],
   )

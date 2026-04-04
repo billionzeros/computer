@@ -3,11 +3,7 @@
  */
 
 import type { WsPayload } from '../../connection.js'
-import type {
-  WsAuthOk,
-  WsUpdateCheckResponse,
-  WsUpdateProgress,
-} from '../../ws-messages.js'
+import type { WsAuthOk, WsUpdateCheckResponse, WsUpdateProgress } from '../../ws-messages.js'
 import { connectionStore } from '../connectionStore.js'
 import { projectStore } from '../projectStore.js'
 import { uiStore } from '../uiStore.js'

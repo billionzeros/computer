@@ -61,6 +61,12 @@ interface UIState {
   eventLog: { id: number; timestamp: number; type: string; summary: string }[]
   appendEventLog: (type: string, summary: string) => void
 
+  // Terminal & filesystem wrappers
+  sendTerminalSpawn: (id: string, cols: number, rows: number, cwd?: string) => void
+  sendTerminalData: (id: string, data: string) => void
+  sendTerminalResize: (id: string, cols: number, rows: number) => void
+  sendFilesystemList: (path: string) => void
+
   // Reset
   reset: () => void
 }
@@ -164,6 +170,12 @@ export const uiStore = create<UIState>((set, get) => ({
       const log = [entry, ...s.eventLog]
       return { eventLog: log.length > 200 ? log.slice(0, 200) : log }
     }),
+
+  // Terminal & filesystem wrappers
+  sendTerminalSpawn: (id, cols, rows, cwd) => connection.sendTerminalSpawn(id, cols, rows, cwd),
+  sendTerminalData: (id, data) => connection.sendTerminalData(id, data),
+  sendTerminalResize: (id, cols, rows) => connection.sendTerminalResize(id, cols, rows),
+  sendFilesystemList: (path) => connection.sendFilesystemList(path),
 
   // Reset — preserves theme, devMode, and sidebar preferences
   reset: () =>

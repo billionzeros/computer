@@ -3,8 +3,8 @@
  * Provides session routing helpers used by all AI channel handlers.
  */
 
-import type { ChatMessage } from '../types.js'
 import type { WsPayload } from '../../connection.js'
+import type { ChatMessage } from '../types.js'
 
 export interface MessageContext {
   /** Session ID from the message, if any */

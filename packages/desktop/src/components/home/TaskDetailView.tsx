@@ -1,6 +1,5 @@
 import { ArrowLeft, BarChart3, Files, ListChecks, Lock, MoreHorizontal } from 'lucide-react'
 import { useCallback, useState } from 'react'
-import { connection } from '../../lib/connection.js'
 import type { Skill } from '../../lib/skills.js'
 import type { ChatImageAttachment } from '../../lib/store.js'
 import { useStore } from '../../lib/store.js'
@@ -53,7 +52,7 @@ export function TaskDetailView() {
         timestamp: Date.now(),
       })
 
-      connection.sendAiMessageToSession(text, sessionId, outboundAttachments)
+      sessionStore.getState().sendAiMessageToSession(text, sessionId, outboundAttachments)
     },
     [addMessage],
   )
@@ -63,7 +62,7 @@ export function TaskDetailView() {
     const conv = store.getActiveConversation()
     const sessionId = conv?.sessionId || sessionStore.getState().currentSessionId
     if (!sessionId) return
-    connection.sendSteerMessage(text, sessionId)
+    sessionStore.getState().sendSteerMessage(text, sessionId)
   }, [])
 
   const handleCancelTurn = useCallback(() => {

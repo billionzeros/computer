@@ -6,7 +6,12 @@
  * lives in one place instead of being scattered across separate collections.
  */
 
-import type { AskUserQuestion, TaskItem, TokenUsage } from '@anton/protocol'
+import type {
+  AskUserQuestion,
+  ChatImageAttachmentInput,
+  TaskItem,
+  TokenUsage,
+} from '@anton/protocol'
 import { create } from 'zustand'
 import type { WsPayload } from '../connection.js'
 import { connection } from '../connection.js'
@@ -190,6 +195,18 @@ interface SessionStoreState {
   sendProviderSetKey: (provider: string, apiKey: string) => void
   sendProviderSetModels: (provider: string, models: string[]) => void
   sendProviderSetDefault: (provider: string, model: string) => void
+  sendAiMessage: (text: string, attachments?: ChatImageAttachmentInput[]) => void
+  sendAiMessageToSession: (
+    text: string,
+    sessionId: string,
+    attachments?: ChatImageAttachmentInput[],
+  ) => void
+  sendSteerMessage: (text: string, sessionId: string) => void
+  sendConfigQuery: (
+    key: 'providers' | 'defaults' | 'security' | 'system_prompt' | 'memories',
+    sessionId?: string,
+    projectId?: string,
+  ) => void
   // Reset
   reset: () => void
   resetKeepConversations: () => void
@@ -416,6 +433,12 @@ export const sessionStore = create<SessionStoreState>((set, get) => {
     sendProviderSetKey: (provider, apiKey) => connection.sendProviderSetKey(provider, apiKey),
     sendProviderSetModels: (provider, models) => connection.sendProviderSetModels(provider, models),
     sendProviderSetDefault: (provider, model) => connection.sendProviderSetDefault(provider, model),
+    sendAiMessage: (text, attachments) => connection.sendAiMessage(text, attachments),
+    sendAiMessageToSession: (text, sessionId, attachments) =>
+      connection.sendAiMessageToSession(text, sessionId, attachments),
+    sendSteerMessage: (text, sessionId) => connection.sendSteerMessage(text, sessionId),
+    sendConfigQuery: (key, sessionId, projectId) =>
+      connection.sendConfigQuery(key, sessionId, projectId),
     // ── Reset ─────────────────────────────────────────────────
 
     reset: () =>

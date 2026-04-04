@@ -14,7 +14,6 @@ import {
 } from 'lucide-react'
 import { useMemo, useRef, useState } from 'react'
 import { formatRelativeTime } from '../../lib/agent-utils.js'
-import { connection } from '../../lib/connection.js'
 import type { Skill } from '../../lib/skills.js'
 import type { ChatImageAttachment } from '../../lib/store.js'
 import { useStore } from '../../lib/store.js'
@@ -213,7 +212,7 @@ export function AgentListView({ mode, selectedId, onSelect }: Props) {
           content: prompt,
           timestamp: Date.now(),
         })
-        connection.sendAiMessageToSession(prompt, sessionId)
+        sessionStore.getState().sendAiMessageToSession(prompt, sessionId)
       }
     })
   }

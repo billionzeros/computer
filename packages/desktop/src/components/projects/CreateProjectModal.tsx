@@ -1,6 +1,6 @@
 import { FolderOpen, X } from 'lucide-react'
 import { useState } from 'react'
-import { connection } from '../../lib/connection.js'
+import { projectStore } from '../../lib/store/projectStore.js'
 
 const DEFAULT_COLORS = [
   '#6366f1',
@@ -25,7 +25,7 @@ export function CreateProjectModal({ onClose }: Props) {
     if (!name.trim()) return
     // Pick a random color for variety
     const color = DEFAULT_COLORS[Math.floor(Math.random() * DEFAULT_COLORS.length)]
-    connection.sendProjectCreate({
+    projectStore.getState().createProject({
       name: name.trim(),
       description: instructions.trim(),
       icon: '📁',

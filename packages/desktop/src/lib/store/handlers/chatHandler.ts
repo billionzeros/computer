@@ -34,7 +34,8 @@ export function handleChatMessage(msg: WsPayload, ctx: MessageContext): boolean 
       const m = msg as unknown as WsText
       const textContent = m.content ?? ''
       if (!textContent) return true
-      const textSessionId = ctx.msgSessionId || useStore.getState().getActiveConversation()?.sessionId
+      const textSessionId =
+        ctx.msgSessionId || useStore.getState().getActiveConversation()?.sessionId
       if (textSessionId) {
         const ss = sessionStore.getState()
         if (!ss.getSessionState(textSessionId).isStreaming) {

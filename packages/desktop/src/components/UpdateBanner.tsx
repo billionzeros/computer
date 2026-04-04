@@ -1,6 +1,5 @@
 import { Check, Download, Loader2, X } from 'lucide-react'
 import { useEffect } from 'react'
-import { connection } from '../lib/connection.js'
 import { semverGt } from '../lib/semver.js'
 import { useConnectionStatus } from '../lib/store.js'
 import { updateStageLabel } from '../lib/store/types.js'
@@ -73,7 +72,7 @@ export function UpdateBanner() {
             <button
               type="button"
               className="update-banner__action"
-              onClick={() => connection.sendUpdateStart()}
+              onClick={() => updateStore.getState().startUpdate()}
             >
               <Download size={16} strokeWidth={1.5} />
               Update now
@@ -134,7 +133,7 @@ export function UpdateBanner() {
               className="update-banner__action"
               onClick={() => {
                 updateStore.getState().setUpdateProgress(null, null)
-                connection.sendUpdateStart()
+                updateStore.getState().startUpdate()
               }}
             >
               Retry

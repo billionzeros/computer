@@ -2,7 +2,6 @@ import type { AgentSession } from '@anton/protocol'
 import { AnimatePresence, motion } from 'framer-motion'
 import { Bot, Settings, Trash2, Zap } from 'lucide-react'
 import { useEffect, useState } from 'react'
-import { connection } from '../../lib/connection.js'
 import { useStore } from '../../lib/store.js'
 import { artifactStore } from '../../lib/store/artifactStore.js'
 import { projectStore } from '../../lib/store/projectStore.js'
@@ -93,7 +92,7 @@ export function ProjectView() {
           content: initialMessage,
           timestamp: Date.now(),
         })
-        connection.sendAiMessageToSession(initialMessage, sessionId)
+        sessionStore.getState().sendAiMessageToSession(initialMessage, sessionId)
       }, 100)
     }
   }

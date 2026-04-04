@@ -213,7 +213,7 @@ function AppSetup({
 
   const handleOAuthConnect = () => {
     setOauthWaiting(true)
-    connection.sendConnectorOAuthStart(entry.id)
+    connectorStore.getState().startOAuth(entry.id)
 
     const unsub = connection.onMessage((_channel, msg) => {
       if (msg.type === 'connector_oauth_url') {
@@ -272,7 +272,7 @@ function AppSetup({
       if (optionalValues[field.key]) metadata[field.key] = optionalValues[field.key]
     }
 
-    connection.sendConnectorAdd({
+    connectorStore.getState().addConnectorRemote({
       id: entry.id,
       name: entry.name,
       description: entry.description,
@@ -304,9 +304,9 @@ function AppSetup({
 
   const handleDisconnect = () => {
     if (isOAuth) {
-      connection.sendConnectorOAuthDisconnect(entry.id)
+      connectorStore.getState().disconnectOAuth(entry.id)
     } else {
-      connection.sendConnectorRemove(entry.id)
+      connectorStore.getState().removeConnectorRemote(entry.id)
     }
 
     const unsub = connection.onMessage((_channel, msg) => {
@@ -325,7 +325,7 @@ function AppSetup({
   const handleTest = () => {
     setTesting(true)
     setTestResult(null)
-    connection.sendConnectorTest(entry.id)
+    connectorStore.getState().testConnectorRemote(entry.id)
 
     const unsub = connection.onMessage((_channel, msg) => {
       if (msg.type === 'connector_test_response' && msg.id === entry.id) {
@@ -566,7 +566,7 @@ function CustomApiTab({
   const handleAdd = () => {
     if (!name) return
     const id = `api-${name.toLowerCase().replace(/\s+/g, '-')}-${Date.now()}`
-    connection.sendConnectorAdd({
+    connectorStore.getState().addConnectorRemote({
       id,
       name,
       type: 'api',
@@ -606,7 +606,7 @@ function CustomApiTab({
             <button
               type="button"
               className="connector-card__remove"
-              onClick={() => connection.sendConnectorRemove(c.id)}
+              onClick={() => connectorStore.getState().removeConnectorRemote(c.id)}
             >
               <Trash2 size={12} />
             </button>
@@ -700,7 +700,7 @@ function CustomMcpTab({
         parsedEnv[line.slice(0, eq).trim()] = line.slice(eq + 1).trim()
       }
     }
-    connection.sendConnectorAdd({
+    connectorStore.getState().addConnectorRemote({
       id,
       name,
       type: 'mcp',
@@ -723,7 +723,7 @@ function CustomMcpTab({
         return
       }
       const id = `mcp-${parsed.name.toLowerCase().replace(/\s+/g, '-')}-${Date.now()}`
-      connection.sendConnectorAdd({
+      connectorStore.getState().addConnectorRemote({
         id: parsed.id || id,
         name: parsed.name,
         description: parsed.description,
@@ -778,7 +778,7 @@ function CustomMcpTab({
                 <button
                   type="button"
                   className="connector-card__toggle"
-                  onClick={() => connection.sendConnectorToggle(c.id, !c.enabled)}
+                  onClick={() => connectorStore.getState().toggleConnectorRemote(c.id, !c.enabled)}
                   title={c.enabled ? 'Disable' : 'Enable'}
                 >
                   {c.enabled ? <Power size={12} /> : <PowerOff size={12} />}
@@ -786,7 +786,7 @@ function CustomMcpTab({
                 <button
                   type="button"
                   className="connector-card__remove"
-                  onClick={() => connection.sendConnectorRemove(c.id)}
+                  onClick={() => connectorStore.getState().removeConnectorRemote(c.id)}
                 >
                   <Trash2 size={12} />
                 </button>

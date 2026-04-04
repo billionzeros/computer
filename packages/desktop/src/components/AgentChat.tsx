@@ -1,11 +1,10 @@
 import { Loader2 } from 'lucide-react'
 import { useCallback, useEffect, useState } from 'react'
-import { connection } from '../lib/connection.js'
 import type { Skill } from '../lib/skills.js'
 import type { ChatImageAttachment } from '../lib/store.js'
 import { useStore } from '../lib/store.js'
-import { projectStore } from '../lib/store/projectStore.js'
 import { connectionStore } from '../lib/store/connectionStore.js'
+import { projectStore } from '../lib/store/projectStore.js'
 import { sessionStore } from '../lib/store/sessionStore.js'
 import { uiStore } from '../lib/store/uiStore.js'
 import { AgentChatHeader } from './chat/AgentChatHeader.js'
@@ -175,10 +174,10 @@ export function AgentChat() {
       }
 
       if (sessionId) {
-        connection.sendAiMessageToSession(outboundText, sessionId, outboundAttachments)
+        sessionStore.getState().sendAiMessageToSession(outboundText, sessionId, outboundAttachments)
       } else {
         // Absolute fallback — should not normally happen
-        connection.sendAiMessage(outboundText, outboundAttachments)
+        sessionStore.getState().sendAiMessage(outboundText, outboundAttachments)
       }
     },
     [addMessage, newConversation],
@@ -189,7 +188,7 @@ export function AgentChat() {
     const conv = store.getActiveConversation()
     const sessionId = conv?.sessionId || sessionStore.getState().currentSessionId
     if (!sessionId) return
-    connection.sendSteerMessage(text, sessionId)
+    sessionStore.getState().sendSteerMessage(text, sessionId)
   }, [])
 
   const handleCancelTurn = useCallback(() => {

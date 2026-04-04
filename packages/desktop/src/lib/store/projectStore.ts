@@ -142,6 +142,12 @@ interface ProjectState {
   getProjectPreferences: (projectId: string) => void
   addProjectPreference: (projectId: string, title: string, content: string) => void
   deleteProjectPreference: (projectId: string, preferenceId: string) => void
+  updateProjectContext: (projectId: string, field: 'notes' | 'summary', value: string) => void
+  sendAgentAction: (
+    projectId: string,
+    sessionId: string,
+    action: 'start' | 'stop' | 'pause' | 'resume' | 'delete',
+  ) => void
 
   // Reset
   reset: () => void
@@ -290,6 +296,10 @@ export const projectStore = create<ProjectState>((set, get) => ({
     connection.sendProjectPreferenceAdd(projectId, title, content),
   deleteProjectPreference: (projectId, preferenceId) =>
     connection.sendProjectPreferenceDelete(projectId, preferenceId),
+  updateProjectContext: (projectId, field, value) =>
+    connection.sendProjectContextUpdate(projectId, field, value),
+  sendAgentAction: (projectId, sessionId, action) =>
+    connection.sendAgentAction(projectId, sessionId, action),
 
   // Reset
   reset: () => {

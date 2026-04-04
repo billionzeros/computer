@@ -1,7 +1,7 @@
 import { ChevronDown, ChevronRight, FileText, RefreshCw, Terminal } from 'lucide-react'
 import { useCallback, useEffect, useState } from 'react'
-import { connection } from '../../lib/connection.js'
 import { useStore } from '../../lib/store.js'
+import { sessionStore } from '../../lib/store/sessionStore.js'
 import { uiStore } from '../../lib/store/uiStore.js'
 
 type DevTab = 'prompt' | 'memories'
@@ -16,8 +16,8 @@ export function DevModePanel() {
   const sessionId = activeConv?.id
 
   const refresh = useCallback(() => {
-    connection.sendConfigQuery('system_prompt', sessionId)
-    connection.sendConfigQuery('memories', sessionId)
+    sessionStore.getState().sendConfigQuery('system_prompt', sessionId)
+    sessionStore.getState().sendConfigQuery('memories', sessionId)
   }, [sessionId])
 
   useEffect(() => {

@@ -10,8 +10,8 @@ import {
   Trash2,
 } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
-import { connection } from '../../lib/connection.js'
 import { projectStore } from '../../lib/store/projectStore.js'
+import { sessionStore } from '../../lib/store/sessionStore.js'
 
 type MemoryScope = 'global' | 'conversation' | 'project'
 
@@ -87,7 +87,7 @@ export function MemoryView() {
       projectInstructionsLoading: true,
       projectPreferencesLoading: true,
     })
-    connection.sendConfigQuery('memories', undefined, activeProjectId)
+    sessionStore.getState().sendConfigQuery('memories', undefined, activeProjectId)
     projectStore.getState().getProjectInstructions(activeProjectId)
     projectStore.getState().getProjectPreferences(activeProjectId)
   }, [activeProjectId])

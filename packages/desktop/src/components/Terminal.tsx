@@ -5,6 +5,7 @@ import { Terminal as XTerm } from '@xterm/xterm'
 import { useEffect, useRef } from 'react'
 import { connection } from '../lib/connection.js'
 import { projectStore } from '../lib/store/projectStore.js'
+import { uiStore } from '../lib/store/uiStore.js'
 import '@xterm/xterm/css/xterm.css'
 
 const TERMINAL_ID = 't1'
@@ -17,8 +18,11 @@ export function Terminal() {
   const projects = projectStore((s) => s.projects)
   const activeProject = projects.find((p) => p.id === activeProjectId)
 
+  const workspacePathRef = useRef(activeProject?.workspacePath)
+
   useEffect(() => {
     if (!containerRef.current) return
+    const { sendTerminalSpawn, sendTerminalData, sendTerminalResize } = uiStore.getState()
 
     const term = new XTerm({
       theme: {
@@ -64,10 +68,10 @@ export function Terminal() {
     fitRef.current = fitAddon
 
     const { cols, rows } = term
-    connection.sendTerminalSpawn(TERMINAL_ID, cols, rows, activeProject?.workspacePath)
+    sendTerminalSpawn(TERMINAL_ID, cols, rows, workspacePathRef.current)
 
     term.onData((data) => {
-      connection.sendTerminalData(TERMINAL_ID, btoa(data))
+      sendTerminalData(TERMINAL_ID, btoa(data))
     })
 
     const unsub = connection.onMessage((channel, msg) => {
@@ -82,7 +86,7 @@ export function Terminal() {
 
     const resizeObserver = new ResizeObserver(() => {
       fitAddon.fit()
-      connection.sendTerminalResize(TERMINAL_ID, term.cols, term.rows)
+      sendTerminalResize(TERMINAL_ID, term.cols, term.rows)
     })
     resizeObserver.observe(containerRef.current)
 

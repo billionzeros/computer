@@ -1,6 +1,5 @@
 import { MoreHorizontal, Pencil, Pin, Search, Trash2 } from 'lucide-react'
 import { useCallback, useMemo, useRef, useState } from 'react'
-import { connection } from '../../lib/connection.js'
 import type { Skill } from '../../lib/skills.js'
 import type { ChatImageAttachment } from '../../lib/store.js'
 import { useStore } from '../../lib/store.js'
@@ -417,7 +416,7 @@ export function TaskListView({ mode }: Props) {
           content: text,
           timestamp: Date.now(),
         })
-        connection.sendAiMessageToSession(text, sessionId)
+        sessionStore.getState().sendAiMessageToSession(text, sessionId)
       }
     })
   }

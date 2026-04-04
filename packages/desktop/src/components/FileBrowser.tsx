@@ -12,6 +12,7 @@ import {
 import { useCallback, useEffect, useState } from 'react'
 import { connection } from '../lib/connection.js'
 import { projectStore } from '../lib/store/projectStore.js'
+import { uiStore } from '../lib/store/uiStore.js'
 
 interface FileEntry {
   name: string
@@ -59,7 +60,7 @@ export function FileBrowser() {
       }
 
       // Send filesystem list on the FILESYNC channel (session-independent)
-      connection.sendFilesystemList(path)
+      uiStore.getState().sendFilesystemList(path)
     },
     [startDir, activeProject?.name],
   )

@@ -11,7 +11,6 @@ import {
   X,
 } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
-import { connection } from '../../lib/connection.js'
 import { projectStore } from '../../lib/store/projectStore.js'
 import { Skeleton, SkeletonLines } from '../Skeleton.js'
 import { Modal } from '../ui/Modal.js'
@@ -89,7 +88,7 @@ function InstructionsModal({
   }, [open, initialValue])
 
   function handleSave() {
-    connection.sendProjectContextUpdate(projectId, 'notes', text)
+    projectStore.getState().updateProjectContext(projectId, 'notes', text)
     onClose()
   }
 
@@ -135,7 +134,7 @@ function MemoryEditModal({
   }, [open, initialValue])
 
   function handleSave() {
-    connection.sendProjectContextUpdate(projectId, 'summary', text)
+    projectStore.getState().updateProjectContext(projectId, 'summary', text)
     onClose()
   }
 
