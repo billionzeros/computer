@@ -5,9 +5,10 @@ import type { Skill } from '../../lib/skills.js'
 import type { ChatImageAttachment } from '../../lib/store.js'
 import { useStore } from '../../lib/store.js'
 import { projectStore } from '../../lib/store/projectStore.js'
+import { sessionStore } from '../../lib/store/sessionStore.js'
+import { Skeleton } from '../Skeleton.js'
 import { ChatInput } from '../chat/ChatInput.js'
 import { EmptyState } from '../chat/EmptyState.js'
-import { Skeleton } from '../Skeleton.js'
 
 function formatRelativeTime(timestamp: number): string {
   const now = Date.now()
@@ -27,12 +28,12 @@ type TaskStatus = 'working' | 'completed' | 'error' | 'idle'
 
 function getTaskStatus(
   sessionId: string | undefined,
-  sessionStatuses: Map<string, { status: string; detail?: string }>,
+  sessionStates: Map<string, { status: string; statusDetail?: string }>,
   messages: { role: string; isError?: boolean }[],
 ): TaskStatus {
   if (!sessionId) return 'idle'
-  const status = sessionStatuses.get(sessionId)
-  if (status?.status === 'working') return 'working'
+  const state = sessionStates.get(sessionId)
+  if (state?.status === 'working') return 'working'
   if (messages.length === 0) return 'idle'
   const lastMsg = [...messages].reverse().find((m) => m.role === 'assistant' || m.role === 'system')
   if (lastMsg?.isError) return 'error'
@@ -52,7 +53,13 @@ function StatusIcon({ status }: { status: TaskStatus }) {
       <svg className="status-icon" width="16" height="16" viewBox="0 0 16 16" fill="none">
         <circle cx="8" cy="8" r="7" fill="var(--success)" opacity="0.15" />
         <circle cx="8" cy="8" r="7" stroke="var(--success)" strokeWidth="1" />
-        <path d="M5 8.5L7 10.5L11 5.5" stroke="var(--success)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+        <path
+          d="M5 8.5L7 10.5L11 5.5"
+          stroke="var(--success)"
+          strokeWidth="1.5"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
       </svg>
     )
   }
@@ -64,7 +71,12 @@ function StatusIcon({ status }: { status: TaskStatus }) {
       <svg className="status-icon" width="16" height="16" viewBox="0 0 16 16" fill="none">
         <circle cx="8" cy="8" r="7" fill="var(--danger)" opacity="0.15" />
         <circle cx="8" cy="8" r="7" stroke="var(--danger)" strokeWidth="1" />
-        <path d="M6 6L10 10M10 6L6 10" stroke="var(--danger)" strokeWidth="1.5" strokeLinecap="round" />
+        <path
+          d="M6 6L10 10M10 6L6 10"
+          stroke="var(--danger)"
+          strokeWidth="1.5"
+          strokeLinecap="round"
+        />
       </svg>
     )
   }
@@ -82,12 +94,12 @@ function StatusDot({ status }: { status: TaskStatus }) {
 
 function getStatusDetail(
   sessionId: string | undefined,
-  sessionStatuses: Map<string, { status: string; detail?: string }>,
+  sessionStates: Map<string, { status: string; statusDetail?: string }>,
   status: TaskStatus,
 ): string | null {
   if (!sessionId) return null
-  const s = sessionStatuses.get(sessionId)
-  if (s?.detail) return s.detail
+  const s = sessionStates.get(sessionId)
+  if (s?.statusDetail) return s.statusDetail
   if (status === 'working') return 'Working...'
   if (status === 'error') return 'Error'
   return null
@@ -143,10 +155,7 @@ function TaskMenu({
               if (e.key === 'Escape') setOpen(false)
             }}
           />
-          <div
-            className="task-menu"
-            style={{ top: pos.top, right: pos.right }}
-          >
+          <div className="task-menu" style={{ top: pos.top, right: pos.right }}>
             <button
               type="button"
               className="task-menu__item"
@@ -215,11 +224,7 @@ function SelectionBar({
           <Trash2 size={14} strokeWidth={1.5} />
           Delete
         </button>
-        <button
-          type="button"
-          className="task-selection-bar__btn"
-          onClick={onCancel}
-        >
+        <button type="button" className="task-selection-bar__btn" onClick={onCancel}>
           Cancel
         </button>
       </div>
@@ -307,11 +312,11 @@ interface Props {
 
 export function TaskListView({ mode }: Props) {
   const allConversations = useStore((s) => s.conversations)
-  const sessionStatuses = useStore((s) => s.sessionStatuses)
+  const sessionStates = sessionStore((s) => s.sessionStates)
   const activeConversationId = useStore((s) => s.activeConversationId)
   const activeProjectId = projectStore((s) => s.activeProjectId)
   const projects = projectStore((s) => s.projects)
-  const sessionsLoaded = useStore((s) => s.sessionsLoaded)
+  const sessionsLoaded = sessionStore((s) => s.sessionsLoaded)
   const switchConversation = useStore((s) => s.switchConversation)
   const deleteConversation = useStore((s) => s.deleteConversation)
   const newConversation = useStore((s) => s.newConversation)
@@ -389,12 +394,13 @@ export function TaskListView({ mode }: Props) {
 
   const handleNewTask = (text: string, _attachments?: ChatImageAttachment[]) => {
     const store = useStore.getState()
+    const sStore = sessionStore.getState()
     const sessionId = `sess_${Date.now().toString(36)}`
     const projectId = projectStore.getState().activeProjectId ?? undefined
     newConversation(undefined, sessionId, projectId)
-    connection.sendSessionCreate(sessionId, {
-      provider: store.currentProvider,
-      model: store.currentModel,
+    sessionStore.getState().createSession(sessionId, {
+      provider: sStore.currentProvider,
+      model: sStore.currentModel,
       projectId,
     })
     const conv = store.findConversationBySession(sessionId)
@@ -486,55 +492,55 @@ export function TaskListView({ mode }: Props) {
             {isLoading ? (
               <TaskTableSkeleton />
             ) : (
-            <div className="task-table__body">
-              {tasks.map((conv) => {
-                const status = getTaskStatus(conv.sessionId, sessionStatuses, conv.messages)
-                const isSelected = selectedIds.has(conv.id)
-                return (
-                  <div
-                    key={conv.id}
-                    className={`task-table__row${isSelected ? ' task-table__row--selected' : ''}`}
-                    onClick={() => handleTaskClick(conv)}
-                    style={{ cursor: 'pointer' }}
-                  >
-                    <div className="task-table__col task-table__col--check">
-                      <SelectionCheckbox
-                        checked={isSelected}
-                        onChange={(e) => {
-                          e.stopPropagation()
-                          toggleSelection(conv.id)
-                        }}
-                      />
-                    </div>
-                    <div className="task-table__col task-table__col--status">
-                      <StatusIcon status={status} />
-                      <span className={`task-table__status-label task-table__status-label--${status}`}>
-                        {STATUS_LABELS[status]}
-                      </span>
-                    </div>
-                    <button
-                      type="button"
-                      className="task-table__col task-table__col--name task-table__col--clickable"
+              <div className="task-table__body">
+                {tasks.map((conv) => {
+                  const status = getTaskStatus(conv.sessionId, sessionStates, conv.messages)
+                  const isSelected = selectedIds.has(conv.id)
+                  return (
+                    <div
+                      key={conv.id}
+                      className={`task-table__row${isSelected ? ' task-table__row--selected' : ''}`}
                       onClick={() => handleTaskClick(conv)}
+                      style={{ cursor: 'pointer' }}
                     >
-                      <span className="task-table__task-title">
-                        {conv.title || 'New task'}
-                      </span>
-                    </button>
-                    <div className="task-table__col task-table__col--updated">
-                      {formatRelativeTime(conv.updatedAt || conv.createdAt)}
+                      <div className="task-table__col task-table__col--check">
+                        <SelectionCheckbox
+                          checked={isSelected}
+                          onChange={(e) => {
+                            e.stopPropagation()
+                            toggleSelection(conv.id)
+                          }}
+                        />
+                      </div>
+                      <div className="task-table__col task-table__col--status">
+                        <StatusIcon status={status} />
+                        <span
+                          className={`task-table__status-label task-table__status-label--${status}`}
+                        >
+                          {STATUS_LABELS[status]}
+                        </span>
+                      </div>
+                      <button
+                        type="button"
+                        className="task-table__col task-table__col--name task-table__col--clickable"
+                        onClick={() => handleTaskClick(conv)}
+                      >
+                        <span className="task-table__task-title">{conv.title || 'New task'}</span>
+                      </button>
+                      <div className="task-table__col task-table__col--updated">
+                        {formatRelativeTime(conv.updatedAt || conv.createdAt)}
+                      </div>
+                      <div className="task-table__col task-table__col--actions">
+                        <TaskMenu
+                          onDelete={() => handleDeleteTask(conv.id)}
+                          onRename={() => {}}
+                          onPin={() => {}}
+                        />
+                      </div>
                     </div>
-                    <div className="task-table__col task-table__col--actions">
-                      <TaskMenu
-                        onDelete={() => handleDeleteTask(conv.id)}
-                        onRename={() => {}}
-                        onPin={() => {}}
-                      />
-                    </div>
-                  </div>
-                )
-              })}
-            </div>
+                  )
+                })}
+              </div>
             )}
           </div>
         </div>
@@ -593,8 +599,8 @@ export function TaskListView({ mode }: Props) {
         ) : (
           <>
             {tasks.map((conv) => {
-              const status = getTaskStatus(conv.sessionId, sessionStatuses, conv.messages)
-              const detail = getStatusDetail(conv.sessionId, sessionStatuses, status)
+              const status = getTaskStatus(conv.sessionId, sessionStates, conv.messages)
+              const detail = getStatusDetail(conv.sessionId, sessionStates, status)
               const isActive = conv.id === activeConversationId
               const isSelected = selectedIds.has(conv.id)
               return (

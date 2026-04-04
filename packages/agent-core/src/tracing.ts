@@ -7,8 +7,8 @@
  */
 
 import { createHash } from 'node:crypto'
-import { type Span, flush as btFlush, initLogger } from 'braintrust'
 import type { TokenUsage } from '@anton/protocol'
+import { type Span, flush as btFlush, initLogger } from 'braintrust'
 
 let tracingEnabled = false
 let logger: ReturnType<typeof initLogger> | null = null
@@ -121,7 +121,7 @@ const MODEL_PRICING: Record<string, ModelPricing> = {
   // OpenAI
   'gpt-4o': { inputPerMillion: 2.5, outputPerMillion: 10 },
   'gpt-4o-mini': { inputPerMillion: 0.15, outputPerMillion: 0.6 },
-  'o3': { inputPerMillion: 10, outputPerMillion: 40 },
+  o3: { inputPerMillion: 10, outputPerMillion: 40 },
   'o4-mini': { inputPerMillion: 1.1, outputPerMillion: 4.4 },
   // Google
   'gemini-2.5-pro': { inputPerMillion: 1.25, outputPerMillion: 10 },

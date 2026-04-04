@@ -1,14 +1,14 @@
 import {
+  File,
   FileCode,
   FileSpreadsheet,
   FileText,
-  Image,
-  File,
   FileType,
-  Upload,
-  Trash2,
-  Loader2,
   FolderOpen,
+  Image,
+  Loader2,
+  Trash2,
+  Upload,
 } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { projectStore } from '../../lib/store/projectStore.js'
@@ -17,17 +17,44 @@ type FileTypeFilter = 'all' | 'code' | 'data' | 'text' | 'image' | 'other'
 
 const FILE_CATEGORIES: Record<string, FileTypeFilter> = {
   // Code
-  js: 'code', jsx: 'code', ts: 'code', tsx: 'code', py: 'code', rs: 'code',
-  go: 'code', sh: 'code', rb: 'code', java: 'code', c: 'code', cpp: 'code',
-  html: 'code', css: 'code', scss: 'code',
+  js: 'code',
+  jsx: 'code',
+  ts: 'code',
+  tsx: 'code',
+  py: 'code',
+  rs: 'code',
+  go: 'code',
+  sh: 'code',
+  rb: 'code',
+  java: 'code',
+  c: 'code',
+  cpp: 'code',
+  html: 'code',
+  css: 'code',
+  scss: 'code',
   // Data
-  json: 'data', yaml: 'data', yml: 'data', csv: 'data', xml: 'data',
-  toml: 'data', sql: 'data',
+  json: 'data',
+  yaml: 'data',
+  yml: 'data',
+  csv: 'data',
+  xml: 'data',
+  toml: 'data',
+  sql: 'data',
   // Text
-  md: 'text', txt: 'text', log: 'text', pdf: 'text', doc: 'text', docx: 'text',
+  md: 'text',
+  txt: 'text',
+  log: 'text',
+  pdf: 'text',
+  doc: 'text',
+  docx: 'text',
   // Image
-  png: 'image', jpg: 'image', jpeg: 'image', gif: 'image', svg: 'image',
-  ico: 'image', webp: 'image',
+  png: 'image',
+  jpg: 'image',
+  jpeg: 'image',
+  gif: 'image',
+  svg: 'image',
+  ico: 'image',
+  webp: 'image',
 }
 
 function getFileCategory(name: string): FileTypeFilter {
@@ -38,11 +65,16 @@ function getFileCategory(name: string): FileTypeFilter {
 function getFileIcon(name: string) {
   const cat = getFileCategory(name)
   switch (cat) {
-    case 'code': return <FileCode size={24} strokeWidth={1.2} />
-    case 'data': return <FileSpreadsheet size={24} strokeWidth={1.2} />
-    case 'text': return <FileText size={24} strokeWidth={1.2} />
-    case 'image': return <Image size={24} strokeWidth={1.2} />
-    default: return <File size={24} strokeWidth={1.2} />
+    case 'code':
+      return <FileCode size={24} strokeWidth={1.2} />
+    case 'data':
+      return <FileSpreadsheet size={24} strokeWidth={1.2} />
+    case 'text':
+      return <FileText size={24} strokeWidth={1.2} />
+    case 'image':
+      return <Image size={24} strokeWidth={1.2} />
+    default:
+      return <File size={24} strokeWidth={1.2} />
   }
 }
 
@@ -103,36 +135,44 @@ export function ProjectFilesView() {
 
   // Group by "date" — we don't have real timestamps from listProjectFiles,
   // so just show as a flat list for now
-  const handleUpload = useCallback((files: FileList) => {
-    if (!activeProjectId) return
-    for (const file of Array.from(files)) {
-      const reader = new FileReader()
-      reader.onload = () => {
-        const base64 = (reader.result as string).split(',')[1] || ''
-        projectStore.getState().uploadProjectFile(
-          activeProjectId,
-          file.name,
-          base64,
-          file.type || 'application/octet-stream',
-          file.size,
-        )
-        // Refresh file list after a short delay
-        setTimeout(() => {
-          projectStore.getState().listProjectFiles(activeProjectId)
-        }, 500)
+  const handleUpload = useCallback(
+    (files: FileList) => {
+      if (!activeProjectId) return
+      for (const file of Array.from(files)) {
+        const reader = new FileReader()
+        reader.onload = () => {
+          const base64 = (reader.result as string).split(',')[1] || ''
+          projectStore
+            .getState()
+            .uploadProjectFile(
+              activeProjectId,
+              file.name,
+              base64,
+              file.type || 'application/octet-stream',
+              file.size,
+            )
+          // Refresh file list after a short delay
+          setTimeout(() => {
+            projectStore.getState().listProjectFiles(activeProjectId)
+          }, 500)
+        }
+        reader.readAsDataURL(file)
       }
-      reader.readAsDataURL(file)
-    }
-  }, [activeProjectId])
+    },
+    [activeProjectId],
+  )
 
-  const handleDelete = useCallback((filename: string) => {
-    if (!activeProjectId) return
-    projectStore.getState().deleteProjectFile(activeProjectId, filename)
-    setDeleteTarget(null)
-    setTimeout(() => {
-      projectStore.getState().listProjectFiles(activeProjectId)
-    }, 300)
-  }, [activeProjectId])
+  const handleDelete = useCallback(
+    (filename: string) => {
+      if (!activeProjectId) return
+      projectStore.getState().deleteProjectFile(activeProjectId, filename)
+      setDeleteTarget(null)
+      setTimeout(() => {
+        projectStore.getState().listProjectFiles(activeProjectId)
+      }, 300)
+    },
+    [activeProjectId],
+  )
 
   const handleDragOver = useCallback((e: React.DragEvent) => {
     e.preventDefault()
@@ -143,13 +183,16 @@ export function ProjectFilesView() {
     setDragging(false)
   }, [])
 
-  const handleDrop = useCallback((e: React.DragEvent) => {
-    e.preventDefault()
-    setDragging(false)
-    if (e.dataTransfer.files.length > 0) {
-      handleUpload(e.dataTransfer.files)
-    }
-  }, [handleUpload])
+  const handleDrop = useCallback(
+    (e: React.DragEvent) => {
+      e.preventDefault()
+      setDragging(false)
+      if (e.dataTransfer.files.length > 0) {
+        handleUpload(e.dataTransfer.files)
+      }
+    },
+    [handleUpload],
+  )
 
   return (
     <div
@@ -187,7 +230,10 @@ export function ProjectFilesView() {
                         key={key}
                         type="button"
                         className={`pf-filter__item${filter === key ? ' pf-filter__item--active' : ''}`}
-                        onClick={() => { setFilter(key); setFilterOpen(false) }}
+                        onClick={() => {
+                          setFilter(key)
+                          setFilterOpen(false)
+                        }}
                       >
                         {FILTER_LABELS[key]}
                       </button>
@@ -239,11 +285,11 @@ export function ProjectFilesView() {
 
           {filtered.map((file) => (
             <div key={file.name} className={`pf-card pf-card--${getFileCategory(file.name)}`}>
-              <div className="pf-card__icon">
-                {getFileIcon(file.name)}
-              </div>
+              <div className="pf-card__icon">{getFileIcon(file.name)}</div>
               <div className="pf-card__info">
-                <span className="pf-card__name" title={file.name}>{file.name}</span>
+                <span className="pf-card__name" title={file.name}>
+                  {file.name}
+                </span>
                 <span className="pf-card__meta">
                   <span className="pf-card__ext">{getFileExt(file.name)}</span>
                   <span className="pf-card__size">{formatSize(file.size)}</span>
@@ -282,10 +328,18 @@ export function ProjectFilesView() {
                 </p>
               </div>
               <div className="modal-card__footer">
-                <button type="button" className="button button--ghost" onClick={() => setDeleteTarget(null)}>
+                <button
+                  type="button"
+                  className="button button--ghost"
+                  onClick={() => setDeleteTarget(null)}
+                >
                   Cancel
                 </button>
-                <button type="button" className="button button--danger" onClick={() => handleDelete(deleteTarget)}>
+                <button
+                  type="button"
+                  className="button button--danger"
+                  onClick={() => handleDelete(deleteTarget)}
+                >
                   Delete
                 </button>
               </div>

@@ -28,7 +28,11 @@ export function createAirtableTools(api: AirtableAPI): AgentTool[] {
       async execute() {
         try {
           const { bases } = await api.listBases()
-          const summary = bases.map((b) => ({ id: b.id, name: b.name, permission: b.permissionLevel }))
+          const summary = bases.map((b) => ({
+            id: b.id,
+            name: b.name,
+            permission: b.permissionLevel,
+          }))
           return toolResult(JSON.stringify(summary, null, 2))
         } catch (err) {
           return toolResult(`Error: ${(err as Error).message}`, true)
@@ -68,20 +72,25 @@ export function createAirtableTools(api: AirtableAPI): AgentTool[] {
         base_id: Type.String({ description: 'Airtable base ID' }),
         table: Type.String({ description: 'Table name or ID' }),
         filter_by_formula: Type.Optional(
-          Type.String({ description: 'Airtable formula to filter records (e.g., "{Status} = \'Done\'")' }),
+          Type.String({
+            description: 'Airtable formula to filter records (e.g., "{Status} = \'Done\'")',
+          }),
         ),
         sort_json: Type.Optional(
           Type.String({
-            description:
-              'Sort as JSON array, e.g. [{"field":"Name","direction":"asc"}]',
+            description: 'Sort as JSON array, e.g. [{"field":"Name","direction":"asc"}]',
           }),
         ),
         fields: Type.Optional(
           Type.String({ description: 'Comma-separated field names to return' }),
         ),
-        max_records: Type.Optional(Type.Number({ description: 'Maximum number of records (default: 100)' })),
+        max_records: Type.Optional(
+          Type.Number({ description: 'Maximum number of records (default: 100)' }),
+        ),
         view: Type.Optional(Type.String({ description: 'View name or ID to use' })),
-        offset: Type.Optional(Type.String({ description: 'Pagination offset from previous response' })),
+        offset: Type.Optional(
+          Type.String({ description: 'Pagination offset from previous response' }),
+        ),
       }),
       async execute(_id, params) {
         try {

@@ -31,9 +31,7 @@ export function createLinkedInTools(api: UnipileLinkedInAPI): AgentTool[] {
       async execute() {
         try {
           const result = await api.listAccounts()
-          const linkedin = (result.items ?? []).filter(
-            (a) => a.type?.toUpperCase() === 'LINKEDIN',
-          )
+          const linkedin = (result.items ?? []).filter((a) => a.type?.toUpperCase() === 'LINKEDIN')
           if (!linkedin.length) return toolResult('No LinkedIn accounts connected via Unipile.')
           return toolResult(JSON.stringify(linkedin, null, 2))
         } catch (err) {
@@ -108,7 +106,9 @@ export function createLinkedInTools(api: UnipileLinkedInAPI): AgentTool[] {
       description: '[LinkedIn] List your LinkedIn message conversations.',
       parameters: Type.Object({
         limit: Type.Optional(Type.Number({ description: 'Max chats to return (default: 20)' })),
-        cursor: Type.Optional(Type.String({ description: 'Pagination cursor from previous response' })),
+        cursor: Type.Optional(
+          Type.String({ description: 'Pagination cursor from previous response' }),
+        ),
       }),
       async execute(_id, params) {
         try {
@@ -192,7 +192,9 @@ export function createLinkedInTools(api: UnipileLinkedInAPI): AgentTool[] {
       description:
         '[LinkedIn] Search for people on LinkedIn by keyword (name, title, company, etc.).',
       parameters: Type.Object({
-        query: Type.String({ description: 'Search keywords (e.g., "software engineer San Francisco")' }),
+        query: Type.String({
+          description: 'Search keywords (e.g., "software engineer San Francisco")',
+        }),
         limit: Type.Optional(Type.Number({ description: 'Max results to return' })),
       }),
       async execute(_id, params) {
@@ -212,8 +214,7 @@ export function createLinkedInTools(api: UnipileLinkedInAPI): AgentTool[] {
     defineTool({
       name: 'linkedin_list_invitations',
       label: 'List LinkedIn Invitations',
-      description:
-        '[LinkedIn] List sent or received LinkedIn connection invitations.',
+      description: '[LinkedIn] List sent or received LinkedIn connection invitations.',
       parameters: Type.Object({
         direction: Type.String({
           description: '"sent" or "received"',
@@ -235,8 +236,7 @@ export function createLinkedInTools(api: UnipileLinkedInAPI): AgentTool[] {
     defineTool({
       name: 'linkedin_send_invitation',
       label: 'Send Connection Request',
-      description:
-        '[LinkedIn] Send a LinkedIn connection request to a user.',
+      description: '[LinkedIn] Send a LinkedIn connection request to a user.',
       parameters: Type.Object({
         profile_id: Type.String({
           description: 'Profile ID of the person to invite',
@@ -337,7 +337,8 @@ export function createLinkedInTools(api: UnipileLinkedInAPI): AgentTool[] {
         post_id: Type.String({ description: 'The post ID to react to' }),
         reaction: Type.Optional(
           Type.String({
-            description: 'Reaction type: LIKE, CELEBRATE, SUPPORT, LOVE, INSIGHTFUL, FUNNY (default: LIKE)',
+            description:
+              'Reaction type: LIKE, CELEBRATE, SUPPORT, LOVE, INSIGHTFUL, FUNNY (default: LIKE)',
           }),
         ),
       }),

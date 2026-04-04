@@ -15,17 +15,17 @@ import { resolve } from 'node:path'
  * Prevents SSRF attacks where the agent could probe internal infrastructure.
  */
 const PRIVATE_IP_PATTERNS = [
-  /^127\./,                          // Loopback
-  /^10\./,                           // Class A private
-  /^172\.(1[6-9]|2\d|3[01])\./,     // Class B private
-  /^192\.168\./,                     // Class C private
-  /^169\.254\./,                     // Link-local
-  /^0\./,                            // Current network
-  /^fc/i,                            // IPv6 unique local
-  /^fd/i,                            // IPv6 unique local
-  /^fe80/i,                          // IPv6 link-local
-  /^::1$/,                           // IPv6 loopback
-  /^::$/,                            // IPv6 unspecified
+  /^127\./, // Loopback
+  /^10\./, // Class A private
+  /^172\.(1[6-9]|2\d|3[01])\./, // Class B private
+  /^192\.168\./, // Class C private
+  /^169\.254\./, // Link-local
+  /^0\./, // Current network
+  /^fc/i, // IPv6 unique local
+  /^fd/i, // IPv6 unique local
+  /^fe80/i, // IPv6 link-local
+  /^::1$/, // IPv6 loopback
+  /^::$/, // IPv6 unspecified
 ]
 
 const PRIVATE_HOSTNAMES = new Set([
@@ -66,24 +66,19 @@ export function isPrivateHost(hostname: string): boolean {
  * Default forbidden paths — always blocked regardless of config.
  * These protect system-critical and credential files.
  */
-const ALWAYS_FORBIDDEN = [
-  '/etc/shadow',
-  '/etc/passwd',
-  '/etc/sudoers',
-  '/etc/ssh/sshd_config',
-]
+const ALWAYS_FORBIDDEN = ['/etc/shadow', '/etc/passwd', '/etc/sudoers', '/etc/ssh/sshd_config']
 
 /** Sensitive path patterns that are blocked by default. */
 const SENSITIVE_PATTERNS = [
-  /\/\.ssh\/(?:id_|authorized_keys|known_hosts|config)/,  // SSH keys and config
-  /\/\.gnupg\//,                                            // GPG keys
-  /\/\.aws\/credentials/,                                   // AWS credentials
-  /\/\.config\/gcloud/,                                     // GCP credentials
-  /\/\.kube\/config/,                                       // Kubernetes config
-  /\/\.docker\/config\.json/,                               // Docker auth
-  /\/\.netrc/,                                              // FTP/HTTP credentials
-  /\/\.npmrc/,                                              // npm auth tokens
-  /\/\.pypirc/,                                             // PyPI auth tokens
+  /\/\.ssh\/(?:id_|authorized_keys|known_hosts|config)/, // SSH keys and config
+  /\/\.gnupg\//, // GPG keys
+  /\/\.aws\/credentials/, // AWS credentials
+  /\/\.config\/gcloud/, // GCP credentials
+  /\/\.kube\/config/, // Kubernetes config
+  /\/\.docker\/config\.json/, // Docker auth
+  /\/\.netrc/, // FTP/HTTP credentials
+  /\/\.npmrc/, // npm auth tokens
+  /\/\.pypirc/, // PyPI auth tokens
 ]
 
 /**
@@ -93,10 +88,7 @@ const SENSITIVE_PATTERNS = [
  * @param forbiddenPaths — additional patterns from config.security.forbiddenPaths
  * @returns reason string if forbidden, null if allowed
  */
-export function checkForbiddenPath(
-  filePath: string,
-  forbiddenPaths: string[] = [],
-): string | null {
+export function checkForbiddenPath(filePath: string, forbiddenPaths: string[] = []): string | null {
   const resolved = resolve(filePath)
 
   // Always-forbidden system files
@@ -147,11 +139,11 @@ export function isDangerousSql(sql: string): boolean {
  * Patterns that indicate dangerous filesystem operations requiring confirmation.
  */
 const DANGEROUS_FS_PATTERNS = [
-  /^\/$/,           // Root directory
-  /^\/etc\/?$/,     // System config
-  /^\/usr\/?$/,     // System binaries
-  /^\/boot\/?$/,    // Boot partition
-  /^\/var\/?$/,     // System variable data
+  /^\/$/, // Root directory
+  /^\/etc\/?$/, // System config
+  /^\/usr\/?$/, // System binaries
+  /^\/boot\/?$/, // Boot partition
+  /^\/var\/?$/, // System variable data
 ]
 
 /**

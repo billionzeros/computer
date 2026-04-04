@@ -51,12 +51,7 @@ function resolveModel(provider: string, modelId: string): Model<Api> | undefined
 
   return undefined
 }
-import {
-  type AskUserHandler,
-  CORE_SYSTEM_PROMPT,
-  type ToolCallbacks,
-  buildTools,
-} from './agent.js'
+import { type AskUserHandler, CORE_SYSTEM_PROMPT, type ToolCallbacks, buildTools } from './agent.js'
 import {
   type CompactionConfig,
   type CompactionState,
@@ -67,13 +62,13 @@ import {
 import { type ContextInfo, type MemoryData, assembleConversationContext } from './context.js'
 import {
   type Span,
-  startTrace,
-  startChildTrace,
-  estimateCost,
   categorizeError,
   computeHeuristicScores,
-  logScore,
+  estimateCost,
   hashPromptVersion,
+  logScore,
+  startChildTrace,
+  startTrace,
 } from './tracing.js'
 
 export type ConfirmHandler = (command: string, reason: string) => Promise<boolean>
@@ -437,7 +432,8 @@ export class Session {
               } else {
                 return {
                   block: true,
-                  reason: 'Write to system directory requires confirmation but no handler available.',
+                  reason:
+                    'Write to system directory requires confirmation but no handler available.',
                 }
               }
             }
@@ -740,7 +736,11 @@ export class Session {
       try {
         // End any orphaned tool spans
         for (const [, s] of toolSpans) {
-          try { s.end() } catch { /* best-effort cleanup */ }
+          try {
+            s.end()
+          } catch {
+            /* best-effort cleanup */
+          }
         }
         toolSpans.clear()
 
@@ -793,45 +793,45 @@ export class Session {
     }
 
     try {
-    // Yield any pending compaction event
-    if (this.pendingCompactionEvent) {
-      yield this.pendingCompactionEvent
-      this.pendingCompactionEvent = null
-    }
-
-    // Yield AI-generated title if available and meaningful
-    if (aiTitlePromise) {
-      const aiTitle = await aiTitlePromise
-      // Skip AI title if it's just "New Conversation" — keep the regex title instead
-      if (aiTitle && aiTitle.toLowerCase() !== 'new conversation') {
-        this.title = aiTitle
-        yield { type: 'title_update', title: aiTitle }
+      // Yield any pending compaction event
+      if (this.pendingCompactionEvent) {
+        yield this.pendingCompactionEvent
+        this.pendingCompactionEvent = null
       }
-    }
 
-    console.log(
-      `[session ${this.id}] processMessage complete: ${eventCount} events, ${textEventCount} text chunks`,
-    )
-    if (eventCount === 0) {
-      console.error(
-        `[session ${this.id}] WARNING: No events produced! The LLM may not have been called. Check API key.`,
+      // Yield AI-generated title if available and meaningful
+      if (aiTitlePromise) {
+        const aiTitle = await aiTitlePromise
+        // Skip AI title if it's just "New Conversation" — keep the regex title instead
+        if (aiTitle && aiTitle.toLowerCase() !== 'new conversation') {
+          this.title = aiTitle
+          yield { type: 'title_update', title: aiTitle }
+        }
+      }
+
+      console.log(
+        `[session ${this.id}] processMessage complete: ${eventCount} events, ${textEventCount} text chunks`,
       )
-    }
+      if (eventCount === 0) {
+        console.error(
+          `[session ${this.id}] WARNING: No events produced! The LLM may not have been called. Check API key.`,
+        )
+      }
 
-    // Final persist (incremental persists happen during tool_execution_end/turn_end,
-    // but this ensures we capture any title or compaction state changes)
-    this.persist()
+      // Final persist (incremental persists happen during tool_execution_end/turn_end,
+      // but this ensures we capture any title or compaction state changes)
+      this.persist()
 
-    // Close the trace span in normal flow
-    closeTraceSpan()
+      // Close the trace span in normal flow
+      closeTraceSpan()
 
-    yield {
-      type: 'done',
-      usage: this.lastTurnUsage,
-      cumulativeUsage: this.getCumulativeUsage(),
-      provider: (this.resolvedModel as unknown as { provider: string }).provider,
-      model: (this.resolvedModel as unknown as { id: string }).id,
-    }
+      yield {
+        type: 'done',
+        usage: this.lastTurnUsage,
+        cumulativeUsage: this.getCumulativeUsage(),
+        provider: (this.resolvedModel as unknown as { provider: string }).provider,
+        model: (this.resolvedModel as unknown as { id: string }).id,
+      }
     } finally {
       // Safety net: ensure trace span is always closed, even on generator abort or exception
       closeTraceSpan('generator_terminated')
@@ -1737,8 +1737,8 @@ Do not call this on every turn — only once per session when there is something
     if (this.availableWorkflows && this.availableWorkflows.length > 0) {
       let workflowBlock =
         'The following automation workflows are available for the user to install. ' +
-        'If the user\'s request matches a workflow, suggest it naturally in your response. ' +
-        'Don\'t force it — only suggest when genuinely relevant. ' +
+        "If the user's request matches a workflow, suggest it naturally in your response. " +
+        "Don't force it — only suggest when genuinely relevant. " +
         'Mention the workflow by name and briefly describe what it does.\n\n'
       for (const wf of this.availableWorkflows) {
         workflowBlock += `### ${wf.name}\n${wf.description}\n${wf.whenToUse}\n\n`

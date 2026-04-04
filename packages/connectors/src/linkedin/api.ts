@@ -135,9 +135,7 @@ export class UnipileLinkedInAPI {
   private async ensureAccountId(): Promise<string> {
     if (this.accountId) return this.accountId
     const accounts = await this.listAccounts()
-    const linkedin = (accounts.items ?? []).filter(
-      (a) => a.type?.toUpperCase() === 'LINKEDIN',
-    )
+    const linkedin = (accounts.items ?? []).filter((a) => a.type?.toUpperCase() === 'LINKEDIN')
     if (linkedin[0]) {
       this.accountId = linkedin[0].id
     }
@@ -205,8 +203,10 @@ export class UnipileLinkedInAPI {
 
   // ── Messaging ──
 
-  async listChats(opts: { limit?: number; cursor?: string; account_id?: string } = {}): Promise<UnipileChatList> {
-    const accountId = opts.account_id ?? await this.ensureAccountId()
+  async listChats(
+    opts: { limit?: number; cursor?: string; account_id?: string } = {},
+  ): Promise<UnipileChatList> {
+    const accountId = opts.account_id ?? (await this.ensureAccountId())
     return this.request('/chats', {
       params: {
         account_id: accountId,

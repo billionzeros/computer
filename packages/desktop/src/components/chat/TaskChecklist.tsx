@@ -65,12 +65,18 @@ export function TaskChecklist({ tasks }: Props) {
                     {task.status === 'completed' ? (
                       <span className="task-checklist-v2__icon--done">✓</span>
                     ) : task.status === 'in_progress' ? (
-                      <Loader2 size={13} strokeWidth={1.5} className="task-checklist-v2__icon--progress" />
+                      <Loader2
+                        size={13}
+                        strokeWidth={1.5}
+                        className="task-checklist-v2__icon--progress"
+                      />
                     ) : (
                       <span className="task-checklist-v2__icon--pending">○</span>
                     )}
                   </span>
-                  <span className={`task-checklist-v2__item-text task-checklist-v2__item-text--${task.status}`}>
+                  <span
+                    className={`task-checklist-v2__item-text task-checklist-v2__item-text--${task.status}`}
+                  >
                     {task.status === 'in_progress' ? task.activeForm : task.content}
                   </span>
                 </div>

@@ -112,7 +112,13 @@ export interface WorkflowManifest {
  */
 export interface WorkflowHook {
   /** When this hook runs */
-  event: 'beforeEmailSend' | 'afterLeadScored' | 'beforeSheetUpdate' | 'afterRun' | 'onError' | string
+  event:
+    | 'beforeEmailSend'
+    | 'afterLeadScored'
+    | 'beforeSheetUpdate'
+    | 'afterRun'
+    | 'onError'
+    | string
   /** What type of hook */
   type: 'script' | 'validate' | 'notify' | 'log'
   /** For script hooks: command to run */

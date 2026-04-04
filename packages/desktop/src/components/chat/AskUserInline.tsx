@@ -40,10 +40,11 @@ export function AskUserInline({ questions, onSubmit }: Props) {
   }
 
   // Auto-submit when all questions have answers (and there are answers)
-  const checkAutoSubmit = (newAnswers: Record<string, string>, newCustom: Record<string, string>) => {
-    const done = questions.every(
-      (q) => newAnswers[q.question] || newCustom[q.question]?.trim(),
-    )
+  const checkAutoSubmit = (
+    newAnswers: Record<string, string>,
+    newCustom: Record<string, string>,
+  ) => {
+    const done = questions.every((q) => newAnswers[q.question] || newCustom[q.question]?.trim())
     if (done) {
       const final: Record<string, string> = {}
       for (const q of questions) {
@@ -67,9 +68,7 @@ export function AskUserInline({ questions, onSubmit }: Props) {
     <div className="ask-inline">
       <div className="ask-inline__card">
         {questions.length > 1 && (
-          <div className="ask-inline__intro">
-            Let me clarify a few things:
-          </div>
+          <div className="ask-inline__intro">Let me clarify a few things:</div>
         )}
         {questions.map((q, qi) => {
           const options = (q.options ?? []).map(normalizeOption)

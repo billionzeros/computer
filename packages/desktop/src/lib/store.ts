@@ -1,18 +1,7 @@
-import {
-  type AskUserQuestion,
-  Channel,
-  type TokenUsage,
-} from '@anton/protocol'
+import { Channel } from '@anton/protocol'
 import { create } from 'zustand'
-import { type Artifact, extractArtifact } from './artifacts.js'
+import { extractArtifact } from './artifacts.js'
 import { type ConnectionStatus, type WsPayload, connection } from './connection.js'
-// Domain stores
-import { connectorStore } from './store/connectorStore.js'
-import { updateStore } from './store/updateStore.js'
-import { usageStore } from './store/usageStore.js'
-import { uiStore } from './store/uiStore.js'
-import { artifactStore } from './store/artifactStore.js'
-import { projectStore } from './store/projectStore.js'
 import {
   type Conversation,
   autoTitle,
@@ -20,6 +9,15 @@ import {
   loadConversations,
   saveConversations,
 } from './conversations.js'
+import { artifactStore } from './store/artifactStore.js'
+import { connectionStore } from './store/connectionStore.js'
+// Domain stores
+import { connectorStore } from './store/connectorStore.js'
+import { projectStore } from './store/projectStore.js'
+import { sessionStore } from './store/sessionStore.js'
+import { uiStore } from './store/uiStore.js'
+import { updateStore } from './store/updateStore.js'
+import { usageStore } from './store/usageStore.js'
 import type {
   WsAgentCreated,
   WsAgentDeleted,
@@ -186,13 +184,7 @@ export interface UpdateInfo {
   releaseUrl: string | null
 }
 
-export type UpdateStage =
-  | 'downloading'
-  | 'replacing'
-  | 'restarting'
-  | 'done'
-  | 'error'
-  | null
+export type UpdateStage = 'downloading' | 'replacing' | 'restarting' | 'done' | 'error' | null
 
 export function updateStageLabel(stage: string | null): string {
   switch (stage) {
@@ -283,18 +275,8 @@ export function saveMachines(machines: SavedMachine[]) {
 // ── Store ───────────────────────────────────────────────────────────
 
 interface AppState {
-  // Connection
+  // Connection (kept for backward compat during migration)
   connectionStatus: ConnectionStatus
-  agentStatus: AgentStatus
-
-  // Sessions (server-side)
-  currentSessionId: string | null
-  currentProvider: string
-  currentModel: string
-  sessions: SessionMeta[]
-  sessionsLoaded: boolean
-  providers: ProviderInfo[]
-  defaults: { provider: string; model: string }
 
   // Conversations (client-side, linked to sessions)
   conversations: Conversation[]
@@ -304,85 +286,40 @@ interface AppState {
   sidebarTab: SidebarTab
   searchQuery: string
 
-  // Last response model info (for display only)
-  lastResponseProvider: string | null
-  lastResponseModel: string | null
-
-  // Token usage
-  turnUsage: TokenUsage | null
-  sessionUsage: TokenUsage | null
-
-  // Turn timing
-  workingStartedAt: number | null
-  lastTurnDurationMs: number | null
-  turnStatsConversationId: string | null // which conversation the turn stats belong to
-  workingSessionId: string | null // which session is currently processing
-
-  // Agent status detail & steps
-  agentStatusDetail: string | null
-  agentSteps: AgentStep[]
-
-  // Task tracker (Claude Code–style work plan)
-  currentTasks: import('@anton/protocol').TaskItem[]
-  // Per-session task storage so tasks don't leak across conversations
-  _sessionTasks: Map<string, import('@anton/protocol').TaskItem[]>
-
-  // Session readiness tracking (race condition fix)
-  _sessionResolvers: Map<string, () => void>
-
   // Current assistant message ID (for appending text across tool interruptions)
   _currentAssistantMsgId: string | null
   // Per-session assistant message tracking (for multi-conversation isolation)
   _sessionAssistantMsgIds: Map<string, string>
-  // Track tool call IDs for tools with dedicated UI (ask_user, task_tracker, etc.)
-  // so their tool_results can be silently discarded
-  _hiddenToolCallIds: Set<string>
-  // Map tool call IDs to their names so tool_results can inherit the toolName
-  _toolCallNames: Map<string, { name: string; input?: Record<string, unknown> }>
 
   // Citations: maps assistant message ID → sources extracted from web_search
   citations: Map<string, CitationSource[]>
   _pendingCitationSourcesQueue: CitationSource[]
   _pendingWebSearchToolCallIds: Set<string>
 
-  // Per-session status tracking
-  sessionStatuses: Map<string, { status: AgentStatus; detail?: string }>
-
-  // Session streaming & history tracking
-  _activeStreamingSessions: Set<string>
-  _sessionsNeedingHistoryRefresh: Set<string>
-  // Sync-first protocol: sessions currently loading history from server
-  _syncingSessionIds: Set<string>
-  // Messages received while a session was still syncing (queued for replay)
-  _pendingSyncMessages: Map<string, WsPayload[]>
-  // Pagination: whether a session has older messages to load
-  _sessionHasMore: Map<string, boolean>
-  // Sessions currently loading older messages (scroll-up pagination)
-  _loadingOlderSessions: Set<string>
-
-  // Pending confirmation
-  pendingConfirm: { id: string; command: string; reason: string; sessionId?: string } | null
-
-  // Plan review
-  pendingPlan: { id: string; title: string; content: string; sessionId?: string } | null
-
-  // Ask-user questionnaire
-  pendingAskUser: { id: string; questions: AskUserQuestion[]; sessionId?: string } | null
-
   // Navigation (orchestration — delegates to uiStore but handles conversation routing)
-  setActiveView: (view: 'home' | 'chat' | 'memory' | 'agents' | 'terminal' | 'files' | 'connectors' | 'developer' | 'skills' | 'workflows' | 'projects') => void
+  setActiveView: (
+    view:
+      | 'home'
+      | 'chat'
+      | 'memory'
+      | 'agents'
+      | 'terminal'
+      | 'files'
+      | 'connectors'
+      | 'developer'
+      | 'skills'
+      | 'workflows'
+      | 'projects',
+  ) => void
   setActiveMode: (mode: 'chat' | 'computer') => void
 
   // Actions
   setConnectionStatus: (status: ConnectionStatus) => void
-  setAgentStatus: (status: AgentStatus, sessionId?: string) => void
   setSidebarTab: (tab: SidebarTab) => void
   setSearchQuery: (query: string) => void
 
-  // Session actions
+  // Session model update on conversation (keeps conversation provider/model in sync)
   setCurrentSession: (id: string, provider: string, model: string) => void
-  setSessions: (sessions: SessionMeta[]) => void
-  setProviders: (providers: ProviderInfo[], defaults: { provider: string; model: string }) => void
 
   // Conversation actions
   newConversation: (
@@ -408,40 +345,13 @@ interface AppState {
   loadOlderMessages: (sessionId: string) => void
   updateConversationTitle: (sessionId: string, title: string) => void
 
-  // Response model tracking
-  setLastResponseModel: (provider: string, model: string) => void
-
-  // Usage actions (turn/session usage stays here, aggregate stats moved to usageStore)
-  setUsage: (turn: TokenUsage | null, session: TokenUsage | null) => void
-
-  // Agent status & steps actions
-  setAgentStatusDetail: (detail: string | null) => void
-  addAgentStep: (step: AgentStep) => void
-  updateAgentStep: (id: string, updates: Partial<AgentStep>) => void
-  clearAgentSteps: () => void
-
-  // Session readiness actions
+  // Session readiness (delegates to sessionStore)
   registerPendingSession: (id: string) => Promise<void>
   resolvePendingSession: (id: string) => void
 
-  // Confirm actions
-  setPendingConfirm: (
-    confirm: { id: string; command: string; reason: string; sessionId?: string } | null,
-  ) => void
-
-  // Plan actions
-  setPendingPlan: (
-    plan: { id: string; title: string; content: string; sessionId?: string } | null,
-  ) => void
+  // UI panel actions
   setSidePanelView: (view: 'artifacts' | 'plan' | 'context' | 'browser' | 'devmode') => void
   openContextPanel: () => void
-
-  // Ask-user actions
-  setPendingAskUser: (
-    ask: { id: string; questions: AskUserQuestion[]; sessionId?: string } | null,
-  ) => void
-
-  // Update actions — moved to updateStore
 
   // Reset actions
   resetForDisconnect: () => void
@@ -451,63 +361,24 @@ interface AppState {
 export const useStore = create<AppState>((set, get) => {
   // Load persisted conversations
   const persisted = loadConversations()
-  const savedModel = loadSelectedModel()
   const savedActiveConvId = localStorage.getItem(ACTIVE_CONV_KEY)
   // Only restore if the conversation still exists
   const restoredActiveId =
     savedActiveConvId && persisted.some((c) => c.id === savedActiveConvId)
       ? savedActiveConvId
       : null
-  // Prefer per-conversation model over global saved model
-  const activeConvModel = restoredActiveId ? persisted.find((c) => c.id === restoredActiveId) : null
-  const initProvider = activeConvModel?.provider ?? savedModel?.provider ?? 'anthropic'
-  const initModel = activeConvModel?.model ?? savedModel?.model ?? 'claude-sonnet-4-6'
 
   return {
     connectionStatus: 'disconnected',
-    agentStatus: 'idle',
-    currentSessionId: null,
-    currentProvider: initProvider,
-    currentModel: initModel,
-    sessions: [],
-    sessionsLoaded: false,
-    providers: [],
-    defaults: { provider: 'anthropic', model: 'claude-sonnet-4-6' },
     conversations: persisted,
     activeConversationId: restoredActiveId,
     sidebarTab: 'history',
     searchQuery: '',
-    lastResponseProvider: null,
-    lastResponseModel: null,
-    turnUsage: null,
-    sessionUsage: null,
-    workingStartedAt: null,
-    lastTurnDurationMs: null,
-    turnStatsConversationId: null,
-    workingSessionId: null,
-    agentStatusDetail: null,
-    agentSteps: [],
-    currentTasks: [],
-    _sessionTasks: new Map(),
-    _sessionResolvers: new Map(),
     _currentAssistantMsgId: null,
     _sessionAssistantMsgIds: new Map(),
-    _hiddenToolCallIds: new Set(),
-    _toolCallNames: new Map(),
     citations: new Map(),
     _pendingCitationSourcesQueue: [],
     _pendingWebSearchToolCallIds: new Set(),
-    sessionStatuses: new Map(),
-    _activeStreamingSessions: new Set(),
-    _sessionsNeedingHistoryRefresh: new Set(),
-    _syncingSessionIds: new Set(),
-    _pendingSyncMessages: new Map(),
-    _sessionHasMore: new Map(),
-    _loadingOlderSessions: new Set(),
-    pendingConfirm: null,
-    pendingPlan: null,
-    pendingAskUser: null,
-
 
     setActiveMode: (mode) => {
       localStorage.setItem('anton-mode', mode)
@@ -540,65 +411,12 @@ export const useStore = create<AppState>((set, get) => {
       uiStore.setState({ activeView: view })
     },
 
-    // Connector actions — moved to connectorStore
-
     setConnectionStatus: (status) => set({ connectionStatus: status }),
-    setAgentStatus: (status, sessionId?) => {
-      const prev = get().agentStatus
-
-      // Clear any existing stuck-state timeout
-      if ((window as unknown as Record<string, unknown>).__stuckTimeout) {
-        clearTimeout((window as unknown as Record<string, unknown>).__stuckTimeout as number)
-        ;(window as unknown as Record<string, unknown>).__stuckTimeout = null
-      }
-
-      if (status === 'working' && prev !== 'working') {
-        set({
-          agentStatus: status,
-          workingStartedAt: Date.now(),
-          lastTurnDurationMs: null,
-          turnUsage: null,
-          currentTasks: [], // Clear previous turn's task list
-          workingSessionId: sessionId || null,
-        })
-
-        // Safety net: if stuck in "working" for 5 min with no events, auto-recover
-        ;(window as unknown as Record<string, unknown>).__stuckTimeout = window.setTimeout(
-          () => {
-            const current = get()
-            if (current.agentStatus === 'working') {
-              console.error(
-                '[store] Stuck-state timeout: agent has been "working" for 5 minutes without completing. Auto-recovering to idle.',
-              )
-              set({ agentStatus: 'idle', workingSessionId: null, _currentAssistantMsgId: null })
-              current.clearAgentSteps()
-              current.setAgentStatusDetail(null)
-            }
-          },
-          5 * 60 * 1000,
-        )
-      } else if (status === 'idle' && prev === 'working') {
-        const started = get().workingStartedAt
-        const duration = started ? Date.now() - started : null
-        set({
-          agentStatus: status,
-          lastTurnDurationMs: duration,
-          turnStatsConversationId: get().activeConversationId,
-          workingSessionId: null,
-        })
-      } else {
-        set({
-          agentStatus: status,
-          workingSessionId: status === 'working' ? sessionId || null : null,
-        })
-      }
-    },
     setSidebarTab: (tab) => set({ sidebarTab: tab }),
     setSearchQuery: (query) => set({ searchQuery: query }),
 
     setCurrentSession: (id, provider, model) => {
-      saveSelectedModel(provider, model)
-      // Also persist model on the active conversation
+      // Persist model on the active conversation (conversation-level concern)
       set((state) => {
         const activeId = state.activeConversationId
         const conversations = activeId
@@ -607,38 +425,18 @@ export const useStore = create<AppState>((set, get) => {
             )
           : state.conversations
         if (activeId) saveConversations(conversations)
-        return {
-          currentSessionId: id,
-          currentProvider: provider,
-          currentModel: model,
-          conversations,
-        }
-      })
-    },
-
-    setSessions: (sessions) => set({ sessions, sessionsLoaded: true }),
-
-    setProviders: (providers, defaults) => {
-      const saved = loadSelectedModel()
-      // Only use server defaults if no local selection is persisted
-      const provider = saved?.provider ?? defaults.provider
-      const model = saved?.model ?? defaults.model
-      set({
-        providers,
-        defaults,
-        currentProvider: provider,
-        currentModel: model,
+        return { conversations }
       })
     },
 
     newConversation: (title, sessionId, projectId, agentSessionId) => {
-      const { currentProvider, currentModel } = get()
+      const ss = sessionStore.getState()
       const conv = createConversation(
         title,
         sessionId,
         projectId,
-        currentProvider,
-        currentModel,
+        ss.currentProvider,
+        ss.currentModel,
         agentSessionId,
       )
       set((state) => {
@@ -648,19 +446,24 @@ export const useStore = create<AppState>((set, get) => {
         return {
           conversations,
           activeConversationId: conv.id,
-          agentStatus: 'idle' as AgentStatus,
-          agentStatusDetail: null,
-          workingSessionId: null,
-          workingStartedAt: null,
-          currentTasks: [],
         }
       })
+      // Reset session state for new conversation
+      ss.setAgentStatus('idle')
+      ss.setAgentStatusDetail(null)
+      ss.setCurrentTasks([])
       return conv.id
     },
 
     appendConversation: (title, sessionId, projectId) => {
-      const { currentProvider, currentModel } = get()
-      const conv = createConversation(title, sessionId, projectId, currentProvider, currentModel)
+      const ss = sessionStore.getState()
+      const conv = createConversation(
+        title,
+        sessionId,
+        projectId,
+        ss.currentProvider,
+        ss.currentModel,
+      )
       set((state) => {
         // Append at end instead of prepending — used for syncing server sessions
         // so they don't displace the user's current conversation
@@ -677,24 +480,24 @@ export const useStore = create<AppState>((set, get) => {
       const conv = get().conversations.find((c) => c.id === id)
       const updates: Partial<AppState> = { activeConversationId: id }
       if (conv?.provider && conv?.model) {
-        updates.currentProvider = conv.provider
-        updates.currentModel = conv.model
+        sessionStore
+          .getState()
+          .setCurrentSession(
+            conv.sessionId || sessionStore.getState().currentSessionId || '',
+            conv.provider,
+            conv.model,
+          )
       }
 
-      // Restore per-session agent status so stale sessions don't show "working"
+      // Restore per-session agent status from sessionStore's consolidated state
+      const ss = sessionStore.getState()
       if (conv?.sessionId) {
-        const sessionStatus = get().sessionStatuses.get(conv.sessionId)
-        updates.agentStatus = sessionStatus?.status ?? 'idle'
-        updates.agentStatusDetail = sessionStatus?.detail ?? null
-        updates.workingSessionId = sessionStatus?.status === 'working' ? conv.sessionId : null
-        if (sessionStatus?.status !== 'working') {
-          updates.workingStartedAt = null
-        }
+        const sessionState = ss.getSessionState(conv.sessionId)
+        ss.setAgentStatus(sessionState.status, conv.sessionId)
+        ss.setAgentStatusDetail(sessionState.statusDetail ?? null)
       } else {
-        updates.agentStatus = 'idle'
-        updates.agentStatusDetail = null
-        updates.workingSessionId = null
-        updates.workingStartedAt = null
+        ss.setAgentStatus('idle')
+        ss.setAgentStatusDetail(null)
       }
 
       // Save current session's tasks before switching, then restore target session's tasks
@@ -702,29 +505,25 @@ export const useStore = create<AppState>((set, get) => {
       const currentConv = currentState.conversations.find(
         (c) => c.id === currentState.activeConversationId,
       )
-      if (currentConv?.sessionId && currentState.currentTasks.length > 0) {
-        const sessionTasks = new Map(currentState._sessionTasks)
-        sessionTasks.set(currentConv.sessionId, currentState.currentTasks)
-        updates._sessionTasks = sessionTasks
+      if (currentConv?.sessionId) {
+        const currentTasks = ss.currentTasks
+        if (currentTasks.length > 0) {
+          ss.updateSessionState(currentConv.sessionId, { tasks: currentTasks })
+        }
       }
       // Restore target session's tasks (or clear if none)
-      updates.currentTasks =
-        (conv?.sessionId
-          ? (updates._sessionTasks ?? currentState._sessionTasks).get(conv.sessionId)
-          : undefined) ?? []
+      const restoredTasks = conv?.sessionId ? ss.getSessionState(conv.sessionId).tasks : []
+      ss.setCurrentTasks(restoredTasks)
 
       // Close artifact panel when switching conversations
       artifactStore.setState({ artifactPanelOpen: false })
 
       // If this session completed a turn in the background, fetch fresh history
-      if (conv?.sessionId && get()._sessionsNeedingHistoryRefresh.has(conv.sessionId)) {
-        const needsRefresh = new Set(get()._sessionsNeedingHistoryRefresh)
-        needsRefresh.delete(conv.sessionId)
-        updates._sessionsNeedingHistoryRefresh = needsRefresh
-        // Mark syncing and request history (will be set in a separate setState)
-        const syncing = new Set(get()._syncingSessionIds)
-        syncing.add(conv.sessionId)
-        updates._syncingSessionIds = syncing
+      if (conv?.sessionId && ss.getSessionState(conv.sessionId).needsHistoryRefresh) {
+        ss.updateSessionState(conv.sessionId, {
+          needsHistoryRefresh: false,
+          isSyncing: true,
+        })
         connection.sendSessionHistory(conv.sessionId)
       }
 
@@ -840,7 +639,9 @@ export const useStore = create<AppState>((set, get) => {
       set((state) => {
         const conv = state.conversations.find((c) => c.sessionId === sessionId)
         if (!conv) {
-          console.warn(`[appendAssistantTextToSession] No conversation found for sessionId=${sessionId} — dropping text`)
+          console.warn(
+            `[appendAssistantTextToSession] No conversation found for sessionId=${sessionId} — dropping text`,
+          )
           return state
         }
 
@@ -922,7 +723,10 @@ export const useStore = create<AppState>((set, get) => {
       const state = get()
       const conv = state.conversations.find((c) => c.id === state.activeConversationId)
       if (!conv?.agentSessionId) return null
-      return projectStore.getState().projectAgents.find((a) => a.sessionId === conv.agentSessionId) ?? null
+      return (
+        projectStore.getState().projectAgents.find((a) => a.sessionId === conv.agentSessionId) ??
+        null
+      )
     },
 
     findConversationBySession: (sessionId) => {
@@ -931,29 +735,24 @@ export const useStore = create<AppState>((set, get) => {
 
     loadSessionMessages: (sessionId, serverMessages) => {
       // Grab queued messages before clearing sync state
-      const queuedMessages = get()._pendingSyncMessages.get(sessionId) ?? []
+      const ss = sessionStore.getState()
+      const queuedMessages = ss.getSessionState(sessionId).pendingSyncMessages
 
       set((state) => {
         const conv = state.conversations.find((c) => c.sessionId === sessionId)
         if (!conv) return state
 
         // Server is always authoritative. Replace local state unconditionally.
-        // This fixes sync issues where stale localStorage data diverged from
-        // the server's persisted history (e.g. after client disconnect/reconnect).
         const conversations = state.conversations.map((c) => {
           if (c.sessionId !== sessionId) return c
           return { ...c, messages: serverMessages, updatedAt: Date.now() }
         })
         saveConversations(conversations)
-
-        // Clear syncing flag and pending queue — history has been loaded
-        const syncing = new Set(state._syncingSessionIds)
-        syncing.delete(sessionId)
-        const pending = new Map(state._pendingSyncMessages)
-        pending.delete(sessionId)
-
-        return { conversations, _syncingSessionIds: syncing, _pendingSyncMessages: pending }
+        return { conversations }
       })
+
+      // Clear syncing flag and pending queue in sessionStore
+      ss.updateSessionState(sessionId, { isSyncing: false, pendingSyncMessages: [] })
 
       // Replay any messages that arrived while we were syncing
       if (queuedMessages.length > 0) {
@@ -965,27 +764,22 @@ export const useStore = create<AppState>((set, get) => {
     },
 
     requestSessionHistory: (sessionId) => {
+      const ss = sessionStore.getState()
       // Mark session as syncing and send the request.
-      // While syncing, incoming streaming messages are queued.
-      set((state) => {
-        const syncing = new Set(state._syncingSessionIds)
-        syncing.add(sessionId)
-        return { _syncingSessionIds: syncing }
-      })
+      ss.updateSessionState(sessionId, { isSyncing: true })
       connection.sendSessionHistory(sessionId)
 
       // Safety timeout: clear syncing flag if server never responds
-      // (e.g. session not found, error response instead of history)
       setTimeout(() => {
-        const state = get()
-        if (state._syncingSessionIds.has(sessionId)) {
+        const ssNow = sessionStore.getState()
+        const state = ssNow.getSessionState(sessionId)
+        if (state.isSyncing) {
           console.warn(`[Sync] Timeout for ${sessionId}, clearing sync flag`)
-          const syncing = new Set(state._syncingSessionIds)
-          syncing.delete(sessionId)
-          const pending = new Map(state._pendingSyncMessages)
-          const queued = pending.get(sessionId) ?? []
-          pending.delete(sessionId)
-          set({ _syncingSessionIds: syncing, _pendingSyncMessages: pending })
+          const queued = state.pendingSyncMessages
+          ssNow.updateSessionState(sessionId, {
+            isSyncing: false,
+            pendingSyncMessages: [],
+          })
           // Replay any queued messages
           for (const msg of queued) {
             handleWsMessage(Channel.AI, msg)
@@ -1007,25 +801,24 @@ export const useStore = create<AppState>((set, get) => {
           return { ...c, messages: [...newMessages, ...c.messages], updatedAt: Date.now() }
         })
         saveConversations(conversations)
-
-        // Clear loading flag
-        const loading = new Set(state._loadingOlderSessions)
-        loading.delete(sessionId)
-        return { conversations, _loadingOlderSessions: loading }
+        return { conversations }
       })
+
+      // Clear loading flag in sessionStore
+      sessionStore.getState().updateSessionState(sessionId, { isLoadingOlder: false })
     },
 
     loadOlderMessages: (sessionId) => {
-      const state = get()
+      const ss = sessionStore.getState()
+      const sessionState = ss.getSessionState(sessionId)
       // Don't load if already loading or no more messages
-      if (state._loadingOlderSessions.has(sessionId)) return
-      if (state._sessionHasMore.get(sessionId) === false) return
+      if (sessionState.isLoadingOlder) return
+      if (!sessionState.hasMore) return
 
-      const conv = state.conversations.find((c) => c.sessionId === sessionId)
+      const conv = get().conversations.find((c) => c.sessionId === sessionId)
       if (!conv || conv.messages.length === 0) return
 
       // Find the lowest seq in current messages to paginate before it
-      // Message IDs are like hist_3_..., tc_xxx, tr_xxx — extract seq from hist_ prefix
       let minSeq = Number.MAX_SAFE_INTEGER
       for (const m of conv.messages) {
         const match = m.id.match(/^hist_(\d+)_/)
@@ -1035,12 +828,7 @@ export const useStore = create<AppState>((set, get) => {
       }
       if (minSeq === Number.MAX_SAFE_INTEGER) return
 
-      set((state) => {
-        const loading = new Set(state._loadingOlderSessions)
-        loading.add(sessionId)
-        return { _loadingOlderSessions: loading }
-      })
-
+      ss.updateSessionState(sessionId, { isLoadingOlder: true })
       connection.sendSessionHistory(sessionId, { before: minSeq, limit: 200 })
     },
 
@@ -1055,89 +843,33 @@ export const useStore = create<AppState>((set, get) => {
       })
     },
 
-    setLastResponseModel: (provider, model) =>
-      set({ lastResponseProvider: provider, lastResponseModel: model }),
-
-    setUsage: (turn, session) => set({ turnUsage: turn, sessionUsage: session }),
-
-    // requestUsageStats and setUsageStats — moved to usageStore
-
-    setAgentStatusDetail: (detail) => set({ agentStatusDetail: detail }),
-
-    addAgentStep: (step) => set((state) => ({ agentSteps: [...state.agentSteps, step] })),
-
-    updateAgentStep: (id, updates) =>
-      set((state) => ({
-        agentSteps: state.agentSteps.map((s) => (s.id === id ? { ...s, ...updates } : s)),
-      })),
-
-    clearAgentSteps: () => set({ agentSteps: [] }),
-
     registerPendingSession: (id) => {
-      return new Promise<void>((resolve) => {
-        get()._sessionResolvers.set(id, resolve)
-      })
+      return sessionStore.getState().registerPendingSession(id)
     },
 
     resolvePendingSession: (id) => {
-      const resolvers = get()._sessionResolvers
-      const resolver = resolvers.get(id)
-      if (resolver) {
-        resolver()
-        resolvers.delete(id)
-      }
+      sessionStore.getState().resolvePendingSession(id)
     },
 
-    setPendingConfirm: (confirm) => set({ pendingConfirm: confirm }),
-
-    setPendingPlan: (plan) => set({ pendingPlan: plan }),
     setSidePanelView: (view) => uiStore.setState({ sidePanelView: view }),
     openContextPanel: () => {
       uiStore.setState({ sidePanelView: 'context' })
       artifactStore.setState({ artifactPanelOpen: true })
     },
-    setPendingAskUser: (ask) => set({ pendingAskUser: ask }),
-
-    // Update actions — moved to updateStore
 
     resetForDisconnect: () => {
       set({
         // KEEP: conversations, activeConversationId — user's chat history persists
-        // KEEP: activeView — don't reset navigation
-
-        // Clear transient session/connection state
-        currentSessionId: null,
-        sessions: [],
-        sessionsLoaded: false,
-        agentStatus: 'idle',
-        agentStatusDetail: null,
-        workingSessionId: null,
-        agentSteps: [],
+        // Clear conversation-level transient state
         _currentAssistantMsgId: null,
         _sessionAssistantMsgIds: new Map(),
-        _sessionResolvers: new Map(),
-        pendingConfirm: null,
-        pendingPlan: null,
-        pendingAskUser: null,
-        turnUsage: null,
-        sessionUsage: null,
-        workingStartedAt: null,
-        lastTurnDurationMs: null,
-        turnStatsConversationId: null,
-        lastResponseProvider: null,
-        lastResponseModel: null,
-        providers: [],
-        // Clear stale streaming/sync state so reconnection doesn't think
-        // old sessions are still streaming (which would block history sync)
-        _activeStreamingSessions: new Set(),
-        _sessionsNeedingHistoryRefresh: new Set(),
-        _syncingSessionIds: new Set(),
-        _pendingSyncMessages: new Map(),
-        _sessionHasMore: new Map(),
-        _loadingOlderSessions: new Set(),
+        citations: new Map(),
+        _pendingCitationSourcesQueue: [],
+        _pendingWebSearchToolCallIds: new Set(),
       })
 
       // Reset domain stores
+      sessionStore.getState().reset()
       connectorStore.getState().reset()
       updateStore.getState().resetKeepIfUpdating()
       usageStore.getState().reset()
@@ -1147,40 +879,18 @@ export const useStore = create<AppState>((set, get) => {
 
     resetForMachineSwitch: () => {
       // Full flush when switching to a different machine.
-      // The new server will re-sync its sessions on connect.
       set({
         conversations: [],
         activeConversationId: null,
-        currentSessionId: null,
-        sessions: [],
-        sessionsLoaded: false,
-        agentStatus: 'idle',
-        agentStatusDetail: null,
-        workingSessionId: null,
-        agentSteps: [],
         _currentAssistantMsgId: null,
         _sessionAssistantMsgIds: new Map(),
-        _sessionResolvers: new Map(),
-        pendingConfirm: null,
-        pendingPlan: null,
-        pendingAskUser: null,
-        turnUsage: null,
-        sessionUsage: null,
-        workingStartedAt: null,
-        lastTurnDurationMs: null,
-        turnStatsConversationId: null,
-        lastResponseProvider: null,
-        lastResponseModel: null,
-        providers: [],
-        _activeStreamingSessions: new Set(),
-        _sessionsNeedingHistoryRefresh: new Set(),
-        _syncingSessionIds: new Set(),
-        _pendingSyncMessages: new Map(),
-        _sessionHasMore: new Map(),
-        _loadingOlderSessions: new Set(),
+        citations: new Map(),
+        _pendingCitationSourcesQueue: [],
+        _pendingWebSearchToolCallIds: new Set(),
       })
 
       // Reset all domain stores
+      sessionStore.getState().reset()
       connectorStore.getState().reset()
       updateStore.getState().reset()
       usageStore.getState().reset()
@@ -1195,6 +905,20 @@ export const useStore = create<AppState>((set, get) => {
 
 connection.onStatusChange((status) => {
   useStore.getState().setConnectionStatus(status)
+  sessionStore.getState().setConnectionStatus(status)
+
+  // Drive the init state machine
+  const cs = connectionStore.getState()
+  if (status === 'connecting' && cs.initPhase === 'idle') {
+    cs.setInitPhase('connecting')
+  } else if (
+    status === 'connected' &&
+    (cs.initPhase === 'connecting' || cs.initPhase === 'authenticating')
+  ) {
+    // auth_ok will trigger syncing via the CONTROL handler below
+  } else if (status === 'disconnected' || status === 'error') {
+    cs.reset()
+  }
 })
 
 // ── WS message type interfaces ─────────────────────────────────────
@@ -1231,7 +955,8 @@ function handleWsMessage(channel: number, msg: WsPayload) {
         })
       }
 
-      // Onboarding state from providers is handled in providers_list_response
+      // Transition to syncing — fires all list requests
+      connectionStore.getState().startSyncing()
     } else if (msg.type === 'update_check_response') {
       const m = msg as unknown as WsUpdateCheckResponse
       updateStore.getState().setUpdateInfo({
@@ -1249,7 +974,11 @@ function handleWsMessage(channel: number, msg: WsPayload) {
       if (m.key === 'system_prompt' && typeof m.value === 'string') {
         uiStore.getState().setDevModeData({ systemPrompt: m.value })
       } else if (m.key === 'memories' && Array.isArray(m.value)) {
-        const memories = m.value as { name: string; content: string; scope: 'global' | 'conversation' | 'project' }[]
+        const memories = m.value as {
+          name: string
+          content: string
+          scope: 'global' | 'conversation' | 'project'
+        }[]
         uiStore.getState().setDevModeData({ memories })
         projectStore.getState().setMemories(memories)
       }
@@ -1283,31 +1012,35 @@ function handleWsMessage(channel: number, msg: WsPayload) {
   if (channel === Channel.EVENTS && msg.type === 'agent_status') {
     const m = msg as unknown as WsAgentStatusMsg
     console.log(`[WS] Agent status: ${m.status}`, m.detail || '', m.sessionId || '')
-    uiStore.getState().appendEventLog('status', `Agent ${m.status}${m.detail ? ` — ${m.detail}` : ''}${m.sessionId ? ` (${m.sessionId.slice(0, 12)})` : ''}`)
+    uiStore
+      .getState()
+      .appendEventLog(
+        'status',
+        `Agent ${m.status}${m.detail ? ` — ${m.detail}` : ''}${m.sessionId ? ` (${m.sessionId.slice(0, 12)})` : ''}`,
+      )
     const sid: string | undefined = m.sessionId
 
-    // Update per-session status map
+    // Update per-session status in sessionStore
+    const ss = sessionStore.getState()
     if (sid) {
-      const statuses = new Map(store.sessionStatuses)
-      statuses.set(sid, { status: m.status, detail: m.detail })
-      useStore.setState({ sessionStatuses: statuses })
+      ss.updateSessionState(sid, { status: m.status, statusDetail: m.detail })
     }
 
     // Update global status ONLY for the active session — never let background agent runs
     // affect the UI of unrelated conversations
     const activeConv = store.getActiveConversation()
     if (sid === activeConv?.sessionId) {
-      store.setAgentStatus(m.status, sid)
-      store.setAgentStatusDetail(m.detail || null)
+      ss.setAgentStatus(m.status, sid)
+      ss.setAgentStatusDetail(m.detail || null)
       if (m.status === 'idle') {
-        store.clearAgentSteps()
+        ss.clearAgentSteps()
       }
     } else if (!sid) {
       // Legacy path: no sessionId means it's for the active session
-      store.setAgentStatus(m.status)
-      store.setAgentStatusDetail(m.detail || null)
+      ss.setAgentStatus(m.status)
+      ss.setAgentStatusDetail(m.detail || null)
       if (m.status === 'idle') {
-        store.clearAgentSteps()
+        ss.clearAgentSteps()
       }
     }
     return
@@ -1354,25 +1087,38 @@ function handleWsMessage(channel: number, msg: WsPayload) {
     'project_sessions_list_response',
     'providers_list_response',
   ])
-  if (msgSessionId && store._syncingSessionIds.has(msgSessionId) && !syncExempt.has(msg.type)) {
+  if (
+    msgSessionId &&
+    sessionStore.getState().getSessionState(msgSessionId).isSyncing &&
+    !syncExempt.has(msg.type)
+  ) {
     // Queue this message for replay after history loads
-    const pending = new Map(store._pendingSyncMessages)
-    const queue = pending.get(msgSessionId) ?? []
-    queue.push(msg)
-    pending.set(msgSessionId, queue)
-    useStore.setState({ _pendingSyncMessages: pending })
+    const ss = sessionStore.getState().getSessionState(msgSessionId)
+    sessionStore.getState().updateSessionState(msgSessionId, {
+      pendingSyncMessages: [...ss.pendingSyncMessages, msg],
+    })
     console.log(`[Sync] Queued ${msg.type} for ${msgSessionId} (syncing)`)
     return
   }
 
   // Log key AI events to the developer event log
-  if (['tool_call', 'done', 'error', 'thinking', 'session_created', 'session_destroyed'].includes(msg.type)) {
-    const summary = msg.type === 'tool_call' ? `Tool call: ${(msg as any).name || 'unknown'}`
-      : msg.type === 'done' ? `Turn complete${(msg as any).usage ? ` (${(msg as any).usage.totalTokens} tokens)` : ''}`
-      : msg.type === 'error' ? `Error: ${(msg as any).message || (msg as any).content || 'unknown'}`
-      : msg.type === 'thinking' ? 'Thinking...'
-      : msg.type === 'session_created' ? `Session created: ${(msg as any).sessionId?.slice(0, 12) || ''}`
-      : `Session destroyed: ${(msg as any).sessionId?.slice(0, 12) || ''}`
+  if (
+    ['tool_call', 'done', 'error', 'thinking', 'session_created', 'session_destroyed'].includes(
+      msg.type,
+    )
+  ) {
+    const summary =
+      msg.type === 'tool_call'
+        ? `Tool call: ${(msg as any).name || 'unknown'}`
+        : msg.type === 'done'
+          ? `Turn complete${(msg as any).usage ? ` (${(msg as any).usage.totalTokens} tokens)` : ''}`
+          : msg.type === 'error'
+            ? `Error: ${(msg as any).message || (msg as any).content || 'unknown'}`
+            : msg.type === 'thinking'
+              ? 'Thinking...'
+              : msg.type === 'session_created'
+                ? `Session created: ${(msg as any).sessionId?.slice(0, 12) || ''}`
+                : `Session destroyed: ${(msg as any).sessionId?.slice(0, 12) || ''}`
     uiStore.getState().appendEventLog(msg.type, summary)
   }
 
@@ -1395,23 +1141,15 @@ function handleWsMessage(channel: number, msg: WsPayload) {
       const m = msg as unknown as WsText
       const textContent = m.content ?? ''
       if (!textContent) break
-      console.log(`[WS] AI text chunk: "${textContent.slice(0, 80)}..."`)
-      console.log(`[WS DEBUG] isForActiveSession=${isForActiveSession}, msgSessionId=${msgSessionId}, activeConv?.sessionId=${activeConv?.sessionId}, activeConvId=${activeConv?.id}, storeActiveId=${store.activeConversationId}`)
       // Track that this session is actively streaming
       const textSessionId = msgSessionId || activeConv?.sessionId
-      if (textSessionId && !store._activeStreamingSessions.has(textSessionId)) {
-        const streaming = new Set(store._activeStreamingSessions)
-        streaming.add(textSessionId)
-        useStore.setState({ _activeStreamingSessions: streaming })
+      if (textSessionId) {
+        const ss = sessionStore.getState()
+        if (!ss.getSessionState(textSessionId).isStreaming) {
+          ss.updateSessionState(textSessionId, { isStreaming: true })
+        }
       }
       appendText(textContent)
-      // Debug: verify the message was actually added
-      {
-        const afterStore = useStore.getState()
-        const afterConv = afterStore.getActiveConversation()
-        const lastMsg = afterConv?.messages[afterConv.messages.length - 1]
-        console.log(`[WS DEBUG] After appendText: conv messages=${afterConv?.messages.length}, lastMsg.role=${lastMsg?.role}, lastMsg.content.len=${lastMsg?.content?.length}`)
-      }
       break
     }
 
@@ -1423,7 +1161,7 @@ function handleWsMessage(channel: number, msg: WsPayload) {
         content: m.text,
         timestamp: Date.now(),
       })
-      store.setAgentStatus('working', msgSessionId)
+      sessionStore.getState().setAgentStatus('working', msgSessionId)
       break
     }
 
@@ -1438,13 +1176,13 @@ function handleWsMessage(channel: number, msg: WsPayload) {
 
     case 'tool_call': {
       const m = msg as unknown as WsToolCall
+      const ss = sessionStore.getState()
       // Tools with dedicated UI — don't pollute the message timeline
       const uiOnlyTools = new Set(['ask_user', 'task_tracker', 'plan_confirm'])
       if (uiOnlyTools.has(m.name)) {
         // Track the ID so we can skip its tool_result too
-        store._hiddenToolCallIds = store._hiddenToolCallIds || new Set()
-        store._hiddenToolCallIds.add(m.id)
-        store.setAgentStatus('working', msgSessionId)
+        ss._hiddenToolCallIds.add(m.id)
+        ss.setAgentStatus('working', msgSessionId)
         break
       }
       // Reset assistant message tracking so any text AFTER this tool call
@@ -1457,7 +1195,7 @@ function handleWsMessage(channel: number, msg: WsPayload) {
         }
       }
       // Track tool name so tool_result can inherit it
-      store._toolCallNames.set(m.id, { name: m.name, input: m.input })
+      ss._toolCallNames.set(m.id, { name: m.name, input: m.input })
       addMsg({
         id: `tc_${m.id}`,
         role: 'tool',
@@ -1472,7 +1210,7 @@ function handleWsMessage(channel: number, msg: WsPayload) {
         store._pendingWebSearchToolCallIds.add(m.id)
       }
       if (!m.parentToolCallId) {
-        store.addAgentStep({
+        ss.addAgentStep({
           id: m.id,
           type: 'tool_call',
           label: `Running: ${m.name}`,
@@ -1481,19 +1219,20 @@ function handleWsMessage(channel: number, msg: WsPayload) {
           timestamp: Date.now(),
         })
       }
-      store.setAgentStatus('working', msgSessionId)
+      ss.setAgentStatus('working', msgSessionId)
       break
     }
 
     case 'tool_result': {
       const m = msg as unknown as WsToolResult
+      const ss = sessionStore.getState()
       // Skip results for tools with dedicated UI
-      if (store._hiddenToolCallIds?.has(m.id)) {
-        store._hiddenToolCallIds.delete(m.id)
+      if (ss._hiddenToolCallIds.has(m.id)) {
+        ss._hiddenToolCallIds.delete(m.id)
         break
       }
       // Inherit toolName/toolInput from matching tool_call
-      const callInfo = store._toolCallNames.get(m.id)
+      const callInfo = ss._toolCallNames.get(m.id)
       const resultMsg: ChatMessage = {
         id: `tr_${m.id}`,
         role: 'tool',
@@ -1503,7 +1242,7 @@ function handleWsMessage(channel: number, msg: WsPayload) {
         parentToolCallId: m.parentToolCallId,
         ...(callInfo && { toolName: callInfo.name, toolInput: callInfo.input }),
       }
-      store._toolCallNames.delete(m.id)
+      ss._toolCallNames.delete(m.id)
       addMsg(resultMsg)
       // Extract citation sources from web_search results
       if (store._pendingWebSearchToolCallIds.has(m.id)) {
@@ -1516,7 +1255,7 @@ function handleWsMessage(channel: number, msg: WsPayload) {
         }
       }
       if (!m.parentToolCallId) {
-        store.updateAgentStep(m.id, {
+        ss.updateAgentStep(m.id, {
           status: m.isError ? 'error' : 'complete',
         })
       }
@@ -1593,7 +1332,7 @@ function handleWsMessage(channel: number, msg: WsPayload) {
 
     case 'confirm': {
       const m = msg as unknown as WsConfirm
-      store.setPendingConfirm({
+      sessionStore.getState().setPendingConfirm({
         id: m.id,
         command: m.command,
         reason: m.reason,
@@ -1604,7 +1343,7 @@ function handleWsMessage(channel: number, msg: WsPayload) {
 
     case 'plan_confirm': {
       const m = msg as unknown as WsPlanConfirm
-      store.setPendingPlan({
+      sessionStore.getState().setPendingPlan({
         id: m.id,
         title: m.title,
         content: m.content,
@@ -1615,7 +1354,7 @@ function handleWsMessage(channel: number, msg: WsPayload) {
 
     case 'ask_user': {
       const m = msg as unknown as WsAskUser
-      store.setPendingAskUser({
+      sessionStore.getState().setPendingAskUser({
         id: m.id,
         questions: m.questions,
         sessionId: msgSessionId,
@@ -1625,13 +1364,10 @@ function handleWsMessage(channel: number, msg: WsPayload) {
 
     case 'error': {
       const m = msg as unknown as WsError
+      const ss = sessionStore.getState()
       // Clear syncing flag if this error is for a session we're waiting on
-      if (msgSessionId && store._syncingSessionIds.has(msgSessionId)) {
-        const syncing = new Set(store._syncingSessionIds)
-        syncing.delete(msgSessionId)
-        const pending = new Map(store._pendingSyncMessages)
-        pending.delete(msgSessionId)
-        useStore.setState({ _syncingSessionIds: syncing, _pendingSyncMessages: pending })
+      if (msgSessionId && ss.getSessionState(msgSessionId).isSyncing) {
+        ss.updateSessionState(msgSessionId, { isSyncing: false, pendingSyncMessages: [] })
       }
 
       // Session permanently gone — remove the stale conversation from the sidebar
@@ -1662,14 +1398,12 @@ function handleWsMessage(channel: number, msg: WsPayload) {
       }
       // Only set global error status if this error belongs to the active session
       if (isForActiveSession && msgSessionId) {
-        store.setAgentStatus('error', msgSessionId)
+        ss.setAgentStatus('error', msgSessionId)
       }
-      // Clear streaming flag on error
+      // Update per-session state on error
       const errSessionId = msgSessionId || activeConv?.sessionId
-      if (errSessionId && store._activeStreamingSessions.has(errSessionId)) {
-        const streaming = new Set(store._activeStreamingSessions)
-        streaming.delete(errSessionId)
-        useStore.setState({ _activeStreamingSessions: streaming })
+      if (errSessionId) {
+        ss.updateSessionState(errSessionId, { isStreaming: false, status: 'error' })
       }
       break
     }
@@ -1704,18 +1438,14 @@ function handleWsMessage(channel: number, msg: WsPayload) {
     case 'tasks_update': {
       const m = msg as unknown as WsTasksUpdate
       if (m.tasks) {
+        const ss = sessionStore.getState()
         // Always store tasks per-session so they persist across conversation switches
         if (msgSessionId) {
-          const sessionTasks = new Map(store._sessionTasks)
-          sessionTasks.set(msgSessionId, m.tasks)
-          const updates: Partial<AppState> = { _sessionTasks: sessionTasks }
-          // Only update the visible currentTasks if this is the active session
-          if (isForActiveSession) {
-            updates.currentTasks = m.tasks
-          }
-          useStore.setState(updates)
-        } else if (isForActiveSession) {
-          useStore.setState({ currentTasks: m.tasks })
+          ss.updateSessionState(msgSessionId, { tasks: m.tasks })
+        }
+        // Only update the visible currentTasks if this is the active session
+        if (isForActiveSession) {
+          ss.setCurrentTasks(m.tasks)
         }
       }
       break
@@ -1753,19 +1483,20 @@ function handleWsMessage(channel: number, msg: WsPayload) {
       const m = msg as unknown as WsTokenUpdate
       // Streaming token update — update turnUsage live so the UI can show a counter
       if (isForActiveSession && m.usage) {
-        store.setUsage(m.usage, null)
+        sessionStore.getState().setUsage(m.usage, null)
       }
       break
     }
 
     case 'done': {
       const m = msg as unknown as WsDone
+      const ss = sessionStore.getState()
       // Detect silent failures: server says "done" but never sent any text/tool events
       const doneConv = msgSessionId
         ? store.findConversationBySession(msgSessionId)
         : store.getActiveConversation()
       const lastMsg = doneConv?.messages[doneConv.messages.length - 1]
-      const wasWorking = store.agentStatus === 'working'
+      const wasWorking = ss.agentStatus === 'working'
       const noResponse = wasWorking && lastMsg?.role === 'user'
       const zeroTokens = m.usage && m.usage.inputTokens === 0 && m.usage.outputTokens === 0
 
@@ -1792,23 +1523,25 @@ function handleWsMessage(channel: number, msg: WsPayload) {
         })
       }
 
-      // Update per-session status
-      if (msgSessionId) {
-        const statuses = new Map(store.sessionStatuses)
-        statuses.set(msgSessionId, { status: 'idle' })
-        useStore.setState({ sessionStatuses: statuses })
+      // Update per-session status in consolidated state
+      const doneSessionId = msgSessionId || activeConv?.sessionId
+      if (doneSessionId) {
+        ss.updateSessionState(doneSessionId, {
+          status: 'idle',
+          isStreaming: false,
+          assistantMsgId: null,
+          needsHistoryRefresh: !isForActiveSession,
+        })
       }
 
       // Only update global status if this is the active session
       if (isForActiveSession || !msgSessionId) {
-        store.setAgentStatus('idle')
-        store.clearAgentSteps()
-        store.setAgentStatusDetail(null)
+        ss.setAgentStatus('idle')
+        ss.clearAgentSteps()
+        ss.setAgentStatusDetail(null)
       }
-      // Background sessions finishing should NOT affect the active session's UI
 
       // Close out any pending tool calls that never got a result.
-      // This prevents spinner icons from staying stuck forever.
       if (doneConv) {
         const resultIds = new Set(
           doneConv.messages.filter((m) => m.id.startsWith('tr_')).map((m) => m.id.slice(3)),
@@ -1818,7 +1551,7 @@ function handleWsMessage(channel: number, msg: WsPayload) {
         )
         if (pendingCalls.length > 0) {
           for (const call of pendingCalls) {
-            const baseId = call.id.slice(3) // strip tc_ prefix
+            const baseId = call.id.slice(3)
             addMsg({
               id: `tr_${baseId}`,
               role: 'tool',
@@ -1830,36 +1563,17 @@ function handleWsMessage(channel: number, msg: WsPayload) {
         }
       }
 
+      // Clear assistant message tracking (conversation-level, stays in old store for now)
       useStore.setState({ _currentAssistantMsgId: null })
       if (msgSessionId) {
         store._sessionAssistantMsgIds.delete(msgSessionId)
       }
 
-      // Clear streaming flag; if this was a background session, mark it for history refresh
-      const doneSessionId = msgSessionId || activeConv?.sessionId
-      if (doneSessionId) {
-        const streaming = new Set(store._activeStreamingSessions)
-        streaming.delete(doneSessionId)
-        const needsRefresh = new Set(store._sessionsNeedingHistoryRefresh)
-        if (!isForActiveSession) {
-          needsRefresh.add(doneSessionId)
-        }
-        useStore.setState({
-          _activeStreamingSessions: streaming,
-          _sessionsNeedingHistoryRefresh: needsRefresh,
-        })
-      }
-
       if (m.usage) {
-        store.setUsage(m.usage, m.cumulativeUsage || null)
+        ss.setUsage(m.usage, m.cumulativeUsage || null)
       }
-      // Track the actual model used for this turn (display only)
       if (m.provider && m.model) {
-        try {
-          useStore.setState({ lastResponseProvider: m.provider, lastResponseModel: m.model })
-        } catch {
-          /* ignore during HMR transitions */
-        }
+        ss.setLastResponseModel(m.provider, m.model)
       }
       break
     }
@@ -1867,11 +1581,11 @@ function handleWsMessage(channel: number, msg: WsPayload) {
     // ── Session responses ──────────────────────────────────────
     case 'session_created': {
       const m = msg as unknown as WsSessionCreated
-      // Session created — update session ID and persist model on the conversation.
-      // The server echoes back the actual provider/model being used for this session.
-      // Update currentProvider/currentModel since this is a fresh session the user just created.
+      const ss = sessionStore.getState()
+      ss.setCurrentSession(m.id, m.provider, m.model)
+      ss.resolvePendingSession(m.id)
+      // Also persist model on the active conversation
       store.setCurrentSession(m.id, m.provider, m.model)
-      store.resolvePendingSession(m.id)
       break
     }
 
@@ -1898,7 +1612,8 @@ function handleWsMessage(channel: number, msg: WsPayload) {
 
     case 'sessions_list_response': {
       const m = msg as unknown as WsSessionsListResponse
-      store.setSessions(m.sessions)
+      sessionStore.getState().setSessions(m.sessions)
+      connectionStore.getState().markSynced('sessions')
       break
     }
 
@@ -2011,12 +1726,11 @@ function handleWsMessage(channel: number, msg: WsPayload) {
         (a, b) => a.timestamp - b.timestamp,
       )
       // Determine if this is a first page (sync) or an older-page (scroll-up pagination)
-      const isFirstPage = !store._loadingOlderSessions.has(m.id)
+      const histSs = sessionStore.getState()
+      const isFirstPage = !histSs.getSessionState(m.id).isLoadingOlder
 
-      // Update hasMore for this session
-      const hasMoreMap = new Map(store._sessionHasMore)
-      hasMoreMap.set(m.id, (m.hasMore ?? false) as boolean)
-      useStore.setState({ _sessionHasMore: hasMoreMap })
+      // Update hasMore for this session in consolidated state
+      histSs.updateSessionState(m.id, { hasMore: (m.hasMore ?? false) as boolean })
 
       if (isFirstPage) {
         // First page: replace messages (server authoritative)
@@ -2110,7 +1824,8 @@ function handleWsMessage(channel: number, msg: WsPayload) {
 
     case 'session_destroyed': {
       const m = msg as unknown as WsSessionDestroyed
-      store.setSessions(store.sessions.filter((s: SessionMeta) => s.id !== m.id))
+      const ss = sessionStore.getState()
+      ss.setSessions(ss.sessions.filter((s: SessionMeta) => s.id !== m.id))
       // Also remove from projectSessions so project view updates immediately
       const ps = projectStore.getState()
       if (ps.projectSessions.some((s: SessionMeta) => s.id !== m.id)) {
@@ -2122,7 +1837,8 @@ function handleWsMessage(channel: number, msg: WsPayload) {
     // ── Provider responses ─────────────────────────────────────
     case 'providers_list_response': {
       const m = msg as unknown as WsProvidersListResponse
-      store.setProviders(m.providers, m.defaults)
+      sessionStore.getState().setProviders(m.providers, m.defaults)
+      connectionStore.getState().markSynced('providers')
       // Onboarding state now lives in uiStore
       const ui = uiStore.getState()
       ui.setOnboardingLoaded(true)
@@ -2136,17 +1852,20 @@ function handleWsMessage(channel: number, msg: WsPayload) {
     }
 
     case 'provider_set_key_response':
-      if (msg.success as boolean) connection.sendProvidersList()
+      if (msg.success as boolean) sessionStore.getState().sendProvidersList()
       break
 
     case 'provider_set_models_response':
-      if (msg.success as boolean) connection.sendProvidersList()
+      if (msg.success as boolean) sessionStore.getState().sendProvidersList()
       break
 
     case 'provider_set_default_response': {
       const m = msg as unknown as WsProviderSetDefaultResponse
       if (m.success) {
-        store.setCurrentSession(store.currentSessionId || '', m.provider, m.model)
+        const ss = sessionStore.getState()
+        ss.setCurrentSession(ss.currentSessionId || '', m.provider, m.model)
+        // Also update the old store's conversation model
+        store.setCurrentSession(ss.currentSessionId || '', m.provider, m.model)
       }
       break
     }
@@ -2185,6 +1904,7 @@ function handleWsMessage(channel: number, msg: WsPayload) {
     case 'projects_list_response': {
       const m = msg as unknown as WsProjectsListResponse
       projectStore.getState().setProjects(m.projects)
+      connectionStore.getState().markSynced('projects')
       break
     }
 
@@ -2225,7 +1945,10 @@ function handleWsMessage(channel: number, msg: WsPayload) {
     }
 
     case 'project_preferences_response': {
-      const m = msg as unknown as { projectId: string; preferences: { id: string; title: string; content: string; createdAt: number }[] }
+      const m = msg as unknown as {
+        projectId: string
+        preferences: { id: string; title: string; content: string; createdAt: number }[]
+      }
       if (m.projectId === projectStore.getState().activeProjectId) {
         projectStore.getState().setProjectPreferences(m.preferences)
       }
@@ -2266,11 +1989,9 @@ function handleWsMessage(channel: number, msg: WsPayload) {
       const m = msg as unknown as WsAgentUpdated
       const ps = projectStore.getState()
       ps.setProjectAgents(
-        ps.projectAgents.map((a) => a.sessionId === m.agent.sessionId ? m.agent : a),
+        ps.projectAgents.map((a) => (a.sessionId === m.agent.sessionId ? m.agent : a)),
       )
-      ps.setAllAgents(
-        ps.allAgents.map((a) => a.sessionId === m.agent.sessionId ? m.agent : a),
-      )
+      ps.setAllAgents(ps.allAgents.map((a) => (a.sessionId === m.agent.sessionId ? m.agent : a)))
       break
     }
 
@@ -2339,9 +2060,7 @@ function handleWsMessage(channel: number, msg: WsPayload) {
     case 'workflow_uninstalled': {
       const m = msg as any
       const ps = projectStore.getState()
-      ps.setProjectWorkflows(
-        ps.projectWorkflows.filter((w) => w.workflowId !== m.workflowId),
-      )
+      ps.setProjectWorkflows(ps.projectWorkflows.filter((w) => w.workflowId !== m.workflowId))
       break
     }
 
@@ -2349,6 +2068,7 @@ function handleWsMessage(channel: number, msg: WsPayload) {
     case 'connectors_list_response': {
       const m = msg as unknown as WsConnectorsListResponse
       connectorStore.getState().setConnectors(m.connectors)
+      connectionStore.getState().markSynced('connectors')
       break
     }
 
@@ -2397,15 +2117,15 @@ export function useConnectionStatus(): ConnectionStatus {
 }
 
 export function useAgentStatus(): AgentStatus {
-  return useStore((s) => s.agentStatus)
+  return sessionStore((s) => s.agentStatus)
 }
 
 /** Returns true if the currently active conversation's session is the one that's working. */
 export function useIsCurrentSessionWorking(): boolean {
-  return useStore((s) => {
-    if (s.agentStatus !== 'working') return false
-    if (!s.workingSessionId) return true // fallback: if no sessionId tracked, assume current
-    const activeConv = s.getActiveConversation()
-    return activeConv?.sessionId === s.workingSessionId
-  })
+  const agentStatus = sessionStore((s) => s.agentStatus)
+  const workingSessionId = sessionStore((s) => s.workingSessionId)
+  const activeConv = useStore((s) => s.getActiveConversation())
+  if (agentStatus !== 'working') return false
+  if (!workingSessionId) return true
+  return activeConv?.sessionId === workingSessionId
 }

@@ -4,7 +4,6 @@
  */
 
 import type { AskUserQuestion, TokenUsage } from '@anton/protocol'
-import type { ArtifactRenderType } from '../artifacts.js'
 
 // ── Chat types ─────────────────────────────────────────────────────
 
@@ -116,13 +115,7 @@ export interface UpdateInfo {
   releaseUrl: string | null
 }
 
-export type UpdateStage =
-  | 'downloading'
-  | 'replacing'
-  | 'restarting'
-  | 'done'
-  | 'error'
-  | null
+export type UpdateStage = 'downloading' | 'replacing' | 'restarting' | 'done' | 'error' | null
 
 export function updateStageLabel(stage: string | null): string {
   switch (stage) {

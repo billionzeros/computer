@@ -100,10 +100,7 @@ export function saveInstalledMeta(
 }
 
 /** Load installed workflow metadata */
-export function loadInstalledMeta(
-  projectId: string,
-  workflowId: string,
-): InstalledWorkflow | null {
+export function loadInstalledMeta(projectId: string, workflowId: string): InstalledWorkflow | null {
   const metaPath = join(getWorkflowDir(projectId, workflowId), 'installed.json')
   if (!existsSync(metaPath)) return null
   try {

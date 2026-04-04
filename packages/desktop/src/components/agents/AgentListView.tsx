@@ -1,5 +1,17 @@
 import type { AgentSession } from '@anton/protocol'
-import { Bot, Calendar, GitPullRequest, Mail, MessageSquare, MoreHorizontal, Pencil, Search, Shield, Trash2, Zap } from 'lucide-react'
+import {
+  Bot,
+  Calendar,
+  GitPullRequest,
+  Mail,
+  MessageSquare,
+  MoreHorizontal,
+  Pencil,
+  Search,
+  Shield,
+  Trash2,
+  Zap,
+} from 'lucide-react'
 import { useMemo, useRef, useState } from 'react'
 import { formatRelativeTime } from '../../lib/agent-utils.js'
 import { connection } from '../../lib/connection.js'
@@ -7,6 +19,7 @@ import type { Skill } from '../../lib/skills.js'
 import type { ChatImageAttachment } from '../../lib/store.js'
 import { useStore } from '../../lib/store.js'
 import { projectStore } from '../../lib/store/projectStore.js'
+import { sessionStore } from '../../lib/store/sessionStore.js'
 import { ChatInput } from '../chat/ChatInput.js'
 
 type DisplayStatus = 'running' | 'completed' | 'error' | 'idle' | 'scheduled'
@@ -35,7 +48,13 @@ function AgentStatusIcon({ status }: { status: DisplayStatus }) {
       <svg className="status-icon" width="16" height="16" viewBox="0 0 16 16" fill="none">
         <circle cx="8" cy="8" r="7" fill="var(--success)" opacity="0.15" />
         <circle cx="8" cy="8" r="7" stroke="var(--success)" strokeWidth="1" />
-        <path d="M5 8.5L7 10.5L11 5.5" stroke="var(--success)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+        <path
+          d="M5 8.5L7 10.5L11 5.5"
+          stroke="var(--success)"
+          strokeWidth="1.5"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
       </svg>
     )
   }
@@ -47,7 +66,12 @@ function AgentStatusIcon({ status }: { status: DisplayStatus }) {
       <svg className="status-icon" width="16" height="16" viewBox="0 0 16 16" fill="none">
         <circle cx="8" cy="8" r="7" fill="var(--danger)" opacity="0.15" />
         <circle cx="8" cy="8" r="7" stroke="var(--danger)" strokeWidth="1" />
-        <path d="M6 6L10 10M10 6L6 10" stroke="var(--danger)" strokeWidth="1.5" strokeLinecap="round" />
+        <path
+          d="M6 6L10 10M10 6L6 10"
+          stroke="var(--danger)"
+          strokeWidth="1.5"
+          strokeLinecap="round"
+        />
       </svg>
     )
   }
@@ -74,18 +98,48 @@ function AgentMenu({ onDelete }: { onDelete: () => void }) {
 
   return (
     <div className="task-menu-wrap">
-      <button ref={triggerRef} type="button" className="task-menu__trigger" onClick={handleOpen} aria-label="Agent options">
+      <button
+        ref={triggerRef}
+        type="button"
+        className="task-menu__trigger"
+        onClick={handleOpen}
+        aria-label="Agent options"
+      >
         <MoreHorizontal size={16} strokeWidth={1.5} />
       </button>
       {open && (
         <>
-          <div className="task-menu__backdrop" onClick={(e) => { e.stopPropagation(); setOpen(false) }} onKeyDown={(e) => { if (e.key === 'Escape') setOpen(false) }} />
+          <div
+            className="task-menu__backdrop"
+            onClick={(e) => {
+              e.stopPropagation()
+              setOpen(false)
+            }}
+            onKeyDown={(e) => {
+              if (e.key === 'Escape') setOpen(false)
+            }}
+          />
           <div className="task-menu" style={{ top: pos.top, right: pos.right }}>
-            <button type="button" className="task-menu__item" onClick={(e) => { e.stopPropagation(); setOpen(false) }}>
+            <button
+              type="button"
+              className="task-menu__item"
+              onClick={(e) => {
+                e.stopPropagation()
+                setOpen(false)
+              }}
+            >
               <Pencil size={14} strokeWidth={1.5} />
               <span>Edit agent</span>
             </button>
-            <button type="button" className="task-menu__item task-menu__item--danger" onClick={(e) => { e.stopPropagation(); onDelete(); setOpen(false) }}>
+            <button
+              type="button"
+              className="task-menu__item task-menu__item--danger"
+              onClick={(e) => {
+                e.stopPropagation()
+                onDelete()
+                setOpen(false)
+              }}
+            >
               <Trash2 size={14} strokeWidth={1.5} />
               <span>Delete agent</span>
             </button>
@@ -137,9 +191,10 @@ export function AgentListView({ mode, selectedId, onSelect }: Props) {
     const sessionId = `sess_${Date.now().toString(36)}`
     const projectId = projectStore.getState().activeProjectId ?? undefined
     newConversation(undefined, sessionId, projectId)
-    connection.sendSessionCreate(sessionId, {
-      provider: store.currentProvider,
-      model: store.currentModel,
+    const ss = sessionStore.getState()
+    sessionStore.getState().createSession(sessionId, {
+      provider: ss.currentProvider,
+      model: ss.currentModel,
       projectId,
     })
     const conv = store.findConversationBySession(sessionId)
@@ -172,25 +227,31 @@ export function AgentListView({ mode, selectedId, onSelect }: Props) {
       icon: <GitPullRequest size={20} strokeWidth={1.5} />,
       title: 'Code review agent',
       description: 'Automatically review PRs, catch bugs, and suggest improvements before merge.',
-      prompt: 'Review my PRs every morning — catch bugs, suggest improvements, and flag any security issues before merge',
+      prompt:
+        'Review my PRs every morning — catch bugs, suggest improvements, and flag any security issues before merge',
     },
     {
       icon: <Calendar size={20} strokeWidth={1.5} />,
       title: 'Scheduled reports',
-      description: 'Generate daily standups, weekly summaries, or custom reports on a cron schedule.',
-      prompt: 'Generate a daily standup summary every morning at 9am from my recent commits and open PRs',
+      description:
+        'Generate daily standups, weekly summaries, or custom reports on a cron schedule.',
+      prompt:
+        'Generate a daily standup summary every morning at 9am from my recent commits and open PRs',
     },
     {
       icon: <Shield size={20} strokeWidth={1.5} />,
       title: 'Security monitor',
       description: 'Scan dependencies for vulnerabilities and alert you when issues are found.',
-      prompt: 'Scan my dependencies daily for known vulnerabilities and alert me when new issues are found',
+      prompt:
+        'Scan my dependencies daily for known vulnerabilities and alert me when new issues are found',
     },
     {
       icon: <Mail size={20} strokeWidth={1.5} />,
       title: 'Inbox triage',
-      description: 'Classify, prioritize, and draft responses for incoming messages and notifications.',
-      prompt: 'Triage my incoming messages — classify by priority, draft responses for routine ones, and flag anything urgent',
+      description:
+        'Classify, prioritize, and draft responses for incoming messages and notifications.',
+      prompt:
+        'Triage my incoming messages — classify by priority, draft responses for routine ones, and flag anything urgent',
     },
     {
       icon: <Zap size={20} strokeWidth={1.5} />,
@@ -201,8 +262,10 @@ export function AgentListView({ mode, selectedId, onSelect }: Props) {
     {
       icon: <MessageSquare size={20} strokeWidth={1.5} />,
       title: 'Customer support',
-      description: 'Answer common questions, route tickets, and escalate issues that need human attention.',
-      prompt: 'Answer common support questions, route tickets to the right team, and escalate issues that need human attention',
+      description:
+        'Answer common questions, route tickets, and escalate issues that need human attention.',
+      prompt:
+        'Answer common support questions, route tickets to the right team, and escalate issues that need human attention',
     },
   ]
 
@@ -261,7 +324,9 @@ export function AgentListView({ mode, selectedId, onSelect }: Props) {
                     >
                       <div className="task-table__col task-table__col--status">
                         <AgentStatusIcon status={status} />
-                        <span className={`task-table__status-label task-table__status-label--${status === 'running' ? 'working' : status === 'scheduled' ? 'completed' : status}`}>
+                        <span
+                          className={`task-table__status-label task-table__status-label--${status === 'running' ? 'working' : status === 'scheduled' ? 'completed' : status}`}
+                        >
                           {STATUS_LABELS[status]}
                         </span>
                       </div>
@@ -272,7 +337,9 @@ export function AgentListView({ mode, selectedId, onSelect }: Props) {
                         <span className="agent-project-pill">{agent.projectId}</span>
                       </div>
                       <div className="task-table__col task-table__col--updated">
-                        {agent.agent.lastRunAt ? formatRelativeTime(agent.agent.lastRunAt) : 'Never'}
+                        {agent.agent.lastRunAt
+                          ? formatRelativeTime(agent.agent.lastRunAt)
+                          : 'Never'}
                       </div>
                       <div className="task-table__col task-table__col--actions">
                         <AgentMenu onDelete={() => handleDelete(agent)} />
@@ -355,7 +422,9 @@ export function AgentListView({ mode, selectedId, onSelect }: Props) {
               >
                 <div className="task-row__status">
                   <AgentStatusIcon status={status} />
-                  <span className={`task-row__status-label task-row__status-label--${status === 'running' ? 'working' : status === 'scheduled' ? 'completed' : status}`}>
+                  <span
+                    className={`task-row__status-label task-row__status-label--${status === 'running' ? 'working' : status === 'scheduled' ? 'completed' : status}`}
+                  >
                     {STATUS_LABELS[status]}
                   </span>
                 </div>

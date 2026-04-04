@@ -1545,11 +1545,7 @@ export const CONNECTOR_REGISTRY: ConnectorRegistryEntry[] = [
     category: 'productivity',
     type: 'oauth',
     oauthProvider: 'airtable',
-    oauthScopes: [
-      'data.records:read',
-      'data.records:write',
-      'schema.bases:read',
-    ],
+    oauthScopes: ['data.records:read', 'data.records:write', 'schema.bases:read'],
     requiredEnv: [],
     featured: true,
     setupGuide: {

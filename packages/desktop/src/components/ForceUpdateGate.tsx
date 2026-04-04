@@ -2,9 +2,9 @@ import { AlertTriangle, Download, Loader2, RotateCw } from 'lucide-react'
 import type { ReactNode } from 'react'
 import { connection } from '../lib/connection.js'
 import { semverGt } from '../lib/semver.js'
+import { useConnectionStatus } from '../lib/store.js'
 import { updateStageLabel } from '../lib/store/types.js'
 import { updateStore } from '../lib/store/updateStore.js'
-import { useConnectionStatus } from '../lib/store.js'
 import { FRONTEND_VERSION } from '../lib/version.js'
 import { AntonLogo } from './AntonLogo.js'
 
@@ -26,9 +26,7 @@ export function ForceUpdateGate({ children }: { children: ReactNode }) {
     semverGt(FRONTEND_VERSION, agentVersion)
 
   const isUpdating =
-    updateStage === 'downloading' ||
-    updateStage === 'replacing' ||
-    updateStage === 'restarting'
+    updateStage === 'downloading' || updateStage === 'replacing' || updateStage === 'restarting'
 
   const isError = updateStage === 'error'
 
@@ -78,7 +76,9 @@ export function ForceUpdateGate({ children }: { children: ReactNode }) {
               <Loader2 size={36} strokeWidth={1.5} className="update-banner__spin" />
             </div>
             <div className="update-banner__version">
-              {isDisconnectedForUpdate ? 'Restarting your machine...' : updateStageLabel(updateStage)}
+              {isDisconnectedForUpdate
+                ? 'Restarting your machine...'
+                : updateStageLabel(updateStage)}
             </div>
             <div className="update-banner__changelog">
               {isDisconnectedForUpdate

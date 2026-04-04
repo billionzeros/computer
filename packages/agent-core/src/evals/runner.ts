@@ -16,10 +16,7 @@ import type { EvalCase, EvalResult } from './types.js'
  * Creates an ephemeral session with tight safety limits to keep
  * eval runs fast and cheap.
  */
-export async function runEvalCase(
-  evalCase: EvalCase,
-  config: AgentConfig,
-): Promise<EvalResult> {
+export async function runEvalCase(evalCase: EvalCase, config: AgentConfig): Promise<EvalResult> {
   // Lazy import to avoid circular dependency and heavy startup cost
   const { Session } = await import('../session.js')
   const { buildTools } = await import('../agent.js')
@@ -97,7 +94,9 @@ export async function runBraintrustEval(opts: {
     console.log(`[eval] Dry run: ${opts.name}`)
     console.log(`[eval] ${opts.dataset.cases.length} cases, ${opts.scorers.length} scorers`)
     for (const c of opts.dataset.cases) {
-      console.log(`  - "${c.input.slice(0, 60)}..." → expected: ${c.expectedTool || c.expected?.slice(0, 30) || `refusal=${c.expectedRefusal}`}`)
+      console.log(
+        `  - "${c.input.slice(0, 60)}..." → expected: ${c.expectedTool || c.expected?.slice(0, 30) || `refusal=${c.expectedRefusal}`}`,
+      )
     }
     return
   }

@@ -132,7 +132,13 @@ export class Connection {
   }
 
   sendTerminalSpawn(sessionId: string, cols: number, rows: number, cwd?: string) {
-    this.send(Channel.TERMINAL, { type: 'pty_spawn', id: sessionId, cols, rows, ...(cwd && { cwd }) })
+    this.send(Channel.TERMINAL, {
+      type: 'pty_spawn',
+      id: sessionId,
+      cols,
+      rows,
+      ...(cwd && { cwd }),
+    })
   }
 
   sendTerminalResize(sessionId: string, cols: number, rows: number) {
@@ -208,8 +214,17 @@ export class Connection {
 
   // ── Config management ───────────────────────────────────────────
 
-  sendConfigQuery(key: 'providers' | 'defaults' | 'security' | 'system_prompt' | 'memories', sessionId?: string, projectId?: string) {
-    this.send(Channel.CONTROL, { type: 'config_query', key, ...(sessionId && { sessionId }), ...(projectId && { projectId }) })
+  sendConfigQuery(
+    key: 'providers' | 'defaults' | 'security' | 'system_prompt' | 'memories',
+    sessionId?: string,
+    projectId?: string,
+  ) {
+    this.send(Channel.CONTROL, {
+      type: 'config_query',
+      key,
+      ...(sessionId && { sessionId }),
+      ...(projectId && { projectId }),
+    })
   }
 
   // ── Update management ──────────────────────────────────────────

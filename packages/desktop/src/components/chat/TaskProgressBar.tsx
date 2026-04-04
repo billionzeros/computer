@@ -1,7 +1,7 @@
 import { AnimatePresence, motion } from 'framer-motion'
 import { Check, ChevronDown, ChevronUp, Loader2 } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
-import { useStore } from '../../lib/store.js'
+import { sessionStore } from '../../lib/store/sessionStore.js'
 import type { GroupedItem } from './groupMessages.js'
 
 const VIBES = [
@@ -48,8 +48,8 @@ interface Props {
 }
 
 export function TaskProgressBar({ grouped }: Props) {
-  const agentStatus = useStore((s) => s.agentStatus)
-  const currentTasks = useStore((s) => s.currentTasks)
+  const agentStatus = sessionStore((s) => s.agentStatus)
+  const currentTasks = sessionStore((s) => s.currentTasks)
   const [elapsed, setElapsed] = useState(0)
   const [startTime] = useState(() => Date.now())
   const [expanded, setExpanded] = useState(false)

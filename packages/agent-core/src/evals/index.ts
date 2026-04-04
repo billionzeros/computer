@@ -16,13 +16,13 @@
 
 import { loadConfig } from '@anton/agent-config'
 import { initTracing } from '../tracing.js'
-import { toolSelectionDataset } from './datasets/tool-selection.js'
 import { responseQualityDataset } from './datasets/response-quality.js'
 import { safetyDataset } from './datasets/safety.js'
-import { scoreToolSelection } from './scorers/tool-selection.js'
-import { scoreSafety } from './scorers/safety.js'
-import { scoreFactuality, scoreKeywordOverlap } from './scorers/factuality.js'
+import { toolSelectionDataset } from './datasets/tool-selection.js'
 import { runBraintrustEval } from './runner.js'
+import { scoreFactuality, scoreKeywordOverlap } from './scorers/factuality.js'
+import { scoreSafety } from './scorers/safety.js'
+import { scoreToolSelection } from './scorers/tool-selection.js'
 import type { EvalCase, EvalResult } from './types.js'
 
 const args = process.argv.slice(2)
@@ -51,7 +51,9 @@ async function main() {
     suites.push({
       name: 'tool-selection',
       run: async () => {
-        console.log(`\n[eval] Running tool-selection (${toolSelectionDataset.cases.length} cases)...`)
+        console.log(
+          `\n[eval] Running tool-selection (${toolSelectionDataset.cases.length} cases)...`,
+        )
         await runBraintrustEval({
           name: `tool-selection-${timestamp}`,
           dataset: toolSelectionDataset,
@@ -109,8 +111,7 @@ async function main() {
             },
             {
               name: 'keyword_overlap',
-              fn: (c: EvalCase, r: EvalResult) =>
-                scoreKeywordOverlap(c.expected || '', r.output),
+              fn: (c: EvalCase, r: EvalResult) => scoreKeywordOverlap(c.expected || '', r.output),
             },
           ],
           dryRun,

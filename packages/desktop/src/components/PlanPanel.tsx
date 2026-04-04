@@ -1,7 +1,6 @@
 import { Check, ChevronRight, MessageSquare, X } from 'lucide-react'
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { connection } from '../lib/connection.js'
-import { useStore } from '../lib/store.js'
+import { sessionStore } from '../lib/store/sessionStore.js'
 import { uiStore } from '../lib/store/uiStore.js'
 import { MarkdownRenderer } from './chat/MarkdownRenderer.js'
 
@@ -30,8 +29,8 @@ function extractToc(markdown: string): TocEntry[] {
 }
 
 export function PlanPanel() {
-  const pendingPlan = useStore((s) => s.pendingPlan)
-  const setPendingPlan = useStore((s) => s.setPendingPlan)
+  const pendingPlan = sessionStore((s) => s.pendingPlan)
+  const setPendingPlan = sessionStore((s) => s.setPendingPlan)
   const setSidePanelView = uiStore((s) => s.setSidePanelView)
   const [showFeedback, setShowFeedback] = useState(false)
   const [feedback, setFeedback] = useState('')
@@ -79,7 +78,7 @@ export function PlanPanel() {
   }
 
   const handleApprove = () => {
-    connection.sendPlanResponse(pendingPlan.id, true)
+    sessionStore.getState().sendPlanResponse(pendingPlan.id, true)
     setPendingPlan(null)
     setSidePanelView('artifacts')
   }
@@ -89,7 +88,7 @@ export function PlanPanel() {
       setShowFeedback(true)
       return
     }
-    connection.sendPlanResponse(pendingPlan.id, false, feedback || undefined)
+    sessionStore.getState().sendPlanResponse(pendingPlan.id, false, feedback || undefined)
     setPendingPlan(null)
     setSidePanelView('artifacts')
     setShowFeedback(false)

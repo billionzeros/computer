@@ -2,6 +2,7 @@ import { AnimatePresence } from 'framer-motion'
 import { ArrowDown, Loader2 } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { type ChatMessage, useAgentStatus, useStore } from '../../lib/store.js'
+import { sessionStore } from '../../lib/store/sessionStore.js'
 import { uiStore } from '../../lib/store/uiStore.js'
 import { ActionsGroup } from './ActionsGroup.js'
 import { MessageBubble } from './MessageBubble.js'
@@ -30,11 +31,11 @@ function formatTokens(n: number): string {
 }
 
 function TurnStats() {
-  const turnUsage = useStore((s) => s.turnUsage)
-  const lastTurnDurationMs = useStore((s) => s.lastTurnDurationMs)
-  const agentStatus = useStore((s) => s.agentStatus)
+  const turnUsage = sessionStore((s) => s.turnUsage)
+  const lastTurnDurationMs = sessionStore((s) => s.lastTurnDurationMs)
+  const agentStatus = sessionStore((s) => s.agentStatus)
   const activeConversationId = useStore((s) => s.activeConversationId)
-  const turnStatsConversationId = useStore((s) => s.turnStatsConversationId)
+  const turnStatsConversationId = sessionStore((s) => s.turnStatsConversationId)
 
   if (agentStatus !== 'idle' || !turnUsage || !lastTurnDurationMs) return null
   if (turnStatsConversationId !== activeConversationId) return null
@@ -49,7 +50,7 @@ function TurnStats() {
 }
 
 function TaskChecklistInline() {
-  const currentTasks = useStore((s) => s.currentTasks)
+  const currentTasks = sessionStore((s) => s.currentTasks)
   const tasksHidden = uiStore((s) => s.tasksHidden)
   if (currentTasks.length === 0 || tasksHidden) return null
   return <TaskChecklist tasks={currentTasks} />
@@ -64,11 +65,11 @@ export function MessageList({ messages }: Props) {
 
   // Pagination: load older messages on scroll-to-top
   const activeSessionId = useStore((s) => s.getActiveConversation()?.sessionId)
-  const hasMore = useStore((s) =>
-    activeSessionId ? (s._sessionHasMore.get(activeSessionId) ?? false) : false,
+  const hasMore = sessionStore((s) =>
+    activeSessionId ? s.getSessionState(activeSessionId).hasMore : false,
   )
-  const isLoadingOlder = useStore((s) =>
-    activeSessionId ? s._loadingOlderSessions.has(activeSessionId) : false,
+  const isLoadingOlder = sessionStore((s) =>
+    activeSessionId ? s.getSessionState(activeSessionId).isLoadingOlder : false,
   )
   const prevScrollHeightRef = useRef(0)
 

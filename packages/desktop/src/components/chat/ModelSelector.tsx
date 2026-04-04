@@ -1,6 +1,7 @@
 import { ChevronDown } from 'lucide-react'
 import { useState } from 'react'
-import { type ProviderInfo, useStore } from '../../lib/store.js'
+import type { ProviderInfo } from '../../lib/store.js'
+import { sessionStore } from '../../lib/store/sessionStore.js'
 import { SettingsModal } from '../settings/SettingsModal.js'
 import { formatModelName, providerIcons } from './model-utils.js'
 
@@ -27,9 +28,9 @@ function ProviderIcon({ provider, size = 16 }: { provider: string; size?: number
 export { ProviderIcon }
 
 export function ModelSelector() {
-  const currentProvider = useStore((s) => s.currentProvider)
-  const currentModel = useStore((s) => s.currentModel)
-  const providers = useStore((s) => s.providers)
+  const currentProvider = sessionStore((s) => s.currentProvider)
+  const currentModel = sessionStore((s) => s.currentModel)
+  const providers = sessionStore((s) => s.providers)
   const [settingsOpen, setSettingsOpen] = useState(false)
 
   const hasAnyKey = providers.some((p: ProviderInfo) => p.hasApiKey)

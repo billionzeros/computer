@@ -105,7 +105,11 @@ export class AirtableAPI {
     return this.request(path)
   }
 
-  async getRecord(baseId: string, tableIdOrName: string, recordId: string): Promise<AirtableRecord> {
+  async getRecord(
+    baseId: string,
+    tableIdOrName: string,
+    recordId: string,
+  ): Promise<AirtableRecord> {
     return this.request(`/${baseId}/${encodeURIComponent(tableIdOrName)}/${recordId}`)
   }
 

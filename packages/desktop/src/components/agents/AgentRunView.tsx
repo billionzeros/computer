@@ -32,7 +32,9 @@ function LogEntry({ log }: { log: AgentRunLogEntry }) {
         {log.toolName && <span className="agent-run-log__tool">{log.toolName}</span>}
         <span className="agent-run-log__time">{formatAbsoluteTime(log.ts)}</span>
       </div>
-      <pre className={`agent-run-log__content${log.isError ? ' agent-run-log__content--error' : ''}`}>
+      <pre
+        className={`agent-run-log__content${log.isError ? ' agent-run-log__content--error' : ''}`}
+      >
         {log.isError ? `ERROR: ${log.content}` : log.content}
       </pre>
     </div>
@@ -46,13 +48,9 @@ export function AgentRunView({ agentSessionId, projectId, run, onBack }: Props) 
   useEffect(() => {
     if (!run.completedAt) return
     projectStore.setState({ agentRunLogs: null, agentRunLogsLoading: true })
-    projectStore.getState().getAgentRunLogs(
-      projectId,
-      agentSessionId,
-      run.startedAt,
-      run.completedAt,
-      run.runSessionId,
-    )
+    projectStore
+      .getState()
+      .getAgentRunLogs(projectId, agentSessionId, run.startedAt, run.completedAt, run.runSessionId)
   }, [projectId, agentSessionId, run.startedAt, run.completedAt, run.runSessionId])
 
   const isError = run.status === 'error'
@@ -60,7 +58,12 @@ export function AgentRunView({ agentSessionId, projectId, run, onBack }: Props) 
   return (
     <div className="conv-panel">
       <div className="conv-panel__topbar">
-        <button type="button" className="conv-panel__back" onClick={onBack} aria-label="Back to agent">
+        <button
+          type="button"
+          className="conv-panel__back"
+          onClick={onBack}
+          aria-label="Back to agent"
+        >
           <ArrowLeft size={16} strokeWidth={1.5} />
         </button>
         <div className="conv-panel__title">

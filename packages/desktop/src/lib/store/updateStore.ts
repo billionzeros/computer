@@ -36,13 +36,11 @@ export const updateStore = create<UpdateState>((set, get) => ({
   updateMessage: null,
   updateDismissed: false,
 
-  setAgentVersionInfo: (version, gitHash) =>
-    set({ agentVersion: version, agentGitHash: gitHash }),
+  setAgentVersionInfo: (version, gitHash) => set({ agentVersion: version, agentGitHash: gitHash }),
 
   setUpdateInfo: (info) => set({ updateInfo: info }),
 
-  setUpdateProgress: (stage, message) =>
-    set({ updateStage: stage, updateMessage: message }),
+  setUpdateProgress: (stage, message) => set({ updateStage: stage, updateMessage: message }),
 
   dismissUpdate: () => set({ updateDismissed: true }),
 

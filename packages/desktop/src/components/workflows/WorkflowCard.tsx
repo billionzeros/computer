@@ -73,7 +73,9 @@ export function WorkflowCard({
           </div>
           <div style={{ fontSize: '12px', color: '#71717a', marginTop: '2px' }}>
             {workflow.author}
-            {comingSoon && <span style={{ marginLeft: '8px', color: '#52525b' }}>· Coming soon</span>}
+            {comingSoon && (
+              <span style={{ marginLeft: '8px', color: '#52525b' }}>· Coming soon</span>
+            )}
           </div>
         </div>
       </div>

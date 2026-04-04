@@ -1,6 +1,6 @@
+import { readFileSync } from 'node:fs'
 import tailwindcss from '@tailwindcss/vite'
 import react from '@vitejs/plugin-react'
-import { readFileSync } from 'node:fs'
 import { defineConfig } from 'vite'
 
 const pkg = JSON.parse(readFileSync('./package.json', 'utf-8'))

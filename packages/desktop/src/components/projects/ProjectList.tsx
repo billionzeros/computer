@@ -51,7 +51,11 @@ export function ProjectList() {
             Organize your work into projects. Each project has its own sessions, agents, and
             context.
           </p>
-          <button type="button" className="projects-empty__cta" onClick={() => window.dispatchEvent(new CustomEvent('anton:create-project'))}>
+          <button
+            type="button"
+            className="projects-empty__cta"
+            onClick={() => window.dispatchEvent(new CustomEvent('anton:create-project'))}
+          >
             <Plus size={16} strokeWidth={1.5} />
             <span>Create a project</span>
           </button>
@@ -83,49 +87,52 @@ export function ProjectList() {
 
         {/* Project grid */}
         <div className="projects-page__grid">
-          {[...projects].sort((a, b) => (b.isDefault ? 1 : 0) - (a.isDefault ? 1 : 0)).map((project, i) => (
-            <motion.button
-              key={project.id}
-              type="button"
-              className="project-card"
-              initial={{ opacity: 0, y: 6 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.25, delay: i * 0.04 }}
-              onClick={() => handleOpenProject(project.id)}
-            >
-              <div className="project-card__top">
-                <div className="project-card__icon" style={{ backgroundColor: project.color }}>
-                  {project.icon}
+          {[...projects]
+            .sort((a, b) => (b.isDefault ? 1 : 0) - (a.isDefault ? 1 : 0))
+            .map((project, i) => (
+              <motion.button
+                key={project.id}
+                type="button"
+                className="project-card"
+                initial={{ opacity: 0, y: 6 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.25, delay: i * 0.04 }}
+                onClick={() => handleOpenProject(project.id)}
+              >
+                <div className="project-card__top">
+                  <div className="project-card__icon" style={{ backgroundColor: project.color }}>
+                    {project.icon}
+                  </div>
+                  {!project.isDefault && (
+                    <button
+                      type="button"
+                      className="project-card__delete"
+                      data-tooltip="Delete project"
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        setDeleteTarget(project.id)
+                      }}
+                    >
+                      <Trash2 size={13} strokeWidth={1.5} />
+                    </button>
+                  )}
                 </div>
-                {!project.isDefault && (
-                  <button
-                    type="button"
-                    className="project-card__delete"
-                    data-tooltip="Delete project"
-                    onClick={(e) => {
-                      e.stopPropagation()
-                      setDeleteTarget(project.id)
-                    }}
-                  >
-                    <Trash2 size={13} strokeWidth={1.5} />
-                  </button>
-                )}
-              </div>
-              <div className="project-card__body">
-                <span className="project-card__name">{project.name}</span>
-                {project.description && (
-                  <span className="project-card__desc">{project.description}</span>
-                )}
-              </div>
-              <div className="project-card__footer">
-                <span className="project-card__stat">
-                  <MessageSquare size={11} strokeWidth={1.5} />
-                  {project.stats.sessionCount} session{project.stats.sessionCount !== 1 ? 's' : ''}
-                </span>
-                <span className="project-card__time">{formatDate(project.stats.lastActive)}</span>
-              </div>
-            </motion.button>
-          ))}
+                <div className="project-card__body">
+                  <span className="project-card__name">{project.name}</span>
+                  {project.description && (
+                    <span className="project-card__desc">{project.description}</span>
+                  )}
+                </div>
+                <div className="project-card__footer">
+                  <span className="project-card__stat">
+                    <MessageSquare size={11} strokeWidth={1.5} />
+                    {project.stats.sessionCount} session
+                    {project.stats.sessionCount !== 1 ? 's' : ''}
+                  </span>
+                  <span className="project-card__time">{formatDate(project.stats.lastActive)}</span>
+                </div>
+              </motion.button>
+            ))}
 
           {/* New project card */}
           <button

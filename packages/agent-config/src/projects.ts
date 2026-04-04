@@ -511,7 +511,9 @@ export function buildProjectContext(project: Project, projectId: string): string
     }
   }
 
-  lines.push('\nYou are working within this project. Use the context above to inform your responses.')
+  lines.push(
+    '\nYou are working within this project. Use the context above to inform your responses.',
+  )
   return lines.join('\n')
 }
 

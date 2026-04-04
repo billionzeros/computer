@@ -16,6 +16,7 @@ import { createServer as createHttpsServer } from 'node:https'
 import { join } from 'node:path'
 import type { AgentConfig } from '@anton/agent-config'
 import {
+  addProjectPreference,
   appendMessageToSession,
   appendSessionHistory,
   buildProjectContext,
@@ -24,38 +25,34 @@ import {
   deleteSession as deletePersistedSession,
   deleteProject,
   deleteProjectFile,
+  deleteProjectPreference,
+  ensureDefaultProject,
   getAntonDir,
+  getConversationMemoryDir,
+  getGlobalMemoryDir,
   getProjectSessionsDir,
   getProvidersList,
   listProjectFiles,
   listProjectSessions,
+  listProjectWorkflows,
   listSessionMetas,
   loadAgentMetadata,
   loadProject,
-  loadProjects,
-  ensureDefaultProject,
   loadProjectInstructions,
-  saveProjectInstructions,
   loadProjectPreferences,
-  addProjectPreference,
-  deleteProjectPreference,
+  loadProjects,
+  loadUserRules,
   saveConfig,
   saveProjectFile,
+  saveProjectInstructions,
   setDefault,
   setProviderKey,
   setProviderModels,
   updateProject,
   updateProjectContext,
   updateProjectStats,
-  getConversationMemoryDir,
-  getGlobalMemoryDir,
-  loadUserRules,
-  listProjectWorkflows,
 } from '@anton/agent-config'
 import { GIT_HASH, VERSION } from '@anton/agent-config'
-import { buildWorkflowAgentContext } from './workflows/workflow-context.js'
-import { WorkflowInstaller } from './workflows/workflow-installer.js'
-import { listBuiltinWorkflows, getBuiltinWorkflowPath, loadBuiltinManifest } from './workflows/builtin-registry.js'
 import {
   CONNECTOR_REGISTRY,
   type ConnectorConfig,
@@ -82,6 +79,13 @@ import { OAuthFlow, TokenStore, oauthCallbackHandler } from './oauth/index.js'
 import type { Scheduler } from './scheduler.js'
 import { TelegramBotHandler } from './telegram-bot.js'
 import { Updater } from './updater.js'
+import {
+  getBuiltinWorkflowPath,
+  listBuiltinWorkflows,
+  loadBuiltinManifest,
+} from './workflows/builtin-registry.js'
+import { buildWorkflowAgentContext } from './workflows/workflow-context.js'
+import { WorkflowInstaller } from './workflows/workflow-installer.js'
 
 const DEFAULT_SESSION_ID = 'default'
 
@@ -181,7 +185,11 @@ export class AgentServer {
     }
     // Kill any active PTY sessions
     for (const [id, pty] of this.ptys) {
-      try { pty.kill() } catch { /* best-effort */ }
+      try {
+        pty.kill()
+      } catch {
+        /* best-effort */
+      }
       this.ptys.delete(id)
     }
   }
@@ -561,7 +569,9 @@ export class AgentServer {
         // Fallback: base prompt + user rules (no session context)
         // loadCoreSystemPrompt() writes to disk on every call — read the file directly instead
         const promptPath = join(getAntonDir(), 'prompts', 'system.md')
-        const base = existsSync(promptPath) ? readFileSync(promptPath, 'utf-8') : '(system prompt not found)'
+        const base = existsSync(promptPath)
+          ? readFileSync(promptPath, 'utf-8')
+          : '(system prompt not found)'
         const userRules = loadUserRules()
         value = userRules ? `${base}\n\n${userRules}` : base
         break
@@ -569,7 +579,11 @@ export class AgentServer {
       case 'memories': {
         // Global memories
         const globalDir = getGlobalMemoryDir()
-        const memories: { name: string; content: string; scope: 'global' | 'conversation' | 'project' }[] = []
+        const memories: {
+          name: string
+          content: string
+          scope: 'global' | 'conversation' | 'project'
+        }[] = []
         try {
           const files = readdirSync(globalDir).filter((f) => f.endsWith('.md'))
           for (const f of files) {
@@ -579,7 +593,9 @@ export class AgentServer {
               scope: 'global',
             })
           }
-        } catch { /* no global memories */ }
+        } catch {
+          /* no global memories */
+        }
 
         // Conversation-scoped memories (if sessionId provided)
         if (sessionId) {
@@ -593,7 +609,9 @@ export class AgentServer {
                 scope: 'conversation',
               })
             }
-          } catch { /* no conversation memories */ }
+          } catch {
+            /* no conversation memories */
+          }
         }
 
         // Project-scoped context (if projectId provided)
@@ -1791,7 +1809,11 @@ export class AgentServer {
    * Loaded once from builtin registry, cached for the server lifetime.
    */
   private _workflowCatalog: { name: string; description: string; whenToUse: string }[] | null = null
-  private getAvailableWorkflowsForPrompt(): { name: string; description: string; whenToUse: string }[] {
+  private getAvailableWorkflowsForPrompt(): {
+    name: string
+    description: string
+    whenToUse: string
+  }[] {
     if (!this._workflowCatalog) {
       const entries = listBuiltinWorkflows()
       this._workflowCatalog = entries
@@ -1826,9 +1848,7 @@ export class AgentServer {
     }
 
     // Get list of currently active connector IDs
-    const activeConnectors = this.connectorManager
-      ? this.connectorManager.getActiveIds()
-      : []
+    const activeConnectors = this.connectorManager ? this.connectorManager.getActiveIds() : []
 
     const satisfied = manifest.connectors.required.filter((c) => activeConnectors.includes(c))
     const missing = manifest.connectors.required.filter((c) => !activeConnectors.includes(c))
@@ -2143,7 +2163,13 @@ export class AgentServer {
   // ── Project handlers ──────────────────────────────────────────
 
   private handleProjectCreate(msg: {
-    project: { name: string; description?: string; icon?: string; color?: string; workspacePath?: string }
+    project: {
+      name: string
+      description?: string
+      icon?: string
+      color?: string
+      workspacePath?: string
+    }
   }) {
     try {
       const project = createProject({ ...msg.project, config: this.config })

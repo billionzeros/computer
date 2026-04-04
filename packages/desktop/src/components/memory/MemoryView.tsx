@@ -8,7 +8,6 @@ import {
   Plus,
   Save,
   Trash2,
-  X,
 } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 import { connection } from '../../lib/connection.js'
@@ -39,9 +38,18 @@ function parseMemoryFile(raw: { name: string; content: string; scope: MemoryScop
 
   let contentStart = 0
   for (let i = 0; i < lines.length; i++) {
-    if (lines[i].startsWith('# ')) { contentStart = i + 1; continue }
-    if (lines[i].startsWith('_Saved:')) { contentStart = i + 1; continue }
-    if (lines[i].trim() === '' && contentStart === i) { contentStart = i + 1; continue }
+    if (lines[i].startsWith('# ')) {
+      contentStart = i + 1
+      continue
+    }
+    if (lines[i].startsWith('_Saved:')) {
+      contentStart = i + 1
+      continue
+    }
+    if (lines[i].trim() === '' && contentStart === i) {
+      contentStart = i + 1
+      continue
+    }
     break
   }
   const content = lines.slice(contentStart).join('\n').trim()
@@ -74,7 +82,11 @@ export function MemoryView() {
   // Fetch data on mount and project change
   useEffect(() => {
     if (!activeProjectId) return
-    projectStore.setState({ memoriesLoading: true, projectInstructionsLoading: true, projectPreferencesLoading: true })
+    projectStore.setState({
+      memoriesLoading: true,
+      projectInstructionsLoading: true,
+      projectPreferencesLoading: true,
+    })
     connection.sendConfigQuery('memories', undefined, activeProjectId)
     projectStore.getState().getProjectInstructions(activeProjectId)
     projectStore.getState().getProjectPreferences(activeProjectId)
@@ -110,7 +122,9 @@ export function MemoryView() {
 
   const handleAddPreference = () => {
     if (!activeProjectId || !newPrefTitle.trim() || !newPrefContent.trim()) return
-    projectStore.getState().addProjectPreference(activeProjectId, newPrefTitle.trim(), newPrefContent.trim())
+    projectStore
+      .getState()
+      .addProjectPreference(activeProjectId, newPrefTitle.trim(), newPrefContent.trim())
     setNewPrefTitle('')
     setNewPrefContent('')
     setAddingPreference(false)
@@ -150,8 +164,8 @@ export function MemoryView() {
             )}
           </div>
           <p className="memory-section__desc">
-            Rules that guide the AI in{' '}
-            <strong>{activeProject?.name || 'this project'}</strong>. Applied to every task.
+            Rules that guide the AI in <strong>{activeProject?.name || 'this project'}</strong>.
+            Applied to every task.
           </p>
 
           {editingInstructions ? (
@@ -301,9 +315,7 @@ export function MemoryView() {
             <h3 className="memory-section__title">Chat Memories</h3>
             <span className="memory-section__count">{parsed.length}</span>
           </div>
-          <p className="memory-section__desc">
-            Auto-generated from your conversations over time.
-          </p>
+          <p className="memory-section__desc">Auto-generated from your conversations over time.</p>
 
           {parsed.length > 0 && (
             <div className="memory-filter-tabs">

@@ -295,7 +295,7 @@ button {
 }
 
 .sidebar-primary__item--active {
-  background: rgba(var(--overlay), 0.10);
+  background: rgba(var(--overlay), 0.1);
   color: var(--text);
 }
 
@@ -8116,7 +8116,7 @@ button {
 }
 
 .project-landing__desc-wrap--clamped::after {
-  content: '';
+  content: "";
   position: absolute;
   bottom: 0;
   left: 0;
@@ -12036,9 +12036,16 @@ button {
   flex-shrink: 0;
 }
 
-.dev-session-dot--idle { background: var(--success); opacity: 0.5; }
-.dev-session-dot--working { background: var(--warning); }
-.dev-session-dot--error { background: var(--danger); }
+.dev-session-dot--idle {
+  background: var(--success);
+  opacity: 0.5;
+}
+.dev-session-dot--working {
+  background: var(--warning);
+}
+.dev-session-dot--error {
+  background: var(--danger);
+}
 
 .dev-session-id {
   flex: 1;
@@ -12304,7 +12311,7 @@ button {
 .devmode-panel__prompt {
   margin: 0;
   padding: 12px;
-  font-family: 'SF Mono', 'Fira Code', 'JetBrains Mono', monospace;
+  font-family: "SF Mono", "Fira Code", "JetBrains Mono", monospace;
   font-size: 11px;
   line-height: 1.6;
   color: var(--text);
@@ -12357,7 +12364,7 @@ button {
 .devmode-panel__memory-content {
   margin: 0;
   padding: 0 12px 12px 32px;
-  font-family: 'SF Mono', 'Fira Code', 'JetBrains Mono', monospace;
+  font-family: "SF Mono", "Fira Code", "JetBrains Mono", monospace;
   font-size: 11px;
   line-height: 1.5;
   color: var(--text-muted);
@@ -12399,8 +12406,12 @@ button {
    ═══════════════════════════════════════════════════════════════════ */
 
 @keyframes welcome-fade-in {
-  from { opacity: 0; }
-  to { opacity: 1; }
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
 }
 
 @keyframes welcome-slide-up {
@@ -13123,7 +13134,7 @@ button {
 }
 
 .home-layout__divider::after {
-  content: '';
+  content: "";
   position: absolute;
   top: 0;
   bottom: 0;
@@ -13468,7 +13479,8 @@ button {
 }
 
 @keyframes status-pulse {
-  0%, 100% {
+  0%,
+  100% {
     opacity: 1;
   }
   50% {
@@ -13765,7 +13777,7 @@ button {
 
 /* Tree branch line (left connector) */
 .tool-call::before {
-  content: '';
+  content: "";
   position: absolute;
   left: -16px;
   top: 0;
@@ -13775,7 +13787,7 @@ button {
 }
 
 .tool-call::after {
-  content: '';
+  content: "";
   position: absolute;
   left: -16px;
   top: 50%;
@@ -13824,7 +13836,7 @@ button {
 
 /* Tree branch for result cards too */
 .tool-result-card::before {
-  content: '';
+  content: "";
   position: absolute;
   left: -16px;
   top: 0;
@@ -13834,7 +13846,7 @@ button {
 }
 
 .tool-result-card::after {
-  content: '';
+  content: "";
   position: absolute;
   left: -16px;
   top: 14px;
@@ -14826,8 +14838,12 @@ button {
 }
 
 @keyframes spin {
-  from { transform: rotate(0deg); }
-  to { transform: rotate(360deg); }
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 /* ══════════════════════════════════════════════════════════════
@@ -14858,7 +14874,7 @@ button {
 
 .pf-view__path {
   display: block;
-  font-family: 'SF Mono', 'Fira Code', monospace;
+  font-family: "SF Mono", "Fira Code", monospace;
   font-size: 11px;
   color: var(--text-subtle);
   margin-top: 4px;
@@ -14872,7 +14888,8 @@ button {
   gap: 8px;
 }
 
-.pf-toolbar__left, .pf-toolbar__right {
+.pf-toolbar__left,
+.pf-toolbar__right {
   display: flex;
   align-items: center;
   gap: 8px;
@@ -15005,11 +15022,21 @@ button {
   color: var(--text-subtle);
 }
 
-.pf-card--code .pf-card__icon { color: #60a5fa; }
-.pf-card--data .pf-card__icon { color: #4ade80; }
-.pf-card--text .pf-card__icon { color: #a1a1aa; }
-.pf-card--image .pf-card__icon { color: #c084fc; }
-.pf-card--other .pf-card__icon { color: #71717a; }
+.pf-card--code .pf-card__icon {
+  color: #60a5fa;
+}
+.pf-card--data .pf-card__icon {
+  color: #4ade80;
+}
+.pf-card--text .pf-card__icon {
+  color: #a1a1aa;
+}
+.pf-card--image .pf-card__icon {
+  color: #c084fc;
+}
+.pf-card--other .pf-card__icon {
+  color: #71717a;
+}
 
 .pf-card__info {
   flex: 1;
@@ -15036,7 +15063,7 @@ button {
 }
 
 .pf-card__ext {
-  font-family: 'SF Mono', 'Fira Code', monospace;
+  font-family: "SF Mono", "Fira Code", monospace;
   font-size: 10px;
   background: rgba(var(--overlay), 0.08);
   padding: 1px 5px;
@@ -15312,8 +15339,13 @@ button {
 }
 
 @keyframes pulse-dot {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.4; }
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.4;
+  }
 }
 
 .agent-home__status-text {
@@ -15436,10 +15468,18 @@ button {
   letter-spacing: 0.03em;
 }
 
-.agent-home__scheduler-status--running { color: var(--warning); }
-.agent-home__scheduler-status--error { color: var(--danger); }
-.agent-home__scheduler-status--idle { color: var(--text-subtle); }
-.agent-home__scheduler-status--paused { color: var(--text-subtle); }
+.agent-home__scheduler-status--running {
+  color: var(--warning);
+}
+.agent-home__scheduler-status--error {
+  color: var(--danger);
+}
+.agent-home__scheduler-status--idle {
+  color: var(--text-subtle);
+}
+.agent-home__scheduler-status--paused {
+  color: var(--text-subtle);
+}
 
 /* Run list */
 .agent-home__run-list {
@@ -15594,10 +15634,21 @@ button {
   color: var(--text-subtle);
 }
 
-.agent-run-log__role--assistant { color: var(--accent); background: rgba(var(--overlay), 0.08); }
-.agent-run-log__role--user { color: var(--success); background: rgba(34, 197, 94, 0.1); }
-.agent-run-log__role--tool_call { color: var(--warning); background: rgba(245, 158, 11, 0.1); }
-.agent-run-log__role--tool_result { color: var(--text-subtle); }
+.agent-run-log__role--assistant {
+  color: var(--accent);
+  background: rgba(var(--overlay), 0.08);
+}
+.agent-run-log__role--user {
+  color: var(--success);
+  background: rgba(34, 197, 94, 0.1);
+}
+.agent-run-log__role--tool_call {
+  color: var(--warning);
+  background: rgba(245, 158, 11, 0.1);
+}
+.agent-run-log__role--tool_result {
+  color: var(--text-subtle);
+}
 
 .agent-run-log__tool {
   font-size: 11px;

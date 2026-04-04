@@ -9,8 +9,8 @@ import { useStore } from '../../lib/store.js'
 import { projectStore } from '../../lib/store/projectStore.js'
 import { Skeleton } from '../Skeleton.js'
 import { ConnectorBanner, ConnectorPill } from '../chat/ConnectorToolbar.js'
-import { WorkflowStatusBanner } from '../workflows/WorkflowStatusBanner.js'
 import { ModelSelector } from '../chat/ModelSelector.js'
+import { WorkflowStatusBanner } from '../workflows/WorkflowStatusBanner.js'
 import { ProjectConfigPanel } from './ProjectConfigPanel.js'
 import { SessionCard } from './SessionCard.js'
 
@@ -51,9 +51,7 @@ function DescriptionClamp({ text }: { text: string }) {
       >
         {text}
       </p>
-      {clamped && !expanded && (
-        <span className="project-landing__desc-more">Show more</span>
-      )}
+      {clamped && !expanded && <span className="project-landing__desc-more">Show more</span>}
     </div>
   )
 }
@@ -311,7 +309,9 @@ export function ProjectLanding({
   const projectWorkflows = projectStore((s) => s.projectWorkflows)
   const projectAgents = projectStore((s) => s.projectAgents)
   const activeWorkflow = projectWorkflows.find((w) => w.projectId === project.id)
-  const workflowAgent = activeWorkflow ? projectAgents.find((a) => a.sessionId === activeWorkflow.agentSessionId) : undefined
+  const workflowAgent = activeWorkflow
+    ? projectAgents.find((a) => a.sessionId === activeWorkflow.agentSessionId)
+    : undefined
 
   const handleSubmit = () => {
     const raw = inputValue.trim()
@@ -352,18 +352,16 @@ export function ProjectLanding({
               </div>
               <div className="project-landing__info">
                 <h1 className="project-landing__name">{project.name}</h1>
-                {project.description && (
-                  <DescriptionClamp text={project.description} />
-                )}
-                <span className="project-landing__meta">
-                  {formatDate(project.updatedAt)}
-                </span>
+                {project.description && <DescriptionClamp text={project.description} />}
+                <span className="project-landing__meta">{formatDate(project.updatedAt)}</span>
               </div>
             </div>
           </div>
 
           {/* Workflow status banner (if this is a workflow project) */}
-          {activeWorkflow && <WorkflowStatusBanner workflow={activeWorkflow} agent={workflowAgent} />}
+          {activeWorkflow && (
+            <WorkflowStatusBanner workflow={activeWorkflow} agent={workflowAgent} />
+          )}
 
           {/* Chat input — Manus-style */}
           <div className="project-landing__input-wrap">

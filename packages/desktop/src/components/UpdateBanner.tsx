@@ -2,9 +2,9 @@ import { Check, Download, Loader2, X } from 'lucide-react'
 import { useEffect } from 'react'
 import { connection } from '../lib/connection.js'
 import { semverGt } from '../lib/semver.js'
+import { useConnectionStatus } from '../lib/store.js'
 import { updateStageLabel } from '../lib/store/types.js'
 import { updateStore } from '../lib/store/updateStore.js'
-import { useConnectionStatus } from '../lib/store.js'
 import { FRONTEND_VERSION } from '../lib/version.js'
 import { AntonLogo } from './AntonLogo.js'
 
@@ -44,9 +44,7 @@ export function UpdateBanner() {
 
   // Determine which state to show
   const isUpdating =
-    updateStage === 'downloading' ||
-    updateStage === 'replacing' ||
-    updateStage === 'restarting'
+    updateStage === 'downloading' || updateStage === 'replacing' || updateStage === 'restarting'
   const isDone = updateStage === 'done'
   const isError = updateStage === 'error'
   const hasUpdate = updateInfo?.updateAvailable && !updateDismissed && !updateStage
@@ -116,9 +114,7 @@ export function UpdateBanner() {
             <div className="update-banner__check">
               <Check size={36} strokeWidth={1.5} />
             </div>
-            <div className="update-banner__version">
-              Updated to v{agentVersion}
-            </div>
+            <div className="update-banner__version">Updated to v{agentVersion}</div>
             <div className="update-banner__changelog">Your machine is up to date</div>
           </>
         )}

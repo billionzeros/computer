@@ -138,12 +138,14 @@ export function ArtifactDetailView() {
   const handlePublish = useCallback(() => {
     if (!artifact || publishing) return
     setPublishing(true)
-    artifactStore.getState().publishArtifact(
-      artifact.id,
-      artifact.content,
-      artifact.renderType,
-      artifact.title || artifact.filename || 'Untitled',
-    )
+    artifactStore
+      .getState()
+      .publishArtifact(
+        artifact.id,
+        artifact.content,
+        artifact.renderType,
+        artifact.title || artifact.filename || 'Untitled',
+      )
     // Publishing state resets when we get the response (publish status update)
     setTimeout(() => setPublishing(false), 5000)
   }, [artifact, publishing])

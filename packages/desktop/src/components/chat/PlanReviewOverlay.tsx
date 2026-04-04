@@ -1,7 +1,6 @@
 import { Check, Send } from 'lucide-react'
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { connection } from '../../lib/connection.js'
-import { useStore } from '../../lib/store.js'
+import { sessionStore } from '../../lib/store/sessionStore.js'
 import { MarkdownRenderer } from './MarkdownRenderer.js'
 
 interface TocEntry {
@@ -27,8 +26,8 @@ function extractToc(markdown: string): TocEntry[] {
 }
 
 export function PlanReviewOverlay() {
-  const pendingPlan = useStore((s) => s.pendingPlan)
-  const setPendingPlan = useStore((s) => s.setPendingPlan)
+  const pendingPlan = sessionStore((s) => s.pendingPlan)
+  const setPendingPlan = sessionStore((s) => s.setPendingPlan)
   const [feedback, setFeedback] = useState('')
   const [activeSection, setActiveSection] = useState<string | null>(null)
   const contentRef = useRef<HTMLDivElement>(null)
@@ -63,13 +62,13 @@ export function PlanReviewOverlay() {
   if (!pendingPlan) return null
 
   const handleApprove = () => {
-    connection.sendPlanResponse(pendingPlan.id, true)
+    sessionStore.getState().sendPlanResponse(pendingPlan.id, true)
     setPendingPlan(null)
   }
 
   const handleReject = () => {
     if (!feedback.trim()) return
-    connection.sendPlanResponse(pendingPlan.id, false, feedback)
+    sessionStore.getState().sendPlanResponse(pendingPlan.id, false, feedback)
     setPendingPlan(null)
     setFeedback('')
   }

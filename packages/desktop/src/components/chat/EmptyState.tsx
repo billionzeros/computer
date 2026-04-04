@@ -1,7 +1,6 @@
 import { motion } from 'framer-motion'
 import { BriefcaseBusiness, Code2, ListChecks, Sparkles } from 'lucide-react'
 import { useCallback, useRef, useState } from 'react'
-import { connection } from '../../lib/connection.js'
 import type { Skill } from '../../lib/skills.js'
 import type { ChatImageAttachment } from '../../lib/store.js'
 import { useStore } from '../../lib/store.js'

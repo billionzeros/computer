@@ -2,7 +2,12 @@
  * Project domain store — projects, agents, workflows, project context.
  */
 
-import type { AgentSession, InstalledWorkflow, Project, WorkflowRegistryEntry } from '@anton/protocol'
+import type {
+  AgentSession,
+  InstalledWorkflow,
+  Project,
+  WorkflowRegistryEntry,
+} from '@anton/protocol'
 import { create } from 'zustand'
 import { connection } from '../connection.js'
 import {
@@ -66,8 +71,12 @@ interface ProjectState {
   setSelectedAgent: (id: string | null) => void
   setActiveProjectSession: (sessionId: string | null) => void
   setProjectInstructions: (content: string) => void
-  setProjectPreferences: (prefs: { id: string; title: string; content: string; createdAt: number }[]) => void
-  setMemories: (memories: { name: string; content: string; scope: 'global' | 'conversation' | 'project' }[]) => void
+  setProjectPreferences: (
+    prefs: { id: string; title: string; content: string; createdAt: number }[],
+  ) => void
+  setMemories: (
+    memories: { name: string; content: string; scope: 'global' | 'conversation' | 'project' }[],
+  ) => void
   setAllAgents: (agents: AgentSession[]) => void
   setAgentRunLogs: (logs: import('@anton/protocol').AgentRunLogEntry[] | null) => void
   setWorkflowRegistry: (entries: WorkflowRegistryEntry[]) => void
@@ -76,22 +85,56 @@ interface ProjectState {
   fetchAllAgents: () => void
 
   // Connection actions
-  createProject: (config: { name: string; description?: string; icon?: string; color?: string }) => void
+  createProject: (config: {
+    name: string
+    description?: string
+    icon?: string
+    color?: string
+  }) => void
   deleteProject: (id: string) => void
   updateProjectRemote: (id: string, changes: Record<string, unknown>) => void
   listProjects: () => void
   listProjectSessions: (projectId: string) => void
   listProjectFiles: (projectId: string) => void
-  uploadProjectFile: (projectId: string, filename: string, base64: string, mimeType: string, size: number) => void
+  uploadProjectFile: (
+    projectId: string,
+    filename: string,
+    base64: string,
+    mimeType: string,
+    size: number,
+  ) => void
   createTextFile: (projectId: string, filename: string, content: string) => void
   deleteProjectFile: (projectId: string, filename: string) => void
   listAgents: (projectId: string) => void
-  createAgent: (projectId: string, config: { name: string; instructions: string; schedule?: string; model?: string; provider?: string }) => void
-  agentAction: (projectId: string, agentId: string, action: 'start' | 'stop' | 'pause' | 'resume' | 'delete') => void
-  getAgentRunLogs: (projectId: string, sessionId: string, startedAt: number, completedAt: number, runSessionId?: string) => void
+  createAgent: (
+    projectId: string,
+    config: {
+      name: string
+      instructions: string
+      schedule?: string
+      model?: string
+      provider?: string
+    },
+  ) => void
+  agentAction: (
+    projectId: string,
+    agentId: string,
+    action: 'start' | 'stop' | 'pause' | 'resume' | 'delete',
+  ) => void
+  getAgentRunLogs: (
+    projectId: string,
+    sessionId: string,
+    startedAt: number,
+    completedAt: number,
+    runSessionId?: string,
+  ) => void
   listWorkflowRegistry: () => void
   checkWorkflowConnectors: (workflowId: string) => void
-  installWorkflow: (projectId: string, workflowId: string, userInputs: Record<string, unknown>) => void
+  installWorkflow: (
+    projectId: string,
+    workflowId: string,
+    userInputs: Record<string, unknown>,
+  ) => void
   listWorkflows: (projectId: string) => void
   uninstallWorkflow: (projectId: string, workflowId: string) => void
   getProjectInstructions: (projectId: string) => void
@@ -188,13 +231,16 @@ export const projectStore = create<ProjectState>((set, get) => ({
     })
   },
 
-  setProjectSessions: (sessions) => set({ projectSessions: sessions, projectSessionsLoading: false }),
+  setProjectSessions: (sessions) =>
+    set({ projectSessions: sessions, projectSessionsLoading: false }),
   setProjectFiles: (files) => set({ projectFiles: files, projectFilesLoading: false }),
   setProjectAgents: (agents) => set({ projectAgents: agents, projectAgentsLoading: false }),
   setSelectedAgent: (id) => set({ selectedAgentId: id }),
   setActiveProjectSession: (sessionId) => set({ activeProjectSessionId: sessionId }),
-  setProjectInstructions: (content) => set({ projectInstructions: content, projectInstructionsLoading: false }),
-  setProjectPreferences: (prefs) => set({ projectPreferences: prefs, projectPreferencesLoading: false }),
+  setProjectInstructions: (content) =>
+    set({ projectInstructions: content, projectInstructionsLoading: false }),
+  setProjectPreferences: (prefs) =>
+    set({ projectPreferences: prefs, projectPreferencesLoading: false }),
   setMemories: (memories) => set({ memories, memoriesLoading: false }),
   setAllAgents: (agents) => set({ allAgents: agents, allAgentsLoading: false }),
   setAgentRunLogs: (logs) => set({ agentRunLogs: logs, agentRunLogsLoading: false }),
@@ -222,8 +268,7 @@ export const projectStore = create<ProjectState>((set, get) => ({
     connection.sendProjectFileUpload(projectId, filename, base64, mimeType, size),
   createTextFile: (projectId, filename, content) =>
     connection.sendProjectFileTextCreate(projectId, filename, content),
-  deleteProjectFile: (projectId, filename) =>
-    connection.sendProjectFileDelete(projectId, filename),
+  deleteProjectFile: (projectId, filename) => connection.sendProjectFileDelete(projectId, filename),
   listAgents: (projectId) => connection.sendAgentsList(projectId),
   createAgent: (projectId, config) => connection.sendAgentCreate(projectId, config),
   agentAction: (projectId, agentId, action) =>
@@ -231,8 +276,7 @@ export const projectStore = create<ProjectState>((set, get) => ({
   getAgentRunLogs: (projectId, sessionId, startedAt, completedAt, runSessionId) =>
     connection.sendAgentRunLogs(projectId, sessionId, startedAt, completedAt, runSessionId),
   listWorkflowRegistry: () => connection.sendWorkflowRegistryList(),
-  checkWorkflowConnectors: (workflowId) =>
-    connection.sendWorkflowCheckConnectors(workflowId),
+  checkWorkflowConnectors: (workflowId) => connection.sendWorkflowCheckConnectors(workflowId),
   installWorkflow: (projectId, workflowId, userInputs) =>
     connection.sendWorkflowInstall(projectId, workflowId, userInputs),
   listWorkflows: (projectId) => connection.sendWorkflowsList(projectId),

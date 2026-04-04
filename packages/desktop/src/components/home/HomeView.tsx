@@ -13,11 +13,14 @@ export function HomeView() {
   const dragRef = useRef<{ startX: number; startW: number } | null>(null)
   const [isDragging, setIsDragging] = useState(false)
 
-  const handleDragStart = useCallback((e: React.MouseEvent) => {
-    e.preventDefault()
-    dragRef.current = { startX: e.clientX, startW: leftWidth }
-    setIsDragging(true)
-  }, [leftWidth])
+  const handleDragStart = useCallback(
+    (e: React.MouseEvent) => {
+      e.preventDefault()
+      dragRef.current = { startX: e.clientX, startW: leftWidth }
+      setIsDragging(true)
+    },
+    [leftWidth],
+  )
 
   useEffect(() => {
     if (!isDragging) return

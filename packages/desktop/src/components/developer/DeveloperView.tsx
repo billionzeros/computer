@@ -15,6 +15,7 @@ import {
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { connection } from '../../lib/connection.js'
 import { useConnectionStatus, useStore } from '../../lib/store.js'
+import { sessionStore } from '../../lib/store/sessionStore.js'
 import { uiStore } from '../../lib/store/uiStore.js'
 
 type DevTab = 'overview' | 'events' | 'prompt' | 'memories'
@@ -34,16 +35,21 @@ function formatDuration(ms: number): string {
 }
 
 function formatTime(ts: number): string {
-  return new Date(ts).toLocaleTimeString('en-US', { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' })
+  return new Date(ts).toLocaleTimeString('en-US', {
+    hour12: false,
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+  })
 }
 
 // ── Status Bar ──
 
 function StatusBar() {
   const connectionStatus = useConnectionStatus()
-  const agentStatus = useStore((s) => s.agentStatus)
-  const agentStatusDetail = useStore((s) => s.agentStatusDetail)
-  const workingStartedAt = useStore((s) => s.workingStartedAt)
+  const agentStatus = sessionStore((s) => s.agentStatus)
+  const agentStatusDetail = sessionStore((s) => s.agentStatusDetail)
+  const workingStartedAt = sessionStore((s) => s.workingStartedAt)
   const [elapsed, setElapsed] = useState(0)
 
   useEffect(() => {
@@ -55,21 +61,44 @@ function StatusBar() {
     return () => clearInterval(id)
   }, [workingStartedAt, agentStatus])
 
-  const connColor = connectionStatus === 'connected' ? 'var(--success)' : connectionStatus === 'error' ? 'var(--danger)' : 'var(--warning)'
-  const agentColor = agentStatus === 'idle' ? 'var(--success)' : agentStatus === 'working' ? 'var(--warning)' : 'var(--danger)'
+  const connColor =
+    connectionStatus === 'connected'
+      ? 'var(--success)'
+      : connectionStatus === 'error'
+        ? 'var(--danger)'
+        : 'var(--warning)'
+  const agentColor =
+    agentStatus === 'idle'
+      ? 'var(--success)'
+      : agentStatus === 'working'
+        ? 'var(--warning)'
+        : 'var(--danger)'
 
   return (
     <div className="dev-status-bar">
       <div className="dev-status-pill" style={{ '--pill-color': connColor } as React.CSSProperties}>
-        {connectionStatus === 'connected' ? <Wifi size={14} strokeWidth={1.5} /> : <WifiOff size={14} strokeWidth={1.5} />}
+        {connectionStatus === 'connected' ? (
+          <Wifi size={14} strokeWidth={1.5} />
+        ) : (
+          <WifiOff size={14} strokeWidth={1.5} />
+        )}
         <span>{connectionStatus}</span>
       </div>
-      <div className="dev-status-pill" style={{ '--pill-color': agentColor } as React.CSSProperties}>
+      <div
+        className="dev-status-pill"
+        style={{ '--pill-color': agentColor } as React.CSSProperties}
+      >
         <Activity size={14} strokeWidth={1.5} />
-        <span>{agentStatus}{agentStatusDetail ? ` — ${agentStatusDetail}` : ''}</span>
+        <span>
+          {agentStatus}
+          {agentStatusDetail ? ` — ${agentStatusDetail}` : ''}
+        </span>
       </div>
       {agentStatus === 'working' && elapsed > 0 && (
-        <div className="dev-status-pill" style={{ '--pill-color': 'var(--text-subtle)' } as React.CSSProperties}>
+        <div
+          className="dev-status-pill"
+          style={{ '--pill-color': 'var(--text-subtle)' } as React.CSSProperties}
+        >
           <Clock size={14} strokeWidth={1.5} />
           <span>{formatDuration(elapsed)}</span>
         </div>
@@ -81,15 +110,15 @@ function StatusBar() {
 // ── Overview Tab ──
 
 function OverviewTab() {
-  const sessionStatuses = useStore((s) => s.sessionStatuses)
-  const streamingSessions = useStore((s) => s._activeStreamingSessions)
-  const turnUsage = useStore((s) => s.turnUsage)
-  const sessionUsage = useStore((s) => s.sessionUsage)
-  const lastTurnDurationMs = useStore((s) => s.lastTurnDurationMs)
-  const workingSessionId = useStore((s) => s.workingSessionId)
+  const sessionStates = sessionStore((s) => s.sessionStates)
+  const turnUsage = sessionStore((s) => s.turnUsage)
+  const sessionUsage = sessionStore((s) => s.sessionUsage)
+  const lastTurnDurationMs = sessionStore((s) => s.lastTurnDurationMs)
+  const workingSessionId = sessionStore((s) => s.workingSessionId)
 
-  const sessions = Array.from(sessionStatuses.entries())
+  const sessions = Array.from(sessionStates.entries())
   const activeSessions = sessions.filter(([, v]) => v.status === 'working')
+  const streamingCount = sessions.filter(([, v]) => v.isStreaming).length
 
   return (
     <div className="dev-overview">
@@ -107,22 +136,26 @@ function OverviewTab() {
           </div>
           <div className="dev-kv">
             <span className="dev-kv__label">Streaming</span>
-            <span className="dev-kv__value">{streamingSessions.size}</span>
+            <span className="dev-kv__value">{streamingCount}</span>
           </div>
           {workingSessionId && (
             <div className="dev-kv">
               <span className="dev-kv__label">Working</span>
-              <span className="dev-kv__value dev-kv__value--mono">{workingSessionId.slice(0, 16)}</span>
+              <span className="dev-kv__value dev-kv__value--mono">
+                {workingSessionId.slice(0, 16)}
+              </span>
             </div>
           )}
           {sessions.length > 0 && (
             <div className="dev-session-list">
               {sessions.map(([sid, s]) => (
                 <div key={sid} className="dev-session-row">
-                  <span className={`dev-session-dot dev-session-dot--${s.status === 'working' ? 'working' : s.status === 'error' ? 'error' : 'idle'}`} />
+                  <span
+                    className={`dev-session-dot dev-session-dot--${s.status === 'working' ? 'working' : s.status === 'error' ? 'error' : 'idle'}`}
+                  />
                   <span className="dev-session-id">{sid.slice(0, 20)}</span>
                   <span className="dev-session-status">{s.status}</span>
-                  {s.detail && <span className="dev-session-detail">{s.detail}</span>}
+                  {s.statusDetail && <span className="dev-session-detail">{s.statusDetail}</span>}
                 </div>
               ))}
             </div>
@@ -181,9 +214,7 @@ function OverviewTab() {
               </div>
             </>
           )}
-          {!turnUsage && !sessionUsage && (
-            <div className="dev-card__empty">No usage data yet</div>
-          )}
+          {!turnUsage && !sessionUsage && <div className="dev-card__empty">No usage data yet</div>}
         </div>
       </div>
     </div>
@@ -315,7 +346,11 @@ function MemoriesTab() {
                 return (
                   <div key={key} className="dev-memory-item">
                     <button type="button" className="dev-memory-header" onClick={() => toggle(key)}>
-                      {isOpen ? <ChevronDown size={14} strokeWidth={1.5} /> : <ChevronRight size={14} strokeWidth={1.5} />}
+                      {isOpen ? (
+                        <ChevronDown size={14} strokeWidth={1.5} />
+                      ) : (
+                        <ChevronRight size={14} strokeWidth={1.5} />
+                      )}
                       <span>{m.name}</span>
                     </button>
                     {isOpen && <pre className="dev-memory-content">{m.content}</pre>}
@@ -333,7 +368,11 @@ function MemoriesTab() {
                 return (
                   <div key={key} className="dev-memory-item">
                     <button type="button" className="dev-memory-header" onClick={() => toggle(key)}>
-                      {isOpen ? <ChevronDown size={14} strokeWidth={1.5} /> : <ChevronRight size={14} strokeWidth={1.5} />}
+                      {isOpen ? (
+                        <ChevronDown size={14} strokeWidth={1.5} />
+                      ) : (
+                        <ChevronRight size={14} strokeWidth={1.5} />
+                      )}
                       <span>{m.name}</span>
                     </button>
                     {isOpen && <pre className="dev-memory-content">{m.content}</pre>}

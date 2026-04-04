@@ -14,9 +14,9 @@ import {
 } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { connection } from '../../lib/connection.js'
-import type { ConnectorRegistryInfo, ConnectorStatusInfo } from '../../lib/store/types.js'
-import { connectorStore } from '../../lib/store/connectorStore.js'
 import { useStore } from '../../lib/store.js'
+import { connectorStore } from '../../lib/store/connectorStore.js'
+import type { ConnectorRegistryInfo, ConnectorStatusInfo } from '../../lib/store/types.js'
 import { ConnectorIcon } from './ConnectorIcons.js'
 
 const CATEGORY_ORDER: { key: string; label: string }[] = [

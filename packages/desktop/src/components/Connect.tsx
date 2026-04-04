@@ -76,7 +76,6 @@ export function Connect({ onConnected }: { onConnected: () => void }) {
           unsub()
         }
       })
-
     },
     [remember, onConnected],
   )

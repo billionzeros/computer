@@ -1,4 +1,4 @@
-import { execSync, execFile } from 'node:child_process'
+import { execFile, execSync } from 'node:child_process'
 import { promisify } from 'node:util'
 
 const execFileAsync = promisify(execFile)

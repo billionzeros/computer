@@ -10,21 +10,20 @@ import {
   Layers,
 } from 'lucide-react'
 import { useStore } from '../../lib/store.js'
+import { sessionStore } from '../../lib/store/sessionStore.js'
 
 export function ContextPanelContent() {
   const activeConv = useStore((s) => s.getActiveConversation())
-  const sessionUsage = useStore((s) => s.sessionUsage)
-  const currentProvider = useStore((s) => s.currentProvider)
-  const currentModel = useStore((s) => s.currentModel)
-  const syncingSessionIds = useStore((s) => s._syncingSessionIds)
-  const pendingSyncMessages = useStore((s) => s._pendingSyncMessages)
-  const activeStreamingSessions = useStore((s) => s._activeStreamingSessions)
+  const sessionUsage = sessionStore((s) => s.sessionUsage)
+  const currentProvider = sessionStore((s) => s.currentProvider)
+  const currentModel = sessionStore((s) => s.currentModel)
+  const sessionStates = sessionStore((s) => s.sessionStates)
   const connectionStatus = useStore((s) => s.connectionStatus)
-  const agentStatus = useStore((s) => s.agentStatus)
+  const agentStatus = sessionStore((s) => s.agentStatus)
   const activeConversationId = useStore((s) => s.activeConversationId)
-  const currentSessionId = useStore((s) => s.currentSessionId)
+  const currentSessionId = sessionStore((s) => s.currentSessionId)
   const currentAssistantMsgId = useStore((s) => s._currentAssistantMsgId)
-  const workingSessionId = useStore((s) => s.workingSessionId)
+  const workingSessionId = sessionStore((s) => s.workingSessionId)
   const sessionAssistantMsgIds = useStore((s) => s._sessionAssistantMsgIds)
 
   const contextInfo = activeConv?.contextInfo
@@ -173,8 +172,14 @@ export function ContextPanelContent() {
             label="_sessionAssistantMsgId"
             value={sessionId ? (sessionAssistantMsgIds.get(sessionId) ?? 'null') : 'n/a'}
           />
-          <KVRow label="Last msg role" value={activeConv?.messages[activeConv.messages.length - 1]?.role ?? 'none'} />
-          <KVRow label="Last msg id" value={activeConv?.messages[activeConv.messages.length - 1]?.id ?? 'none'} />
+          <KVRow
+            label="Last msg role"
+            value={activeConv?.messages[activeConv.messages.length - 1]?.role ?? 'none'}
+          />
+          <KVRow
+            label="Last msg id"
+            value={activeConv?.messages[activeConv.messages.length - 1]?.id ?? 'none'}
+          />
         </div>
       </Section>
 
@@ -185,19 +190,27 @@ export function ContextPanelContent() {
           <KVRow label="Agent" value={agentStatus} />
           <KVRow
             label="Session syncing"
-            value={sessionId && syncingSessionIds.has(sessionId) ? 'yes' : 'no'}
+            value={sessionId ? (sessionStates.get(sessionId)?.isSyncing ? 'yes' : 'no') : 'no'}
           />
           <KVRow
             label="Streaming"
-            value={sessionId && activeStreamingSessions.has(sessionId) ? 'yes' : 'no'}
+            value={sessionId ? (sessionStates.get(sessionId)?.isStreaming ? 'yes' : 'no') : 'no'}
           />
           <KVRow label="Local messages" value={String(activeConv?.messages.length ?? 0)} />
           <KVRow
             label="Queued (sync)"
-            value={String(sessionId ? (pendingSyncMessages.get(sessionId)?.length ?? 0) : 0)}
+            value={String(
+              sessionId ? (sessionStates.get(sessionId)?.pendingSyncMessages?.length ?? 0) : 0,
+            )}
           />
-          <KVRow label="Syncing sessions" value={String(syncingSessionIds.size)} />
-          <KVRow label="Streaming sessions" value={String(activeStreamingSessions.size)} />
+          <KVRow
+            label="Syncing sessions"
+            value={String(Array.from(sessionStates.values()).filter((s) => s.isSyncing).length)}
+          />
+          <KVRow
+            label="Streaming sessions"
+            value={String(Array.from(sessionStates.values()).filter((s) => s.isStreaming).length)}
+          />
         </div>
       </Section>
 

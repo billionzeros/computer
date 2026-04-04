@@ -209,14 +209,16 @@ export const toolSelectionDataset: EvalDataset = {
 
     // ── Plan ────────────────────────────────────────────────────────
     {
-      input: 'Create a plan for building a REST API with authentication, rate limiting, and database integration',
+      input:
+        'Create a plan for building a REST API with authentication, rate limiting, and database integration',
       expectedTool: 'plan',
       tags: ['plan'],
     },
 
     // ── Sub-agent ───────────────────────────────────────────────────
     {
-      input: 'In parallel: (1) set up the database schema, (2) create the API routes, and (3) write the tests',
+      input:
+        'In parallel: (1) set up the database schema, (2) create the API routes, and (3) write the tests',
       expectedTool: 'sub_agent',
       tags: ['sub_agent'],
     },

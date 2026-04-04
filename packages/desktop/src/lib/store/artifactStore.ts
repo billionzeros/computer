@@ -4,8 +4,8 @@
 
 import { Channel } from '@anton/protocol'
 import { create } from 'zustand'
-import { connection } from '../connection.js'
 import type { Artifact, ArtifactRenderType } from '../artifacts.js'
+import { connection } from '../connection.js'
 
 interface BrowserState {
   url: string
@@ -81,8 +81,7 @@ export const artifactStore = create<ArtifactState>((set, get) => ({
   setActiveArtifact: (id) => set({ activeArtifactId: id }),
   setArtifactPanelOpen: (open) => set({ artifactPanelOpen: open }),
 
-  clearArtifacts: () =>
-    set({ artifacts: [], activeArtifactId: null, artifactPanelOpen: false }),
+  clearArtifacts: () => set({ artifacts: [], activeArtifactId: null, artifactPanelOpen: false }),
 
   setArtifactSearchQuery: (query) => set({ artifactSearchQuery: query }),
   setArtifactFilterType: (type) => set({ artifactFilterType: type }),

@@ -146,13 +146,15 @@ export function AgentEmptyState({ agent }: Props) {
     if (!run.completedAt) return
     projectStore.setState({ agentRunLogs: null, agentRunLogsLoading: true })
     setShowLogsModal(true)
-    projectStore.getState().getAgentRunLogs(
-      agent.projectId,
-      agent.sessionId,
-      run.startedAt,
-      run.completedAt,
-      run.runSessionId,
-    )
+    projectStore
+      .getState()
+      .getAgentRunLogs(
+        agent.projectId,
+        agent.sessionId,
+        run.startedAt,
+        run.completedAt,
+        run.runSessionId,
+      )
   }
 
   const handleRunStop = () => {

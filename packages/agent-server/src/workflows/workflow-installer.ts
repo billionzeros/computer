@@ -9,11 +9,11 @@ import {
   getWorkflowsDir,
   loadInstalledMeta,
   loadWorkflowResource,
-  saveInstalledMeta,
+  deleteWorkflow as removeWorkflowDir,
   saveAgentMetadata,
+  saveInstalledMeta,
   saveProjectInstructions,
   saveWorkflowUserConfig,
-  deleteWorkflow as removeWorkflowDir,
 } from '@anton/agent-config'
 import type { InstalledWorkflow, WorkflowManifest } from '@anton/protocol'
 import type { AgentManager } from '../agents/agent-manager.js'

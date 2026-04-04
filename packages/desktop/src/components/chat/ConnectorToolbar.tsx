@@ -1,9 +1,9 @@
 import { Plus, Settings2, Unplug, X } from 'lucide-react'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
-import type { ConnectorStatusInfo } from '../../lib/store/types.js'
-import { connectorStore } from '../../lib/store/connectorStore.js'
 import { useStore } from '../../lib/store.js'
+import { connectorStore } from '../../lib/store/connectorStore.js'
+import type { ConnectorStatusInfo } from '../../lib/store/types.js'
 import { ConnectorIcon } from '../connectors/ConnectorIcons.js'
 
 /**

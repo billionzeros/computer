@@ -149,7 +149,10 @@ export class Updater {
 
     // Check if repo exists
     if (!existsSync(join(REPO_DIR, '.git'))) {
-      yield { stage: 'error', message: `Repo not found at ${REPO_DIR}. Run 'anton computer setup' first.` }
+      yield {
+        stage: 'error',
+        message: `Repo not found at ${REPO_DIR}. Run 'anton computer setup' first.`,
+      }
       return
     }
 

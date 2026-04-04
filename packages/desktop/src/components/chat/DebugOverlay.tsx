@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useStore } from '../../lib/store.js'
+import { sessionStore } from '../../lib/store/sessionStore.js'
 
 /**
  * Lightweight debug overlay for observability.
@@ -26,14 +27,13 @@ export function DebugOverlay() {
 }
 
 function DebugPanel({ onClose }: { onClose: () => void }) {
-  const agentStatus = useStore((s) => s.agentStatus)
-  const agentStatusDetail = useStore((s) => s.agentStatusDetail)
+  const agentStatus = sessionStore((s) => s.agentStatus)
+  const agentStatusDetail = sessionStore((s) => s.agentStatusDetail)
   const connectionStatus = useStore((s) => s.connectionStatus)
   const currentAssistantMsgId = useStore((s) => s._currentAssistantMsgId)
-  const workingStartedAt = useStore((s) => s.workingStartedAt)
-  const workingSessionId = useStore((s) => s.workingSessionId)
-  const streamingSessions = useStore((s) => s._activeStreamingSessions)
-  const sessionStatuses = useStore((s) => s.sessionStatuses)
+  const workingStartedAt = sessionStore((s) => s.workingStartedAt)
+  const workingSessionId = sessionStore((s) => s.workingSessionId)
+  const sessionStates = sessionStore((s) => s.sessionStates)
 
   const [now, setNow] = useState(Date.now())
   useEffect(() => {
@@ -105,23 +105,22 @@ function DebugPanel({ onClose }: { onClose: () => void }) {
       <Row label="Assist msg ID" value={currentAssistantMsgId || '(none)'} />
       <Row
         label="Streaming"
-        value={
-          streamingSessions.size > 0
-            ? Array.from(streamingSessions)
-                .map((s) => s.slice(0, 8))
-                .join(', ')
-            : '(none)'
-        }
+        value={(() => {
+          const streaming = Array.from(sessionStates.entries())
+            .filter(([, s]) => s.isStreaming)
+            .map(([sid]) => sid.slice(0, 8))
+          return streaming.length > 0 ? streaming.join(', ') : '(none)'
+        })()}
       />
 
-      {sessionStatuses.size > 0 && (
+      {sessionStates.size > 0 && (
         <div style={{ marginTop: 6, borderTop: '1px solid rgba(255,255,255,0.1)', paddingTop: 6 }}>
           <div style={{ color: '#888', marginBottom: 4 }}>Session statuses:</div>
-          {Array.from(sessionStatuses.entries()).map(([sid, st]) => (
+          {Array.from(sessionStates.entries()).map(([sid, st]) => (
             <Row
               key={sid}
               label={sid.slice(0, 8)}
-              value={`${st.status}${st.detail ? ` — ${st.detail}` : ''}`}
+              value={`${st.status}${st.statusDetail ? ` — ${st.statusDetail}` : ''}`}
             />
           ))}
         </div>

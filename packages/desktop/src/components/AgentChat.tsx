@@ -5,6 +5,8 @@ import type { Skill } from '../lib/skills.js'
 import type { ChatImageAttachment } from '../lib/store.js'
 import { useStore } from '../lib/store.js'
 import { projectStore } from '../lib/store/projectStore.js'
+import { connectionStore } from '../lib/store/connectionStore.js'
+import { sessionStore } from '../lib/store/sessionStore.js'
 import { uiStore } from '../lib/store/uiStore.js'
 import { AgentChatHeader } from './chat/AgentChatHeader.js'
 import { AgentEmptyState } from './chat/AgentEmptyState.js'
@@ -21,22 +23,12 @@ export function AgentChat() {
   const agentSession = useStore((s) => s.getActiveAgentSession())
   const addMessage = useStore((s) => s.addMessage)
   const newConversation = useStore((s) => s.newConversation)
-  const pendingConfirm = useStore((s) => {
-    const confirm = s.pendingConfirm
-    if (!confirm) return null
-    const active = s.getActiveConversation()
-    // Show confirm only for the active session (or if no sessionId for backward compat)
-    return !confirm.sessionId || confirm.sessionId === active?.sessionId ? confirm : null
-  })
-  const setPendingConfirm = useStore((s) => s.setPendingConfirm)
-  const pendingAskUser = useStore((s) => {
-    const ask = s.pendingAskUser
-    if (!ask) return null
-    const active = s.getActiveConversation()
-    return !ask.sessionId || ask.sessionId === active?.sessionId ? ask : null
-  })
-  const setPendingAskUser = useStore((s) => s.setPendingAskUser)
-  const _currentProvider = useStore((s) => s.currentProvider)
+  const activeSessionId = activeConv?.sessionId
+  const pendingConfirm = sessionStore((s) => s.getPendingConfirmForSession(activeSessionId))
+  const setPendingConfirm = sessionStore((s) => s.setPendingConfirm)
+  const pendingAskUser = sessionStore((s) => s.getPendingAskUserForSession(activeSessionId))
+  const setPendingAskUser = sessionStore((s) => s.setPendingAskUser)
+  const _currentProvider = sessionStore((s) => s.currentProvider)
   const [selectedSkill, setSelectedSkill] = useState<Skill | null>(null)
 
   // Extract stable identity props so the effect doesn't re-run on every message change
@@ -47,11 +39,11 @@ export function AgentChat() {
   // When used inside ProjectView, the active conversation will have a projectId —
   // in that case we should NOT switch away from it (the project view manages its own sessions).
   const activeView = uiStore((s) => s.activeView)
-  const sessionsLoaded = useStore((s) => s.sessionsLoaded)
+  const initReady = connectionStore((s) => s.initPhase === 'ready')
   useEffect(() => {
-    // Don't create sessions until the server sessions list has been loaded.
+    // Don't create sessions until the init state machine has completed.
     // Otherwise we race with App.tsx's session sync and create duplicates.
-    if (!sessionsLoaded) return
+    if (!initReady) return
 
     const store = useStore.getState()
 
@@ -80,9 +72,10 @@ export function AgentChat() {
       const projectId = ps.activeProjectId ?? undefined
       store.newConversation(undefined, sessionId, projectId)
       store.registerPendingSession(sessionId)
-      connection.sendSessionCreate(sessionId, {
-        provider: store.currentProvider,
-        model: store.currentModel,
+      const ss = sessionStore.getState()
+      sessionStore.getState().createSession(sessionId, {
+        provider: ss.currentProvider,
+        model: ss.currentModel,
         projectId,
       })
     } else if (activeConvProjectId && activeView === 'chat') {
@@ -100,20 +93,21 @@ export function AgentChat() {
         const projectId = ps.activeProjectId ?? undefined
         store.newConversation(undefined, sessionId, projectId)
         store.registerPendingSession(sessionId)
-        connection.sendSessionCreate(sessionId, {
-          provider: store.currentProvider,
-          model: store.currentModel,
+        const ss2 = sessionStore.getState()
+        sessionStore.getState().createSession(sessionId, {
+          provider: ss2.currentProvider,
+          model: ss2.currentModel,
           projectId,
         })
       }
     }
-  }, [activeConvId, activeConvProjectId, activeView, sessionsLoaded])
+  }, [activeConvId, activeConvProjectId, activeView, initReady])
 
   const handleSend = useCallback(
     async (text: string, attachments: ChatImageAttachment[] = []) => {
       const store = useStore.getState()
       const conv = store.getActiveConversation()
-      let sessionId = conv?.sessionId || store.currentSessionId
+      let sessionId = conv?.sessionId || sessionStore.getState().currentSessionId
       const outboundAttachments = attachments.flatMap((attachment) =>
         attachment.data
           ? [
@@ -134,30 +128,31 @@ export function AgentChat() {
         const projectId = projectStore.getState().activeProjectId ?? undefined
         newConversation(undefined, sessionId, projectId)
         const waitPromise = store.registerPendingSession(sessionId)
-        connection.sendSessionCreate(sessionId, {
-          provider: store.currentProvider,
-          model: store.currentModel,
+        const ss3 = sessionStore.getState()
+        sessionStore.getState().createSession(sessionId, {
+          provider: ss3.currentProvider,
+          model: ss3.currentModel,
           projectId,
         })
         await waitPromise
-      } else if (sessionId && !store.currentSessionId) {
+      } else if (sessionId && !sessionStore.getState().currentSessionId) {
         // Conversation exists but session hasn't been confirmed yet — wait for it
-        const resolvers = store._sessionResolvers
-        if (resolvers.has(sessionId)) {
+        const sessionState = sessionStore.getState().getSessionState(sessionId)
+        if (sessionState.resolver) {
           await new Promise<void>((resolve) => {
-            const existing = resolvers.get(sessionId!)
-            // Chain: resolve the original AND our new waiter
-            resolvers.set(sessionId!, () => {
-              existing?.()
-              resolve()
+            const existing = sessionState.resolver
+            sessionStore.getState().updateSessionState(sessionId!, {
+              resolver: () => {
+                existing?.()
+                resolve()
+              },
             })
           })
         }
       }
 
       // Re-read sessionId after potential await
-      const freshStore = useStore.getState()
-      sessionId = freshStore.currentSessionId || sessionId
+      sessionId = sessionStore.getState().currentSessionId || sessionId
 
       addMessage({
         id: `user_${Date.now()}`,
@@ -192,7 +187,7 @@ export function AgentChat() {
   const handleSteer = useCallback((text: string) => {
     const store = useStore.getState()
     const conv = store.getActiveConversation()
-    const sessionId = conv?.sessionId || store.currentSessionId
+    const sessionId = conv?.sessionId || sessionStore.getState().currentSessionId
     if (!sessionId) return
     connection.sendSteerMessage(text, sessionId)
   }, [])
@@ -200,21 +195,22 @@ export function AgentChat() {
   const handleCancelTurn = useCallback(() => {
     const store = useStore.getState()
     const conv = store.getActiveConversation()
-    const sessionId = conv?.sessionId || store.currentSessionId
+    const sessionId = conv?.sessionId || sessionStore.getState().currentSessionId
     if (!sessionId) return
     // If a plan is pending, reject it and clear it
-    const plan = store.pendingPlan
+    const ss = sessionStore.getState()
+    const plan = ss.pendingPlan
     if (plan && (!plan.sessionId || plan.sessionId === sessionId)) {
-      connection.sendPlanResponse(plan.id, false, 'Cancelled by user')
-      store.setPendingPlan(null)
+      sessionStore.getState().sendPlanResponse(plan.id, false, 'Cancelled by user')
+      ss.setPendingPlan(null)
     }
-    connection.sendCancelTurn(sessionId)
+    sessionStore.getState().sendCancelTurn(sessionId)
   }, [])
 
   const handleConfirm = useCallback(
     (approved: boolean) => {
       if (!pendingConfirm) return
-      connection.sendConfirmResponse(pendingConfirm.id, approved)
+      sessionStore.getState().sendConfirmResponse(pendingConfirm.id, approved)
       addMessage({
         id: `confirm_${Date.now()}`,
         role: 'system',
@@ -231,7 +227,7 @@ export function AgentChat() {
   const handleAskUserSubmit = useCallback(
     (answers: Record<string, string>) => {
       if (!pendingAskUser) return
-      connection.sendAskUserResponse(pendingAskUser.id, answers)
+      sessionStore.getState().sendAskUserResponse(pendingAskUser.id, answers)
       // Show a summary of answers in the chat
       const summary = Object.entries(answers)
         .map(([q, a]) => `**${q}** → ${a}`)
@@ -248,9 +244,9 @@ export function AgentChat() {
   )
 
   const messages = activeConv?.messages || []
-  const isSyncing = useStore((s) => {
-    const sid = s.getActiveConversation()?.sessionId
-    return sid ? s._syncingSessionIds.has(sid) : false
+  const isSyncing = sessionStore((s) => {
+    const sid = activeConv?.sessionId
+    return sid ? s.getSessionState(sid).isSyncing : false
   })
 
   return (

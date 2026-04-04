@@ -5,7 +5,7 @@
 import { Channel } from '@anton/protocol'
 import { create } from 'zustand'
 import { connection } from '../connection.js'
-import type { ActiveMode, ActiveView, SidebarTab, SidePanelView } from './types.js'
+import type { ActiveMode, ActiveView, SidePanelView, SidebarTab } from './types.js'
 
 interface UIState {
   // Theme

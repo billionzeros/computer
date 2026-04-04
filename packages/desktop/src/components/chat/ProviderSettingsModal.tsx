@@ -1,7 +1,7 @@
 import { Check, Plus, RotateCcw, Trash2 } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
-import { connection } from '../../lib/connection.js'
 import type { ProviderInfo } from '../../lib/store.js'
+import { sessionStore } from '../../lib/store/sessionStore.js'
 import { Modal } from '../ui/Modal.js'
 import { providerIcons } from './model-utils.js'
 
@@ -36,11 +36,11 @@ export function ProviderSettingsModal({ provider, onClose }: Props) {
   const handleSaveKey = () => {
     const trimmed = apiKey.trim()
     if (!trimmed) return
-    connection.sendProviderSetKey(provider.name, trimmed)
+    sessionStore.getState().sendProviderSetKey(provider.name, trimmed)
     setApiKey('')
     setKeySaved(true)
     // Refresh providers to pick up new key status
-    setTimeout(() => connection.sendProvidersList(), 300)
+    setTimeout(() => sessionStore.getState().sendProvidersList(), 300)
     setTimeout(() => setKeySaved(false), 2000)
   }
 
@@ -77,10 +77,10 @@ export function ProviderSettingsModal({ provider, onClose }: Props) {
   }
 
   const handleSaveModels = () => {
-    connection.sendProviderSetModels(provider.name, models)
+    sessionStore.getState().sendProviderSetModels(provider.name, models)
     setModelsSaved(true)
     // Refresh providers so the dropdown picks up the new models
-    setTimeout(() => connection.sendProvidersList(), 300)
+    setTimeout(() => sessionStore.getState().sendProvidersList(), 300)
     setTimeout(() => setModelsSaved(false), 2000)
   }
 

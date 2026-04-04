@@ -60,8 +60,7 @@ export const connectorStore = create<ConnectorState>((set) => ({
       }
       return { connectors: [...s.connectors, connector] }
     }),
-  removeConnector: (id) =>
-    set((s) => ({ connectors: s.connectors.filter((c) => c.id !== id) })),
+  removeConnector: (id) => set((s) => ({ connectors: s.connectors.filter((c) => c.id !== id) })),
   updateConnectorStatus: (id, updates) =>
     set((s) => ({
       connectors: s.connectors.map((c) => (c.id === id ? { ...c, ...updates } : c)),

@@ -5,9 +5,7 @@ import { AgentDetailView } from './AgentDetailView.js'
 import { AgentListView } from './AgentListView.js'
 import { AgentRunView } from './AgentRunView.js'
 
-type RightPanel =
-  | { view: 'home' }
-  | { view: 'run'; run: AgentRunRecord }
+type RightPanel = { view: 'home' } | { view: 'run'; run: AgentRunRecord }
 
 export function AgentsView() {
   const [selectedAgentId, setSelectedAgentId] = useState<string | null>(null)

@@ -1,5 +1,5 @@
-import { Clock, Pause, Play, Zap } from 'lucide-react'
 import type { AgentSession, InstalledWorkflow } from '@anton/protocol'
+import { Clock, Pause, Play, Zap } from 'lucide-react'
 import { connection } from '../../lib/connection.js'
 
 function formatRelativeTime(ts: number): string {
@@ -37,12 +37,30 @@ export function WorkflowStatusBanner({
   }
   const handlePause = () => {
     if (agent) {
-      connection.sendAgentAction(workflow.projectId, agent.sessionId, status === 'paused' ? 'resume' : 'pause')
+      connection.sendAgentAction(
+        workflow.projectId,
+        agent.sessionId,
+        status === 'paused' ? 'resume' : 'pause',
+      )
     }
   }
 
-  const statusLabel = status === 'running' ? 'Running' : status === 'paused' ? 'Paused' : status === 'error' ? 'Error' : 'Active'
-  const statusColor = status === 'running' ? 'text-amber-400' : status === 'paused' ? 'text-zinc-500' : status === 'error' ? 'text-red-400' : 'text-emerald-400'
+  const statusLabel =
+    status === 'running'
+      ? 'Running'
+      : status === 'paused'
+        ? 'Paused'
+        : status === 'error'
+          ? 'Error'
+          : 'Active'
+  const statusColor =
+    status === 'running'
+      ? 'text-amber-400'
+      : status === 'paused'
+        ? 'text-zinc-500'
+        : status === 'error'
+          ? 'text-red-400'
+          : 'text-emerald-400'
 
   return (
     <div className="mx-0 mb-3 rounded-xl border border-white/[0.06] bg-white/[0.02] p-3.5">
@@ -77,7 +95,8 @@ export function WorkflowStatusBanner({
           {lastRun && (
             <span className="flex items-center gap-1">
               <Clock size={11} strokeWidth={1.5} />
-              Last run: {formatRelativeTime(lastRun)}{runCount > 0 && ` · ${runCount} runs total`}
+              Last run: {formatRelativeTime(lastRun)}
+              {runCount > 0 && ` · ${runCount} runs total`}
             </span>
           )}
           {nextRun && status !== 'paused' && <span>Next: {formatRelativeTime(nextRun)}</span>}

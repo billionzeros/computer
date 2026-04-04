@@ -1,4 +1,4 @@
-import type { AgentRunLogEntry, AgentRunRecord, AgentSession } from '@anton/protocol'
+import type { AgentRunLogEntry, AgentRunRecord } from '@anton/protocol'
 import {
   AlertCircle,
   ArrowLeft,
@@ -173,13 +173,15 @@ export function AgentDetailView({ agentId, onBack, onViewRun }: Props) {
       }
       projectStore.setState({ agentRunLogs: null, agentRunLogsLoading: true })
       setShowLogsModal(true)
-      projectStore.getState().getAgentRunLogs(
-        agent.projectId,
-        agent.sessionId,
-        run.startedAt,
-        run.completedAt,
-        run.runSessionId,
-      )
+      projectStore
+        .getState()
+        .getAgentRunLogs(
+          agent.projectId,
+          agent.sessionId,
+          run.startedAt,
+          run.completedAt,
+          run.runSessionId,
+        )
     },
     [agent, onViewRun],
   )
@@ -231,7 +233,12 @@ export function AgentDetailView({ agentId, onBack, onViewRun }: Props) {
     <div className="conv-panel">
       {/* Top bar */}
       <div className="conv-panel__topbar">
-        <button type="button" className="conv-panel__back" onClick={onBack} aria-label="Back to agents">
+        <button
+          type="button"
+          className="conv-panel__back"
+          onClick={onBack}
+          aria-label="Back to agents"
+        >
           <ArrowLeft size={16} strokeWidth={1.5} />
         </button>
         <div className="conv-panel__title">{meta.name}</div>
@@ -269,7 +276,13 @@ export function AgentDetailView({ agentId, onBack, onViewRun }: Props) {
               className={`agent-home__dot${isRunning ? ' agent-home__dot--running' : isError ? ' agent-home__dot--error' : ''}`}
             />
             <span className="agent-home__status-text">
-              {isRunning ? 'Running' : isError ? 'Error' : meta.schedule?.cron ? 'Scheduled' : 'Idle'}
+              {isRunning
+                ? 'Running'
+                : isError
+                  ? 'Error'
+                  : meta.schedule?.cron
+                    ? 'Scheduled'
+                    : 'Idle'}
             </span>
             {meta.schedule?.cron && (
               <span className="agent-home__schedule">
@@ -301,9 +314,7 @@ export function AgentDetailView({ agentId, onBack, onViewRun }: Props) {
           <div className="agent-home__stat">
             <Zap size={13} strokeWidth={1.5} />
             <span>
-              {meta.tokenBudget
-                ? `${Math.round(meta.tokenBudget.usedThisMonth / 1000)}k`
-                : '—'}
+              {meta.tokenBudget ? `${Math.round(meta.tokenBudget.usedThisMonth / 1000)}k` : '—'}
             </span>
             <span className="agent-home__stat-label">tokens</span>
           </div>
@@ -336,7 +347,9 @@ export function AgentDetailView({ agentId, onBack, onViewRun }: Props) {
             <div className="agent-home__scheduler-row">
               <Timer size={12} strokeWidth={1.5} />
               <code>{meta.schedule.cron}</code>
-              <span className={`agent-home__scheduler-status agent-home__scheduler-status--${meta.status}`}>
+              <span
+                className={`agent-home__scheduler-status agent-home__scheduler-status--${meta.status}`}
+              >
                 {meta.status}
               </span>
             </div>

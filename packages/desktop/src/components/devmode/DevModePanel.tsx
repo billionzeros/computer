@@ -47,12 +47,7 @@ export function DevModePanel() {
           Memories
         </button>
         <div className="devmode-panel__tabs-spacer" />
-        <button
-          type="button"
-          className="devmode-panel__refresh"
-          onClick={refresh}
-          title="Refresh"
-        >
+        <button type="button" className="devmode-panel__refresh" onClick={refresh} title="Refresh">
           <RefreshCw size={14} strokeWidth={1.5} />
         </button>
       </div>
@@ -78,16 +73,16 @@ function PromptView({ prompt, sessionId }: { prompt: string | null; sessionId?: 
         </div>
       )}
       {!sessionId && (
-        <div className="devmode-panel__prompt-badge">
-          Base prompt (no active session)
-        </div>
+        <div className="devmode-panel__prompt-badge">Base prompt (no active session)</div>
       )}
       <pre className="devmode-panel__prompt">{prompt}</pre>
     </div>
   )
 }
 
-function MemoriesView({ memories }: { memories: { name: string; content: string; scope?: string }[] }) {
+function MemoriesView({
+  memories,
+}: { memories: { name: string; content: string; scope?: string }[] }) {
   const [expanded, setExpanded] = useState<Set<string>>(new Set())
 
   if (memories.length === 0) {
@@ -142,11 +137,7 @@ function MemoryItem({
   const isOpen = expanded.has(key)
   return (
     <div className="devmode-panel__memory">
-      <button
-        type="button"
-        className="devmode-panel__memory-header"
-        onClick={() => onToggle(key)}
-      >
+      <button type="button" className="devmode-panel__memory-header" onClick={() => onToggle(key)}>
         {isOpen ? (
           <ChevronDown size={14} strokeWidth={1.5} />
         ) : (
@@ -154,9 +145,7 @@ function MemoryItem({
         )}
         <span className="devmode-panel__memory-name">{memory.name}</span>
       </button>
-      {isOpen && (
-        <pre className="devmode-panel__memory-content">{memory.content}</pre>
-      )}
+      {isOpen && <pre className="devmode-panel__memory-content">{memory.content}</pre>}
     </div>
   )
 }

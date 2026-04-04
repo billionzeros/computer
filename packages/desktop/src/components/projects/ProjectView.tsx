@@ -6,6 +6,7 @@ import { connection } from '../../lib/connection.js'
 import { useStore } from '../../lib/store.js'
 import { artifactStore } from '../../lib/store/artifactStore.js'
 import { projectStore } from '../../lib/store/projectStore.js'
+import { sessionStore } from '../../lib/store/sessionStore.js'
 import { AgentChat } from '../AgentChat.js'
 import { SidePanel } from '../SidePanel.js'
 import { CodeModePanel } from '../code-mode/CodeModePanel.js'
@@ -20,7 +21,7 @@ export function ProjectView() {
   const projectSessions = projectStore((s) => s.projectSessions)
   const projectSessionsLoading = projectStore((s) => s.projectSessionsLoading)
   const artifactPanelOpen = artifactStore((s) => s.artifactPanelOpen)
-  const pendingPlan = useStore((s) => s.pendingPlan)
+  const pendingPlan = sessionStore((s) => s.pendingPlan)
   const agentSession: AgentSession | null = useStore((s) => s.getActiveAgentSession())
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
 
@@ -50,12 +51,13 @@ export function ProjectView() {
   const handleNewSession = (initialMessage?: string) => {
     const sessionId = `proj_${project.id}_sess_${Date.now().toString(36)}`
     const store = useStore.getState()
+    const ss = sessionStore.getState()
 
     store.newConversation(undefined, sessionId, project.id)
 
-    connection.sendSessionCreate(sessionId, {
-      provider: store.currentProvider,
-      model: store.currentModel,
+    sessionStore.getState().createSession(sessionId, {
+      provider: ss.currentProvider,
+      model: ss.currentModel,
       projectId: project.id,
     })
 
@@ -65,8 +67,8 @@ export function ProjectView() {
       {
         id: sessionId,
         title: 'New conversation',
-        provider: store.currentProvider,
-        model: store.currentModel,
+        provider: ss.currentProvider,
+        model: ss.currentModel,
         messageCount: 0,
         createdAt: Date.now(),
         lastActiveAt: Date.now(),
@@ -119,7 +121,9 @@ export function ProjectView() {
     // Show the agent info panel (AgentEmptyState) with stats, scheduler debug, run history.
     // Run logs are accessed via the modal when clicking a run entry.
     const store = useStore.getState()
-    const agent = projectStore.getState().projectAgents.find((a: any) => a.sessionId === agentSessionId)
+    const agent = projectStore
+      .getState()
+      .projectAgents.find((a: any) => a.sessionId === agentSessionId)
     const title = agent ? agent.agent.name : 'Agent'
 
     // Check if an agent info conversation already exists — don't create duplicates
@@ -132,9 +136,10 @@ export function ProjectView() {
     } else {
       const sessionId = `proj_${project.id}_sess_${Date.now().toString(36)}`
       store.newConversation(title, sessionId, project.id, agentSessionId)
-      connection.sendSessionCreate(sessionId, {
-        provider: store.currentProvider,
-        model: store.currentModel,
+      const ss2 = sessionStore.getState()
+      sessionStore.getState().createSession(sessionId, {
+        provider: ss2.currentProvider,
+        model: ss2.currentModel,
         projectId: project.id,
       })
       setActiveSessionId(sessionId)
@@ -144,7 +149,7 @@ export function ProjectView() {
   const handleDeleteSession = (sessionId: string) => {
     const store = useStore.getState()
     // Always tell the server to destroy — session may exist on disk without a local conversation
-    connection.sendSessionDestroy(sessionId)
+    sessionStore.getState().destroySession(sessionId)
     const conv = store.findConversationBySession(sessionId)
     if (conv) {
       store.deleteConversation(conv.id)

@@ -309,3 +309,115 @@ Each page needs an empty state for when a project has no data:
 - **Connector registry** — Available connectors are global; *enablement* is per-project
 - **Global memories** — Stored in `~/.anton/memory/`, visible from any project's Memory page
 - **Chat mode** — Uses the default "My Computer" project (conversations now always have a projectId)
+
+---
+
+## Upcoming UI Phases (from ui-redesign spec)
+
+### Phase 2: Task Detail Split-Pane (Perplexity-style)
+
+Split-pane layout for task detail:
+
+```
+┌── Left (resizable 25-75%) ──┬── Right (flex 1) ────────────────────┐
+│ All tasks             [🔍]  │  ← Task Name      [...] [📊] [🔒]  │
+│ [Hero ChatInput]            │  Messages + tool calls               │
+│ ✅ Task 1      just now     │  Chat input at bottom                │
+│ ○  Task 2      2m ago       │                                      │
+└─────────────────────────────┴──────────────────────────────────────┘
+```
+
+- Divider: 4px drag handle, min 25% / max 75%, floor 360px
+- Left pane: original prompt, follow-up input, previous tasks list
+- Right pane: agent work stream (messages + tool calls), chat input at bottom
+- Top bar: back button, task name, files badge, usage, todo dropdown, share
+
+### Phase 3: Perplexity-Style Tool Call Groups
+
+Tool calls with parallel grouping and tree branch connectors:
+
+```
+-< Running tasks in parallel  ›
+   ├── 📋 Reading skills/shared/05-taste.md  ›
+   ├── 📋 Reading skills/shared/08-standards.md  ›
+   └── 📋 Reading webapp/references/sidebar_rules.md  ›     Mar 26, 11:02 PM · 1s
+```
+
+### Phase 4: Ask-User Inline Cards
+
+Inline cards in chat instead of modal dialog, with numbered questions and pill-button options.
+
+### Phase 5: Todo Dropdown (Top Bar)
+
+Popover dropdown from top bar showing task progress: ✓ completed, ◎ in progress, ○ pending.
+
+### Phase 6: Remove Artifacts Panel, Integrate Files
+
+- Artifacts → "Files" in task detail top bar (count badge)
+- Browser viewer → tab in right pane
+- Plan review → inline card (like ask-user)
+
+### Phase 7: Projects Hero View
+
+Enhanced project cards with agent count, task count, active/idle status.
+
+---
+
+## Home Page Component Tree
+
+```
+HomeView
+├── TaskListView (mode="full" | "compact")
+│   ├── Header ("All tasks" + search toggle)
+│   ├── SelectionBar (if any tasks selected)
+│   ├── Search Input (if search toggled)
+│   ├── ChatInput (variant="hero")
+│   ├── Task Table (full mode) — or — Task Row List (compact mode)
+│   └── Empty State ("No tasks yet. Start one above.")
+│
+└── TaskDetailView (only when hasOpenTask)
+    ├── Topbar (back, title, action buttons, todo dropdown)
+    ├── Message Area (MessageList, ConfirmDialog, PlanReviewOverlay)
+    └── ChatInput (variant="minimal")
+```
+
+### ChatInput Variants
+
+| Variant | Placeholder | Used In |
+|---|---|---|
+| `hero` | "What should we work on next?" | TaskListView (both modes) |
+| `minimal` | "Type a command..." | TaskDetailView |
+| `docked` | "Ask a follow-up" | AgentChat (not on home) |
+
+### Task Status Derivation
+
+```ts
+type TaskStatus = 'working' | 'completed' | 'error' | 'idle'
+
+function getTaskStatus(sessionId, sessionStatuses, messages): TaskStatus {
+  if (!sessionId) return 'idle'
+  if (sessionStatuses.get(sessionId)?.status === 'working') return 'working'
+  if (messages.length === 0) return 'idle'
+  const lastAssistant = messages.findLast(m => m.role === 'assistant' || m.role === 'system')
+  if (lastAssistant?.isError) return 'error'
+  return 'completed'
+}
+```
+
+---
+
+## Files Page Remaining Work
+
+| Phase | Description | Status |
+|-------|-------------|--------|
+| Phase 1-4 | Visual card grid, upload, delete, terminal relocation | Done |
+| Phase 5 | File previews — click to preview text, images, PDFs | Not yet |
+| Phase 6 | File actions — download, rename, three-dot menu | Not yet |
+
+---
+
+## Design References
+
+- **Perplexity**: Visual file cards grouped by date, split-pane task detail, parallel tool call groups, inline ask-user cards
+- **Claude Projects**: Right panel with file list, type badges
+- **VS Code**: File explorer tree + integrated terminal

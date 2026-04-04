@@ -17,11 +17,10 @@ import {
   X,
 } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
-import { connection } from '../../lib/connection.js'
+import { sessionStore } from '../../lib/store/sessionStore.js'
 import type { ProviderInfo } from '../../lib/store/types.js'
 import { uiStore } from '../../lib/store/uiStore.js'
 import { usageStore } from '../../lib/store/usageStore.js'
-import { useStore } from '../../lib/store.js'
 import { formatModelName, providerIcons } from '../chat/model-utils.js'
 import { ConnectorsPage } from '../connectors/ConnectorsPage.js'
 
@@ -136,7 +135,8 @@ function GeneralPage() {
           <div className="settings-toggle-row__info">
             <div className="settings-toggle-row__title">Developer Mode</div>
             <div className="settings-toggle-row__desc">
-              Show a developer tools button in the toolbar to inspect the system prompt and memories.
+              Show a developer tools button in the toolbar to inspect the system prompt and
+              memories.
             </div>
           </div>
           <button
@@ -224,10 +224,10 @@ function ProviderPanel({
   const handleSaveKey = () => {
     const trimmed = apiKey.trim()
     if (!trimmed) return
-    connection.sendProviderSetKey(provider.name, trimmed)
+    sessionStore.getState().sendProviderSetKey(provider.name, trimmed)
     setApiKey('')
     setKeySaved(true)
-    setTimeout(() => connection.sendProvidersList(), 300)
+    setTimeout(() => sessionStore.getState().sendProvidersList(), 300)
     setTimeout(() => setKeySaved(false), 2500)
   }
 
@@ -258,9 +258,9 @@ function ProviderPanel({
   }
 
   const handleSaveModels = () => {
-    connection.sendProviderSetModels(provider.name, models)
+    sessionStore.getState().sendProviderSetModels(provider.name, models)
     setModelsSaved(true)
-    setTimeout(() => connection.sendProvidersList(), 300)
+    setTimeout(() => sessionStore.getState().sendProvidersList(), 300)
     setTimeout(() => setModelsSaved(false), 2500)
   }
 
@@ -436,15 +436,15 @@ function ProviderPanel({
 }
 
 function ModelsPage({ onClose }: { onClose: () => void }) {
-  const currentProvider = useStore((s) => s.currentProvider)
-  const currentModel = useStore((s) => s.currentModel)
-  const providers = useStore((s) => s.providers)
+  const currentProvider = sessionStore((s) => s.currentProvider)
+  const currentModel = sessionStore((s) => s.currentModel)
+  const providers = sessionStore((s) => s.providers)
   const [expandedProvider, setExpandedProvider] = useState<string | null>(currentProvider)
 
   const handleSelect = (provider: string, model: string) => {
-    const store = useStore.getState()
-    store.setCurrentSession(store.currentSessionId || '', provider, model)
-    connection.sendProviderSetDefault(provider, model)
+    const ss = sessionStore.getState()
+    ss.setCurrentSession(ss.currentSessionId || '', provider, model)
+    ss.sendProviderSetDefault(provider, model)
     onClose()
   }
 

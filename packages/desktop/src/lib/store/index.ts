@@ -17,8 +17,12 @@ export { usageStore } from './usageStore.js'
 export { uiStore } from './uiStore.js'
 export { artifactStore } from './artifactStore.js'
 export { projectStore } from './projectStore.js'
+export { sessionStore } from './sessionStore.js'
+export { connectionStore } from './connectionStore.js'
 
 // Re-export shared types so components can import from here
+export type { InitPhase, SyncProgress } from './connectionStore.js'
+
 export type {
   ChatMessage,
   ChatImageAttachment,
@@ -41,5 +45,7 @@ export type {
   PendingPlan,
   PendingAskUser,
 } from './types.js'
+
+export type { SessionState } from './sessionStore.js'
 
 export { updateStageLabel } from './types.js'

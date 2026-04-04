@@ -40,9 +40,7 @@ export class LinkedInConnector implements DirectConnector {
       // Fall back to listing accounts if profile fails
       try {
         const accounts = await this.api.listAccounts()
-        const linkedin = (accounts.items ?? []).filter(
-          (a) => a.type?.toUpperCase() === 'LINKEDIN',
-        )
+        const linkedin = (accounts.items ?? []).filter((a) => a.type?.toUpperCase() === 'LINKEDIN')
         if (!linkedin.length) {
           return { success: false, error: 'No LinkedIn accounts found.' }
         }

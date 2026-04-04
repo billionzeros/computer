@@ -1,31 +1,33 @@
 import { AnimatePresence } from 'framer-motion'
-import { Code, FolderOpen, ListChecks, MoreHorizontal, PanelLeft, Ticket, X } from 'lucide-react'
+import { Code, FolderOpen, MoreHorizontal, Ticket, X } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { AgentChat } from './components/AgentChat.js'
 import { Connect } from './components/Connect.js'
 import { FileBrowser } from './components/FileBrowser.js'
-import { ProjectFilesView } from './components/files/ProjectFilesView.js'
+import { ForceUpdateGate } from './components/ForceUpdateGate.js'
 import { MachineInfoPanel } from './components/MachineInfoPanel.js'
 import { SidePanel } from './components/SidePanel.js'
 import { Sidebar } from './components/Sidebar.js'
 import { Terminal } from './components/Terminal.js'
-import { DebugOverlay } from './components/chat/DebugOverlay.js'
-import { AgentsView } from './components/agents/AgentsView.js'
-import { DeveloperView } from './components/developer/DeveloperView.js'
-import { MemoryView } from './components/memory/MemoryView.js'
-import { ForceUpdateGate } from './components/ForceUpdateGate.js'
 import { UpdateBanner } from './components/UpdateBanner.js'
-import { SettingsModal } from './components/settings/SettingsModal.js'
 import { WelcomeModal } from './components/WelcomeModal.js'
+import { AgentsView } from './components/agents/AgentsView.js'
+import { DebugOverlay } from './components/chat/DebugOverlay.js'
+import { DeveloperView } from './components/developer/DeveloperView.js'
+import { ProjectFilesView } from './components/files/ProjectFilesView.js'
 import { HomeView } from './components/home/HomeView.js'
+import { MemoryView } from './components/memory/MemoryView.js'
+import { CreateProjectModal } from './components/projects/CreateProjectModal.js'
+import { ProjectList } from './components/projects/ProjectList.js'
+import { SettingsModal } from './components/settings/SettingsModal.js'
 import { SkillsPanel } from './components/skills/SkillsPanel.js'
 import { WorkflowsPage } from './components/workflows/WorkflowsPage.js'
-import { ProjectList } from './components/projects/ProjectList.js'
-import { CreateProjectModal } from './components/projects/CreateProjectModal.js'
 import { connection } from './lib/connection.js'
 import { useConnectionStatus, useStore } from './lib/store.js'
 import { artifactStore } from './lib/store/artifactStore.js'
+import { connectionStore } from './lib/store/connectionStore.js'
 import { projectStore } from './lib/store/projectStore.js'
+import { sessionStore } from './lib/store/sessionStore.js'
 import { uiStore } from './lib/store/uiStore.js'
 import { updateStore } from './lib/store/updateStore.js'
 
@@ -42,7 +44,7 @@ export function App() {
   const activeView = uiStore((s) => s.activeView)
   const activeMode = uiStore((s) => s.activeMode)
   const setActiveView = uiStore((s) => s.setActiveView)
-  const sessionUsage = useStore((s) => s.sessionUsage)
+  const sessionUsage = sessionStore((s) => s.sessionUsage)
   const activeConv = useStore((s) => s.getActiveConversation())
   const hasMessages = (activeConv?.messages?.length || 0) > 0
   const artifactPanelOpen = artifactStore((s) => s.artifactPanelOpen)
@@ -61,7 +63,7 @@ export function App() {
   const setSidePanelView = uiStore((s) => s.setSidePanelView)
   const tasksHidden = uiStore((s) => s.tasksHidden)
   const toggleTasksHidden = uiStore((s) => s.toggleTasksHidden)
-  const currentTasks = useStore((s) => s.currentTasks)
+  const currentTasks = sessionStore((s) => s.currentTasks)
   const showWelcome = onboardingLoaded && !onboardingCompleted
 
   // Apply theme on mount + listen for system preference changes
@@ -119,37 +121,17 @@ export function App() {
     }
   }, [connected, activeView, activeConv?.title])
 
+  // ── Init state machine: all list requests are fired by connectionStore.startSyncing()
+  // on auth_ok. We subscribe to initPhase === 'ready' to do post-sync setup.
   useEffect(() => {
-    if (status === 'connected') {
-      connection.sendProvidersList()
-      connection.sendSessionsList()
-      projectStore.getState().listProjects()
-      connection.sendConnectorsList()
-      connection.sendConnectorRegistryList()
-
-      // Fetch agents for home view
-      const pStore = projectStore.getState()
-      if (pStore.activeProjectId) {
-        projectStore.setState({ projectSessionsLoading: true })
-        projectStore.getState().listProjectSessions(pStore.activeProjectId)
-      }
-    }
-  }, [status])
-
-  // Fetch all agents once projects are loaded
-  useEffect(() => {
-    if (status === 'connected' && projects.length > 0) {
-      projectStore.getState().fetchAllAgents()
-    }
-  }, [status, projects.length])
-
-  useEffect(() => {
-    const unsub = useStore.subscribe((state, prev) => {
-      if (state.sessions.length > 0 && prev.sessions.length === 0) {
+    const unsub = connectionStore.subscribe((state, prev) => {
+      // When init transitions to 'ready', do post-sync session/conversation setup
+      if (state.initPhase === 'ready' && prev.initPhase !== 'ready') {
         const store = useStore.getState()
+        const ss = sessionStore.getState()
 
         // Sync server sessions to local conversations
-        for (const session of state.sessions) {
+        for (const session of ss.sessions) {
           const existing = store.findConversationBySession(session.id)
           if (!existing) {
             let projectId: string | undefined
@@ -167,15 +149,17 @@ export function App() {
           }
         }
 
+        // Fetch all agents now that projects are loaded
+        projectStore.getState().fetchAllAgents()
+
         // In computer mode (home view), don't auto-navigate to a conversation
-        const currentStore = useStore.getState()
         const currentUI = uiStore.getState()
         if (currentUI.activeMode === 'computer' && currentUI.activeView === 'home') {
-          // Stay on home view — don't force into a chat conversation
           return
         }
 
         // In chat mode, land on a fresh empty conversation
+        const currentStore = useStore.getState()
         const defaultProject = projectStore.getState().projects.find((p) => p.isDefault)
         const chatConvs = currentStore.conversations.filter(
           (c) => !c.projectId || c.projectId === defaultProject?.id,
@@ -185,8 +169,8 @@ export function App() {
         if (emptyConv) {
           currentStore.switchConversation(emptyConv.id)
         } else if (!currentStore.activeConversationId) {
-          const chatSession = state.sessions.find((s) => !s.id.match(/^proj_/))
-          const latest = chatSession || state.sessions[0]
+          const chatSession = ss.sessions.find((s) => !s.id.match(/^proj_/))
+          const latest = chatSession || ss.sessions[0]
           if (latest) {
             const latestConv = currentStore.findConversationBySession(latest.id)
             if (latestConv) {
@@ -237,7 +221,8 @@ export function App() {
   }
 
   // For sidebar compatibility
-  const sidebarView = activeView === 'chat' ? 'agent' : activeView === 'terminal' ? 'terminal' : 'agent'
+  const sidebarView =
+    activeView === 'chat' ? 'agent' : activeView === 'terminal' ? 'terminal' : 'agent'
   const handleSidebarViewChange = (view: 'agent' | 'terminal') => {
     setActiveView(view === 'agent' ? 'chat' : 'terminal')
   }
@@ -288,7 +273,9 @@ export function App() {
                 )}
                 <h2 className="workspace-topbar__title">
                   {activeView === 'chat'
-                    ? (hasMessages ? (activeConv?.title || 'New conversation') : 'New conversation')
+                    ? hasMessages
+                      ? activeConv?.title || 'New conversation'
+                      : 'New conversation'
                     : activeView === 'memory'
                       ? 'Memory'
                       : activeView === 'agents'
@@ -334,7 +321,9 @@ export function App() {
                         type="button"
                         className="workspace-topbar__action-btn workspace-topbar__action-btn--with-label"
                         onClick={() => {
-                          const event = new CustomEvent('open-settings', { detail: { tab: 'usage' } })
+                          const event = new CustomEvent('open-settings', {
+                            detail: { tab: 'usage' },
+                          })
                           window.dispatchEvent(event)
                         }}
                         aria-label="Usage"

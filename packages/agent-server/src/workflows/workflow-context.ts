@@ -63,7 +63,9 @@ export function buildWorkflowAgentContext(
     if (ref.role === 'sub') {
       const content = loadWorkflowResource(projectId, workflowId, ref.file)
       if (content) {
-        sections.push(`\n---\n## Sub-Agent Module: ${name}\n\n${substituteVariables(content, config, workflowDir)}`)
+        sections.push(
+          `\n---\n## Sub-Agent Module: ${name}\n\n${substituteVariables(content, config, workflowDir)}`,
+        )
       }
     }
   }
@@ -112,10 +114,7 @@ function buildMetadataHeader(manifest: WorkflowManifest, workflowDir: string): s
   ].join('\n')
 }
 
-function loadMergedConfig(
-  projectId: string,
-  workflowId: string,
-): Record<string, string> {
+function loadMergedConfig(projectId: string, workflowId: string): Record<string, string> {
   // Load defaults
   const defaultsRaw = loadWorkflowResource(projectId, workflowId, 'config/defaults.json')
   let defaults: Record<string, unknown> = {}

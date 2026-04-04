@@ -82,8 +82,8 @@ const rolePrompts: Record<Role, string[]> = {
 }
 
 const whyAnton = [
-  'True agentic AI. Anton doesn\'t just suggest code, it executes, deploys, and manages it.',
-  'Always running. Autonomous agents work 24/7 on your server, even when you\'re not looking.',
+  "True agentic AI. Anton doesn't just suggest code, it executes, deploys, and manages it.",
+  "Always running. Autonomous agents work 24/7 on your server, even when you're not looking.",
   'Your server, your data. Everything runs on your machine. No data leaves, no security risks.',
   'Fully open source. No black boxes, no vendor lock-in. You own everything.',
 ]
@@ -177,7 +177,6 @@ export function WelcomeModal({ open, onClose, onOpenSettings }: Props) {
       <div className="welcome-modal__overlay" />
 
       <div className="welcome-modal__container">
-
         {/* Progress dots */}
         <div className="welcome-modal__progress">
           {steps.map((step, i) => (
@@ -276,8 +275,8 @@ export function WelcomeModal({ open, onClose, onOpenSettings }: Props) {
               </div>
 
               <p className="welcome-modal__section-subtitle">
-                Projects are how you organize real work in Anton. Each project gets its own workspace
-                with persistent memory, autonomous agents, and full system access.
+                Projects are how you organize real work in Anton. Each project gets its own
+                workspace with persistent memory, autonomous agents, and full system access.
               </p>
 
               <div className="welcome-modal__features">
@@ -321,9 +320,12 @@ export function WelcomeModal({ open, onClose, onOpenSettings }: Props) {
               <div className="welcome-modal__connector-highlight">
                 <ConnectorIcon id="telegram" size={20} />
                 <div>
-                  <span className="welcome-modal__connector-highlight-title">Talk to Anton from anywhere</span>
+                  <span className="welcome-modal__connector-highlight-title">
+                    Talk to Anton from anywhere
+                  </span>
                   <span className="welcome-modal__connector-highlight-desc">
-                    Connect Telegram in 2 steps and message Anton from your phone. It always works, even when your laptop is closed.
+                    Connect Telegram in 2 steps and message Anton from your phone. It always works,
+                    even when your laptop is closed.
                   </span>
                 </div>
               </div>

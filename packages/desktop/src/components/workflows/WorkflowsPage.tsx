@@ -1,6 +1,6 @@
+import type { WorkflowRegistryEntry } from '@anton/protocol'
 import { Zap } from 'lucide-react'
 import { useEffect, useState } from 'react'
-import type { WorkflowRegistryEntry } from '@anton/protocol'
 import { projectStore } from '../../lib/store/projectStore.js'
 import { WorkflowCard } from './WorkflowCard.js'
 import { WorkflowDetailPage } from './WorkflowDetailPage.js'
@@ -9,7 +9,8 @@ const PLACEHOLDER_WORKFLOWS: WorkflowRegistryEntry[] = [
   {
     id: 'content-creation-pipeline',
     name: 'Content Creation Pipeline',
-    description: 'Capture ideas from Slack, validate with trend research, generate production-ready briefs with shot lists, and track your content pipeline.',
+    description:
+      'Capture ideas from Slack, validate with trend research, generate production-ready briefs with shot lists, and track your content pipeline.',
     category: 'CONTENT',
     connectors: ['slack', 'google-sheets', 'exa-search'],
     version: '0.1.0',
@@ -19,7 +20,8 @@ const PLACEHOLDER_WORKFLOWS: WorkflowRegistryEntry[] = [
   {
     id: 'workflow-creator',
     name: 'Workflow Creator',
-    description: 'Build custom workflows through conversation. Describe what you want to automate and Anton generates the agents, scripts, and templates.',
+    description:
+      'Build custom workflows through conversation. Describe what you want to automate and Anton generates the agents, scripts, and templates.',
     category: 'META',
     connectors: [],
     version: '0.1.0',
@@ -29,7 +31,8 @@ const PLACEHOLDER_WORKFLOWS: WorkflowRegistryEntry[] = [
   {
     id: 'customer-support-automation',
     name: 'Customer Support Automation',
-    description: 'Automate email responses to customer support inquiries from Gmail. Categorize tickets, draft replies, escalate complex issues.',
+    description:
+      'Automate email responses to customer support inquiries from Gmail. Categorize tickets, draft replies, escalate complex issues.',
     category: 'SUPPORT',
     connectors: ['gmail', 'slack', 'google-sheets'],
     version: '0.1.0',
@@ -56,8 +59,7 @@ export function WorkflowsPage() {
   const isInstalled = (workflowId: string) =>
     projectWorkflows.some((w) => w.workflowId === workflowId)
 
-  const isComingSoon = (workflowId: string) =>
-    !workflowRegistry.some((w) => w.id === workflowId)
+  const isComingSoon = (workflowId: string) => !workflowRegistry.some((w) => w.id === workflowId)
 
   if (selectedWorkflow && !isComingSoon(selectedWorkflow.id)) {
     return (
@@ -79,13 +81,22 @@ export function WorkflowsPage() {
 
         {/* Grid */}
         {allWorkflows.length === 0 ? (
-          <div style={{
-            display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
-            borderRadius: '14px', border: '1px solid rgba(255,255,255,0.06)',
-            padding: '56px 20px', textAlign: 'center',
-          }}>
+          <div
+            style={{
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              justifyContent: 'center',
+              borderRadius: '14px',
+              border: '1px solid rgba(255,255,255,0.06)',
+              padding: '56px 20px',
+              textAlign: 'center',
+            }}
+          >
             <Zap size={36} strokeWidth={1.5} style={{ color: '#3f3f46', marginBottom: '16px' }} />
-            <p style={{ fontSize: '14px', fontWeight: 500, color: '#d4d4d8' }}>No workflows available</p>
+            <p style={{ fontSize: '14px', fontWeight: 500, color: '#d4d4d8' }}>
+              No workflows available
+            </p>
           </div>
         ) : (
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '12px' }}>

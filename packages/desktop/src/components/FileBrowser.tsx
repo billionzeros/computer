@@ -39,27 +39,30 @@ export function FileBrowser() {
   const [dirState, setDirState] = useState<DirState>({ entries: [], loading: true, error: null })
   const [_expandedDirs, _setExpandedDirs] = useState<Set<string>>(new Set())
 
-  const listDir = useCallback((path: string) => {
-    setDirState({ entries: [], loading: true, error: null })
-    setCwd(path)
+  const listDir = useCallback(
+    (path: string) => {
+      setDirState({ entries: [], loading: true, error: null })
+      setCwd(path)
 
-    // Build breadcrumb parts — show project name for workspace root
-    const isWorkspaceRoot = path === startDir
-    const isUnderWorkspace = path.startsWith(`${startDir}/`)
-    const projectLabel = activeProject?.name || '~'
+      // Build breadcrumb parts — show project name for workspace root
+      const isWorkspaceRoot = path === startDir
+      const isUnderWorkspace = path.startsWith(`${startDir}/`)
+      const projectLabel = activeProject?.name || '~'
 
-    if (isWorkspaceRoot) {
-      setPathParts([projectLabel])
-    } else if (isUnderWorkspace) {
-      const rel = path.slice(startDir.length + 1)
-      setPathParts([projectLabel, ...rel.split('/').filter(Boolean)])
-    } else {
-      setPathParts(path === '/' ? ['/'] : ['/', ...path.split('/').filter(Boolean)])
-    }
+      if (isWorkspaceRoot) {
+        setPathParts([projectLabel])
+      } else if (isUnderWorkspace) {
+        const rel = path.slice(startDir.length + 1)
+        setPathParts([projectLabel, ...rel.split('/').filter(Boolean)])
+      } else {
+        setPathParts(path === '/' ? ['/'] : ['/', ...path.split('/').filter(Boolean)])
+      }
 
-    // Send filesystem list on the FILESYNC channel (session-independent)
-    connection.sendFilesystemList(path)
-  }, [startDir, activeProject?.name])
+      // Send filesystem list on the FILESYNC channel (session-independent)
+      connection.sendFilesystemList(path)
+    },
+    [startDir, activeProject?.name],
+  )
 
   // Listen for filesystem list responses
   useEffect(() => {
