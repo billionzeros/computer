@@ -1074,7 +1074,7 @@ export function buildTools(
             ],
             { description: 'Operation to perform' },
           ),
-          name: Type.Optional(Type.String({ description: 'Agent name (for create)' })),
+          name: Type.Optional(Type.String({ description: 'Agent name (for create, or for delete/start/stop to display in confirmation)' })),
           description: Type.Optional(
             Type.String({ description: 'What the agent does (for create)' }),
           ),
@@ -1099,15 +1099,23 @@ export function buildTools(
           if (params.operation === 'create' && getAskUser) {
             const askUser = getAskUser()
             if (askUser) {
-              const scheduleDesc = params.schedule
-                ? `Schedule: ${humanizeCron(params.schedule)}`
-                : 'Trigger: manual only'
+              const humanSchedule = params.schedule
+                ? humanizeCron(params.schedule)
+                : null
               const answers = await askUser([
                 {
                   question: `Create agent "${params.name || 'Untitled'}"?`,
-                  description: [params.description, scheduleDesc].filter(Boolean).join('\n'),
+                  description: params.description || '',
                   options: ['Yes, create it', 'No, cancel'],
                   allowFreeText: false,
+                  metadata: {
+                    type: 'agent_create',
+                    name: params.name || 'Untitled',
+                    description: params.description || '',
+                    schedule: humanSchedule,
+                    cron: params.schedule || null,
+                    prompt: params.prompt || '',
+                  },
                 },
               ])
               // Check if user rejected
@@ -1125,12 +1133,18 @@ export function buildTools(
           if (params.operation === 'delete' && getAskUser) {
             const askUser = getAskUser()
             if (askUser) {
+              const displayName = params.name || params.agent_id || 'this agent'
               const answers = await askUser([
                 {
-                  question: `Delete agent "${params.agent_id}"?`,
+                  question: `Delete agent "${displayName}"?`,
                   description: 'This will remove the agent and its conversation history.',
                   options: ['Yes, delete it', 'No, keep it'],
                   allowFreeText: false,
+                  metadata: {
+                    type: 'agent_delete',
+                    name: displayName,
+                    agentId: params.agent_id || '',
+                  },
                 },
               ])
               const answer = Object.values(answers)[0]

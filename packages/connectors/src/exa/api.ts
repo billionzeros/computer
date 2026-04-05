@@ -99,6 +99,28 @@ export class ExaAPI {
     })
   }
 
+  async getContents(
+    urls: string[],
+    opts: { text?: boolean; highlights?: boolean; summary?: boolean } = {},
+  ): Promise<{ results: ExaResult[] }> {
+    return this.request('/search/contents', {
+      urls: urls.slice(0, 10),
+      ...(opts.text !== false ? { text: { maxCharacters: 5000 } } : {}),
+      ...(opts.highlights ? { highlights: { maxCharacters: 500 } } : {}),
+      ...(opts.summary ? { summary: {} } : {}),
+    })
+  }
+
+  async answer(
+    query: string,
+    opts: { text?: boolean } = {},
+  ): Promise<{ answer: string; citations: Array<{ url: string; title: string }> }> {
+    return this.request('/search/answer', {
+      query,
+      text: opts.text ?? true,
+    })
+  }
+
   async findSimilar(
     url: string,
     opts: { numResults?: number; text?: boolean; summary?: boolean } = {},

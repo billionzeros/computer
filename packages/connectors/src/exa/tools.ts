@@ -75,6 +75,62 @@ export function createExaTools(api: ExaAPI): AgentTool[] {
     }),
 
     defineTool({
+      name: 'exa_get_contents',
+      label: 'Get Page Contents',
+      description:
+        '[Exa] Get clean, parsed content from one or more URLs. Use to read full page text, summaries, or highlights from URLs found via search.',
+      parameters: Type.Object({
+        urls: Type.Array(Type.String(), { description: 'URLs to get content from (max 10)' }),
+        text: Type.Optional(
+          Type.Boolean({ description: 'Include full page text (default: true)' }),
+        ),
+        highlights: Type.Optional(
+          Type.Boolean({ description: 'Include key highlights (default: false)' }),
+        ),
+        summary: Type.Optional(
+          Type.Boolean({ description: 'Include AI summary (default: false)' }),
+        ),
+      }),
+      async execute(_id, params) {
+        try {
+          const { results } = await api.getContents(params.urls, {
+            text: params.text,
+            highlights: params.highlights,
+            summary: params.summary,
+          })
+          if (!results.length) return toolResult('No content returned.')
+          const formatted = results
+            .map((r, i) => `### Page ${i + 1}\n${formatResult(r)}`)
+            .join('\n\n---\n\n')
+          return toolResult(`Content from ${results.length} page(s):\n\n${formatted}`)
+        } catch (err) {
+          return toolResult(`Error: ${(err as Error).message}`, true)
+        }
+      },
+    }),
+
+    defineTool({
+      name: 'exa_answer',
+      label: 'Answer Question',
+      description:
+        '[Exa] Get a direct LLM-generated answer to a question, backed by real-time web search. Returns an answer with citations. Use for quick factual questions.',
+      parameters: Type.Object({
+        query: Type.String({ description: 'The question to answer' }),
+      }),
+      async execute(_id, params) {
+        try {
+          const data = await api.answer(params.query)
+          const citations = data.citations?.length
+            ? `\n\n**Sources:**\n${data.citations.map((c) => `- [${c.title}](${c.url})`).join('\n')}`
+            : ''
+          return toolResult(`${data.answer}${citations}`)
+        } catch (err) {
+          return toolResult(`Error: ${(err as Error).message}`, true)
+        }
+      },
+    }),
+
+    defineTool({
       name: 'exa_find_similar',
       label: 'Find Similar Pages',
       description: '[Exa] Find web pages similar to a given URL.',

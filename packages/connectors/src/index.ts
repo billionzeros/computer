@@ -37,6 +37,7 @@ import type { ConnectorFactory } from './types.js'
 /** Built-in direct connector factories keyed by provider ID. */
 export const CONNECTOR_FACTORIES: Record<string, ConnectorFactory> = {
   slack: () => new SlackConnector(),
+  'slack-bot': () => new SlackConnector(),
   github: () => new GitHubConnector(),
   gmail: () => new GmailConnector(),
   notion: () => new NotionConnector(),

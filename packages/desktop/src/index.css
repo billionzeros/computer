@@ -14349,6 +14349,102 @@ button {
   text-decoration: line-through;
 }
 
+/* Artifacts dropdown */
+.conv-panel__artifacts-wrap {
+  position: relative;
+}
+
+.conv-panel__artifacts-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 99;
+}
+
+.conv-panel__artifacts-dropdown {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  z-index: 100;
+  width: 320px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-strong);
+  border-radius: 12px;
+  padding: 12px;
+  box-shadow: var(--shadow-lg);
+}
+
+.conv-panel__artifacts-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+  padding: 0 4px;
+}
+
+.conv-panel__artifacts-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.conv-panel__artifacts-count {
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--text-tertiary);
+  background: var(--bg-hover);
+  border-radius: 8px;
+  padding: 1px 6px;
+}
+
+.conv-panel__artifacts-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  max-height: 260px;
+  overflow-y: auto;
+}
+
+.conv-panel__artifacts-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px;
+  border-radius: 8px;
+  background: none;
+  border: none;
+  cursor: pointer;
+  width: 100%;
+  text-align: left;
+  transition: background 0.15s;
+}
+
+.conv-panel__artifacts-item:hover {
+  background: var(--bg-hover);
+}
+
+.conv-panel__artifacts-item-icon {
+  flex-shrink: 0;
+  color: var(--text-subtle);
+}
+
+.conv-panel__artifacts-item-title {
+  flex: 1;
+  font-size: 13px;
+  color: var(--text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.conv-panel__artifacts-item-badge {
+  flex-shrink: 0;
+  font-size: 11px;
+  color: var(--text-tertiary);
+  background: var(--bg-hover);
+  border-radius: 6px;
+  padding: 2px 6px;
+}
+
 /* Messages area */
 .conv-panel__messages {
   flex: 1;
@@ -14620,6 +14716,174 @@ button {
 
 .ask-inline__custom-input::placeholder {
   color: var(--text-subtle);
+}
+
+/* ── Agent creation confirmation card ── */
+
+.agent-confirm {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 20px;
+}
+
+.agent-confirm__header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.agent-confirm__icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 10px;
+  background: rgba(var(--overlay), 0.06);
+  color: var(--text-secondary);
+  flex-shrink: 0;
+}
+
+.agent-confirm__title-group {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+}
+
+.agent-confirm__title {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.agent-confirm__name {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.agent-confirm__desc {
+  font-size: 13px;
+  color: var(--text-secondary);
+  line-height: 1.45;
+  margin: 0;
+}
+
+.agent-confirm__fields {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  border: 1px solid rgba(var(--overlay), 0.08);
+  border-radius: 10px;
+  overflow: hidden;
+}
+
+.agent-confirm__field {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 14px;
+  border-bottom: 1px solid rgba(var(--overlay), 0.06);
+}
+
+.agent-confirm__field:last-child {
+  border-bottom: none;
+}
+
+.agent-confirm__field--block {
+  flex-wrap: wrap;
+}
+
+.agent-confirm__field-icon {
+  display: flex;
+  align-items: center;
+  color: var(--text-muted);
+  flex-shrink: 0;
+}
+
+.agent-confirm__field-label {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-muted);
+  min-width: 56px;
+  flex-shrink: 0;
+}
+
+.agent-confirm__field-value {
+  font-size: 13px;
+  color: var(--text-primary);
+  flex: 1;
+  min-width: 0;
+}
+
+.agent-confirm__field-value--mono {
+  font-family: var(--font-mono, monospace);
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.agent-confirm__field-value--prompt {
+  font-size: 12px;
+  color: var(--text-secondary);
+  line-height: 1.45;
+  width: 100%;
+  margin-top: 4px;
+}
+
+.agent-confirm__actions {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+  padding-top: 2px;
+}
+
+.agent-confirm__btn {
+  font-size: 13px;
+  font-weight: 500;
+  padding: 7px 16px;
+  border-radius: 8px;
+  border: none;
+  cursor: pointer;
+  transition: background 0.12s, color 0.12s;
+}
+
+.agent-confirm__btn--cancel {
+  background: rgba(var(--overlay), 0.06);
+  color: var(--text-secondary);
+}
+
+.agent-confirm__btn--cancel:hover {
+  background: rgba(var(--overlay), 0.1);
+}
+
+.agent-confirm__btn--confirm {
+  background: var(--text-primary);
+  color: var(--bg-primary);
+}
+
+.agent-confirm__btn--confirm:hover {
+  opacity: 0.88;
+}
+
+.agent-confirm__icon--danger {
+  background: rgba(239, 68, 68, 0.1);
+  color: #ef4444;
+}
+
+.agent-confirm__btn--danger {
+  background: #ef4444;
+  color: #fff;
+}
+
+.agent-confirm__btn--danger:hover {
+  background: #dc2626;
 }
 
 /* ── Composer shortcut hint ── */

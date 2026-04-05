@@ -13,7 +13,6 @@ import {
   Play,
   Square,
   Terminal,
-  Timer,
   X,
   Zap,
 } from 'lucide-react'
@@ -338,21 +337,6 @@ export function AgentDetailView({ agentId, onBack, onViewRun }: Props) {
             {showInstructions && (
               <pre className="agent-home__instructions-body">{meta.instructions}</pre>
             )}
-          </div>
-        )}
-
-        {/* Scheduler info */}
-        {meta.schedule?.cron && (
-          <div className="agent-home__scheduler">
-            <div className="agent-home__scheduler-row">
-              <Timer size={12} strokeWidth={1.5} />
-              <code>{meta.schedule.cron}</code>
-              <span
-                className={`agent-home__scheduler-status agent-home__scheduler-status--${meta.status}`}
-              >
-                {meta.status}
-              </span>
-            </div>
           </div>
         )}
 

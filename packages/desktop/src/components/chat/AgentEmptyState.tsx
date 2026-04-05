@@ -12,7 +12,6 @@ import {
   Play,
   Square,
   Terminal,
-  Timer,
   X,
   Zap,
 } from 'lucide-react'
@@ -248,34 +247,6 @@ export function AgentEmptyState({ agent }: Props) {
             {showInstructions && (
               <pre className="agent-empty-state__instructions-body">{meta.instructions}</pre>
             )}
-          </div>
-        )}
-
-        {/* Scheduler Debug */}
-        {meta.schedule?.cron && (
-          <div className="agent-empty-state__scheduler-debug">
-            <div className="agent-empty-state__debug-title">
-              <Timer size={12} strokeWidth={1.5} />
-              <span>Scheduler</span>
-            </div>
-            <div className="agent-empty-state__debug-grid">
-              <span className="agent-empty-state__debug-label">Cron</span>
-              <code className="agent-empty-state__debug-value">{meta.schedule.cron}</code>
-              <span className="agent-empty-state__debug-label">Status</span>
-              <span
-                className={`agent-empty-state__debug-value agent-empty-state__debug-status--${meta.status}`}
-              >
-                {meta.status}
-              </span>
-              <span className="agent-empty-state__debug-label">Next run</span>
-              <span className="agent-empty-state__debug-value">
-                {meta.nextRunAt ? formatAbsoluteTime(meta.nextRunAt) : 'Not scheduled'}
-              </span>
-              <span className="agent-empty-state__debug-label">Last run</span>
-              <span className="agent-empty-state__debug-value">
-                {meta.lastRunAt ? formatAbsoluteTime(meta.lastRunAt) : 'Never'}
-              </span>
-            </div>
           </div>
         )}
 

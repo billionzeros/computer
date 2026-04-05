@@ -1,10 +1,32 @@
-import { ArrowLeft, BarChart3, Files, ListChecks, Lock, MoreHorizontal } from 'lucide-react'
+import {
+  ArrowLeft,
+  BarChart3,
+  Braces,
+  FileCode,
+  Files,
+  ListChecks,
+  Lock,
+  MoreHorizontal,
+  Network,
+  Sparkles,
+  SquareCode,
+} from 'lucide-react'
 import { useCallback, useState } from 'react'
 import { sanitizeTitle } from '../../lib/conversations.js'
+import type { ArtifactRenderType } from '../../lib/artifacts.js'
+import { getArtifactTypeLabel } from '../../lib/artifacts.js'
 import type { Skill } from '../../lib/skills.js'
 import type { ChatImageAttachment } from '../../lib/store.js'
 import { useStore } from '../../lib/store.js'
 import { artifactStore } from '../../lib/store/artifactStore.js'
+
+const ARTIFACT_TYPE_ICONS: Record<ArtifactRenderType, typeof Sparkles> = {
+  html: Sparkles,
+  code: Braces,
+  markdown: FileCode,
+  svg: SquareCode,
+  mermaid: Network,
+}
 import {
   sessionStore,
   useActiveSessionState,
@@ -21,6 +43,7 @@ export function TaskDetailView() {
   const addMessage = useStore((s) => s.addMessage)
   const currentTasks = useActiveSessionState((s) => s.tasks)
   const [todoOpen, setTodoOpen] = useState(false)
+  const [artifactsOpen, setArtifactsOpen] = useState(false)
 
   const activeSessionId = activeConv?.sessionId
   const pendingConfirm = useSessionState(activeSessionId, (s) => s.pendingConfirm)
@@ -142,14 +165,65 @@ export function TaskDetailView() {
             <MoreHorizontal size={18} strokeWidth={1.5} />
           </button>
           {artifacts.length > 0 && (
-            <button
-              type="button"
-              className="conv-panel__action-btn conv-panel__action-btn--label"
-              aria-label="Files"
-            >
-              <Files size={15} strokeWidth={1.5} />
-              <span>{artifacts.length}</span>
-            </button>
+            <div className="conv-panel__artifacts-wrap">
+              <button
+                type="button"
+                className="conv-panel__action-btn conv-panel__action-btn--label"
+                aria-label="Files"
+                onClick={() => setArtifactsOpen(!artifactsOpen)}
+              >
+                <Files size={15} strokeWidth={1.5} />
+                <span>{artifacts.length}</span>
+              </button>
+              {artifactsOpen && (
+                <>
+                  <div
+                    className="conv-panel__artifacts-backdrop"
+                    onClick={() => setArtifactsOpen(false)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Escape') setArtifactsOpen(false)
+                    }}
+                  />
+                  <div className="conv-panel__artifacts-dropdown">
+                    <div className="conv-panel__artifacts-header">
+                      <span className="conv-panel__artifacts-title">Artifacts</span>
+                      <span className="conv-panel__artifacts-count">{artifacts.length}</span>
+                    </div>
+                    <div className="conv-panel__artifacts-list">
+                      {[...artifacts].reverse().map((artifact) => {
+                        const Icon = ARTIFACT_TYPE_ICONS[artifact.renderType] || Braces
+                        const title = artifact.title || artifact.filename || 'Untitled'
+                        return (
+                          <button
+                            key={artifact.id}
+                            type="button"
+                            className="conv-panel__artifacts-item"
+                            onClick={() => {
+                              setArtifactsOpen(false)
+                              artifactStore.getState().setActiveArtifact(artifact.id)
+                              const el = document.querySelector(
+                                `[data-artifact-id="${artifact.id}"]`,
+                              )
+                              if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' })
+                            }}
+                          >
+                            <Icon
+                              size={14}
+                              strokeWidth={1.5}
+                              className="conv-panel__artifacts-item-icon"
+                            />
+                            <span className="conv-panel__artifacts-item-title">{title}</span>
+                            <span className="conv-panel__artifacts-item-badge">
+                              {getArtifactTypeLabel(artifact.renderType)}
+                            </span>
+                          </button>
+                        )
+                      })}
+                    </div>
+                  </div>
+                </>
+              )}
+            </div>
           )}
           <button type="button" className="conv-panel__action-btn" aria-label="Usage">
             <BarChart3 size={18} strokeWidth={1.5} />

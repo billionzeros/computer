@@ -1148,7 +1148,7 @@ export function getPromptsDir(): string {
 }
 
 export function getPublishedDir(): string {
-  mkdirSync(PUBLISHED_DIR, { recursive: true })
+  mkdirSync(PUBLISHED_DIR, { recursive: true, mode: 0o755 })
   return PUBLISHED_DIR
 }
 
@@ -1388,6 +1388,27 @@ export const CONNECTOR_REGISTRY: ConnectorRegistryEntry[] = [
     featured: true,
     setupGuide: {
       steps: ['Click Connect to authorize with your Slack workspace'],
+      url: 'https://api.slack.com/apps',
+      urlLabel: 'Slack Apps',
+    },
+  },
+  {
+    id: 'slack-bot',
+    name: 'Slack (Anton Bot)',
+    description: 'Send messages as Anton with its own identity in Slack',
+    icon: '🤖',
+    category: 'messaging',
+    type: 'oauth',
+    oauthProvider: 'slack-bot',
+    oauthScopes: ['channels:read', 'chat:write', 'chat:write.customize', 'users:read'],
+    requiredEnv: [],
+    featured: true,
+    setupGuide: {
+      steps: [
+        'Add Bot Token Scopes to your Slack App at api.slack.com/apps',
+        'Set the bot display name to "Anton" and add an avatar',
+        'Click Connect to install the bot to your workspace',
+      ],
       url: 'https://api.slack.com/apps',
       urlLabel: 'Slack Apps',
     },

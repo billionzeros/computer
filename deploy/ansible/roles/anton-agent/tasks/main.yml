@@ -72,9 +72,22 @@
     create_home: true
     state: present
 
+- name: Ensure home directory is traversable (for Caddy file serving)
+  file:
+    path: "/home/{{ anton_user }}"
+    mode: "0755"
+
 - name: Create .anton directory
   file:
     path: "/home/{{ anton_user }}/.anton"
+    state: directory
+    owner: "{{ anton_user }}"
+    group: "{{ anton_user }}"
+    mode: "0755"
+
+- name: Create published directory (world-readable for Caddy)
+  file:
+    path: "/home/{{ anton_user }}/.anton/published"
     state: directory
     owner: "{{ anton_user }}"
     group: "{{ anton_user }}"

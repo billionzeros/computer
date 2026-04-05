@@ -417,6 +417,7 @@ export interface AskUserQuestion {
   options?: (string | AskUserOption)[]
   allowFreeText?: boolean
   freeTextPlaceholder?: string
+  metadata?: Record<string, unknown>
 }
 
 export interface AiAskUserMessage {

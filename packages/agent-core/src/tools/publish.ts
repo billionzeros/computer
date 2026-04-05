@@ -11,7 +11,7 @@
  */
 
 import { randomBytes } from 'node:crypto'
-import { mkdirSync, writeFileSync } from 'node:fs'
+import { chmodSync, mkdirSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { getPublishedDir } from '@anton/agent-config'
 
@@ -125,8 +125,10 @@ export function executePublish(input: PublishInput, domain?: string): string {
 
   const publishedDir = getPublishedDir()
   const artifactDir = join(publishedDir, slug)
-  mkdirSync(artifactDir, { recursive: true })
-  writeFileSync(join(artifactDir, 'index.html'), html, 'utf-8')
+  mkdirSync(artifactDir, { recursive: true, mode: 0o755 })
+  const filePath = join(artifactDir, 'index.html')
+  writeFileSync(filePath, html, 'utf-8')
+  chmodSync(filePath, 0o644)
 
   const url = domain ? `https://${domain}/a/${slug}` : `/a/${slug}`
   return `Published "${input.title}" → ${url}`
