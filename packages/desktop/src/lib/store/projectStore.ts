@@ -38,9 +38,6 @@ interface ProjectState {
   selectedAgentId: string | null
   agentRunLogs: import('@anton/protocol').AgentRunLogEntry[] | null
   agentRunLogsLoading: boolean
-  allAgents: AgentSession[]
-  allAgentsLoading: boolean
-
   // Workflows
   workflowRegistry: WorkflowRegistryEntry[]
   projectWorkflows: InstalledWorkflow[]
@@ -77,12 +74,10 @@ interface ProjectState {
   setMemories: (
     memories: { name: string; content: string; scope: 'global' | 'conversation' | 'project' }[],
   ) => void
-  setAllAgents: (agents: AgentSession[]) => void
   setAgentRunLogs: (logs: import('@anton/protocol').AgentRunLogEntry[] | null) => void
   setWorkflowRegistry: (entries: WorkflowRegistryEntry[]) => void
   setProjectWorkflows: (workflows: InstalledWorkflow[]) => void
   setWorkflowConnectorCheck: (check: ProjectState['workflowConnectorCheck']) => void
-  fetchAllAgents: () => void
 
   // Connection actions
   createProject: (config: {
@@ -168,8 +163,6 @@ export const projectStore = create<ProjectState>((set, get) => ({
   selectedAgentId: null,
   agentRunLogs: null,
   agentRunLogsLoading: false,
-  allAgents: [],
-  allAgentsLoading: false,
   workflowRegistry: [],
   projectWorkflows: [],
   workflowConnectorCheck: null,
@@ -198,6 +191,7 @@ export const projectStore = create<ProjectState>((set, get) => ({
     set({
       activeProjectId: id,
       activeProjectSessionId: null,
+      // Clear ALL project-scoped state to prevent cross-project leaks
       projectSessions: [],
       projectSessionsLoading: !!id,
       projectFiles: [],
@@ -207,6 +201,14 @@ export const projectStore = create<ProjectState>((set, get) => ({
       selectedAgentId: null,
       agentRunLogs: null,
       agentRunLogsLoading: false,
+      projectWorkflows: [],
+      workflowConnectorCheck: null,
+      projectInstructions: '',
+      projectInstructionsLoading: !!id,
+      projectPreferences: [],
+      projectPreferencesLoading: !!id,
+      memories: [],
+      memoriesLoading: !!id,
     })
   },
 
@@ -249,20 +251,10 @@ export const projectStore = create<ProjectState>((set, get) => ({
   setProjectPreferences: (prefs) =>
     set({ projectPreferences: prefs, projectPreferencesLoading: false }),
   setMemories: (memories) => set({ memories, memoriesLoading: false }),
-  setAllAgents: (agents) => set({ allAgents: agents, allAgentsLoading: false }),
   setAgentRunLogs: (logs) => set({ agentRunLogs: logs, agentRunLogsLoading: false }),
   setWorkflowRegistry: (entries) => set({ workflowRegistry: entries }),
   setProjectWorkflows: (workflows) => set({ projectWorkflows: workflows }),
   setWorkflowConnectorCheck: (check) => set({ workflowConnectorCheck: check }),
-
-  fetchAllAgents: () => {
-    const state = get()
-    if (state.projects.length === 0) return
-    set({ allAgentsLoading: true })
-    for (const project of state.projects) {
-      connection.sendAgentsList(project.id)
-    }
-  },
 
   // Connection actions
   createProject: (config) => connection.sendProjectCreate(config),
@@ -319,8 +311,6 @@ export const projectStore = create<ProjectState>((set, get) => ({
       selectedAgentId: null,
       agentRunLogs: null,
       agentRunLogsLoading: false,
-      allAgents: [],
-      allAgentsLoading: false,
       workflowRegistry: [],
       projectWorkflows: [],
       workflowConnectorCheck: null,
@@ -342,8 +332,6 @@ export const projectStore = create<ProjectState>((set, get) => ({
       projectAgents: [],
       projectAgentsLoading: false,
       selectedAgentId: null,
-      allAgents: [],
-      allAgentsLoading: false,
     })
   },
 }))

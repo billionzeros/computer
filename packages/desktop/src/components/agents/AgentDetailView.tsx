@@ -153,7 +153,7 @@ interface Props {
 }
 
 export function AgentDetailView({ agentId, onBack, onViewRun }: Props) {
-  const allAgents = projectStore((s) => s.allAgents)
+  const projectAgents = projectStore((s) => s.projectAgents)
   const agentRunLogs = projectStore((s) => s.agentRunLogs)
   const agentRunLogsLoading = projectStore((s) => s.agentRunLogsLoading)
   const addMessage = useStore((s) => s.addMessage)
@@ -162,7 +162,7 @@ export function AgentDetailView({ agentId, onBack, onViewRun }: Props) {
   const [showHistory, setShowHistory] = useState(true)
   const [showLogsModal, setShowLogsModal] = useState(false)
 
-  const agent = allAgents.find((a) => a.sessionId === agentId)
+  const agent = projectAgents.find((a) => a.sessionId === agentId)
 
   const handleViewRunLogs = useCallback(
     (run: AgentRunRecord) => {

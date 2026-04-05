@@ -17,7 +17,7 @@ const CODE_BLOCK_PATTERN = /```[\s\S]*?```/g
 const FUNCTION_PATTERN =
   /(?:function\s+\w+|(?:const|let|var)\s+\w+\s*=\s*(?:async\s+)?(?:\([^)]*\)|[^=])\s*=>|def\s+\w+|(?:export\s+)?(?:async\s+)?function)/
 const TYPE_PATTERN = /(?:type\s+\w+|interface\s+\w+|:\s*\w+(?:\[\])?(?:\s*\|)?)/
-const IMPORT_PATTERN = /(?:import\s+|from\s+['"]|require\s*\()/
+const _IMPORT_PATTERN = /(?:import\s+|from\s+['"]|require\s*\()/
 const TEST_PATTERN = /(?:describe\s*\(|it\s*\(|test\s*\(|expect\s*\(|assert\.)/
 const SQL_PATTERN =
   /(?:SELECT\s+|INSERT\s+|UPDATE\s+|DELETE\s+|CREATE\s+|JOIN\s+|GROUP\s+BY|ORDER\s+BY)/i
@@ -68,7 +68,7 @@ export function scoreCodeStructure(evalCase: EvalCase, result: EvalResult): numb
   }
 
   // 8. Not too short (at least 50 chars of actual content)
-  const stripped = output.replace(CODE_BLOCK_PATTERN, '').trim()
+  output.replace(CODE_BLOCK_PATTERN, '').trim()
   const codeContent = output.match(CODE_BLOCK_PATTERN)?.[0] || output
   checks.push(codeContent.length >= 50)
 

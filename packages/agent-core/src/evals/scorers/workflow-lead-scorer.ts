@@ -60,9 +60,10 @@ function extractTier(output: string): string | null {
   const tierMentions: Array<{ tier: string; index: number }> = []
   for (const tier of ['hot', 'warm', 'cool', 'skip']) {
     const regex = new RegExp(`\\b${tier}\\b`, 'gi')
-    let match: RegExpExecArray | null
-    while ((match = regex.exec(lower)) !== null) {
+    let match: RegExpExecArray | null = regex.exec(lower)
+    while (match !== null) {
       tierMentions.push({ tier, index: match.index })
+      match = regex.exec(lower)
     }
   }
   if (tierMentions.length > 0) {

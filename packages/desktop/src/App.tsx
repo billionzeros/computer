@@ -150,9 +150,6 @@ export function App() {
           }
         }
 
-        // Fetch all agents now that projects are loaded
-        projectStore.getState().fetchAllAgents()
-
         // In computer mode (home view), don't auto-navigate to a conversation
         const currentUI = uiStore.getState()
         if (currentUI.activeMode === 'computer' && currentUI.activeView === 'home') {

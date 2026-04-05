@@ -52,8 +52,11 @@ export function handleToolMessage(msg: AiMessage, ctx: MessageContext): boolean 
         parentToolCallId: msg.parentToolCallId,
       })
 
-      if (msg.name === 'web_search') {
-        useStore.getState()._pendingWebSearchToolCallIds.add(msg.id)
+      if (msg.name === 'web_search' && sid) {
+        const state = ss.getSessionState(sid)
+        const webSearchIds = new Set(state.pendingWebSearchToolCallIds)
+        webSearchIds.add(msg.id)
+        ss.updateSessionState(sid, { pendingWebSearchToolCallIds: webSearchIds })
       }
 
       if (!msg.parentToolCallId && sid) {
@@ -108,14 +111,21 @@ export function handleToolMessage(msg: AiMessage, ctx: MessageContext): boolean 
         ...(callInfo && { toolName: callInfo.name, toolInput: callInfo.input }),
       })
 
-      const store = useStore.getState()
-      if (store._pendingWebSearchToolCallIds.has(msg.id)) {
-        store._pendingWebSearchToolCallIds.delete(msg.id)
-        if (!msg.isError) {
-          const sources = parseCitationSources(msg.output)
-          if (sources.length > 0) {
-            store._pendingCitationSourcesQueue = sources
+      if (sid) {
+        const state = ss.getSessionState(sid)
+        if (state.pendingWebSearchToolCallIds.has(msg.id)) {
+          const webSearchIds = new Set(state.pendingWebSearchToolCallIds)
+          webSearchIds.delete(msg.id)
+          const updates: Partial<import('../sessionStore.js').SessionState> = {
+            pendingWebSearchToolCallIds: webSearchIds,
           }
+          if (!msg.isError) {
+            const sources = parseCitationSources(msg.output)
+            if (sources.length > 0) {
+              updates.pendingCitationSources = sources
+            }
+          }
+          ss.updateSessionState(sid, updates)
         }
       }
 

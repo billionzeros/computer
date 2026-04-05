@@ -131,7 +131,7 @@ export function scoreCrossLanguage(evalCase: EvalCase, result: EvalResult): numb
     return 1.0
   }
 
-  const output = result.output.toLowerCase()
+  const _output = result.output.toLowerCase()
   // Check for Python-specific patterns (the current test case is TS → Python)
   const hasPython =
     /(?:def\s+\w+|list|for\s+\w+\s+in\s+|isinstance|import\s+|from\s+\w+\s+import)/.test(

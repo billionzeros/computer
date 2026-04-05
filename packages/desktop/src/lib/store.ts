@@ -111,8 +111,6 @@ interface AppState {
 
   // Citations: maps assistant message ID → sources extracted from web_search
   citations: Map<string, CitationSource[]>
-  _pendingCitationSourcesQueue: CitationSource[]
-  _pendingWebSearchToolCallIds: Set<string>
 
   // Navigation (orchestration — delegates to uiStore but handles conversation routing)
   setActiveView: (
@@ -197,8 +195,6 @@ export const useStore = create<AppState>((set, get) => {
     _sessionAssistantMsgIds: new Map(),
     _sessionThinkingMsgIds: new Map(),
     citations: new Map(),
-    _pendingCitationSourcesQueue: [],
-    _pendingWebSearchToolCallIds: new Set(),
 
     setActiveMode: (mode) => {
       localStorage.setItem('anton-mode', mode)
@@ -324,6 +320,17 @@ export const useStore = create<AppState>((set, get) => {
     },
 
     deleteConversation: (id) => {
+      // Clean up per-session state for the deleted conversation
+      const conv = get().conversations.find((c) => c.id === id)
+      if (conv?.sessionId) {
+        const ss = sessionStore.getState()
+        const states = new Map(ss.sessionStates)
+        states.delete(conv.sessionId)
+        // Also clean up message tracking maps
+        get()._sessionAssistantMsgIds.delete(conv.sessionId)
+        get()._sessionThinkingMsgIds.delete(conv.sessionId)
+      }
+
       set((state) => {
         const conversations = state.conversations.filter((c) => c.id !== id)
         saveConversations(conversations)
@@ -393,9 +400,7 @@ export const useStore = create<AppState>((set, get) => {
           const messages = [...c.messages]
 
           // Use per-session tracking to find the target message
-          const targetId = sessionId
-            ? (state._sessionAssistantMsgIds.get(sessionId) ?? null)
-            : null
+          const targetId = sessionId ? (state._sessionAssistantMsgIds.get(sessionId) ?? null) : null
           const idx = targetId ? messages.findIndex((m) => m.id === targetId) : -1
 
           if (idx >= 0) {
@@ -421,13 +426,16 @@ export const useStore = create<AppState>((set, get) => {
         }
 
         saveConversations(conversations)
-        // Associate pending citation sources with new assistant message
+        // Associate pending citation sources from per-session state
         const citationUpdate: Record<string, unknown> = {}
-        if (newMsgId && state._pendingCitationSourcesQueue?.length > 0) {
-          const newCitations = new Map(state.citations)
-          newCitations.set(newMsgId, state._pendingCitationSourcesQueue)
-          citationUpdate.citations = newCitations
-          citationUpdate._pendingCitationSourcesQueue = []
+        if (newMsgId && sessionId) {
+          const ss = sessionStore.getState().getSessionState(sessionId)
+          if (ss.pendingCitationSources.length > 0) {
+            const newCitations = new Map(state.citations)
+            newCitations.set(newMsgId, ss.pendingCitationSources)
+            citationUpdate.citations = newCitations
+            sessionStore.getState().updateSessionState(sessionId, { pendingCitationSources: [] })
+          }
         }
         return {
           conversations,
@@ -475,13 +483,16 @@ export const useStore = create<AppState>((set, get) => {
         }
 
         saveConversations(conversations)
-        // Associate pending citation sources with new assistant message
+        // Associate pending citation sources from per-session state
         const citationUpdate: Record<string, unknown> = {}
-        if (newMsgId && state._pendingCitationSourcesQueue?.length > 0) {
-          const newCitations = new Map(state.citations)
-          newCitations.set(newMsgId, state._pendingCitationSourcesQueue)
-          citationUpdate.citations = newCitations
-          citationUpdate._pendingCitationSourcesQueue = []
+        if (newMsgId) {
+          const ss = sessionStore.getState().getSessionState(sessionId)
+          if (ss.pendingCitationSources.length > 0) {
+            const newCitations = new Map(state.citations)
+            newCitations.set(newMsgId, ss.pendingCitationSources)
+            citationUpdate.citations = newCitations
+            sessionStore.getState().updateSessionState(sessionId, { pendingCitationSources: [] })
+          }
         }
         return { conversations, ...citationUpdate }
       })
@@ -499,9 +510,7 @@ export const useStore = create<AppState>((set, get) => {
         const conversations = state.conversations.map((c) => {
           if (c.id !== activeId) return c
           const messages = [...c.messages]
-          const targetId = sessionId
-            ? (state._sessionThinkingMsgIds.get(sessionId) ?? null)
-            : null
+          const targetId = sessionId ? (state._sessionThinkingMsgIds.get(sessionId) ?? null) : null
           const idx = targetId ? messages.findIndex((m) => m.id === targetId) : -1
 
           if (idx >= 0) {
@@ -741,8 +750,6 @@ export const useStore = create<AppState>((set, get) => {
         _sessionAssistantMsgIds: new Map(),
         _sessionThinkingMsgIds: new Map(),
         citations: new Map(),
-        _pendingCitationSourcesQueue: [],
-        _pendingWebSearchToolCallIds: new Set(),
       })
 
       // Reset domain stores
@@ -762,8 +769,6 @@ export const useStore = create<AppState>((set, get) => {
         _sessionAssistantMsgIds: new Map(),
         _sessionThinkingMsgIds: new Map(),
         citations: new Map(),
-        _pendingCitationSourcesQueue: [],
-        _pendingWebSearchToolCallIds: new Set(),
       })
 
       // Reset all domain stores

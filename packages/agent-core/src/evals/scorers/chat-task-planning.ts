@@ -60,7 +60,7 @@ export function scoreReadBeforeWrite(evalCase: EvalCase, result: EvalResult): nu
 
   // Check: first tool should be a "read" tool, not a "write" tool
   const readTools = ['filesystem', 'code_search', 'shell', 'browser', 'web_search']
-  const writeTools = ['filesystem'] // context-dependent, but writing first is bad for these tags
+  const _writeTools = ['filesystem'] // context-dependent, but writing first is bad for these tags
 
   const firstTool = toolNames[0]
   const isReadFirst = readTools.includes(firstTool)

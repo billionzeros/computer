@@ -4,7 +4,11 @@ import type { Skill } from '../../lib/skills.js'
 import type { ChatImageAttachment } from '../../lib/store.js'
 import { useStore } from '../../lib/store.js'
 import { artifactStore } from '../../lib/store/artifactStore.js'
-import { sessionStore, useActiveSessionState, useSessionState } from '../../lib/store/sessionStore.js'
+import {
+  sessionStore,
+  useActiveSessionState,
+  useSessionState,
+} from '../../lib/store/sessionStore.js'
 import { Skeleton } from '../Skeleton.js'
 import { ChatInput } from '../chat/ChatInput.js'
 import { ConfirmDialog } from '../chat/ConfirmDialog.js'

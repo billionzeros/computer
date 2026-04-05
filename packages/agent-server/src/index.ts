@@ -23,6 +23,7 @@ import { Scheduler } from './scheduler.js'
 import { AgentServer } from './server.js'
 
 async function main() {
+  // biome-ignore lint/suspicious/noConsole: startup banner before logger init
   console.log(`
    ┌─────────────────────────────────────┐
    │  anton.computer agent v${VERSION}         │

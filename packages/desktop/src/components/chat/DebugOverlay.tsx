@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useStore } from '../../lib/store.js'
-import { useActiveSessionState, sessionStore } from '../../lib/store/sessionStore.js'
+import { sessionStore, useActiveSessionState } from '../../lib/store/sessionStore.js'
 
 /**
  * Lightweight debug overlay for observability.

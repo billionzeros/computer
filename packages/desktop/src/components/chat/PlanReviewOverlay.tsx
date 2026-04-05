@@ -1,6 +1,6 @@
 import { Check, Send } from 'lucide-react'
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { useActiveSessionState, sessionStore } from '../../lib/store/sessionStore.js'
+import { sessionStore, useActiveSessionState } from '../../lib/store/sessionStore.js'
 import { MarkdownRenderer } from './MarkdownRenderer.js'
 
 interface TocEntry {

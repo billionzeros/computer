@@ -70,26 +70,18 @@ export function handleProjectMessage(msg: AiMessage): boolean {
       if (msg.projectId === ps.activeProjectId) {
         ps.setProjectAgents(msg.agents)
       }
-      const otherAgents = ps.allAgents.filter((a) => a.projectId !== msg.projectId)
-      const merged = [...otherAgents, ...msg.agents]
-      // Dedup by sessionId to prevent race conditions from concurrent fetches
-      const deduped = [...new Map(merged.map((a) => [a.sessionId, a])).values()]
-      ps.setAllAgents(deduped)
       return true
     }
 
     case 'agent_created': {
       const ps = projectStore.getState()
-      const agents = [...ps.projectAgents]
-      const idx = agents.findIndex((a) => a.sessionId === msg.agent.sessionId)
-      if (idx >= 0) agents[idx] = msg.agent
-      else agents.push(msg.agent)
-      ps.setProjectAgents(agents)
-      const allAgents = [...ps.allAgents]
-      const allIdx = allAgents.findIndex((a) => a.sessionId === msg.agent.sessionId)
-      if (allIdx >= 0) allAgents[allIdx] = msg.agent
-      else allAgents.push(msg.agent)
-      ps.setAllAgents(allAgents)
+      if (msg.agent.projectId === ps.activeProjectId) {
+        const agents = [...ps.projectAgents]
+        const idx = agents.findIndex((a) => a.sessionId === msg.agent.sessionId)
+        if (idx >= 0) agents[idx] = msg.agent
+        else agents.push(msg.agent)
+        ps.setProjectAgents(agents)
+      }
       return true
     }
 
@@ -98,16 +90,12 @@ export function handleProjectMessage(msg: AiMessage): boolean {
       ps.setProjectAgents(
         ps.projectAgents.map((a) => (a.sessionId === msg.agent.sessionId ? msg.agent : a)),
       )
-      ps.setAllAgents(
-        ps.allAgents.map((a) => (a.sessionId === msg.agent.sessionId ? msg.agent : a)),
-      )
       return true
     }
 
     case 'agent_deleted': {
       const ps = projectStore.getState()
       ps.setProjectAgents(ps.projectAgents.filter((a) => a.sessionId !== msg.sessionId))
-      ps.setAllAgents(ps.allAgents.filter((a) => a.sessionId !== msg.sessionId))
       return true
     }
 
@@ -172,18 +160,12 @@ export function handleProjectMessage(msg: AiMessage): boolean {
           w.workflowId === msg.workflow.workflowId ? msg.workflow : w,
         ),
       )
-      // Sync server-created agents into UI store so they render in the agents list
-      if (msg.agents?.length) {
-        const existing = ps.allAgents.filter(
+      // Sync server-created agents into project agents list
+      if (msg.agents?.length && msg.workflow.projectId === ps.activeProjectId) {
+        const existing = ps.projectAgents.filter(
           (a) => !msg.agents.some((na: { sessionId: string }) => na.sessionId === a.sessionId),
         )
-        ps.setAllAgents([...existing, ...msg.agents])
-        if (msg.workflow.projectId === ps.activeProjectId) {
-          const existingProject = ps.projectAgents.filter(
-            (a) => !msg.agents.some((na: { sessionId: string }) => na.sessionId === a.sessionId),
-          )
-          ps.setProjectAgents([...existingProject, ...msg.agents])
-        }
+        ps.setProjectAgents([...existing, ...msg.agents])
       }
       return true
     }

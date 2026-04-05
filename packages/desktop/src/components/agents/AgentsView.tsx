@@ -16,11 +16,11 @@ export function AgentsView() {
   const [leftWidth, setLeftWidth] = useState(340)
   const dragRef = useRef<{ startX: number; startW: number } | null>(null)
   const [isDragging, setIsDragging] = useState(false)
-  const allAgents = projectStore((s) => s.allAgents)
+  const projectAgents = projectStore((s) => s.projectAgents)
   const projectWorkflows = projectStore((s) => s.projectWorkflows)
 
   const selectedAgent = selectedAgentId
-    ? allAgents.find((a) => a.sessionId === selectedAgentId)
+    ? projectAgents.find((a) => a.sessionId === selectedAgentId)
     : null
 
   const handleDragStart = useCallback(

@@ -177,7 +177,7 @@ interface Props {
 }
 
 export function AgentListView({ mode, selectedId, onSelect }: Props) {
-  const allAgents = projectStore((s) => s.allAgents)
+  const projectAgents = projectStore((s) => s.projectAgents)
   const projects = projectStore((s) => s.projects)
   const [searchQuery, setSearchQuery] = useState('')
   const [searchOpen, setSearchOpen] = useState(false)
@@ -187,7 +187,7 @@ export function AgentListView({ mode, selectedId, onSelect }: Props) {
   const setActiveView = useStore((s) => s.setActiveView)
 
   const filtered = useMemo(() => {
-    const sorted = [...allAgents].sort((a, b) => {
+    const sorted = [...projectAgents].sort((a, b) => {
       const aTime = a.agent.lastRunAt || a.agent.createdAt
       const bTime = b.agent.lastRunAt || b.agent.createdAt
       return bTime - aTime
@@ -200,7 +200,7 @@ export function AgentListView({ mode, selectedId, onSelect }: Props) {
         a.projectId.toLowerCase().includes(q) ||
         a.agent.description?.toLowerCase().includes(q),
     )
-  }, [allAgents, searchQuery])
+  }, [projectAgents, searchQuery])
 
   const handleDelete = (agent: AgentSession) => {
     projectStore.getState().agentAction(agent.projectId, agent.sessionId, 'delete')

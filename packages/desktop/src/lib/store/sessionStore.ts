@@ -79,6 +79,10 @@ export interface SessionState {
   hasMore: boolean
   isLoadingOlder: boolean
 
+  // Citation tracking
+  pendingCitationSources: import('./types.js').CitationSource[]
+  pendingWebSearchToolCallIds: Set<string>
+
   // Message tracking
   assistantMsgId: string | null
 
@@ -104,6 +108,8 @@ export function createSessionState(partial?: Partial<SessionState>): SessionStat
     pendingAskUser: null,
     hiddenToolCallIds: new Set(),
     toolCallNames: new Map(),
+    pendingCitationSources: [],
+    pendingWebSearchToolCallIds: new Set(),
     needsHistoryRefresh: false,
     isSyncing: false,
     pendingSyncMessages: [],
@@ -288,18 +294,21 @@ export const sessionStore = create<SessionStoreState>((set, get) => {
         })
 
         // Safety net: if stuck in "working" for 5 min, auto-recover
-        const timeout = setTimeout(() => {
-          const current = get().getSessionState(sessionId)
-          if (current.status === 'working') {
-            console.error(`[sessionStore] Stuck-state timeout for ${sessionId}: auto-recovering.`)
-            get().updateSessionState(sessionId, {
-              status: 'idle',
-              statusDetail: null,
-              agentSteps: [],
-            })
-          }
-          _stuckTimeouts.delete(sessionId)
-        }, 5 * 60 * 1000)
+        const timeout = setTimeout(
+          () => {
+            const current = get().getSessionState(sessionId)
+            if (current.status === 'working') {
+              console.error(`[sessionStore] Stuck-state timeout for ${sessionId}: auto-recovering.`)
+              get().updateSessionState(sessionId, {
+                status: 'idle',
+                statusDetail: null,
+                agentSteps: [],
+              })
+            }
+            _stuckTimeouts.delete(sessionId)
+          },
+          5 * 60 * 1000,
+        )
         _stuckTimeouts.set(sessionId, timeout)
       } else if (status === 'idle' && prev.status === 'working') {
         const duration = prev.workingStartedAt ? Date.now() - prev.workingStartedAt : null
