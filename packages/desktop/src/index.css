@@ -972,7 +972,7 @@ button {
 
 .composer--hero {
   width: 100%;
-  padding: 0;
+  padding: 0 0 16px;
   border-top: 0;
   background: transparent;
 }
@@ -2752,6 +2752,98 @@ button {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   THINKING BLOCK
+   ═══════════════════════════════════════════════════════════════════ */
+
+.thinking-block {
+  margin-bottom: 8px;
+}
+
+.thinking-block__header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 4px 0;
+  color: var(--text-subtle);
+  font-size: 13px;
+  font-family: inherit;
+  transition: color 0.15s;
+}
+
+.thinking-block__header:hover {
+  color: var(--text-secondary);
+}
+
+.thinking-block__icon {
+  color: #e8a068;
+  flex-shrink: 0;
+}
+
+.thinking-block--streaming .thinking-block__icon {
+  animation: thinking-pulse 1.5s ease-in-out infinite;
+}
+
+.thinking-block__label {
+  font-weight: 500;
+}
+
+.thinking-block--streaming .thinking-block__label {
+  animation: thinking-glow 2s ease-in-out infinite;
+}
+
+.thinking-block__chevron {
+  transition: transform 0.15s;
+  flex-shrink: 0;
+}
+
+.thinking-block__chevron--open {
+  transform: rotate(90deg);
+}
+
+.thinking-block__content {
+  padding: 8px 0 4px 21px;
+  border-left: 2px solid var(--border);
+  margin-left: 7px;
+}
+
+.thinking-block__text {
+  font-family: inherit;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--text-subtle);
+  white-space: pre-wrap;
+  word-break: break-word;
+  margin: 0;
+}
+
+.thinking-block--streaming .thinking-block__text {
+  animation: thinking-glow 2s ease-in-out infinite;
+}
+
+@keyframes thinking-pulse {
+  0%,
+  100% {
+    opacity: 0.6;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+@keyframes thinking-glow {
+  0%,
+  100% {
+    opacity: 0.5;
+  }
+  50% {
+    opacity: 0.85;
+  }
 }
 
 /* ═══════════════════════════════════════════════════════════════════

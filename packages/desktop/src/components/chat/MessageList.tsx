@@ -156,7 +156,17 @@ export function MessageList({ messages }: Props) {
         <AnimatePresence mode="popLayout">
           {grouped.map((item, idx) => {
             if (item.type === 'message') {
-              return <MessageBubble key={item.message.id} message={item.message} />
+              // Find if this is the last thinking message (for streaming indicator)
+              const isLastThinking = item.message.isThinking
+                ? !grouped.slice(idx + 1).some((g) => g.type === 'message' && g.message.isThinking)
+                : false
+              return (
+                <MessageBubble
+                  key={item.message.id}
+                  message={item.message}
+                  isLastThinking={isLastThinking}
+                />
+              )
             }
             if (item.type === 'task_section') {
               return (

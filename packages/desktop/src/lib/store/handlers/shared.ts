@@ -15,6 +15,8 @@ export interface MessageContext {
   addMsg: (msg: ChatMessage) => void
   /** Append text to the current assistant message in the correct conversation */
   appendText: (content: string) => void
+  /** Append thinking text to the current thinking message in the correct conversation */
+  appendThinking: (content: string) => void
   /** The raw AI message */
   msg: AiMessage
 }

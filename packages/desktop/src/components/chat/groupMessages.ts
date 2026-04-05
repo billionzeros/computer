@@ -30,7 +30,7 @@ export type GroupedItem =
  * These get merged with their following tool actions into task_section items.
  */
 function isStepNarration(msg: ChatMessage): boolean {
-  if (msg.role !== 'assistant') return false
+  if (msg.role !== 'assistant' || msg.isThinking) return false
   const text = msg.content.trim()
   // Must be short (step title, not a full response)
   if (text.length > 120 || text.length < 3) return false

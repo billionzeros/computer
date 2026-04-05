@@ -66,6 +66,13 @@ export function handleWsMessage(channel: number, msg: IncomingMessage): void {
       store.appendAssistantTextToSession(msgSessionId, content)
     }
   }
+  const appendThinking = (content: string) => {
+    if (isForActiveSession) {
+      store.appendThinkingText(content)
+    } else if (msgSessionId) {
+      store.appendThinkingTextToSession(msgSessionId, content)
+    }
+  }
 
   // ── Sync-first gate ──
   const syncExempt = new Set([
@@ -125,6 +132,7 @@ export function handleWsMessage(channel: number, msg: IncomingMessage): void {
     isForActiveSession,
     addMsg,
     appendText,
+    appendThinking,
     msg: aiMsg,
   }
 

@@ -132,11 +132,14 @@ export function Sidebar({ onViewChange, onOpenSettings }: Props) {
   const handleNewTask = () => {
     const sessionId = `sess_${Date.now().toString(36)}`
     const ss = sessionStore.getState()
-    newConversation(undefined, sessionId, activeProjectId ?? undefined)
+    // In chat mode, always use the default project (My Computer)
+    // In computer mode, use the active project
+    const projectId = activeMode === 'chat' ? defaultProjectId : (activeProjectId ?? undefined)
+    newConversation(undefined, sessionId, projectId)
     sessionStore.getState().createSession(sessionId, {
       provider: ss.currentProvider,
       model: ss.currentModel,
-      projectId: activeProjectId ?? undefined,
+      projectId,
     })
     if (activeMode === 'computer') {
       setActiveView('chat')

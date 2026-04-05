@@ -10,7 +10,15 @@
     "eval": "tsx src/evals/index.ts",
     "eval:tools": "tsx src/evals/index.ts tools",
     "eval:safety": "tsx src/evals/index.ts safety",
-    "eval:quality": "tsx src/evals/index.ts quality"
+    "eval:quality": "tsx src/evals/index.ts quality",
+    "eval:lead-scanner": "tsx src/evals/index.ts lead-scanner",
+    "eval:lead-scorer": "tsx src/evals/index.ts lead-scorer",
+    "eval:outreach-writer": "tsx src/evals/index.ts outreach-writer",
+    "eval:workflows": "tsx src/evals/index.ts workflows",
+    "eval:code": "tsx src/evals/index.ts code",
+    "eval:planning": "tsx src/evals/index.ts planning",
+    "eval:context": "tsx src/evals/index.ts context",
+    "eval:chat": "tsx src/evals/index.ts chat"
   },
   "dependencies": {
     "@anton/agent-config": "workspace:*",

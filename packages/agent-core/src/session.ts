@@ -32,7 +32,7 @@ import type {
   AgentEvent as PiAgentEvent,
 } from '@mariozechner/pi-agent-core'
 import { completeSimple, getModel as piGetModel } from '@mariozechner/pi-ai'
-import type { Api, ImageContent, Model, TextContent } from '@mariozechner/pi-ai'
+import type { Api, ImageContent, Model, TextContent, ThinkingContent } from '@mariozechner/pi-ai'
 import { getAntonModel } from './anton-models.js'
 
 /**
@@ -159,6 +159,7 @@ export class Session {
   private lastActiveAt: number
   private clientApiKey?: string // client-provided, never persisted
   private lastEmittedTextLength = 0 // track delta for streaming
+  private lastEmittedThinkingLength = 0 // track delta for thinking streaming
   // Pending tool calls for artifact detection
   private pendingToolCalls = new Map<string, { name: string; input: Record<string, unknown> }>()
   // Injected event push — set during processMessage so tools can emit events
@@ -194,6 +195,7 @@ export class Session {
 
   // Braintrust tracing
   private parentTraceSpan?: Span // when this is a sub-agent, inherit parent's span
+  private workflowMetadata?: { workflowId: string; agentKey: string; promptVersion: string }
   currentTraceSpan?: Span // current turn's trace span (exposed for sub-agent threading)
   private _promptVersion?: string // hash of assembled system prompt
 
@@ -232,7 +234,9 @@ export class Session {
     maxTokenBudget?: number // max total tokens before aborting (0 = unlimited)
     maxDurationMs?: number // max wall-clock time for processMessage (0 = unlimited)
     maxTurns?: number // max LLM turns per processMessage call (0 = unlimited)
+    thinkingLevel?: 'off' | 'minimal' | 'low' | 'medium' | 'high'
     parentTraceSpan?: Span // for sub-agents: nest under parent's trace
+    workflowMetadata?: { workflowId: string; agentKey: string; promptVersion: string }
   }) {
     this.id = opts.id
     this.log = withContext(baseLog, { sessionId: opts.id })
@@ -257,6 +261,7 @@ export class Session {
     this.maxDurationMs = opts.maxDurationMs ?? 0
     this.maxTurns = opts.maxTurns ?? 0
     this.parentTraceSpan = opts.parentTraceSpan
+    this.workflowMetadata = opts.workflowMetadata
 
     // Set up conversation workspace (skip for ephemeral sub-agents)
     if (!this.ephemeral) {
@@ -295,7 +300,7 @@ export class Session {
         systemPrompt: this.getSystemPrompt(),
         tools: opts.tools,
         messages: (opts.existingMessages || []) as AgentMessage[],
-        thinkingLevel: 'off',
+        thinkingLevel: model.reasoning ? (opts.thinkingLevel ?? 'medium') : 'off',
       },
       // Dynamic API key resolution — called on every LLM call
       getApiKey: async (provider: string) => {
@@ -528,6 +533,7 @@ export class Session {
   ): AsyncGenerator<SessionEvent> {
     this.lastActiveAt = Date.now()
     this.lastEmittedTextLength = 0 // reset delta tracking for new turn
+    this.lastEmittedThinkingLength = 0
     this._turnCount = 0
     this._processStartedAt = Date.now()
     let trimmedMessage = userMessage.trim()
@@ -599,6 +605,13 @@ export class Session {
     let assistantText = ''
 
     // Braintrust tracing: start a span for this turn (nested under parent if sub-agent)
+    const wfMeta = this.workflowMetadata
+      ? {
+          workflowId: this.workflowMetadata.workflowId,
+          workflowAgentKey: this.workflowMetadata.agentKey,
+          workflowPromptVersion: this.workflowMetadata.promptVersion,
+        }
+      : {}
     const traceSpan = this.parentTraceSpan
       ? startChildTrace(this.parentTraceSpan, {
           name: 'sub-agent-turn',
@@ -610,10 +623,13 @@ export class Session {
             ephemeral: this.ephemeral,
             turnNumber: this._turnCount,
             promptVersion: this._promptVersion,
+            ...wfMeta,
           },
         })
       : startTrace({
-          name: 'agent-turn',
+          name: this.workflowMetadata
+            ? `workflow-agent:${this.workflowMetadata.agentKey}`
+            : 'agent-turn',
           input: { message: userMessage, attachments: attachments.length },
           metadata: {
             sessionId: this.id,
@@ -622,6 +638,7 @@ export class Session {
             ephemeral: this.ephemeral,
             turnNumber: this._turnCount,
             promptVersion: this._promptVersion,
+            ...wfMeta,
           },
         })
     this.currentTraceSpan = traceSpan ?? undefined
@@ -1275,15 +1292,33 @@ export class Session {
       case 'message_update': {
         const msg = piEvent.message
         if (msg.role === 'assistant') {
+          const events: SessionEvent[] = []
+
+          // Extract thinking content
+          const thinkingParts = msg.content.filter(
+            (c): c is ThinkingContent => c.type === 'thinking',
+          )
+          if (thinkingParts.length > 0) {
+            const fullThinking = thinkingParts.map((c) => c.thinking).join('')
+            if (fullThinking.length > this.lastEmittedThinkingLength) {
+              const delta = fullThinking.slice(this.lastEmittedThinkingLength)
+              this.lastEmittedThinkingLength = fullThinking.length
+              events.push({ type: 'thinking', text: delta })
+            }
+          }
+
+          // Extract text content
           const textParts = msg.content.filter((c): c is TextContent => c.type === 'text')
           if (textParts.length > 0) {
             const fullText = textParts.map((c) => c.text).join('')
             if (fullText.length > this.lastEmittedTextLength) {
               const delta = fullText.slice(this.lastEmittedTextLength)
               this.lastEmittedTextLength = fullText.length
-              return [{ type: 'text', content: delta }]
+              events.push({ type: 'text', content: delta })
             }
           }
+
+          return events
         }
         return []
       }
@@ -1799,6 +1834,8 @@ export function createSession(
     agentMemory?: string
     /** Available workflow catalog for auto-suggestion in system prompt */
     availableWorkflows?: { name: string; description: string; whenToUse: string }[]
+    /** Workflow metadata for Braintrust tracing (workflow ID, agent key, prompt version) */
+    workflowMetadata?: { workflowId: string; agentKey: string; promptVersion: string }
   },
 ): Session {
   const provider = opts?.provider || config.defaults.provider
@@ -1847,6 +1884,7 @@ export function createSession(
     agentMemory: opts?.agentMemory,
     availableWorkflows: opts?.availableWorkflows,
     maxDurationMs: opts?.maxDurationMs,
+    workflowMetadata: opts?.workflowMetadata,
   })
   sessionRef.session = session
   session._connectorManager = opts?.connectorManager
@@ -1972,7 +2010,7 @@ function generateSmartTitle(text: string): string {
     )
     .trim()
 
-  if (!cleaned) cleaned = text.trim().replace(/\n/g, ' ')
+  if (!cleaned) return 'New conversation'
 
   // Remove trailing punctuation
   cleaned = cleaned.replace(/[.!?]+$/, '').trim()
@@ -1983,11 +2021,11 @@ function generateSmartTitle(text: string): string {
   )
   if (qMatch) {
     const topic = qMatch[1].replace(/^(?:the|a|an|i|we|you)\s+/i, '').trim()
-    return smartCap(smartTruncate(topic, 40))
+    return smartCap(smartTruncate(topic, 50))
   }
 
   // Capitalize and truncate
-  return smartCap(smartTruncate(cleaned, 40))
+  return smartCap(smartTruncate(cleaned, 50))
 }
 
 function smartTruncate(text: string, max: number): string {
@@ -2001,14 +2039,25 @@ function smartCap(text: string): string {
   return text ? text.charAt(0).toUpperCase() + text.slice(1) : text
 }
 
-const TITLE_MAX_LENGTH = 40
+const TITLE_MAX_LENGTH = 50
 
-const TITLE_SYSTEM_PROMPT = `Generate a short conversation title from the user's first message. Output ONLY the title, nothing else. Rules:
-- Maximum 5 words and 40 characters
+const TITLE_SYSTEM_PROMPT = `Generate a concise, sentence-case title (3-7 words) that captures the main topic or goal of this conversation. Output ONLY the title, nothing else.
+
+Rules:
+- 3-7 words, max 50 characters
+- Sentence case: capitalize only first word and proper nouns
+- Be specific about what the user wants to do
 - No quotes, no punctuation at the end
-- Capitalize like a headline
-- If it's just a greeting, output "New Conversation"
-- Be specific but brief`
+- If it's just a greeting with no substance, output "New Conversation"
+
+Good: "Fix login button on mobile"
+Good: "Debug failing CI pipeline"
+Good: "Set up OAuth authentication"
+Good: "Optimize database query performance"
+Bad (too vague): "Code changes"
+Bad (too vague): "Hey"
+Bad (too long): "Investigate and fix the issue where login fails on mobile devices"
+Bad (wrong case): "Fix Login Button On Mobile"`
 
 /**
  * Use the LLM to generate a meaningful conversation title from the first message.

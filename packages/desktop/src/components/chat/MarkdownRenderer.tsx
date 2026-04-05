@@ -76,8 +76,21 @@ function CitationPill({ index, source }: { index: number; source?: CitationSourc
   )
 }
 
+/**
+ * Strip <think>…</think> blocks that some models (DeepSeek, QwQ, etc.)
+ * include inline in their text output. Also handles the streaming case
+ * where the closing tag hasn't arrived yet.
+ */
+function stripThinkTags(text: string): string {
+  // Remove complete <think>…</think> blocks (dotall)
+  let result = text.replace(/<think>[\s\S]*?<\/think>/g, '')
+  // Remove an unclosed <think>… at the end (still streaming)
+  result = result.replace(/<think>[\s\S]*$/g, '')
+  return result.trim()
+}
+
 export function MarkdownRenderer({ content, citations }: Props) {
-  const processedContent = injectCitationLinks(content)
+  const processedContent = injectCitationLinks(stripThinkTags(content))
 
   return (
     <div className="markdown-body">

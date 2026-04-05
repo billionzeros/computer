@@ -30,7 +30,6 @@ function DebugPanel({ onClose }: { onClose: () => void }) {
   const agentStatus = sessionStore((s) => s.agentStatus)
   const agentStatusDetail = sessionStore((s) => s.agentStatusDetail)
   const connectionStatus = useStore((s) => s.connectionStatus)
-  const currentAssistantMsgId = useStore((s) => s._currentAssistantMsgId)
   const workingStartedAt = sessionStore((s) => s.workingStartedAt)
   const workingSessionId = sessionStore((s) => s.workingSessionId)
   const sessionStates = sessionStore((s) => s.sessionStates)
@@ -102,7 +101,7 @@ function DebugPanel({ onClose }: { onClose: () => void }) {
         />
       )}
       {workingSessionId && <Row label="Working session" value={workingSessionId.slice(0, 12)} />}
-      <Row label="Assist msg ID" value={currentAssistantMsgId || '(none)'} />
+      <Row label="Assist msg ID" value="(per-session)" />
       <Row
         label="Streaming"
         value={(() => {

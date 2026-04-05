@@ -38,5 +38,5 @@ export {
   assembleConversationContext,
 } from './context.js'
 export { executePublish, type PublishInput } from './tools/publish.js'
-export { initTracing, flushTraces } from './tracing.js'
+export { initTracing, flushTraces, hashPromptVersion } from './tracing.js'
 export { closeBrowserSession } from './tools/browser.js'

@@ -27,6 +27,36 @@ export interface EvalDataset {
   cases: EvalCase[]
 }
 
+// ── Workflow eval types ─────────────────────────────────────────────
+
+/** A workflow-specific eval case with structured expectations. */
+export interface WorkflowEvalCase extends EvalCase {
+  /** Workflow ID (e.g. "lead-qualification"). */
+  workflowId?: string
+  /** Agent key within the workflow (e.g. "lead-scanner"). */
+  agentKey?: string
+  /** Expected extracted fields — scored by fraction found in output. */
+  expectedFields?: Record<string, string>
+  /** Expected score range [min, max] — scored by proximity. */
+  expectedScoreRange?: [number, number]
+  /** Expected classification tier (e.g. "hot", "warm", "cool", "skip"). */
+  expectedTier?: string
+  /** Quality criteria the output should satisfy (for LLM-as-judge scoring). */
+  qualityCriteria?: string[]
+}
+
+/** Result from a workflow eval with parsed structured data. */
+export interface WorkflowEvalResult extends EvalResult {
+  /** Fields parsed from the agent's output. */
+  parsedFields?: Record<string, string>
+  /** Score parsed from the agent's output. */
+  parsedScore?: number
+  /** Tier parsed from the agent's output. */
+  parsedTier?: string
+}
+
+// ── Base eval types ─────────────────────────────────────────────────
+
 /** Result from running a single eval case through the agent. */
 export interface EvalResult {
   /** The user input that was sent. */

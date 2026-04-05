@@ -22,10 +22,10 @@ export function handleToolMessage(msg: AiMessage, ctx: MessageContext): boolean 
       }
       // Reset assistant message tracking so text after this tool call creates a new bubble
       if (!msg.parentToolCallId) {
-        if (ctx.isForActiveSession) {
-          useStore.setState({ _currentAssistantMsgId: null })
-        } else if (ctx.msgSessionId) {
-          useStore.getState()._sessionAssistantMsgIds.delete(ctx.msgSessionId)
+        const sid =
+          ctx.msgSessionId || useStore.getState().getActiveConversation()?.sessionId
+        if (sid) {
+          useStore.getState()._sessionAssistantMsgIds.delete(sid)
         }
       }
       ss._toolCallNames.set(msg.id, { name: msg.name, input: msg.input })

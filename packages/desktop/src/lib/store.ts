@@ -30,6 +30,7 @@ export interface ChatMessage {
   toolName?: string
   toolInput?: Record<string, unknown>
   isError?: boolean
+  isThinking?: boolean // thinking/reasoning content from the model
   parentToolCallId?: string // set when this message is from a sub-agent
   isSteering?: boolean // sent while agent was working
 }
@@ -103,10 +104,10 @@ interface AppState {
   sidebarTab: SidebarTab
   searchQuery: string
 
-  // Current assistant message ID (for appending text across tool interruptions)
-  _currentAssistantMsgId: string | null
-  // Per-session assistant message tracking (for multi-conversation isolation)
+  // Per-session assistant message tracking (keyed by sessionId for isolation)
   _sessionAssistantMsgIds: Map<string, string>
+  // Per-session thinking message tracking (keyed by sessionId for isolation)
+  _sessionThinkingMsgIds: Map<string, string>
 
   // Citations: maps assistant message ID → sources extracted from web_search
   citations: Map<string, CitationSource[]>
@@ -152,6 +153,8 @@ interface AppState {
   addMessageToSession: (sessionId: string, msg: ChatMessage) => void
   appendAssistantText: (content: string) => void
   appendAssistantTextToSession: (sessionId: string, content: string) => void
+  appendThinkingText: (content: string) => void
+  appendThinkingTextToSession: (sessionId: string, content: string) => void
   replaceAssistantText: (search: string, replacement: string, sessionId?: string) => void
   getActiveConversation: () => Conversation | null
   getActiveAgentSession: () => import('@anton/protocol').AgentSession | null
@@ -191,8 +194,8 @@ export const useStore = create<AppState>((set, get) => {
     activeConversationId: restoredActiveId,
     sidebarTab: 'history',
     searchQuery: '',
-    _currentAssistantMsgId: null,
     _sessionAssistantMsgIds: new Map(),
+    _sessionThinkingMsgIds: new Map(),
     citations: new Map(),
     _pendingCitationSourcesQueue: [],
     _pendingWebSearchToolCallIds: new Set(),
@@ -408,14 +411,18 @@ export const useStore = create<AppState>((set, get) => {
           return state
         }
 
+        const conv = state.conversations.find((c) => c.id === activeId)
+        const sessionId = conv?.sessionId
         let newMsgId: string | null = null
 
         const conversations = state.conversations.map((c) => {
           if (c.id !== activeId) return c
           const messages = [...c.messages]
 
-          // Find the tracked assistant message, or the last assistant message
-          const targetId = state._currentAssistantMsgId
+          // Use per-session tracking to find the target message
+          const targetId = sessionId
+            ? (state._sessionAssistantMsgIds.get(sessionId) ?? null)
+            : null
           const idx = targetId ? messages.findIndex((m) => m.id === targetId) : -1
 
           if (idx >= 0) {
@@ -435,6 +442,11 @@ export const useStore = create<AppState>((set, get) => {
           return { ...c, messages, updatedAt: Date.now() }
         })
 
+        // Track in per-session map
+        if (newMsgId && sessionId) {
+          state._sessionAssistantMsgIds.set(sessionId, newMsgId)
+        }
+
         saveConversations(conversations)
         // Associate pending citation sources with new assistant message
         const citationUpdate: Record<string, unknown> = {}
@@ -446,7 +458,6 @@ export const useStore = create<AppState>((set, get) => {
         }
         return {
           conversations,
-          ...(newMsgId ? { _currentAssistantMsgId: newMsgId } : {}),
           ...citationUpdate,
         }
       })
@@ -503,6 +514,81 @@ export const useStore = create<AppState>((set, get) => {
       })
     },
 
+    appendThinkingText: (content) => {
+      set((state) => {
+        const activeId = state.activeConversationId
+        if (!activeId) return state
+
+        const conv = state.conversations.find((c) => c.id === activeId)
+        const sessionId = conv?.sessionId
+        let newMsgId: string | null = null
+
+        const conversations = state.conversations.map((c) => {
+          if (c.id !== activeId) return c
+          const messages = [...c.messages]
+          const targetId = sessionId
+            ? (state._sessionThinkingMsgIds.get(sessionId) ?? null)
+            : null
+          const idx = targetId ? messages.findIndex((m) => m.id === targetId) : -1
+
+          if (idx >= 0) {
+            const target = messages[idx]
+            messages[idx] = { ...target, content: target.content + content }
+          } else {
+            newMsgId = `think_${Date.now()}`
+            messages.push({
+              id: newMsgId,
+              role: 'assistant',
+              content,
+              isThinking: true,
+              timestamp: Date.now(),
+            })
+          }
+          return { ...c, messages, updatedAt: Date.now() }
+        })
+
+        // Track in per-session map
+        if (newMsgId && sessionId) {
+          state._sessionThinkingMsgIds.set(sessionId, newMsgId)
+        }
+
+        return { conversations }
+      })
+    },
+
+    appendThinkingTextToSession: (sessionId, content) => {
+      set((state) => {
+        const conv = state.conversations.find((c) => c.sessionId === sessionId)
+        if (!conv) return state
+
+        const conversations = state.conversations.map((c) => {
+          if (c.sessionId !== sessionId) return c
+          const messages = [...c.messages]
+          const targetId = state._sessionThinkingMsgIds.get(sessionId) ?? null
+          const idx = targetId ? messages.findIndex((m) => m.id === targetId) : -1
+
+          if (idx >= 0) {
+            const target = messages[idx]
+            messages[idx] = { ...target, content: target.content + content }
+          } else {
+            const newId = `think_${Date.now()}`
+            messages.push({
+              id: newId,
+              role: 'assistant',
+              content,
+              isThinking: true,
+              timestamp: Date.now(),
+            })
+            state._sessionThinkingMsgIds.set(sessionId, newId)
+          }
+          return { ...c, messages, updatedAt: Date.now() }
+        })
+
+        saveConversations(conversations)
+        return { conversations }
+      })
+    },
+
     replaceAssistantText: (search, replacement, sessionId?) => {
       set((state) => {
         // Find the conversation — by sessionId or active
@@ -511,10 +597,11 @@ export const useStore = create<AppState>((set, get) => {
           : state.conversations.find((c) => c.id === state.activeConversationId)
         if (!conv) return state
 
-        // Find the current assistant message
-        const targetId = sessionId
-          ? state._sessionAssistantMsgIds.get(sessionId)
-          : state._currentAssistantMsgId
+        // Find the current assistant message — always use per-session tracking
+        const resolvedSessionId = sessionId || conv.sessionId
+        const targetId = resolvedSessionId
+          ? state._sessionAssistantMsgIds.get(resolvedSessionId)
+          : undefined
         if (!targetId) return state
 
         const conversations = state.conversations.map((c) => {
@@ -678,8 +765,8 @@ export const useStore = create<AppState>((set, get) => {
       set({
         // KEEP: conversations, activeConversationId — user's chat history persists
         // Clear conversation-level transient state
-        _currentAssistantMsgId: null,
         _sessionAssistantMsgIds: new Map(),
+        _sessionThinkingMsgIds: new Map(),
         citations: new Map(),
         _pendingCitationSourcesQueue: [],
         _pendingWebSearchToolCallIds: new Set(),
@@ -699,8 +786,8 @@ export const useStore = create<AppState>((set, get) => {
       set({
         conversations: [],
         activeConversationId: null,
-        _currentAssistantMsgId: null,
         _sessionAssistantMsgIds: new Map(),
+        _sessionThinkingMsgIds: new Map(),
         citations: new Map(),
         _pendingCitationSourcesQueue: [],
         _pendingWebSearchToolCallIds: new Set(),

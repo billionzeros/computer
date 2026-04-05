@@ -31,17 +31,19 @@ export function handleChatMessage(msg: AiMessage, ctx: MessageContext): boolean 
           ss.updateSessionState(textSessionId, { isStreaming: true })
         }
       }
+      // Reset thinking message tracking — text arriving means thinking phase is done
+      if (textSessionId) {
+        useStore.getState()._sessionThinkingMsgIds.delete(textSessionId)
+      }
       ctx.appendText(textContent)
       return true
     }
 
     case 'thinking': {
-      ctx.addMsg({
-        id: `think_${Date.now()}`,
-        role: 'system',
-        content: msg.text,
-        timestamp: Date.now(),
-      })
+      const thinkContent = msg.text ?? ''
+      if (thinkContent) {
+        ctx.appendThinking(thinkContent)
+      }
       sessionStore.getState().setAgentStatus('working', ctx.msgSessionId)
       return true
     }

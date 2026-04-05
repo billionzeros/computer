@@ -102,7 +102,7 @@ const ANTON_MODELS: AntonModelDef[] = [
   {
     id: 'claude-opus-4.6',
     name: 'Claude Opus 4.6',
-    reasoning: false,
+    reasoning: true,
     input: ['text', 'image'],
     cost: { input: 5, output: 25, cacheRead: 0, cacheWrite: 0 },
     contextWindow: 1_000_000,
@@ -111,7 +111,7 @@ const ANTON_MODELS: AntonModelDef[] = [
   {
     id: 'claude-sonnet-4.6',
     name: 'Claude Sonnet 4.6',
-    reasoning: false,
+    reasoning: true,
     input: ['text', 'image'],
     cost: { input: 3, output: 15, cacheRead: 0, cacheWrite: 0 },
     contextWindow: 200_000,
@@ -120,7 +120,7 @@ const ANTON_MODELS: AntonModelDef[] = [
   {
     id: 'claude-sonnet-4.5',
     name: 'Claude Sonnet 4.5',
-    reasoning: false,
+    reasoning: true,
     input: ['text', 'image'],
     cost: { input: 3, output: 15, cacheRead: 0, cacheWrite: 0 },
     contextWindow: 1_000_000,
@@ -138,7 +138,7 @@ const ANTON_MODELS: AntonModelDef[] = [
   {
     id: 'claude-sonnet-4',
     name: 'Claude Sonnet 4',
-    reasoning: false,
+    reasoning: true,
     input: ['text', 'image'],
     cost: { input: 3, output: 15, cacheRead: 0, cacheWrite: 0 },
     contextWindow: 200_000,
@@ -167,7 +167,7 @@ const ANTON_MODELS: AntonModelDef[] = [
   {
     id: 'gemini-2.5-pro',
     name: 'Gemini 2.5 Pro',
-    reasoning: false,
+    reasoning: true,
     input: ['text', 'image'],
     cost: { input: 1.25, output: 10, cacheRead: 0, cacheWrite: 0 },
     contextWindow: 1_000_000,
@@ -176,7 +176,7 @@ const ANTON_MODELS: AntonModelDef[] = [
   {
     id: 'gemini-2.5-flash',
     name: 'Gemini 2.5 Flash',
-    reasoning: false,
+    reasoning: true,
     input: ['text', 'image'],
     cost: { input: 0.15, output: 0.6, cacheRead: 0, cacheWrite: 0 },
     contextWindow: 1_000_000,

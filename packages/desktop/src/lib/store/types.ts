@@ -23,6 +23,7 @@ export interface ChatMessage {
   toolName?: string
   toolInput?: Record<string, unknown>
   isError?: boolean
+  isThinking?: boolean
   parentToolCallId?: string
   isSteering?: boolean
 }

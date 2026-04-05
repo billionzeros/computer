@@ -69,6 +69,7 @@ import {
   type SubAgentEventHandler,
   createSession,
   executePublish,
+  hashPromptVersion,
   resumeSession,
 } from '@anton/agent-core'
 import { CONNECTOR_FACTORIES, ConnectorManager } from '@anton/connectors'
@@ -2111,6 +2112,14 @@ export class AgentServer {
       agentInstructions,
       agentMemory,
       availableWorkflows: this.getAvailableWorkflowsForPrompt(),
+      workflowMetadata:
+        agentWorkflowId && agentWorkflowKey && agentInstructions
+          ? {
+              workflowId: agentWorkflowId,
+              agentKey: agentWorkflowKey,
+              promptVersion: hashPromptVersion(agentInstructions),
+            }
+          : undefined,
     }
   }
 

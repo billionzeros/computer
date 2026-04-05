@@ -212,10 +212,10 @@ export function handleInteractionMessage(msg: AiMessage, ctx: MessageContext): b
         }
       }
 
-      // Clear assistant message tracking
-      useStore.setState({ _currentAssistantMsgId: null })
-      if (ctx.msgSessionId) {
-        store._sessionAssistantMsgIds.delete(ctx.msgSessionId)
+      // Clear per-session message tracking
+      if (doneSessionId) {
+        store._sessionAssistantMsgIds.delete(doneSessionId)
+        store._sessionThinkingMsgIds.delete(doneSessionId)
       }
 
       if (msg.usage) {

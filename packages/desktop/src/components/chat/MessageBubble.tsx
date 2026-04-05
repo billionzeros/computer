@@ -1,12 +1,15 @@
 import { motion } from 'framer-motion'
 import { AlertTriangle } from 'lucide-react'
 import { type ChatMessage, useStore } from '../../lib/store.js'
+import { sessionStore } from '../../lib/store/sessionStore.js'
 import { MarkdownRenderer } from './MarkdownRenderer.js'
 import { SourceCards } from './SourceCards.js'
+import { ThinkingBlock } from './ThinkingBlock.js'
 import { ToolCallBlock } from './ToolCallBlock.js'
 
 interface Props {
   message: ChatMessage
+  isLastThinking?: boolean
 }
 
 function attachmentSrc(message: ChatMessage, index: number): string | undefined {
@@ -14,8 +17,9 @@ function attachmentSrc(message: ChatMessage, index: number): string | undefined 
   return attachment?.data ? `data:${attachment.mimeType};base64,${attachment.data}` : undefined
 }
 
-export function MessageBubble({ message }: Props) {
+export function MessageBubble({ message, isLastThinking }: Props) {
   const citations = useStore((s) => s.citations.get(message.id))
+  const isAgentWorking = sessionStore((s) => s.agentStatus === 'working')
 
   return (
     <motion.div
@@ -52,7 +56,11 @@ export function MessageBubble({ message }: Props) {
         </div>
       )}
 
-      {message.role === 'assistant' && (
+      {message.role === 'assistant' && message.isThinking && (
+        <ThinkingBlock content={message.content} isStreaming={isLastThinking && isAgentWorking} />
+      )}
+
+      {message.role === 'assistant' && !message.isThinking && (
         <div className="message__surface message__surface--assistant">
           {citations && citations.length > 0 && <SourceCards sources={citations} />}
           <MarkdownRenderer content={message.content} citations={citations} />

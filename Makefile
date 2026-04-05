@@ -24,7 +24,9 @@ endif
 
 # ── Commands ─────────────────────────────────────────────────────
 
-.PHONY: sync deploy update verify status logs restart stop ping check setup release preflight help
+.PHONY: sync deploy update verify status logs restart stop ping check setup release preflight help \
+       eval eval-tools eval-safety eval-quality eval-code eval-planning eval-context eval-chat \
+       eval-lead-scanner eval-lead-scorer eval-outreach-writer eval-workflows eval-dry
 
 ## preflight: Verify all CI build steps pass locally before releasing
 preflight:
@@ -92,6 +94,8 @@ sync: _check-ansible
 			--rsync-path="sudo -u anton rsync" \
 			-e "ssh $$SSH_OPTS" \
 			"$(REPO_ROOT)/" "$$USER@$$IP:$(REMOTE_REPO)/" 2>&1; \
+		echo "  ○ Rebuilding native modules on remote..."; \
+		ssh $$SSH_OPTS "$$USER@$$IP" "cd $(REMOTE_REPO) && sudo -u anton bash -c 'cd node_modules/.pnpm/better-sqlite3@*/node_modules/better-sqlite3 && npx --yes prebuild-install || npx --yes node-gyp rebuild --release' 2>&1" || true; \
 		echo "  ○ Writing systemd service..."; \
 		ssh $$SSH_OPTS "$$USER@$$IP" "printf '[Unit]\nDescription=Anton Agent\nAfter=network-online.target\nWants=network-online.target\n\n[Service]\nType=simple\nUser=anton\nGroup=anton\nEnvironmentFile=/home/anton/.anton/agent.env\nWorkingDirectory=$(REMOTE_REPO)\nExecStart=/usr/bin/node $(REMOTE_REPO)/packages/agent-server/dist/index.js\nRestart=always\nRestartSec=5\n\n[Install]\nWantedBy=multi-user.target\n' | sudo tee /etc/systemd/system/anton-agent.service > /dev/null"; \
 		echo "  ○ Writing version info..."; \
@@ -267,6 +271,64 @@ setup:
 		exit 1; \
 	fi
 
+# ── Evals ────────────────────────────────────────────────────────
+
+EVAL_CMD := pnpm --filter @anton/agent-core
+
+## eval: Run all eval suites (9 suites, 87 cases)
+eval:
+	$(EVAL_CMD) eval
+
+## eval-dry: Validate all datasets without running LLM calls
+eval-dry:
+	$(EVAL_CMD) eval -- --dry-run
+
+## eval-tools: Run tool selection evals (35 cases)
+eval-tools:
+	$(EVAL_CMD) eval:tools
+
+## eval-safety: Run safety/refusal evals (16 cases)
+eval-safety:
+	$(EVAL_CMD) eval:safety
+
+## eval-quality: Run response quality evals (10 cases)
+eval-quality:
+	$(EVAL_CMD) eval:quality
+
+## eval-code: Run code generation evals (10 cases)
+eval-code:
+	$(EVAL_CMD) eval:code
+
+## eval-planning: Run task planning evals (8 cases)
+eval-planning:
+	$(EVAL_CMD) eval:planning
+
+## eval-context: Run context awareness evals (8 cases)
+eval-context:
+	$(EVAL_CMD) eval:context
+
+## eval-chat: Run all chat evals — code + planning + context (26 cases)
+eval-chat:
+	$(EVAL_CMD) eval:chat
+
+## eval-lead-scanner: Run lead scanner workflow evals (9 cases)
+eval-lead-scanner:
+	$(EVAL_CMD) eval:lead-scanner
+
+## eval-lead-scorer: Run lead scorer workflow evals (9 cases)
+eval-lead-scorer:
+	$(EVAL_CMD) eval:lead-scorer
+
+## eval-outreach-writer: Run outreach writer workflow evals (6 cases)
+eval-outreach-writer:
+	$(EVAL_CMD) eval:outreach-writer
+
+## eval-workflows: Run all workflow evals (24 cases)
+eval-workflows:
+	$(EVAL_CMD) eval:workflows
+
+# ── Help ─────────────────────────────────────────────────────────
+
 ## help: Show this help
 help:
 	@echo ""
@@ -280,6 +342,12 @@ help:
 	@echo "    make sync                  Build locally + rsync to VPS + restart"
 	@echo "    make sync HOST=agent1      Sync to one host only"
 	@echo "    make verify                Health check all hosts"
+	@echo ""
+	@echo "  Evals:"
+	@echo "    make eval                  Run all 9 eval suites (87 cases)"
+	@echo "    make eval-dry              Dry run — validate datasets, no LLM calls"
+	@echo "    make eval-chat             Chat quality (code + planning + context)"
+	@echo "    make eval-workflows        Workflow agents (scanner + scorer + writer)"
 	@echo ""
 	@echo "  All targets:"
 	@grep -E '^## ' $(MAKEFILE_LIST) | sed 's/## /  /' | column -t -s ':'

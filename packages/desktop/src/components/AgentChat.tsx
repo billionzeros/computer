@@ -68,7 +68,7 @@ export function AgentChat() {
 
       // No conversations at all — create a fresh one
       const sessionId = `sess_${Date.now().toString(36)}`
-      const projectId = ps.activeProjectId ?? undefined
+      const projectId = defaultProject?.id ?? ps.activeProjectId ?? undefined
       store.newConversation(undefined, sessionId, projectId)
       store.registerPendingSession(sessionId)
       const ss = sessionStore.getState()
@@ -89,7 +89,7 @@ export function AgentChat() {
         store.switchConversation(chatConvs[0].id)
       } else {
         const sessionId = `sess_${Date.now().toString(36)}`
-        const projectId = ps.activeProjectId ?? undefined
+        const projectId = defaultProject?.id ?? ps.activeProjectId ?? undefined
         store.newConversation(undefined, sessionId, projectId)
         store.registerPendingSession(sessionId)
         const ss2 = sessionStore.getState()
@@ -124,7 +124,9 @@ export function AgentChat() {
       if (!conv) {
         // No conversation at all — create one
         sessionId = `sess_${Date.now().toString(36)}`
-        const projectId = projectStore.getState().activeProjectId ?? undefined
+        const ps = projectStore.getState()
+        const projectId =
+          ps.projects.find((p) => p.isDefault)?.id ?? ps.activeProjectId ?? undefined
         newConversation(undefined, sessionId, projectId)
         const waitPromise = store.registerPendingSession(sessionId)
         const ss3 = sessionStore.getState()

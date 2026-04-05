@@ -22,7 +22,6 @@ export function ContextPanelContent() {
   const agentStatus = sessionStore((s) => s.agentStatus)
   const activeConversationId = useStore((s) => s.activeConversationId)
   const currentSessionId = sessionStore((s) => s.currentSessionId)
-  const currentAssistantMsgId = useStore((s) => s._currentAssistantMsgId)
   const workingSessionId = sessionStore((s) => s.workingSessionId)
   const sessionAssistantMsgIds = useStore((s) => s._sessionAssistantMsgIds)
 
@@ -167,7 +166,6 @@ export function ContextPanelContent() {
           <KVRow label="Conv sessionId" value={sessionId ?? 'null'} />
           <KVRow label="currentSessionId" value={currentSessionId ?? 'null'} />
           <KVRow label="workingSessionId" value={workingSessionId ?? 'null'} />
-          <KVRow label="_currentAssistantMsgId" value={currentAssistantMsgId ?? 'null'} />
           <KVRow
             label="_sessionAssistantMsgId"
             value={sessionId ? (sessionAssistantMsgIds.get(sessionId) ?? 'null') : 'n/a'}
