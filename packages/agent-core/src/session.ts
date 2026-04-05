@@ -2081,7 +2081,7 @@ async function generateAITitle(
       systemPrompt: TITLE_SYSTEM_PROMPT,
       messages: [{ role: 'user', content: text, timestamp: Date.now() }],
     },
-    { apiKey },
+    { apiKey, reasoning: undefined },
   )
 
   let title = result.content

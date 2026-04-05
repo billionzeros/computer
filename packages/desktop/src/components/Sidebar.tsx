@@ -23,6 +23,7 @@ import {
   Zap,
 } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
+import { sanitizeTitle } from '../lib/conversations.js'
 import { useConnectionStatus, useStore } from '../lib/store.js'
 import { projectStore } from '../lib/store/projectStore.js'
 import { sessionStore } from '../lib/store/sessionStore.js'
@@ -546,7 +547,7 @@ function ConversationItem({
       }}
       className={`sidebar-recent__item${isActive ? ' sidebar-recent__item--active' : ''}`}
     >
-      <span className="sidebar-recent__title">{conv.title}</span>
+      <span className="sidebar-recent__title">{sanitizeTitle(conv.title)}</span>
       {status === 'working' && (
         <Loader2 size={14} strokeWidth={1.5} className="sidebar-status-spinner" />
       )}

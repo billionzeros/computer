@@ -1,5 +1,6 @@
 import { ArrowLeft, BarChart3, Files, ListChecks, Lock, MoreHorizontal } from 'lucide-react'
 import { useCallback, useState } from 'react'
+import { sanitizeTitle } from '../../lib/conversations.js'
 import type { Skill } from '../../lib/skills.js'
 import type { ChatImageAttachment } from '../../lib/store.js'
 import { useStore } from '../../lib/store.js'
@@ -134,7 +135,7 @@ export function TaskDetailView() {
         >
           <ArrowLeft size={16} strokeWidth={1.5} />
         </button>
-        <div className="conv-panel__title">{activeConv?.title || 'New task'}</div>
+        <div className="conv-panel__title">{sanitizeTitle(activeConv?.title || 'New task')}</div>
 
         <div className="conv-panel__actions">
           <button type="button" className="conv-panel__action-btn" aria-label="More options">

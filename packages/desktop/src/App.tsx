@@ -23,6 +23,7 @@ import { SettingsModal } from './components/settings/SettingsModal.js'
 import { SkillsPanel } from './components/skills/SkillsPanel.js'
 import { WorkflowsPage } from './components/workflows/WorkflowsPage.js'
 import { connection } from './lib/connection.js'
+import { sanitizeTitle } from './lib/conversations.js'
 import { useConnectionStatus, useStore } from './lib/store.js'
 import { artifactStore } from './lib/store/artifactStore.js'
 import { connectionStore } from './lib/store/connectionStore.js'
@@ -116,7 +117,7 @@ export function App() {
     } else if (activeView === 'developer') {
       document.title = 'Developer \u2014 anton'
     } else if (activeConv?.title && activeConv.title !== 'New conversation') {
-      document.title = `${activeConv.title} \u2014 anton`
+      document.title = `${sanitizeTitle(activeConv.title)} \u2014 anton`
     } else {
       document.title = 'anton'
     }
@@ -272,7 +273,7 @@ export function App() {
                 <h2 className="workspace-topbar__title">
                   {activeView === 'chat'
                     ? hasMessages
-                      ? activeConv?.title || 'New conversation'
+                      ? sanitizeTitle(activeConv?.title || 'New conversation')
                       : 'New conversation'
                     : activeView === 'memory'
                       ? 'Memory'

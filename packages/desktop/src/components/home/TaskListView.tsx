@@ -1,5 +1,6 @@
 import { AlertCircle, MoreHorizontal, Pencil, Pin, Search, Trash2 } from 'lucide-react'
 import { useCallback, useMemo, useRef, useState } from 'react'
+import { sanitizeTitle } from '../../lib/conversations.js'
 import type { Skill } from '../../lib/skills.js'
 import type { ChatImageAttachment } from '../../lib/store.js'
 import { useStore } from '../../lib/store.js'
@@ -566,7 +567,9 @@ export function TaskListView({ mode }: Props) {
                         className="task-table__col task-table__col--name task-table__col--clickable"
                         onClick={() => handleTaskClick(conv)}
                       >
-                        <span className="task-table__task-title">{conv.title || 'New task'}</span>
+                        <span className="task-table__task-title">
+                          {sanitizeTitle(conv.title || 'New task')}
+                        </span>
                       </button>
                       <div className="task-table__col task-table__col--updated">
                         {formatRelativeTime(conv.updatedAt || conv.createdAt)}
@@ -656,7 +659,9 @@ export function TaskListView({ mode }: Props) {
                   >
                     <StatusIcon status={status} />
                     <div className="task-row__content">
-                      <span className="task-row__name">{conv.title || 'New task'}</span>
+                      <span className="task-row__name">
+                        {sanitizeTitle(conv.title || 'New task')}
+                      </span>
                       {detail && <span className="task-row__detail">{detail}</span>}
                     </div>
                     <span className="task-row__time">

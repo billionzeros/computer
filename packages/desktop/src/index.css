@@ -1809,7 +1809,7 @@ button {
   margin: 0 auto;
   display: flex;
   flex-direction: column;
-  gap: 24px;
+  gap: 6px;
 }
 
 .message-list__loading-older {
@@ -1865,6 +1865,7 @@ button {
 
 .message--user {
   align-items: flex-end;
+  margin-top: 18px;
 }
 
 .message--assistant,

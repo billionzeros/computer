@@ -631,7 +631,7 @@ export const useStore = create<AppState>((set, get) => {
         // Server is always authoritative. Replace local state unconditionally.
         const conversations = state.conversations.map((c) => {
           if (c.sessionId !== sessionId) return c
-          return { ...c, messages: serverMessages, updatedAt: Date.now() }
+          return { ...c, messages: serverMessages }
         })
         saveConversations(conversations)
         return { conversations }
@@ -684,7 +684,7 @@ export const useStore = create<AppState>((set, get) => {
         const newMessages = olderMessages.filter((m) => !existingIds.has(m.id))
         const conversations = state.conversations.map((c) => {
           if (c.sessionId !== sessionId) return c
-          return { ...c, messages: [...newMessages, ...c.messages], updatedAt: Date.now() }
+          return { ...c, messages: [...newMessages, ...c.messages] }
         })
         saveConversations(conversations)
         return { conversations }

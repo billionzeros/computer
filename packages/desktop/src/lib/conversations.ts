@@ -1,5 +1,18 @@
 import type { ChatMessage } from './store.js'
 
+/**
+ * Strip <think>...</think> tags from a title string.
+ * Handles both complete and unclosed tags (from streaming).
+ */
+export function sanitizeTitle(title: string): string {
+  return (
+    title
+      .replace(/<think>[\s\S]*?<\/think>/g, '')
+      .replace(/<think>[\s\S]*$/g, '')
+      .trim() || 'New conversation'
+  )
+}
+
 export interface ConversationContextInfo {
   globalMemories: string[]
   conversationMemories: string[]
