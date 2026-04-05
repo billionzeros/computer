@@ -12,6 +12,12 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versioning: [S
 
 ## [1.0.31] - 2026-04-06
 
+### Other
+- refactor: remove agent and sidecar binary builds from release workflow and manifest
+---
+
+## [1.0.31] - 2026-04-06
+
 ### Features
 - persist thinking
 - sanitize conversation titles by stripping <think> tags and optimize store updates and UI spacing
@@ -261,6 +267,7 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versioning: [S
 ---
 
 [Unreleased]: https://github.com/OmGuptaIND/computer/compare/v1.0.31...HEAD
+[1.0.31]: https://github.com/OmGuptaIND/computer/compare/v$(changelog.match(/## [(d+.d+.d+)]/g)[1].match(/d+.d+.d+/)[0])...v1.0.31
 [1.0.31]: https://github.com/OmGuptaIND/computer/compare/v$(changelog.match(/## [(d+.d+.d+)]/g)[1].match(/d+.d+.d+/)[0])...v1.0.31
 [1.0.30]: https://github.com/OmGuptaIND/computer/compare/v$(changelog.match(/## [(d+.d+.d+)]/g)[1].match(/d+.d+.d+/)[0])...v1.0.30
 [1.0.29]: https://github.com/OmGuptaIND/computer/compare/v$(changelog.match(/## [(d+.d+.d+)]/g)[1].match(/d+.d+.d+/)[0])...v1.0.29

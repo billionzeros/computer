@@ -2,7 +2,7 @@
   "version": "1.0.31",
   "gitHash": "",
   "releaseUrl": "https://github.com/OmGuptaIND/computer/releases",
-  "changelog": "Features:\n- persist thinking\n- sanitize conversation titles by stripping <think> tags and optimize store updates and UI spacing\n- evals\n- allow agents to have shared state using sqllite\n- group sidebar conversations by date, update web search to use OAuth, and add connector build step to release workflow\n\nFixes:\n- modals\n- bugs\n- view\n- issues\n- linting issues\n- global states blunder\n- logging\n- logging\n- linting issues\n- protocol duplication issue\n- linting issues\n- agent arch v2\n- major arch change\n\nAdded:\n- more robust code\n- anton test prompts\n- logging specs\n\nOther:\n- docs: rewrite README with architecture diagrams and full system overview\n- docs: rewrite README with improved branding, story, and clarity\n- Add: sginificant changes",
-  "publishedAt": "2026-04-05T19:27:23.223Z",
+  "changelog": "Other:\n- refactor: remove agent and sidecar binary builds from release workflow and manifest",
+  "publishedAt": "2026-04-05T19:38:20.824Z",
   "cli": "https://github.com/OmGuptaIND/computer/releases/download/v1.0.31/anton-cli.mjs"
 }
