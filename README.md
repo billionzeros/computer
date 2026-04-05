@@ -1,270 +1,212 @@
-<p align="center">
-  <h1 align="center">anton.computer</h1>
-  <p align="center">
-    <strong>A computer that thinks. Your AI agent, on your server, 24/7.</strong>
-  </p>
-  <p align="center">
-    <a href="https://github.com/OmGuptaIND/computer/blob/main/LICENSE"><img src="https://img.shields.io/badge/license-Apache%202.0-blue.svg" alt="License"></a>
-    <a href="https://github.com/OmGuptaIND/computer/releases"><img src="https://img.shields.io/github/v/release/OmGuptaIND/computer" alt="Release"></a>
-    <a href="https://github.com/OmGuptaIND/computer/issues"><img src="https://img.shields.io/github/issues/OmGuptaIND/computer" alt="Issues"></a>
-    <a href="https://antoncomputer.in"><img src="https://img.shields.io/badge/website-antoncomputer.in-orange" alt="Website"></a>
-  </p>
-</p>
+# antoncomputer.in
+
+> **A computer that thinks.**
+
+Give Anton a task. It figures out the rest — writes the code, deploys it, monitors it, and tells you when it's done. Always on. Never stops. Yours.
+
+[![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
+[![GitHub Release](https://img.shields.io/github/v/release/OmGuptaIND/computer)](https://github.com/OmGuptaIND/computer/releases)
+[![Issues](https://img.shields.io/github/issues/OmGuptaIND/computer)](https://github.com/OmGuptaIND/computer/issues)
 
 ---
 
-Anton is an open-source AI agent that lives on your server and does real work autonomously. Not just chat — it executes shell commands, manages files, deploys code, scrapes the web, monitors systems, and remembers everything across sessions. You describe what you need, Anton does it.
+## What is Anton?
 
-**Always on. Never stops. Yours.**
+Anton is an AI agent that lives on its own computer. Not a chatbot. Not a copilot. A machine that runs 24/7, remembers everything, and does the actual work.
 
-## Why Anton?
-
-Most AI tools give you text. Anton gives you **execution**. It runs on a dedicated machine you control — a VPS, a homelab box, a cloud instance — with full shell access and persistent memory.
-
-- **Autonomous work** — Schedule tasks, run cron jobs, monitor systems. Anton works while you sleep.
-- **Real execution** — 20+ tools: shell, filesystem, git, browser, database, networking, and more.
-- **Self-hosted** — Your server, your data. Zero vendor lock-in.
-- **Multi-provider** — Claude, GPT-4, Gemini, Ollama (local), Groq, Together, Mistral, Bedrock, OpenRouter.
-- **Desktop + CLI** — Native Tauri app or terminal client. Your choice.
-- **Persistent memory** — Remembers projects, files, and context across sessions.
-- **Extensible** — Add custom tools and connectors in TypeScript.
-
-## What can Anton do?
+Other AI tools give you text. Anton gives you results:
 
 ```
-"Monitor competitor pricing every 6 hours and alert me when changes happen"
-"Set up a Node.js project with Express, write tests, and deploy it"
-"Scrape 800 companies, categorize by industry, output a spreadsheet"
-"Watch my logs for errors and restart the service if it crashes"
-"Build me a landing page with email capture and deploy it"
+"Monitor my competitor's pricing every 6 hours and alert me when prices change"
+→ Anton set up automated monitoring, takes screenshots, diffs them, emails you summaries.
+
+"Build me a landing page and deploy it"
+→ Anton designed, coded, and deployed. Live URL in 20 minutes.
+
+"Scrape every YC company from the last 3 batches and find ones in my space"
+→ Anton scraped, categorized 800+ companies, exported a filtered spreadsheet.
 ```
 
-Anton doesn't generate code for you to copy-paste. It runs the commands, creates the files, and deploys the result.
+**No templates. No plugins. Just tell it what you need.**
 
-## Quick Start
+---
 
-### Option A: One-line install (recommended)
+## Why "Anton"?
 
+In *Silicon Valley*, Gilfoyle builds a sentient computer and names it **Anton**. Not a chatbot. Not an assistant. A machine that thinks, acts, and runs on its own hardware.
+
+What made Anton special wasn't just intelligence — it was that Anton had **its own space to exist**. Its own processes, its own environment. It could self-improve, run experiments, and keep working after everyone went home.
+
+Then OpenClaw proved the concept: give AI a computer to use and it browses, clicks, writes code, deploys. The breakthrough isn't smarter text. It's **giving AI a machine to work on.**
+
+Gilfoyle was right. We just made it real.
+
+---
+
+## Get Started
+
+### Option 1: Try the Hosted Version
+
+The fastest way to try Anton. We handle the server, you just use it.
+
+👉 **[antoncomputer.in](https://antoncomputer.in)** — Free tier available
+
+### Option 2: Run It Yourself
+
+Want full control? Deploy Anton on your own server.
+
+**One-line install:**
 ```bash
-# On your VPS
 curl -fsSL https://antoncomputer.in/install | bash
 ```
 
-The install script handles everything: downloads the agent binary, sets up systemd, configures your API key, and starts the service.
+The install script handles everything: downloads the agent, sets up systemd, configures your API key, and starts the service.
 
-### Option B: Build from source
+**Prerequisites:**
+- A VPS or server (Ubuntu 20.04+, Debian 11+)
+- An AI provider API key ([Anthropic](https://anthropic.com), [OpenAI](https://openai.com), [Groq](https://groq.com), etc.)
 
-#### Prerequisites
-
-- [Node.js](https://nodejs.org/) 22+
-- [pnpm](https://pnpm.io/) 9+
-- An AI provider API key (Anthropic, OpenAI, etc.)
-
+**Connect to your agent:**
 ```bash
-git clone https://github.com/OmGuptaIND/computer.git
-cd computer
-pnpm install
-pnpm dev          # builds protocol, runs agent + desktop concurrently
-```
+# Desktop app
+Open the app → Enter your server IP and token
 
-### Connect
-
-Open the desktop app, enter your agent's host (e.g. `203.0.113.10:9876`) and token to connect.
-
-Or use the CLI:
-
-```bash
-# Install the CLI
-curl -fsSL https://antoncomputer.in/install | bash --cli
-
-# Connect to your agent
+# Or use the CLI
+curl -fsSL https://antoncomputer.in/install | bash -- --cli
 anton connect 203.0.113.10 --token ak_your_token_here
 ```
 
-## Deploy to Your Server
+---
 
-### Option A: Ansible (recommended for teams)
+## What Can It Do?
 
-```bash
-# 1. Install Ansible
-make setup
+| Category | Examples |
+|----------|----------|
+| **Build & Deploy** | Create projects, write tests, deploy to any cloud |
+| **Monitor & Alert** | Watch services, log errors, restart on crash |
+| **Research & Scrape** | Collect data, categorize companies, generate reports |
+| **Automate** | Run cron jobs, sync files, manage infrastructure |
+| **Create** | Build websites, write docs, generate content |
 
-# 2. Add your VPS to deploy/ansible/inventory.ini
-# [anton_agents]
-# myserver  ansible_host=203.0.113.10  ansible_user=ubuntu  ansible_ssh_private_key_file=~/.ssh/my_key
+Anton doesn't generate code for you to copy-paste. It runs the commands, creates the files, and deploys the result.
 
-# 3. Deploy
-make deploy HOST=myserver API_KEY=sk-ant-api03-xxxxx
+---
 
-# 4. Get your connection token
-ssh ubuntu@203.0.113.10
-cat /home/anton/.anton/config.yaml | grep token
-```
+## Features
 
-Ansible handles everything: Node.js, pnpm, systemd service, firewall, security hardening.
+- **Always on** — Works while you sleep. Schedules tasks, runs cron jobs, monitors systems.
+- **20+ built-in tools** — Shell, filesystem, git, browser, database, web search, and more.
+- **Persistent memory** — Remembers projects, context, and preferences across sessions.
+- **Your choice of AI** — Claude, GPT-4, Gemini, Ollama (local), Groq, Together, Mistral, and more.
+- **Two interfaces** — Native desktop app (Tauri) or terminal CLI.
+- **Extensible** — Add custom tools and connectors in TypeScript.
+- **Self-hosted** — Your server, your data. Zero vendor lock-in.
 
-### Option B: Install Script
-
-```bash
-ssh ubuntu@your-vps
-git clone https://github.com/OmGuptaIND/computer.git ~/.anton/agent
-cd ~/.anton/agent && bash deploy/install.sh
-export ANTHROPIC_API_KEY=sk-ant-...
-~/.anton/start.sh
-```
-
-### Option C: Docker
-
-```bash
-# Clone and configure
-git clone https://github.com/OmGuptaIND/computer.git
-cd computer
-
-# Set your API key
-export ANTHROPIC_API_KEY=sk-ant-...
-
-# Run with Docker Compose
-docker compose -f deploy/docker-compose.yml up -d
-```
+---
 
 ## Architecture
 
 ```
 computer/
 ├── packages/
-│   ├── agent-server/      # WebSocket server (Node.js daemon)
-│   ├── agent-core/        # AI engine, tools, system prompt
-│   ├── agent-config/      # Config loading & validation
-│   ├── agent/             # Agent entry point & binary
-│   ├── cli/               # Terminal client (Ink + WebSocket)
-│   ├── desktop/           # Native app (Tauri v2 + React 19)
-│   └── protocol/          # Shared types & binary codec
-├── desktop/               # Desktop app assets & config
+│   ├── agent-server/      # WebSocket server
+│   ├── agent-core/        # AI engine + tools
+│   ├── agent-config/     # Config loading
+│   ├── cli/               # Terminal client
+│   └── desktop/           # Tauri desktop app
 ├── deploy/
-│   ├── ansible/           # Production deployment playbook
+│   ├── ansible/           # Production deployment
 │   ├── Dockerfile         # Docker image
-│   ├── docker-compose.yml # Docker Compose setup
-│   └── install.sh         # One-command VPS setup
-├── infra-providers/       # Cloud provider Terraform configs
-├── specs/                 # Protocol & architecture specs
-└── Makefile               # Deploy, sync, manage commands
+│   └── install.sh         # One-command setup
+└── specs/                 # Protocol documentation
 ```
 
-### Agent Tools
+For full protocol details, see [`specs/SPEC.md`](specs/SPEC.md).
 
-| Category | Tools |
-|----------|-------|
-| **System** | `shell`, `filesystem`, `process`, `network`, `clipboard`, `notification`, `image` |
-| **Development** | `git`, `code_search`, `diff`, `http_api` |
-| **Data** | `database` (SQLite), `memory` (persistent KV), `todo`, `task_tracker` |
-| **Content** | `browser` (fetch + scrape), `artifact` (HTML/SVG/Mermaid), `publish`, `web_search` |
-| **Interaction** | `plan`, `ask_user`, `sub_agent` |
+---
 
-### Go Sidecar
+## Deployment Options
 
-Anton ships with a lightweight Go sidecar binary that handles agent health checks, status reporting, and system diagnostics. It runs alongside the Node.js agent and is included in all binary releases for both `linux-x64` and `linux-arm64`.
+### Ansible (Recommended)
+```bash
+make setup
+# Add your VPS to deploy/ansible/inventory.ini
+make deploy HOST=myserver API_KEY=sk-ant-...
+```
 
-### Protocol
+### Docker
+```bash
+git clone https://github.com/OmGuptaIND/computer.git
+cd computer
+export ANTHROPIC_API_KEY=sk-ant-...
+docker compose -f deploy/docker-compose.yml up -d
+```
 
-Single WebSocket connection multiplexed across 5 channels:
+### Manual
+```bash
+git clone https://github.com/OmGuptaIND/computer.git ~/.anton/agent
+cd ~/.anton/agent && bash deploy/install.sh
+```
 
-| Channel | Purpose |
-|---------|---------|
-| `CONTROL` | Auth, ping/pong, config, updates |
-| `TERMINAL` | Remote PTY access |
-| `AI` | Sessions, chat, tool calls |
-| `FILESYNC` | Remote filesystem browsing |
-| `EVENTS` | Status updates, notifications |
-
-Full spec in [`specs/SPEC.md`](specs/SPEC.md).
+---
 
 ## Configuration
 
-Agent config lives at `~/.anton/config.yaml` (auto-generated on first run):
+Agent config at `~/.anton/config.yaml`:
 
 ```yaml
-agentId: anton-myserver-a1b2c3d4
-token: ak_...
+agentId: anton-myserver
+token: ak_...           # Generated on install
 port: 9876
 
 ai:
-  provider: anthropic    # anthropic | openai | google | ollama | groq | together | openrouter | bedrock | mistral
+  provider: anthropic   # anthropic | openai | google | ollama | groq | together | mistral
   model: claude-3-5-sonnet-20241022
-  apiKey: ""             # or set ANTHROPIC_API_KEY env var
+  apiKey: ""            # Or set via ANTHROPIC_API_KEY env var
 ```
 
-## Day-to-Day Commands
+---
+
+## Quick Commands
 
 ```bash
-# Development
-pnpm dev                      # run everything (agent + desktop)
-pnpm agent:dev                # agent server only
-pnpm desktop:dev              # desktop app only
-pnpm cli:dev                  # CLI interactive REPL
-
-# Deployment
-make sync HOST=myserver       # push local code to VPS
-make status                   # check service health
-make logs HOST=myserver       # tail agent logs
-make restart                  # restart agent service
-make verify                   # full health check
-make release                  # cut a new release (interactive)
-
-# Quality
-pnpm typecheck                # run type checking
-pnpm check                    # lint + format check
-pnpm check:fix                # auto-fix lint/format issues
-pnpm verify                   # typecheck + lint (run before PRs)
+pnpm dev           # Run locally (agent + desktop)
+make status        # Check service health
+make logs          # View agent logs
+make restart       # Restart the service
+make release       # Cut a new release
 ```
+
+---
 
 ## Contributing
 
-We welcome contributions! Anton is open source because we believe AI agents should be owned by the people who use them.
+We welcome contributions! Open source because AI agents should be owned by the people who use them.
 
-### Getting Started
+1. Fork & clone the repo
+2. `pnpm install`
+3. Create a branch: `git checkout -b feat/your-feature`
+4. Make changes, run `pnpm verify` (typecheck + lint)
+5. Open a Pull Request
 
-1. **Fork** the repository
-2. **Clone** your fork: `git clone https://github.com/YOUR_USERNAME/computer.git`
-3. **Install** dependencies: `pnpm install`
-4. **Create a branch**: `git checkout -b feat/your-feature`
-5. **Make your changes**
-6. **Run checks**: `pnpm verify` (typecheck + lint)
-7. **Commit** with a descriptive message
-8. **Push** and open a Pull Request
+**Areas to contribute:**
+- New tools and capabilities
+- Desktop UI improvements
+- CLI enhancements
+- Deployment options (Kubernetes, new clouds)
+- Documentation and tutorials
 
-### What to Contribute
+---
 
-- **New tools** — Add capabilities to the agent in `packages/agent-core/src/tools/`
-- **Desktop UI** — Improve the Tauri app in `packages/desktop/`
-- **CLI features** — Enhance the terminal client in `packages/cli/`
-- **Deployment** — Better Docker support, new cloud providers, Kubernetes
-- **Documentation** — Improve specs, add guides, write tutorials
-- **Bug fixes** — Check [open issues](https://github.com/OmGuptaIND/computer/issues)
+## Links
 
-### Guidelines
+- 🌐 **Website:** [antoncomputer.in](https://antoncomputer.in)
+- 📖 **Documentation:** [docs.antoncomputer.in](https://docs.antoncomputer.in)
+- 🐛 **Issues:** [github.com/OmGuptaIND/computer/issues](https://github.com/OmGuptaIND/computer/issues)
+- 📦 **Releases:** [github.com/OmGuptaIND/computer/releases](https://github.com/OmGuptaIND/computer/releases)
 
-- Run `pnpm verify` before submitting a PR
-- Keep PRs focused — one feature or fix per PR
-- Write descriptive commit messages
-- Add types — the codebase uses TypeScript throughout
-- Follow existing code style (Biome for linting/formatting)
-
-### Reporting Issues
-
-Found a bug or have a feature request? [Open an issue](https://github.com/OmGuptaIND/computer/issues/new) with:
-
-- A clear description of the problem or feature
-- Steps to reproduce (for bugs)
-- Your environment (OS, Node.js version, provider)
-
-## Community
-
-- [Website](https://antoncomputer.in)
-- [GitHub Issues](https://github.com/OmGuptaIND/computer/issues)
-- [Releases](https://github.com/OmGuptaIND/computer/releases)
+---
 
 ## License
 
-Anton is licensed under the [Apache License 2.0](LICENSE).
-
-You are free to use, modify, and distribute this software. See the [LICENSE](LICENSE) file for details.
+[Apache License 2.0](LICENSE) — Use it, modify it, build on it.
