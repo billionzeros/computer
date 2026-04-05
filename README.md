@@ -43,6 +43,130 @@ Gilfoyle was right. We just made it real.
 
 ---
 
+## Architecture
+
+```mermaid
+flowchart TB
+    subgraph Clients["👤 Clients"]
+        Desktop["Desktop App<br/><small>Tauri + React</small>"]
+        CLI["Terminal CLI<br/><small>Ink TUI</small>"]
+    end
+
+    subgraph Server["☁️ Your Server (VPS/Homelab/Cloud)"]
+        Caddy["Caddy Reverse Proxy<br/><small>:443 TLS</small>"]
+        
+        subgraph Agent["🧠 Anton Agent"]
+            WS["WebSocket Server<br/><small>:9876 / :9877</small>"]
+            
+            subgraph Core["Agent Core"]
+                SessionMgr["Session Manager<br/><small>pi SDK Agent</small>"]
+                ProjectMgr["Project Manager"]
+                ContextEngine["Context Engine<br/><small>System Prompt Builder</small>"]
+                Compaction["Compaction Engine<br/><small>Auto-summarizes</small>"]
+            end
+            
+            subgraph Tools["🔧 Tools (20+)"]
+                System["System<br/>shell, process, network, fs"]
+                Dev["Development<br/>git, code_search, diff"]
+                Data["Data<br/>database, memory, todo"]
+                Content["Content<br/>browser, web_search, artifact"]
+                Interact["Interaction<br/>plan, ask_user, sub_agent"]
+            end
+            
+            subgraph Storage["💾 Storage"]
+                Projects["Projects<br/><code>~/.anton/projects/</code>"]
+                Sessions["Sessions<br/><code>~/.anton/sessions/</code>"]
+                Memory["Memory<br/><code>~/.anton/memory/</code>"]
+                Workspace["Workspace<br/><code>~/Anton/</code>"]
+            end
+        end
+        
+        Sidecar["Go Sidecar<br/><small>:9878 Health/Status</small>"]
+    end
+
+    subgraph Cloud["🌐 AI Providers"]
+        Anthropic["Anthropic<br/>Claude"]
+        OpenAI["OpenAI<br/>GPT-4"]
+        Google["Google<br/>Gemini"]
+        Ollama["Ollama<br/>Local"]
+        Groq["Groq"]
+        Others["Mistral, Together, etc."]
+    end
+
+    Clients -->|"wss:// | ws://"| Caddy
+    Caddy --> WS
+    WS --> SessionMgr
+    SessionMgr <--> ProjectMgr
+    SessionMgr <--> ContextEngine
+    SessionMgr <--> Compaction
+    ContextEngine --> Tools
+    SessionMgr --> Storage
+    Tools --> Storage
+    Tools -->|"HTTP/REST"| Cloud
+    SessionMgr -->|"API Calls"| Cloud
+    Sidecar -.->|"Health Checks"| Agent
+```
+
+### Data Flow
+
+```mermaid
+sequenceDiagram
+    participant User
+    participant Client as Desktop/CLI
+    participant WS as WebSocket
+    participant Session as Session Manager
+    participant Tools as Tools
+    participant LLM as AI Provider
+    participant Storage
+
+    User->>Client: "Build me a landing page"
+    Client->>WS: message event
+    WS->>Session: route to session
+    Session->>ContextEngine: build system prompt
+    ContextEngine->>Session: system prompt + context
+    
+    loop Tool Loop
+        Session->>LLM: send message
+        LLM-->>Session: tool_call: filesystem.write
+        Session->>Tools: execute write
+        Tools->>Storage: write file
+        Storage-->>Tools: success
+        Tools-->>Session: result
+        Session->>LLM: tool_result
+    end
+    
+    LLM-->>Session: final response
+    Session-->>WS: text events
+    WS-->>Client: streamed text
+    Client-->>User: rendered response
+```
+
+### Project-First Architecture
+
+Every task, file, agent, and memory is scoped to a **Project**:
+
+```mermaid
+graph LR
+    subgraph Project["📁 Project: SEO Analyser"]
+        Tasks["Tasks<br/>(conversations)"]
+        Memory["Memory<br/>(instructions + prefs)"]
+        Files["Files<br/>(workspace)"]
+        Agents["Agents<br/>(background jobs)"]
+    end
+    
+    subgraph Storage["Storage"]
+        Internal["~/.anton/projects/seo/"]
+        Workspace["~/Anton/seo-analyser/"]
+    end
+    
+    Tasks --> Internal
+    Memory --> Internal
+    Files --> Workspace
+    Agents --> Internal
+```
+
+---
+
 ## Get Started
 
 ### Option 1: Try the Hosted Version
@@ -104,24 +228,42 @@ Anton doesn't generate code for you to copy-paste. It runs the commands, creates
 
 ---
 
-## Architecture
+## Package Structure
 
 ```
 computer/
 ├── packages/
-│   ├── agent-server/      # WebSocket server
-│   ├── agent-core/        # AI engine + tools
-│   ├── agent-config/     # Config loading
-│   ├── cli/               # Terminal client
-│   └── desktop/           # Tauri desktop app
+│   ├── protocol/           # Shared types, codec, message definitions
+│   ├── agent-config/      # Project/session persistence, config loading
+│   ├── agent-core/        # Session runtime, tools, context injection
+│   ├── agent-server/      # WebSocket server, message routing, PTY
+│   ├── desktop/           # Tauri v2 desktop app (React 19 + Zustand)
+│   ├── cli/               # Terminal client (Ink TUI)
+│   ├── connectors/        # External integrations
+│   └── logger/            # Logging utilities
+├── sidecar/               # Go sidecar for health checks & diagnostics
+├── desktop/               # Desktop app assets
 ├── deploy/
-│   ├── ansible/           # Production deployment
+│   ├── ansible/           # Production deployment (recommended)
 │   ├── Dockerfile         # Docker image
-│   └── install.sh         # One-command setup
-└── specs/                 # Protocol documentation
+│   └── install.sh         # One-command VPS setup
+└── specs/
+    └── architecture/      # Full protocol & architecture specs
 ```
 
-For full protocol details, see [`specs/SPEC.md`](specs/SPEC.md).
+---
+
+## Protocol
+
+Single WebSocket connection, multiplexed across 5 channels:
+
+| Channel | ID | Purpose |
+|---------|-----|---------|
+| `CONTROL` | 0x00 | Auth, ping/pong, config, updates |
+| `TERMINAL` | 0x01 | Remote PTY (terminal) access |
+| `AI` | 0x02 | Sessions, chat, tool calls, confirmations |
+| `FILESYNC` | 0x03 | Remote filesystem browsing |
+| `EVENTS` | 0x04 | Status updates, notifications |
 
 ---
 
@@ -159,10 +301,22 @@ agentId: anton-myserver
 token: ak_...           # Generated on install
 port: 9876
 
-ai:
-  provider: anthropic   # anthropic | openai | google | ollama | groq | together | mistral
-  model: claude-3-5-sonnet-20241022
-  apiKey: ""            # Or set via ANTHROPIC_API_KEY env var
+providers:
+  anthropic:
+    apiKey: ""
+    models: [claude-sonnet-4-6, claude-opus-4-6]
+  openai:
+    apiKey: ""
+    models: [gpt-4o, gpt-4o-mini]
+  # Also supported: google, ollama, groq, together, mistral, openrouter
+
+defaults:
+  provider: anthropic
+  model: claude-sonnet-4-6
+
+security:
+  confirmPatterns: [rm -rf, sudo, shutdown]
+  forbiddenPaths: [/etc/shadow, ~/.ssh/id_*]
 ```
 
 ---
