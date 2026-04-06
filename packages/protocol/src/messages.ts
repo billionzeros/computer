@@ -92,6 +92,7 @@ export interface UpdateProgressMessage {
     | 'installing'
     | 'building'
     | 'starting'
+    | 'swapping'
     | 'verifying'
     | 'done'
     | 'error'

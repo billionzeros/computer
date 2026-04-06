@@ -44,7 +44,9 @@ export const updateStore = create<UpdateState>((set, get) => ({
 
   dismissUpdate: () => set({ updateDismissed: true }),
 
-  startUpdate: () => connection.sendUpdateStart(),
+  startUpdate: () => {
+    connection.sendUpdateStart()
+  },
 
   reset: () =>
     set({

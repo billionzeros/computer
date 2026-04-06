@@ -85,6 +85,7 @@ export type UpdateStage =
   | 'installing'
   | 'building'
   | 'starting'
+  | 'swapping'
   | 'verifying'
   | 'done'
   | 'error'
@@ -102,6 +103,8 @@ export function updateStageLabel(stage: string | null): string {
       return 'Installing dependencies...'
     case 'building':
       return 'Building...'
+    case 'swapping':
+      return 'Swapping to new version...'
     case 'starting':
       return 'Starting agent...'
     case 'verifying':

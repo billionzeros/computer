@@ -1,33 +1,16 @@
 /**
- * Update proxy — delegates to the sidecar HTTP endpoints.
+ * Update checker for the anton.computer agent.
  *
- * The sidecar (a stable Go binary) handles the actual update lifecycle:
- * stop agent → git pull → pnpm install → build → start agent → verify health.
- *
- * This module:
- *   1. Periodically checks for updates via the sidecar
- *   2. Proxies update_start requests to the sidecar's streaming endpoint
- *   3. Relays progress back to the desktop/CLI via WebSocket
+ * Periodically checks the sidecar for available updates and notifies
+ * the connected desktop client. The actual update execution is handled
+ * by the sidecar (which calls `anton computer update`).
  */
 
 import { UPDATE_CHECK_INTERVAL, type UpdateManifest, VERSION } from '@anton/agent-config'
 import { createLogger } from '@anton/logger'
 
-export type UpdateStage =
-  | 'checking'
-  | 'stopping'
-  | 'downloading'
-  | 'installing'
-  | 'building'
-  | 'starting'
-  | 'verifying'
-  | 'done'
-  | 'error'
-export type UpdateProgress = { stage: UpdateStage; message: string }
-
 const log = createLogger('updater')
 
-/** Default sidecar port */
 const SIDECAR_PORT = Number(process.env.SIDECAR_PORT) || 9878
 const SIDECAR_BASE = `http://127.0.0.1:${SIDECAR_PORT}`
 
@@ -42,7 +25,6 @@ interface SidecarCheckResult {
 export class Updater {
   private cachedCheck: SidecarCheckResult | null = null
   private checkTimer: ReturnType<typeof setInterval> | null = null
-  private updating = false
   private token: string
 
   /** Called when a periodic check discovers a new version */
@@ -126,79 +108,6 @@ export class Updater {
     } catch (err) {
       log.warn({ err }, 'sidecar update check error')
       return { updateAvailable: false, manifest: null }
-    }
-  }
-
-  /**
-   * Execute update via the sidecar's streaming endpoint.
-   * Yields progress events as they arrive from the sidecar.
-   */
-  async *selfUpdate(): AsyncGenerator<UpdateProgress> {
-    if (this.updating) {
-      yield { stage: 'error', message: 'Update already in progress' }
-      return
-    }
-
-    this.updating = true
-
-    try {
-      const res = await fetch(`${SIDECAR_BASE}/update/start`, {
-        method: 'POST',
-        headers: { Authorization: `Bearer ${this.token}` },
-        signal: AbortSignal.timeout(600_000), // 10 min max
-      })
-
-      if (!res.ok) {
-        const body = await res.text().catch(() => '')
-        yield { stage: 'error', message: `Sidecar error: ${res.status} ${body}` }
-        return
-      }
-
-      if (!res.body) {
-        yield { stage: 'error', message: 'No response body from sidecar' }
-        return
-      }
-
-      // Stream newline-delimited JSON from the sidecar
-      const reader = res.body.getReader()
-      const decoder = new TextDecoder()
-      let buffer = ''
-
-      while (true) {
-        const { done, value } = await reader.read()
-        if (done) break
-
-        buffer += decoder.decode(value, { stream: true })
-        const lines = buffer.split('\n')
-        buffer = lines.pop() ?? ''
-
-        for (const line of lines) {
-          const trimmed = line.trim()
-          if (!trimmed) continue
-          try {
-            const progress = JSON.parse(trimmed) as UpdateProgress
-            log.info({ stage: progress.stage }, progress.message)
-            yield progress
-          } catch {
-            log.warn({ line: trimmed }, 'failed to parse sidecar progress')
-          }
-        }
-      }
-
-      // Process any remaining buffer
-      if (buffer.trim()) {
-        try {
-          const progress = JSON.parse(buffer.trim()) as UpdateProgress
-          yield progress
-        } catch {
-          // ignore
-        }
-      }
-    } catch (err: unknown) {
-      yield { stage: 'error', message: `Update failed: ${(err as Error).message}` }
-    } finally {
-      this.updating = false
-      this.cachedCheck = null
     }
   }
 

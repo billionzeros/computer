@@ -12,10 +12,23 @@ export function handleControlMessage(msg: ControlMessage): void {
   switch (msg.type) {
     case 'auth_ok': {
       const us = updateStore.getState()
+
+      // Capture previous version BEFORE updating state
+      const prevVersion = us.updateInfo?.currentVersion ?? us.agentVersion
+      const wasUpdating =
+        us.updateStage !== null && us.updateStage !== 'done' && us.updateStage !== 'error'
+
       us.setAgentVersionInfo(msg.version || '', msg.gitHash || '')
 
-      if (us.updateStage === 'verifying' || us.updateStage === 'starting') {
-        us.setUpdateProgress('done', `Updated to v${msg.version}`)
+      if (wasUpdating) {
+        // Agent reconnected after update — check if version changed
+        const versionChanged = prevVersion && msg.version !== prevVersion
+
+        if (versionChanged) {
+          us.setUpdateProgress('done', `Updated to v${msg.version}`)
+        } else {
+          us.setUpdateProgress('error', 'Update failed — rolled back to previous version')
+        }
         us.setUpdateInfo({
           currentVersion: msg.version,
           latestVersion: msg.version,

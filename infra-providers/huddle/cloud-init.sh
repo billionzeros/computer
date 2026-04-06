@@ -242,8 +242,11 @@ ${DOMAIN} {
         reverse_proxy localhost:${AGENT_PORT}
     }
 
-    # Sidecar
-    handle_path /_anton/* {
+    # Sidecar — only expose health/status, not update endpoints
+    handle_path /_anton/health {
+        reverse_proxy localhost:9878
+    }
+    handle_path /_anton/status {
         reverse_proxy localhost:9878
     }
 

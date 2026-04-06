@@ -2,8 +2,7 @@ package handlers
 
 import (
 	"bufio"
-	"encoding/json"
-	"fmt"
+	"os/exec"
 	"sync"
 
 	"github.com/gofiber/fiber/v2"
@@ -28,11 +27,10 @@ func NewUpdateCheckHandler(cfg *config.Config) fiber.Handler {
 	}
 }
 
-// NewUpdateStartHandler returns a handler that executes the update,
-// streaming newline-delimited JSON progress events.
+// NewUpdateStartHandler returns a handler that runs `anton computer update`
+// and streams its stdout back to the caller.
 func NewUpdateStartHandler(cfg *config.Config) fiber.Handler {
 	return func(c *fiber.Ctx) error {
-		// Prevent concurrent updates
 		updateMu.Lock()
 		if updateRunning {
 			updateMu.Unlock()
@@ -49,19 +47,40 @@ func NewUpdateStartHandler(cfg *config.Config) fiber.Handler {
 			updateMu.Unlock()
 		}()
 
-		// Set up streaming response
-		c.Set("Content-Type", "application/x-ndjson")
+		c.Set("Content-Type", "text/plain; charset=utf-8")
 		c.Set("Cache-Control", "no-cache")
 
 		c.Context().SetBodyStreamWriter(func(w *bufio.Writer) {
-			update.Execute(cfg.AgentPort, func(p update.Progress) {
-				data, err := json.Marshal(p)
-				if err != nil {
-					return
-				}
-				fmt.Fprintf(w, "%s\n", data)
+			cmd := exec.Command("sudo", "anton", "computer", "update", "--yes", "--json")
+			cmd.Env = []string{
+				"PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/bin",
+				"HOME=/home/anton",
+			}
+
+			stdout, err := cmd.StdoutPipe()
+			if err != nil {
+				w.WriteString("error: " + err.Error() + "\n")
 				w.Flush()
-			})
+				return
+			}
+			cmd.Stderr = cmd.Stdout // merge stderr into stdout
+
+			if err := cmd.Start(); err != nil {
+				w.WriteString("error: " + err.Error() + "\n")
+				w.Flush()
+				return
+			}
+
+			scanner := bufio.NewScanner(stdout)
+			for scanner.Scan() {
+				w.WriteString(scanner.Text() + "\n")
+				w.Flush()
+			}
+
+			if err := cmd.Wait(); err != nil {
+				w.WriteString("error: " + err.Error() + "\n")
+				w.Flush()
+			}
 		})
 
 		return nil

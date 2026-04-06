@@ -719,13 +719,70 @@ export class AgentServer {
   }
 
   private async handleUpdateStart() {
-    for await (const progress of this.updater.selfUpdate()) {
-      log.info({ stage: progress.stage }, progress.message)
-      this.sendToClient(Channel.CONTROL, {
-        type: 'update_progress',
-        stage: progress.stage,
-        message: progress.message,
+    // Stream sidecar output to desktop via WebSocket.
+    // The sidecar runs `anton computer update --json` which emits NDJSON.
+    // The agent stays alive during clone/install/build, so the desktop sees
+    // real-time progress. When the CLI stops the agent for the swap,
+    // the WebSocket dies and the desktop shows "restarting...".
+    // On reconnect, auth_ok version comparison determines success/failure.
+    const sidecarPort = Number(process.env.SIDECAR_PORT) || 9878
+    try {
+      const res = await fetch(`http://127.0.0.1:${sidecarPort}/update/start`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${this.config.token}` },
+        signal: AbortSignal.timeout(600_000),
       })
+
+      if (!res.ok) {
+        const body = await res.text().catch(() => '')
+        this.sendToClient(Channel.CONTROL, {
+          type: 'update_progress',
+          stage: 'error',
+          message: `Sidecar error: ${res.status} ${body}`,
+        })
+        return
+      }
+
+      if (!res.body) {
+        this.sendToClient(Channel.CONTROL, {
+          type: 'update_progress',
+          stage: 'error',
+          message: 'No response from sidecar',
+        })
+        return
+      }
+
+      // Stream NDJSON lines — each is {"stage":"...","message":"..."}
+      const reader = res.body.getReader()
+      const decoder = new TextDecoder()
+      let buffer = ''
+
+      while (true) {
+        const { done, value } = await reader.read()
+        if (done) break
+
+        buffer += decoder.decode(value, { stream: true })
+        const lines = buffer.split('\n')
+        buffer = lines.pop() ?? ''
+
+        for (const line of lines) {
+          const trimmed = line.trim()
+          if (!trimmed) continue
+          try {
+            const progress = JSON.parse(trimmed) as { stage: string; message: string }
+            this.sendToClient(Channel.CONTROL, {
+              type: 'update_progress',
+              stage: progress.stage,
+              message: progress.message,
+            })
+          } catch {
+            // Non-JSON line from CLI — skip
+          }
+        }
+      }
+    } catch (err) {
+      // If the agent is being killed for the swap, this is expected
+      log.info({ err }, 'update stream ended (expected during restart)')
     }
   }
 
