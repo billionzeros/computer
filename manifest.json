@@ -1,6 +1,6 @@
 {
   "version": "1.0.33",
-  "gitHash": "",
+  "gitHash": "526537e",
   "releaseUrl": "https://github.com/OmGuptaIND/computer/releases",
   "changelog": "Features:\n- make release a little faster\n\nFixes:\n- CLI issues",
   "publishedAt": "2026-04-06T18:50:04.795Z",
