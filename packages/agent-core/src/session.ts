@@ -924,11 +924,16 @@ export class Session {
    * Steer the agent mid-run with a user message.
    * The message is queued and delivered after the current tool execution.
    */
-  steer(message: string) {
+  steer(message: string, attachments: ChatImageAttachmentInput[] = []) {
     const wrapped = `<user_steering>\nThe user sent this message while you were working. Briefly acknowledge it (1-2 sentences), share your thought on how it affects your current task, then continue your work incorporating this new context.\n\nUser message: "${message}"\n</user_steering>`
+    const images: ImageContent[] = attachments.map((a) => ({
+      type: 'image' as const,
+      data: a.data,
+      mimeType: a.mimeType,
+    }))
     this.piAgent.steer({
       role: 'user',
-      content: [{ type: 'text', text: wrapped }],
+      content: [{ type: 'text', text: wrapped }, ...images],
       timestamp: Date.now(),
     })
   }

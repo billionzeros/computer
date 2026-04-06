@@ -119,6 +119,31 @@ export function readTokenFromEnv(): string | null {
   }
 }
 
+/** Manifest URL for downloading release artifacts. */
+export const MANIFEST_URL =
+  'https://raw.githubusercontent.com/OmGuptaIND/computer/main/manifest.json'
+
+/** Systemd unit for the sidecar health/status server. */
+export function sidecarServiceUnit(agentPort: number, sidecarPort: number): string {
+  return `[Unit]
+Description=Anton Sidecar (Health & Status)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+EnvironmentFile=${ENV_FILE}
+Environment=SIDECAR_PORT=${sidecarPort}
+Environment=AGENT_PORT=${agentPort}
+ExecStart=${SIDECAR_BIN}
+Restart=always
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target
+`
+}
+
 /** Read port from the agent systemd unit file. */
 export function readPortFromService(): number | null {
   try {

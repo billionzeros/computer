@@ -16,6 +16,13 @@ export function handleChatMessage(msg: AiMessage, ctx: MessageContext): boolean 
         content: msg.content,
         timestamp: Date.now(),
         isSteering: true,
+        attachments: msg.attachments?.map((a) => ({
+          id: a.id,
+          name: a.name,
+          mimeType: a.mimeType,
+          sizeBytes: a.sizeBytes,
+          data: a.data,
+        })),
       })
       return true
     }

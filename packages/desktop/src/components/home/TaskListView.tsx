@@ -415,7 +415,7 @@ export function TaskListView({ mode }: Props) {
     [deleteConversation],
   )
 
-  const handleNewTask = (text: string, _attachments?: ChatImageAttachment[]) => {
+  const handleNewTask = (text: string, attachments?: ChatImageAttachment[]) => {
     const store = useStore.getState()
     const sStore = sessionStore.getState()
     const sessionId = `sess_${Date.now().toString(36)}`
@@ -430,6 +430,11 @@ export function TaskListView({ mode }: Props) {
     if (conv) {
       switchConversation(conv.id)
     }
+    const outboundAttachments = attachments?.flatMap((a) =>
+      a.data
+        ? [{ id: a.id, name: a.name, mimeType: a.mimeType, data: a.data, sizeBytes: a.sizeBytes }]
+        : [],
+    )
     requestAnimationFrame(() => {
       const conv = useStore.getState().findConversationBySession(sessionId)
       if (conv) {
@@ -438,9 +443,10 @@ export function TaskListView({ mode }: Props) {
           id: `msg_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
           role: 'user',
           content: text,
+          attachments: attachments && attachments.length > 0 ? attachments : undefined,
           timestamp: Date.now(),
         })
-        sessionStore.getState().sendAiMessageToSession(text, sessionId)
+        sessionStore.getState().sendAiMessageToSession(text, sessionId, outboundAttachments)
       }
     })
   }

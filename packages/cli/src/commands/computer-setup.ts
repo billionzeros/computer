@@ -23,9 +23,6 @@ import {
   ENV_FILE,
   REPO_DIR,
   REPO_URL,
-  SIDECAR_BIN,
-  SIDECAR_SERVICE_PATH,
-  // @ts-ignore — used in all imports
   done,
   exec,
   execSilent,
@@ -35,6 +32,7 @@ import {
   requireLinuxRoot,
   step,
 } from './computer-common.js'
+import { computerSidecarCommand } from './computer-sidecar.js'
 
 // ── Types ───────────────────────────────────────────────────────
 
@@ -68,26 +66,6 @@ WorkingDirectory=${REPO_DIR}
 ExecStart=/usr/bin/node ${AGENT_ENTRY} --port ${port}
 Restart=always
 RestartSec=5
-
-[Install]
-WantedBy=multi-user.target
-`
-}
-
-function sidecarServiceUnit(agentPort: number, sidecarPort: number): string {
-  return `[Unit]
-Description=Anton Sidecar (Health & Status)
-After=network-online.target
-Wants=network-online.target
-
-[Service]
-Type=simple
-EnvironmentFile=${ENV_FILE}
-Environment=SIDECAR_PORT=${sidecarPort}
-Environment=AGENT_PORT=${agentPort}
-ExecStart=${SIDECAR_BIN}
-Restart=always
-RestartSec=3
 
 [Install]
 WantedBy=multi-user.target
@@ -292,32 +270,28 @@ export async function computerSetupCommand(args: ComputerSetupArgs): Promise<voi
     process.exit(1)
   }
 
-  // ── 7. Create systemd services ──
-  step('Creating systemd services')
+  // ── 7. Create agent systemd service ──
+  step('Creating agent systemd service')
   try {
     writeFileSync(AGENT_SERVICE_PATH, agentServiceUnit(effectivePort))
-    writeFileSync(SIDECAR_SERVICE_PATH, sidecarServiceUnit(effectivePort, sidecarPort))
     exec('systemctl daemon-reload')
-    done('Systemd services created')
+    done('Agent service created')
   } catch (err) {
-    fail('Systemd services', (err as Error).message)
+    fail('Agent service', (err as Error).message)
     process.exit(1)
   }
 
-  // ── 8. Start services ──
-  step('Starting services')
+  // ── 8. Start agent ──
+  step('Starting agent')
   try {
     exec('systemctl enable --now anton-agent')
-    if (existsSync(SIDECAR_BIN)) {
-      exec('systemctl enable --now anton-sidecar')
-    }
-    done('Services started')
+    done('Agent started')
   } catch (err) {
-    fail('Service start', (err as Error).message)
+    fail('Agent start', (err as Error).message)
     process.exit(1)
   }
 
-  // ── 9. Health check ──
+  // ── 9. Agent health check ──
   step('Checking agent health')
   const healthy = await waitForHealthy(effectivePort)
   if (healthy) {
@@ -331,7 +305,10 @@ export async function computerSetupCommand(args: ComputerSetupArgs): Promise<voi
     console.log()
   }
 
-  // ── 10. Write version info ──
+  // ── 10. Install + start sidecar ──
+  await computerSidecarCommand({ agentPort: effectivePort, sidecarPort })
+
+  // ── 11. Write version info ──
   try {
     const gitHash = execSilent(`sudo -u ${ANTON_USER} git -C ${REPO_DIR} rev-parse --short HEAD`)
       ? exec(`sudo -u ${ANTON_USER} git -C ${REPO_DIR} rev-parse --short HEAD`)
@@ -347,7 +324,7 @@ export async function computerSetupCommand(args: ComputerSetupArgs): Promise<voi
     // non-critical
   }
 
-  // ── 11. Print connection info ──
+  // ── 12. Print connection info ──
   console.log()
   console.log(`  ${theme.brand('──────────────────────────────────────')}`)
   console.log()

@@ -75,6 +75,39 @@ jobs:
           name: anton-cli
           path: anton-cli.mjs
 
+  # ── Sidecar (Go binary, cross-compiled for Linux) ────────────────
+  sidecar:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.25'
+          cache-dependency-path: sidecar/go.sum
+
+      - name: Extract version from tag
+        id: version
+        run: echo "version=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
+
+      - name: Cross-compile sidecar
+        working-directory: sidecar
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+          LDFLAGS="-s -w -X main.version=${VERSION}"
+
+          GOOS=linux GOARCH=arm64 go build -ldflags "$LDFLAGS" -o ../anton-sidecar-linux-arm64 .
+          GOOS=linux GOARCH=amd64 go build -ldflags "$LDFLAGS" -o ../anton-sidecar-linux-amd64 .
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: sidecar-binaries
+          path: |
+            anton-sidecar-linux-arm64
+            anton-sidecar-linux-amd64
+
   # ── Desktop app (macOS, Windows, Linux) ──────────────────────────
   desktop:
     strategy:
@@ -131,7 +164,7 @@ jobs:
 
   # ── Create GitHub Release ────────────────────────────────────────
   release:
-    needs: [cli, desktop]
+    needs: [cli, desktop, sidecar]
     runs-on: ubuntu-latest
 
     steps:
@@ -163,6 +196,8 @@ jobs:
           mkdir -p release-assets
           # CLI
           cp artifacts/anton-cli/anton-cli.mjs release-assets/ 2>/dev/null || true
+          # Sidecar binaries
+          cp artifacts/sidecar-binaries/anton-sidecar-linux-* release-assets/ 2>/dev/null || true
           # Desktop installers — find recursively since Tauri nests them
           find artifacts/desktop-* -type f \( \
             -name "*.dmg" -o -name "*.msi" -o -name "*.AppImage" -o -name "*.deb" \

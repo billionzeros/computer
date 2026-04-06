@@ -108,6 +108,26 @@ chmod +x /usr/local/bin/anton-agent
 log "BINARY: installed to /usr/local/bin/anton-agent"
 
 # ─────────────────────────────────────────────────────────────────
+# 5b. Download sidecar binary from manifest
+# ─────────────────────────────────────────────────────────────────
+SIDECAR_ARCH="${AGENT_ARCH}"
+[ "$SIDECAR_ARCH" = "x64" ] && SIDECAR_ARCH="amd64"
+
+if [ -n "$MANIFEST" ]; then
+    SIDECAR_URL=$(echo "$MANIFEST" | jq -r ".sidecar.\"linux-${SIDECAR_ARCH}\"" 2>/dev/null || echo "")
+fi
+
+if [ -z "${SIDECAR_URL:-}" ] || [ "$SIDECAR_URL" = "null" ]; then
+    SIDECAR_URL="https://github.com/OmGuptaIND/computer/releases/latest/download/anton-sidecar-linux-${SIDECAR_ARCH}"
+    log "SIDECAR: falling back to latest release URL"
+fi
+
+log "SIDECAR: downloading from ${SIDECAR_URL}"
+curl -fSL -o /usr/local/bin/anton-sidecar "${SIDECAR_URL}"
+chmod +x /usr/local/bin/anton-sidecar
+log "SIDECAR: installed to /usr/local/bin/anton-sidecar"
+
+# ─────────────────────────────────────────────────────────────────
 # 6. Write agent config
 # ─────────────────────────────────────────────────────────────────
 cat > "${ANTON_DIR}/config.yaml" <<YAML
@@ -159,9 +179,28 @@ PrivateTmp=true
 WantedBy=multi-user.target
 UNIT
 
+cat > /etc/systemd/system/anton-sidecar.service <<UNIT
+[Unit]
+Description=Anton Sidecar (Health & Status)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+EnvironmentFile=${ANTON_DIR}/agent.env
+Environment=SIDECAR_PORT=9878
+Environment=AGENT_PORT=${AGENT_PORT}
+ExecStart=/usr/local/bin/anton-sidecar
+Restart=always
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target
+UNIT
+
 chown -R anton:anton "${ANTON_DIR}"
 chown -R anton:anton /home/anton/Anton
-log "SERVICE: systemd unit created"
+log "SERVICE: systemd units created (agent + sidecar)"
 
 # ─────────────────────────────────────────────────────────────────
 # 9. Install Caddy
@@ -273,7 +312,8 @@ CADDY_PID=$!
 # ─────────────────────────────────────────────────────────────────
 systemctl daemon-reload
 systemctl enable --now anton-agent
-log "AGENT: start requested"
+systemctl enable --now anton-sidecar
+log "AGENT + SIDECAR: start requested"
 
 # Wait for agent healthy
 AGENT_HEALTHY=false

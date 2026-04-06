@@ -4,5 +4,9 @@
   "releaseUrl": "https://github.com/OmGuptaIND/computer/releases",
   "changelog": "Other:\n- refactor: remove agent and sidecar binary builds from release workflow and manifest",
   "publishedAt": "2026-04-05T19:38:20.824Z",
-  "cli": "https://github.com/OmGuptaIND/computer/releases/download/v1.0.31/anton-cli.mjs"
+  "cli": "https://github.com/OmGuptaIND/computer/releases/download/v1.0.31/anton-cli.mjs",
+  "sidecar": {
+    "linux-arm64": "https://github.com/OmGuptaIND/computer/releases/download/v1.0.31/anton-sidecar-linux-arm64",
+    "linux-amd64": "https://github.com/OmGuptaIND/computer/releases/download/v1.0.31/anton-sidecar-linux-amd64"
+  }
 }

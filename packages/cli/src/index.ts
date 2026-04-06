@@ -31,6 +31,7 @@ import {
   computerUninstallCommand,
 } from './commands/computer-lifecycle.js'
 import { computerSetupCommand } from './commands/computer-setup.js'
+import { computerSidecarCommand } from './commands/computer-sidecar.js'
 import { connectCommand } from './commands/connect.js'
 import { connectorCommand } from './commands/connector.js'
 import { machinesCommand } from './commands/machines.js'
@@ -263,6 +264,12 @@ async function main() {
           yes: hasFlag('--yes') || hasFlag('-y'),
           purge: hasFlag('--purge'),
         })
+      } else if (subcommand === 'sidecar') {
+        await computerSidecarCommand({
+          sidecarPort: parseFlag('--sidecar-port')
+            ? Number(parseFlag('--sidecar-port'))
+            : undefined,
+        })
       } else if (subcommand === 'config') {
         await computerConfigCommand(args.slice(2))
       } else {
@@ -278,6 +285,9 @@ async function main() {
         console.log(`    ${theme.brand('anton computer start')}        Start services`)
         console.log(`    ${theme.brand('anton computer stop')}         Stop services`)
         console.log(`    ${theme.brand('anton computer restart')}      Restart services`)
+        console.log(
+          `    ${theme.brand('anton computer sidecar')}      Install/update sidecar binary`,
+        )
         console.log(`    ${theme.brand('anton computer update')}       Update agent binary`)
         console.log(`    ${theme.brand('anton computer version')}      Show agent version`)
         console.log(

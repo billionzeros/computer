@@ -206,7 +206,11 @@ interface SessionStoreState {
     sessionId: string,
     attachments?: ChatImageAttachmentInput[],
   ) => void
-  sendSteerMessage: (text: string, sessionId: string) => void
+  sendSteerMessage: (
+    text: string,
+    sessionId: string,
+    attachments?: ChatImageAttachmentInput[],
+  ) => void
   sendConfigQuery: (
     key: 'providers' | 'defaults' | 'security' | 'system_prompt' | 'memories',
     sessionId?: string,
@@ -398,7 +402,8 @@ export const sessionStore = create<SessionStoreState>((set, get) => {
     sendAiMessage: (text, attachments) => connection.sendAiMessage(text, attachments),
     sendAiMessageToSession: (text, sessionId, attachments) =>
       connection.sendAiMessageToSession(text, sessionId, attachments),
-    sendSteerMessage: (text, sessionId) => connection.sendSteerMessage(text, sessionId),
+    sendSteerMessage: (text, sessionId, attachments) =>
+      connection.sendSteerMessage(text, sessionId, attachments),
     sendConfigQuery: (key, sessionId, projectId) =>
       connection.sendConfigQuery(key, sessionId, projectId),
 

@@ -206,7 +206,7 @@ export function AgentListView({ mode, selectedId, onSelect }: Props) {
     projectStore.getState().agentAction(agent.projectId, agent.sessionId, 'delete')
   }
 
-  const handleNewAgent = (text: string, _attachments?: ChatImageAttachment[]) => {
+  const handleNewAgent = (text: string, attachments?: ChatImageAttachment[]) => {
     // Create a new conversation that will guide agent creation
     const store = useStore.getState()
     const sessionId = `sess_${Date.now().toString(36)}`
@@ -223,6 +223,11 @@ export function AgentListView({ mode, selectedId, onSelect }: Props) {
       switchConversation(conv.id)
     }
     setActiveView('chat')
+    const outboundAttachments = attachments?.flatMap((a) =>
+      a.data
+        ? [{ id: a.id, name: a.name, mimeType: a.mimeType, data: a.data, sizeBytes: a.sizeBytes }]
+        : [],
+    )
     requestAnimationFrame(() => {
       const conv = useStore.getState().findConversationBySession(sessionId)
       if (conv) {
@@ -232,9 +237,10 @@ export function AgentListView({ mode, selectedId, onSelect }: Props) {
           id: `msg_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
           role: 'user',
           content: prompt,
+          attachments: attachments && attachments.length > 0 ? attachments : undefined,
           timestamp: Date.now(),
         })
-        sessionStore.getState().sendAiMessageToSession(prompt, sessionId)
+        sessionStore.getState().sendAiMessageToSession(prompt, sessionId, outboundAttachments)
       }
     })
   }

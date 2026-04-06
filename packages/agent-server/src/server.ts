@@ -1052,11 +1052,12 @@ export class AgentServer {
         const steerSessionId = msg.sessionId || DEFAULT_SESSION_ID
         const steerSession = this.sessions.get(steerSessionId)
         if (steerSession && this.activeTurns.has(steerSessionId)) {
-          steerSession.steer(msg.content)
+          steerSession.steer(msg.content, msg.attachments)
           this.sendToClient(Channel.AI, {
             type: 'steer_ack',
             content: msg.content,
             sessionId: steerSessionId,
+            attachments: msg.attachments,
           })
           log.info(
             { sessionId: steerSessionId, content: msg.content.slice(0, 60) },
@@ -1064,7 +1065,11 @@ export class AgentServer {
           )
         } else {
           // Session not active — treat as a regular message
-          await this.handleChatMessage({ content: msg.content, sessionId: msg.sessionId })
+          await this.handleChatMessage({
+            content: msg.content,
+            sessionId: msg.sessionId,
+            attachments: msg.attachments,
+          })
         }
         break
       }
@@ -2636,11 +2641,12 @@ export class AgentServer {
     // Guard: if this session is already processing, steer instead of starting a second turn
     if (this.activeTurns.has(sessionId)) {
       log.warn({ sessionId }, 'Session already processing — converting message to steer')
-      session.steer(msg.content)
+      session.steer(msg.content, msg.attachments)
       this.sendToClient(Channel.AI, {
         type: 'steer_ack',
         content: msg.content,
         sessionId,
+        attachments: msg.attachments,
       })
       return 0
     }

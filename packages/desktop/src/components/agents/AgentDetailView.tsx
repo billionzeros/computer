@@ -195,16 +195,21 @@ export function AgentDetailView({ agentId, onBack, onViewRun }: Props) {
   }, [agent])
 
   const handleSend = useCallback(
-    async (text: string, _attachments: ChatImageAttachment[] = []) => {
+    async (text: string, attachments: ChatImageAttachment[] = []) => {
       if (!agent) return
-      // Send message to the agent's session
+      const outboundAttachments = attachments.flatMap((a) =>
+        a.data
+          ? [{ id: a.id, name: a.name, mimeType: a.mimeType, data: a.data, sizeBytes: a.sizeBytes }]
+          : [],
+      )
       addMessage({
         id: `user_${Date.now()}`,
         role: 'user',
         content: text,
+        attachments: attachments.length > 0 ? attachments : undefined,
         timestamp: Date.now(),
       })
-      sessionStore.getState().sendAiMessageToSession(text, agent.sessionId)
+      sessionStore.getState().sendAiMessageToSession(text, agent.sessionId, outboundAttachments)
     },
     [agent, addMessage],
   )

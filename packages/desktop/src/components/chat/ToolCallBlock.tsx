@@ -210,8 +210,15 @@ export function ToolCallBlock({ message }: Props) {
 
 // ── Tool Result (expandable, clean) ──
 
-function ToolResultBlock({ content, isError }: { content: string; isError: boolean }) {
+function stripThinkTags(text: string): string {
+  let result = text.replace(/<think>[\s\S]*?<\/think>/g, '')
+  result = result.replace(/<think>[\s\S]*$/g, '')
+  return result.trim()
+}
+
+function ToolResultBlock({ content: rawContent, isError }: { content: string; isError: boolean }) {
   const [expanded, setExpanded] = useState(false)
+  const content = stripThinkTags(rawContent)
   const hasContent = content.trim().length > 0
   const preview = content.slice(0, 120).trim()
   const hasMore = content.length > 120

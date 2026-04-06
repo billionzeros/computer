@@ -2,6 +2,7 @@ import { motion } from 'framer-motion'
 import { AlertTriangle } from 'lucide-react'
 import { type ChatMessage, useStore } from '../../lib/store.js'
 import { useActiveSessionState } from '../../lib/store/sessionStore.js'
+import { ImageThumbnail } from './ImageViewer.js'
 import { MarkdownRenderer } from './MarkdownRenderer.js'
 import { SourceCards } from './SourceCards.js'
 import { ThinkingBlock } from './ThinkingBlock.js'
@@ -37,7 +38,7 @@ export function MessageBubble({ message, isLastThinking }: Props) {
               {message.attachments.map((attachment, index) => {
                 const src = attachmentSrc(message, index)
                 return src ? (
-                  <img
+                  <ImageThumbnail
                     key={attachment.id}
                     src={src}
                     alt={attachment.name}

@@ -12,7 +12,7 @@ import { SlashCommandMenu } from './SlashCommandMenu.js'
 
 interface Props {
   onSend: (text: string, attachments?: ChatImageAttachment[]) => void
-  onSteer?: (text: string) => void
+  onSteer?: (text: string, attachments?: ChatImageAttachment[]) => void
   onCancelTurn?: () => void
   onSkillSelect: (skill: Skill) => void
   /** @deprecated variant is no longer used — all inputs render identically */
@@ -140,9 +140,11 @@ export function ChatInput({
 
     // If agent is working, steer instead of sending a new message
     if (isCurrentSessionWorking) {
-      if (text && onSteer) {
-        onSteer(text)
+      if ((text || attachments.length > 0) && onSteer) {
+        onSteer(text, attachments)
         setInput('')
+        setAttachments([])
+        setAttachmentError(null)
         setShowSlashMenu(false)
         textareaRef.current?.focus()
       }

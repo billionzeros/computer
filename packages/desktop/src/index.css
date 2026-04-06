@@ -2002,6 +2002,119 @@ button {
   text-align: center;
 }
 
+/* ── Image Thumbnail (clickable) ── */
+
+.image-thumbnail__button {
+  all: unset;
+  display: inline-block;
+  cursor: zoom-in;
+}
+
+.image-thumbnail--clickable {
+  cursor: zoom-in;
+  transition: filter 0.15s ease;
+}
+
+.image-thumbnail--clickable:hover {
+  filter: brightness(0.85);
+}
+
+/* ── Image Viewer (lightbox) ── */
+
+.image-viewer {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.image-viewer__backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.85);
+  -webkit-app-region: no-drag;
+}
+
+.image-viewer__toolbar {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  z-index: 10;
+  background: rgba(var(--overlay), 0.12);
+  border: 1px solid rgba(var(--overlay), 0.1);
+  border-radius: 10px;
+  padding: 4px;
+  backdrop-filter: blur(12px);
+  -webkit-app-region: no-drag;
+}
+
+.image-viewer__btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.8);
+  cursor: pointer;
+  transition: background 0.12s ease, color 0.12s ease;
+}
+
+.image-viewer__btn:hover {
+  background: rgba(255, 255, 255, 0.12);
+  color: #fff;
+}
+
+.image-viewer__zoom-label {
+  color: rgba(255, 255, 255, 0.6);
+  font-size: 12px;
+  min-width: 40px;
+  text-align: center;
+  user-select: none;
+}
+
+.image-viewer__container {
+  position: relative;
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  max-width: 90vw;
+  max-height: 90vh;
+  -webkit-app-region: no-drag;
+}
+
+.image-viewer__image {
+  max-width: 90vw;
+  max-height: 85vh;
+  object-fit: contain;
+  border-radius: 8px;
+  user-select: none;
+  transition: transform 0.1s ease;
+}
+
+.image-viewer__filename {
+  position: absolute;
+  bottom: 16px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 10;
+  color: rgba(255, 255, 255, 0.6);
+  font-size: 12px;
+  background: rgba(0, 0, 0, 0.5);
+  padding: 4px 12px;
+  border-radius: 6px;
+  user-select: none;
+  -webkit-app-region: no-drag;
+}
+
 .message__text {
   white-space: pre-wrap;
   overflow-wrap: anywhere;

@@ -331,6 +331,7 @@ export interface AiSteerMessage {
   type: 'steer'
   content: string
   sessionId?: string
+  attachments?: ChatImageAttachmentInput[]
 }
 
 /** Client requests cancellation of the active turn */
@@ -343,6 +344,7 @@ export interface AiSteerAckMessage {
   type: 'steer_ack'
   content: string
   sessionId?: string
+  attachments?: ChatImageAttachmentInput[]
 }
 
 export interface AiThinkingMessage {
