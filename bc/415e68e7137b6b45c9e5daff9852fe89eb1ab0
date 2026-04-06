@@ -1,0 +1,145 @@
+packages/desktop/src/components/chat/ChatInput.tsx
+  ab05193bfef2fcfc 15,143-144,146-147
+packages/desktop/src/lib/connection.ts
+  ab05193bfef2fcfc 207-208
+packages/agent-server/src/server.ts
+  ab05193bfef2fcfc 1055,1060,1070,2644,2649
+packages/desktop/src/components/agents/AgentDetailView.tsx
+  ab05193bfef2fcfc 198,200-204,209,212
+packages/protocol/src/messages.ts
+  ab05193bfef2fcfc 334,347
+packages/desktop/src/components/home/TaskListView.tsx
+  ab05193bfef2fcfc 418,433-437,446,449
+packages/desktop/src/components/chat/MessageBubble.tsx
+  1e3f053cfc62ba79 5,41
+packages/desktop/src/index.css
+  1e3f053cfc62ba79 2005-2006,2013-2117
+  e64ee66e3fdd5d88 2007-2012
+packages/desktop/src/components/AgentChat.tsx
+  ab05193bfef2fcfc 186,191-204
+packages/desktop/src/components/chat/ToolCallBlock.tsx
+  e1e9b9cebd41e75a 213-219,221
+packages/agent-core/src/session.ts
+  ab05193bfef2fcfc 927,929-933,936
+.github/workflows/release.yml
+  e64ee66e3fdd5d88 78-110,167,199-200
+packages/cli/src/commands/computer-setup.ts
+  e64ee66e3fdd5d88 35,273-274,278,280,284-285,288,290,294,308-309,311,327
+packages/cli/src/commands/computer-sidecar.ts
+  e64ee66e3fdd5d88 1-10,12-152
+packages/desktop/src/lib/store/sessionStore.ts
+  ab05193bfef2fcfc 211,405-406
+infra-providers/huddle/cloud-init.sh
+  e64ee66e3fdd5d88 111-129,182-200,203,315-316
+packages/cli/src/index.ts
+  e64ee66e3fdd5d88 34,267-272,288,290
+packages/cli/src/commands/computer-common.ts
+  e64ee66e3fdd5d88 122-146
+manifest.json
+  e64ee66e3fdd5d88 7-11
+packages/desktop/src/components/agents/AgentListView.tsx
+  ab05193bfef2fcfc 209,226-230,240,243
+packages/desktop/src/components/chat/ImageViewer.tsx
+  e64ee66e3fdd5d88 93-97,166-168
+  1e3f053cfc62ba79 1-47,49-92,98-165,169-172
+packages/desktop/src/lib/store/handlers/chatHandler.ts
+  ab05193bfef2fcfc 19-25
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.2.5",
+  "base_commit_sha": "bc415e68e7137b6b45c9e5daff9852fe89eb1ab0",
+  "prompts": {
+    "0a41d955db1b7478": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "b0371636-2fb1-42a7-82a5-086b5da6ae86",
+        "model": "claude-opus-4-6"
+      },
+      "human_author": "Om Gupta",
+      "messages": [],
+      "total_additions": 0,
+      "total_deletions": 0,
+      "accepted_lines": 3,
+      "overriden_lines": 0
+    },
+    "1e3f053cfc62ba79": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "cfc2af2f-9f91-49ca-b14b-7e67ddb72c27",
+        "model": "claude-opus-4-6"
+      },
+      "human_author": "Om Gupta",
+      "messages": [],
+      "total_additions": 273,
+      "total_deletions": 1,
+      "accepted_lines": 272,
+      "overriden_lines": 1
+    },
+    "7b82cbdeefcec3fb": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "40d7e693-24ab-4dbd-89db-cfab867db69e",
+        "model": "claude-opus-4-6"
+      },
+      "human_author": "Om Gupta",
+      "messages": [],
+      "total_additions": 0,
+      "total_deletions": 0,
+      "accepted_lines": 2,
+      "overriden_lines": 0
+    },
+    "ab05193bfef2fcfc": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "c5bcc57e-f5a1-4732-9eba-f491786d75ab",
+        "model": "claude-opus-4-6"
+      },
+      "human_author": "Om Gupta",
+      "messages": [],
+      "total_additions": 92,
+      "total_deletions": 43,
+      "accepted_lines": 70,
+      "overriden_lines": 2
+    },
+    "b86c1b79f0b75756": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "9ea7e932-7812-4d56-8f40-5115d6521554",
+        "model": "claude-opus-4-6"
+      },
+      "human_author": "Om Gupta",
+      "messages": [],
+      "total_additions": 0,
+      "total_deletions": 0,
+      "accepted_lines": 112,
+      "overriden_lines": 0
+    },
+    "e1e9b9cebd41e75a": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "0118af0f-6f4a-45e8-ae73-d2ac0dcb0466",
+        "model": "claude-opus-4-6"
+      },
+      "human_author": "Om Gupta",
+      "messages": [],
+      "total_additions": 8,
+      "total_deletions": 1,
+      "accepted_lines": 8,
+      "overriden_lines": 0
+    },
+    "e64ee66e3fdd5d88": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "c62282c0-5cba-4c5e-8f0d-fc7e50f757b7",
+        "model": "claude-opus-4-6"
+      },
+      "human_author": "Om Gupta",
+      "messages": [],
+      "total_additions": 302,
+      "total_deletions": 37,
+      "accepted_lines": 297,
+      "overriden_lines": 1
+    }
+  }
+}
