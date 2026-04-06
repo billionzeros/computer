@@ -246,6 +246,10 @@ node -e "
   delete manifest.binaries;
   delete manifest.sidecar_binaries;
   manifest.cli = '${GITHUB_BASE}/anton-cli.mjs';
+  manifest.sidecar = {
+    'linux-arm64': '${GITHUB_BASE}/anton-sidecar-linux-arm64',
+    'linux-amd64': '${GITHUB_BASE}/anton-sidecar-linux-amd64'
+  };
   fs.writeFileSync('manifest.json', JSON.stringify(manifest, null, 2) + '\n');
 "
 
