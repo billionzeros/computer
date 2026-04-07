@@ -19,7 +19,6 @@ import { execSync } from 'node:child_process'
 import { chmodSync, existsSync, readFileSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
 import { theme } from '../lib/theme.js'
-import { checkForUpdate, selfUpdate } from '../lib/version.js'
 import {
   ANTON_USER,
   DEFAULT_PORT,
@@ -125,18 +124,21 @@ export async function computerUpdateCommand(
   cleanup(PREV_DIR)
 
   // ── 2. Update CLI binary ─────────────────────────────────────
+  // Shell out to the install script instead of in-process self-update.
+  // The install script is the canonical installer — it handles symlinks,
+  // multiple installations, and per-user paths correctly. In-process
+  // self-update only touches process.argv[1] which can miss other installs.
   emitStep('downloading', 'Updating CLI')
   try {
-    const update = await checkForUpdate()
-    if (update?.available && update.downloadUrl) {
-      await selfUpdate(update.downloadUrl)
-      emitDone('downloading', 'CLI updated')
-    } else {
-      emitDone('downloading', 'CLI already up to date')
-    }
+    execSync('curl -fsSL https://antoncomputer.in/install | bash', {
+      stdio: 'pipe',
+      timeout: 120_000,
+      env: { ...process.env, ANTON_INSTALL_QUIET: '1' },
+    })
+    emitDone('downloading', 'CLI updated')
   } catch (err) {
     // Non-fatal — CLI update failure shouldn't block agent update
-    emitDone('downloading', 'CLI update skipped', (err as Error).message)
+    emitDone('downloading', 'CLI update skipped', (err as Error).message.slice(0, 200))
   }
 
   // ── 3. Clone agent into staging ──────────────────────────────
