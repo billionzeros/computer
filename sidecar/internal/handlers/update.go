@@ -51,7 +51,22 @@ func NewUpdateStartHandler(cfg *config.Config) fiber.Handler {
 		c.Set("Cache-Control", "no-cache")
 
 		c.Context().SetBodyStreamWriter(func(w *bufio.Writer) {
-			cmd := exec.Command("sudo", "anton", "computer", "update", "--yes", "--json")
+			// Run the CLI in a transient systemd scope so it lives in its own
+			// cgroup, independent of the sidecar's. This is critical: the CLI
+			// will restart the sidecar mid-update; if the CLI were a child of
+			// the sidecar's cgroup, systemd would kill it when it kills the
+			// sidecar, leaving the agent stopped and the update half-applied.
+			//
+			// systemd-run --scope creates the new cgroup synchronously and
+			// streams stdout back to us, so we keep the streaming progress UX.
+			cmd := exec.Command(
+				"systemd-run",
+				"--scope",
+				"--quiet",
+				"--unit=anton-update",
+				"--collect",
+				"sudo", "anton", "computer", "update", "--yes", "--json",
+			)
 			cmd.Env = []string{
 				"PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/bin",
 				"HOME=/home/anton",
@@ -77,10 +92,10 @@ func NewUpdateStartHandler(cfg *config.Config) fiber.Handler {
 				w.Flush()
 			}
 
-			if err := cmd.Wait(); err != nil {
-				w.WriteString("error: " + err.Error() + "\n")
-				w.Flush()
-			}
+			// We may not get to Wait() if the sidecar gets restarted by the
+			// child CLI — that's expected and fine because the CLI continues
+			// running in its own scope.
+			_ = cmd.Wait()
 		})
 
 		return nil

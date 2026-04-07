@@ -59,15 +59,24 @@ async function downloadSidecarBinary(): Promise<boolean> {
   }
 
   step('Downloading sidecar binary')
+  // Write to a temp file first then atomically mv into place. Direct overwrite
+  // fails with "Text file busy" if the sidecar binary is currently running.
+  // mv works because it's a rename (relinks inode), not a write.
+  const tempPath = `${SIDECAR_BIN}.new`
   try {
-    execSync(`curl -fSL -o "${SIDECAR_BIN}" "${binaryUrl}"`, {
+    execSync(`curl -fSL -o "${tempPath}" "${binaryUrl}"`, {
       stdio: 'pipe',
       timeout: 120_000,
     })
-    chmodSync(SIDECAR_BIN, 0o755)
+    chmodSync(tempPath, 0o755)
+    execSync(`mv "${tempPath}" "${SIDECAR_BIN}"`, { stdio: 'pipe' })
     done('Sidecar binary installed', SIDECAR_BIN)
     return true
   } catch (err) {
+    // Best-effort cleanup of temp file
+    try {
+      execSync(`rm -f "${tempPath}"`, { stdio: 'pipe' })
+    } catch {}
     fail('Sidecar download', (err as Error).message)
     return false
   }
