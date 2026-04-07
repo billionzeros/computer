@@ -101,7 +101,7 @@ async function main() {
 
     case 'connector':
     case 'connectors':
-      connectorCommand(args.slice(1))
+      await connectorCommand(args.slice(1))
       break
 
     case 'help':
@@ -371,13 +371,10 @@ function showHelp() {
     `    ${theme.brand('anton connector')}                     List configured + available`,
   )
   console.log(
-    `    ${theme.brand('anton connector add')} ${theme.dim('<id> [opts]')}     Add a connector`,
+    `    ${theme.brand('anton connector connect')} ${theme.dim('<id>')}       Connect a built-in OAuth connector`,
   )
-  console.log(`      ${theme.dim('--url <url>')}                   SearXNG URL`)
-  console.log(`      ${theme.dim('--api-key <key>')}               API key (Brave, etc.)`)
-  console.log(`      ${theme.dim('--env KEY=value')}              Env var (MCP connectors)`)
   console.log(
-    `    ${theme.brand('anton connector remove')} ${theme.dim('<id>')}        Remove a connector`,
+    `    ${theme.brand('anton connector disconnect')} ${theme.dim('<id>')}    Disconnect/remove a configured connector`,
   )
   console.log()
 

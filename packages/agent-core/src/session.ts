@@ -152,7 +152,10 @@ export class Session {
   private confirmHandler?: ConfirmHandler
   private planConfirmHandler?: PlanConfirmHandler
   private askUserHandler?: AskUserHandler
-  _connectorManager?: { getAllTools(): AgentTool[] }
+  _connectorManager?: {
+    getAllTools(): AgentTool[]
+    getToolPermission?(toolName: string): 'auto' | 'ask' | 'never'
+  }
   _mcpManager?: import('./mcp/mcp-manager.js').McpManager
   _toolCallbacks?: Parameters<typeof buildTools>[1]
   private title = ''
@@ -376,6 +379,48 @@ export class Session {
         }
       },
       beforeToolCall: async (ctx) => {
+        // Connector tool permissions: 'never' is blocked here as defense-in-depth
+        // (these tools are also filtered out of getAllTools so the agent shouldn't
+        // see them); 'ask' triggers a user confirmation via the existing handler.
+        // Both MCP-prefixed tools and direct-connector tools (slack_*, github_*…)
+        // run through the same gate so the UI permission toggle is honoured
+        // regardless of how the connector is implemented.
+        const mcpPerm =
+          this._mcpManager && ctx.toolCall.name.startsWith('mcp_')
+            ? this._mcpManager.getToolPermission(ctx.toolCall.name)
+            : 'auto'
+        const directPerm = this._connectorManager?.getToolPermission?.(ctx.toolCall.name) ?? 'auto'
+        // 'never' wins over 'ask' wins over 'auto' if both managers report (which
+        // shouldn't happen in practice, but stay strict).
+        const perm: 'auto' | 'ask' | 'never' =
+          mcpPerm === 'never' || directPerm === 'never'
+            ? 'never'
+            : mcpPerm === 'ask' || directPerm === 'ask'
+              ? 'ask'
+              : 'auto'
+        if (perm === 'never') {
+          return {
+            block: true,
+            reason: `Tool "${ctx.toolCall.name}" is disabled by connector permissions.`,
+          }
+        }
+        if (perm === 'ask') {
+          if (this.confirmHandler) {
+            const approved = await this.confirmHandler(
+              ctx.toolCall.name,
+              'Connector tool requires user approval per its permission setting',
+            )
+            if (!approved) {
+              return { block: true, reason: 'Connector tool denied by user.' }
+            }
+          } else {
+            return {
+              block: true,
+              reason: 'Connector tool requires confirmation but no handler available.',
+            }
+          }
+        }
+
         // Shell: check for dangerous command patterns
         if (ctx.toolCall.name === 'shell') {
           const args = ctx.args as { command: string }
@@ -592,11 +637,9 @@ export class Session {
 
     const events: SessionEvent[] = []
 
-    // Send initial regex-based title immediately so the client always has one,
-    // even if the async AI title generation fails later.
-    if (isFirstMessage) {
-      events.push({ type: 'title_update', title: this.title })
-    }
+    // Title is emitted exactly once per conversation, after the first turn
+    // completes (see the aiTitlePromise handling below). The regex title set
+    // above acts as an in-memory fallback if AI title generation fails.
 
     let resolveNext: (() => void) | null = null
     let done = false
@@ -816,14 +859,17 @@ export class Session {
         this.pendingCompactionEvent = null
       }
 
-      // Yield AI-generated title if available and meaningful
-      if (aiTitlePromise) {
-        const aiTitle = await aiTitlePromise
-        // Skip AI title if it's just "New Conversation" — keep the regex title instead
-        if (aiTitle && aiTitle.toLowerCase() !== 'new conversation') {
-          this.title = aiTitle
-          yield { type: 'title_update', title: aiTitle }
+      // Emit the conversation title exactly once, on the first message.
+      // Prefer the AI-generated title; fall back to the regex title if the AI
+      // call failed or returned the generic placeholder.
+      if (isFirstMessage) {
+        if (aiTitlePromise) {
+          const aiTitle = await aiTitlePromise
+          if (aiTitle && aiTitle.toLowerCase() !== 'new conversation') {
+            this.title = aiTitle
+          }
         }
+        yield { type: 'title_update', title: this.title }
       }
 
       this.log.info({ eventCount, textEventCount }, 'processMessage complete')
@@ -1861,7 +1907,10 @@ export function createSession(
     projectWorkspacePath?: string
     projectType?: string
     mcpManager?: import('./mcp/mcp-manager.js').McpManager
-    connectorManager?: { getAllTools(): import('@mariozechner/pi-agent-core').AgentTool[] }
+    connectorManager?: {
+      getAllTools(): import('@mariozechner/pi-agent-core').AgentTool[]
+      getToolPermission?(toolName: string): 'auto' | 'ask' | 'never'
+    }
     onJobAction?: import('./tools/job.js').JobActionHandler
     onDeliverResult?: import('./tools/deliver-result.js').DeliverResultHandler
     maxDurationMs?: number
@@ -1958,7 +2007,10 @@ export function resumeSession(
     projectWorkspacePath?: string
     projectType?: string
     mcpManager?: import('./mcp/mcp-manager.js').McpManager
-    connectorManager?: { getAllTools(): import('@mariozechner/pi-agent-core').AgentTool[] }
+    connectorManager?: {
+      getAllTools(): import('@mariozechner/pi-agent-core').AgentTool[]
+      getToolPermission?(toolName: string): 'auto' | 'ask' | 'never'
+    }
     onJobAction?: import('./tools/job.js').JobActionHandler
     onDeliverResult?: import('./tools/deliver-result.js').DeliverResultHandler
     maxDurationMs?: number

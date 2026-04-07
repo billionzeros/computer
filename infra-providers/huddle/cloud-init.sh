@@ -232,17 +232,8 @@ ${DOMAIN} {
         file_server
     }
 
-    # OAuth callback → agent
-    handle /_anton/oauth/* {
-        reverse_proxy localhost:${AGENT_PORT}
-    }
-
-    # Telegram webhook → agent
-    handle /_anton/telegram/* {
-        reverse_proxy localhost:${AGENT_PORT}
-    }
-
-    # Sidecar — only expose health/status, not update endpoints
+    # Sidecar — only expose /health and /status, NEVER the update endpoints.
+    # Listed first so these specific paths win before the agent catch-all.
     handle_path /_anton/health {
         reverse_proxy localhost:9878
     }
@@ -250,7 +241,10 @@ ${DOMAIN} {
         reverse_proxy localhost:9878
     }
 
-    # Everything else → agent WebSocket
+    # Everything else under /_anton/* (oauth, telegram, webhooks/*,
+    # proxy/*, and the WebSocket upgrade at /) goes to the agent.
+    # Using a single catch-all block instead of enumerating subpaths
+    # so new webhook providers don't need a Caddyfile edit per-install.
     reverse_proxy localhost:${AGENT_PORT}
 }
 CADDY

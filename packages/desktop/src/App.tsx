@@ -13,6 +13,7 @@ import { UpdateBanner } from './components/UpdateBanner.js'
 import { WelcomeModal } from './components/WelcomeModal.js'
 import { AgentsView } from './components/agents/AgentsView.js'
 import { DebugOverlay } from './components/chat/DebugOverlay.js'
+import { ConnectorsView } from './components/connectors/ConnectorsView.js'
 import { DeveloperView } from './components/developer/DeveloperView.js'
 import { ProjectFilesView } from './components/files/ProjectFilesView.js'
 import { HomeView } from './components/home/HomeView.js'
@@ -370,6 +371,7 @@ export function App() {
               </>
             )}
             {activeView === 'files' && <ProjectFilesView />}
+            {activeView === 'connectors' && <ConnectorsView />}
             {activeView === 'skills' && <SkillsPanel />}
             {activeView === 'workflows' && <WorkflowsPage />}
             {activeView === 'projects' && <ProjectList />}

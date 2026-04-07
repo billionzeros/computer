@@ -8,19 +8,18 @@ if not os.path.exists(f):
     sys.exit(0)
 
 content = open(f).read()
-checks = ['_anton/oauth', '_anton/telegram', '/a/*', '/p/*', '_anton/*']
-if all(c in content for c in checks):
+# Canary strings that only exist in the new layout. The old layout had a
+# wildcard `handle_path /_anton/*` that dumped everything to the sidecar and
+# broke /_anton/webhooks/* (slack-bot) and /_anton/proxy/notify; rewriting is
+# the safe move whenever we can't see the new-shape markers.
+checks = ['_anton/health', '_anton/status', '/a/*', '/p/*']
+wildcard_sidecar = 'handle_path /_anton/*'
+if all(c in content for c in checks) and wildcard_sidecar not in content:
     print('    Caddy routes already configured')
     sys.exit(0)
 
 domain = content.split()[0]
 new = f"""{domain} {{
-    handle /_anton/oauth/* {{
-        reverse_proxy localhost:9876
-    }}
-    handle /_anton/telegram/* {{
-        reverse_proxy localhost:9876
-    }}
     handle /a/* {{
         uri strip_prefix /a
         root * /home/anton/.anton/published
@@ -31,9 +30,20 @@ new = f"""{domain} {{
         root * /home/anton/Anton
         file_server
     }}
-    handle_path /_anton/* {{
+
+    # Sidecar — expose /health and /status only. /update/* is Bearer-token
+    # protected and must stay off the public internet.
+    handle_path /_anton/health {{
         reverse_proxy localhost:9878
     }}
+    handle_path /_anton/status {{
+        reverse_proxy localhost:9878
+    }}
+
+    # Everything else goes to the agent: /_anton/oauth/*, /_anton/telegram/*,
+    # /_anton/webhooks/* (slack-bot, etc.), /_anton/proxy/notify, and the
+    # WebSocket upgrade at /. One catch-all instead of enumerating subpaths
+    # so new webhook providers don't need a Caddyfile edit per-install.
     reverse_proxy localhost:9876
 }}
 """

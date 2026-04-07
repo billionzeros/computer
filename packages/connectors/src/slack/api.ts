@@ -1,6 +1,11 @@
 /**
  * Typed Slack Web API client.
  * Makes direct HTTP calls — no MCP subprocess, no SDK dependency.
+ *
+ * Each instance holds a single token. Use one SlackAPI per connector class:
+ * the user connector hands it an xoxp- token; the bot connector hands it an
+ * xoxb- token. Method-level routing was removed in favour of two distinct
+ * connectors so the agent sees clearly-scoped tools.
  */
 
 const BASE_URL = 'https://slack.com/api'
@@ -17,8 +22,12 @@ export class SlackAPI {
     this.tokenProvider = fn
   }
 
+  private async resolveToken(): Promise<string> {
+    return this.tokenProvider ? await this.tokenProvider() : this.token
+  }
+
   private async call<T = unknown>(method: string, body?: Record<string, unknown>): Promise<T> {
-    const token = this.tokenProvider ? await this.tokenProvider() : this.token
+    const token = await this.resolveToken()
     const res = await fetch(`${BASE_URL}/${method}`, {
       method: 'POST',
       headers: {
@@ -73,7 +82,7 @@ export class SlackAPI {
   async postMessage(
     channel: string,
     text: string,
-    opts?: { thread_ts?: string },
+    opts?: { thread_ts?: string; username?: string; icon_url?: string },
   ): Promise<{
     ts: string
     channel: string
@@ -82,6 +91,8 @@ export class SlackAPI {
       channel,
       text,
       ...(opts?.thread_ts ? { thread_ts: opts.thread_ts } : {}),
+      ...(opts?.username ? { username: opts.username } : {}),
+      ...(opts?.icon_url ? { icon_url: opts.icon_url } : {}),
     })
   }
 
@@ -152,7 +163,7 @@ export class SlackAPI {
     return this.call('users.info', { user: userId })
   }
 
-  // ── Search ──
+  // ── Search (user-token only — xoxp) ──
 
   async searchMessages(
     query: string,

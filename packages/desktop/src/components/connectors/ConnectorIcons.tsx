@@ -292,6 +292,7 @@ const ICON_MAP: Record<string, (props: { size?: number }) => JSX.Element> = {
   notion: NotionIcon,
   github: GitHubIcon,
   slack: SlackIcon,
+  'slack-bot': SlackIcon,
   linear: LinearIcon,
   'google-drive': GoogleDriveIcon,
   granola: GranolaIcon,

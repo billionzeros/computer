@@ -1,7 +1,7 @@
-export { ConnectorManager } from './connector-manager.js'
+export { ConnectorManager, type DirectToolPermission } from './connector-manager.js'
 export type { DirectConnector, ConnectorFactory, TokenGetter } from './types.js'
 
-export { SlackConnector } from './slack/index.js'
+export { SlackUserConnector, SlackBotConnector } from './slack/index.js'
 export { GitHubConnector } from './github/index.js'
 export { GmailConnector } from './gmail/index.js'
 export { NotionConnector } from './notion/index.js'
@@ -30,14 +30,14 @@ import { GranolaConnector } from './granola/index.js'
 import { LinearConnector } from './linear/index.js'
 import { LinkedInConnector } from './linkedin/index.js'
 import { NotionConnector } from './notion/index.js'
-import { SlackConnector } from './slack/index.js'
+import { SlackBotConnector, SlackUserConnector } from './slack/index.js'
 import { TelegramConnector } from './telegram/index.js'
 import type { ConnectorFactory } from './types.js'
 
 /** Built-in direct connector factories keyed by provider ID. */
 export const CONNECTOR_FACTORIES: Record<string, ConnectorFactory> = {
-  slack: () => new SlackConnector(),
-  'slack-bot': () => new SlackConnector(),
+  slack: () => new SlackUserConnector(),
+  'slack-bot': () => new SlackBotConnector(),
   github: () => new GitHubConnector(),
   gmail: () => new GmailConnector(),
   notion: () => new NotionConnector(),

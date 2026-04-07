@@ -56,9 +56,11 @@ import { GIT_HASH, VERSION } from '@anton/agent-config'
 import {
   CONNECTOR_REGISTRY,
   type ConnectorConfig,
+  type ConnectorToolPermission,
   addConnector,
   getConnectors,
   removeConnector as removeConnectorConfig,
+  setConnectorToolPermission,
   toggleConnector as toggleConnectorConfig,
   updateConnector as updateConnectorConfig,
 } from '@anton/agent-config'
@@ -79,8 +81,13 @@ import type { AiMessage, ChannelId, ControlMessage, TerminalMessage } from '@ant
 import { WebSocket, WebSocketServer } from 'ws'
 import { OAuthFlow, TokenStore, oauthCallbackHandler } from './oauth/index.js'
 import type { Scheduler } from './scheduler.js'
-import { TelegramBotHandler } from './telegram-bot.js'
 import { Updater } from './updater.js'
+import {
+  SlackWebhookProvider,
+  TelegramWebhookProvider,
+  WebhookAgentRunner,
+  WebhookRouter,
+} from './webhooks/index.js'
 import {
   getBuiltinWorkflowPath,
   listBuiltinWorkflows,
@@ -156,7 +163,10 @@ export class AgentServer {
   private oauthFlow: OAuthFlow
   private tokenStore: TokenStore
   private connectorManager: ConnectorManager
-  private telegramBot: TelegramBotHandler | null = null
+  private webhookRouter: WebhookRouter | null = null
+  private webhookRunner: WebhookAgentRunner | null = null
+  private telegramProvider: TelegramWebhookProvider | null = null
+  private slackBotProvider: SlackWebhookProvider | null = null
   private ptys: Map<string, ChildProcess> = new Map()
 
   constructor(config: AgentConfig) {
@@ -286,13 +296,30 @@ export class AgentServer {
         return
       }
 
+      // Unified webhook router: POST /_anton/webhooks/{provider}
+      if (this.webhookRouter?.tryHandle(req, res)) return
+
+      // Typed notifications from the oauth-proxy (e.g. Slack bot ownership
+      // was transferred to another Anton). Signed with the connector's
+      // forward_secret so only the legitimate proxy can reach it.
+      if (req.method === 'POST' && req.url === '/_anton/proxy/notify') {
+        this.handleProxyNotify(req, res).catch((err) => {
+          log.error({ err }, '/_anton/proxy/notify failed')
+          if (!res.headersSent) {
+            res.writeHead(500, { 'Content-Type': 'text/plain' })
+            res.end('internal error')
+          }
+        })
+        return
+      }
+
+      // Backwards-compat alias for the legacy Telegram webhook URL.
       if (req.method === 'POST' && req.url === '/_anton/telegram/webhook') {
-        if (this.telegramBot) {
-          this.telegramBot.handle(req, res)
-        } else {
-          res.writeHead(404)
-          res.end('Telegram bot not configured')
-        }
+        // Rewrite and re-dispatch through the router so we don't duplicate logic.
+        req.url = '/_anton/webhooks/telegram'
+        if (this.webhookRouter?.tryHandle(req, res)) return
+        res.writeHead(404)
+        res.end('Telegram bot not configured')
         return
       }
 
@@ -373,8 +400,8 @@ export class AgentServer {
     // Activate API connectors with stored tokens from config or env
     this.startApiConnectors()
 
-    // Start Telegram bot if token is configured
-    await this.startTelegramBot()
+    // Start webhook router and configured providers
+    await this.startWebhooks()
 
     log.info({ agentId: this.config.agentId, token: this.config.token }, 'Server started')
 
@@ -1094,7 +1121,12 @@ export class AgentServer {
         this.handleConnectorOAuthStart(msg)
         break
       case 'connector_oauth_disconnect':
-        this.handleConnectorOAuthDisconnect(msg)
+        this.handleConnectorOAuthDisconnect(msg).catch((err) =>
+          log.error({ err, provider: msg.provider }, 'OAuth disconnect failed'),
+        )
+        break
+      case 'connector_set_tool_permission':
+        this.handleConnectorSetToolPermission(msg)
         break
 
       // ── Publish artifacts ──
@@ -3098,6 +3130,18 @@ export class AgentServer {
       log.info({ count: mcpConfigs.length }, 'Starting MCP connectors')
       await this.mcpManager.startAll(mcpConfigs)
     }
+
+    // Restore per-tool permission overrides from persisted config for both
+    // managers. Direct connectors (slack, github, …) need this just as much
+    // as MCP — without it, a 'never' tool would be re-allowed every restart.
+    for (const c of connectors) {
+      if (!c.toolPermissions) continue
+      if (c.type === 'mcp') {
+        this.mcpManager.setToolPermissions(c.id, c.toolPermissions)
+      } else {
+        this.connectorManager.setToolPermissions(c.id, c.toolPermissions)
+      }
+    }
   }
 
   private async startOAuthConnectors(): Promise<void> {
@@ -3119,41 +3163,89 @@ export class AgentServer {
     }
   }
 
-  private async startTelegramBot(): Promise<void> {
-    const token = this.getTelegramToken()
-    if (!token) return
+  /**
+   * Boot the unified webhook router and register all providers whose
+   * credentials are present. Idempotent — safe to call repeatedly when a
+   * connector is added at runtime.
+   */
+  private async startWebhooks(): Promise<void> {
+    // Lazily construct the runner + router on first call.
+    if (!this.webhookRunner) {
+      this.webhookRunner = new WebhookAgentRunner(
+        this.config,
+        this.mcpManager,
+        this.connectorManager,
+      )
+    }
+    if (!this.webhookRouter) {
+      this.webhookRouter = new WebhookRouter(this.webhookRunner)
+    }
 
-    // Accept DOMAIN, or derive from OAUTH_CALLBACK_BASE_URL (same host)
-    let publicUrl: string | null = null
-    if (process.env.DOMAIN) {
-      publicUrl = `https://${process.env.DOMAIN}`
-    } else if (process.env.OAUTH_CALLBACK_BASE_URL) {
-      try {
-        publicUrl = new URL(process.env.OAUTH_CALLBACK_BASE_URL).origin
-      } catch {
-        /* ignore */
+    const publicUrl = this.getPublicUrl()
+
+    // ── Telegram ─────────────────────────────────────────────────
+    const telegramToken = this.getTelegramToken()
+    if (telegramToken && !this.telegramProvider) {
+      this.telegramProvider = new TelegramWebhookProvider(telegramToken)
+      this.webhookRouter.register(this.telegramProvider)
+      if (publicUrl) {
+        await this.telegramProvider.registerWebhook(publicUrl)
+      } else {
+        log.warn('Telegram token present but DOMAIN not set; webhook not registered')
       }
-    } else if (this.config.oauth?.callbackBaseUrl) {
+    }
+
+    // ── Slack bot ────────────────────────────────────────────────
+    // Inbound Slack events arrive from the developer-owned oauth-proxy, not
+    // from Slack directly. Verification uses the per-install forward_secret
+    // the proxy wrote into slack-bot metadata at OAuth time — we never see
+    // Slack's app signing secret.
+    //
+    // We always register the provider (even before the user has installed
+    // the bot) so the route exists; `getForwardSecret` returning null is the
+    // natural "not-installed" signal and rejects traffic cleanly.
+    if (!this.slackBotProvider) {
+      this.slackBotProvider = new SlackWebhookProvider({
+        getForwardSecret: async () => this.getSlackBotForwardSecret(),
+        getBotToken: async () => {
+          try {
+            return (await this.oauthFlow.getToken('slack-bot')) ?? null
+          } catch {
+            return null
+          }
+        },
+        getBotUserId: async () => this.getSlackBotConnector()?.metadata?.bot_user_id ?? null,
+        getBotIdentity: async () => {
+          const meta = this.getSlackBotConnector()?.metadata
+          if (!meta) return null
+          return {
+            displayName: meta.displayName || undefined,
+            iconUrl: meta.iconUrl || undefined,
+          }
+        },
+      })
+      this.webhookRouter.register(this.slackBotProvider)
+    }
+  }
+
+  /** Resolve the publicly reachable origin used for webhook registration. */
+  private getPublicUrl(): string | null {
+    if (process.env.DOMAIN) return `https://${process.env.DOMAIN}`
+    if (process.env.OAUTH_CALLBACK_BASE_URL) {
       try {
-        publicUrl = new URL(this.config.oauth.callbackBaseUrl).origin
+        return new URL(process.env.OAUTH_CALLBACK_BASE_URL).origin
       } catch {
         /* ignore */
       }
     }
-
-    if (!publicUrl) {
-      log.warn('Telegram bot token found but DOMAIN not set, skipping webhook registration')
-      return
+    if (this.config.oauth?.callbackBaseUrl) {
+      try {
+        return new URL(this.config.oauth.callbackBaseUrl).origin
+      } catch {
+        /* ignore */
+      }
     }
-
-    this.telegramBot = new TelegramBotHandler({
-      token,
-      config: this.config,
-      mcpManager: this.mcpManager,
-      connectorManager: this.connectorManager,
-    })
-
-    await this.telegramBot.registerWebhook(publicUrl)
+    return null
   }
 
   private getTelegramToken(): string | null {
@@ -3161,6 +3253,31 @@ export class AgentServer {
     if (process.env.TELEGRAM_BOT_TOKEN) return process.env.TELEGRAM_BOT_TOKEN
     const saved = getConnectors(this.config).find((c) => c.id === 'telegram' && c.enabled)
     return saved?.apiKey ?? null
+  }
+
+  /**
+   * Resolve the slack-bot connector from config. Centralised so the inbound
+   * webhook hot path, the proxy notify endpoint, and the disconnect helper all
+   * agree on what "the slack-bot install" means.
+   */
+  private getSlackBotConnector(): ConnectorConfig | undefined {
+    return getConnectors(this.config).find((c) => c.id === 'slack-bot')
+  }
+
+  /**
+   * Resolve the forward_secret for the slack-bot install. Called on every
+   * inbound Slack event, so this stays cheap (single Map lookup + property
+   * access) — no caching, which sidesteps any race between cache invalidation
+   * and concurrent webhook verification during ownership transfers.
+   */
+  private getSlackBotForwardSecret(): string | null {
+    const c = this.getSlackBotConnector()
+    return c?.enabled ? (c.metadata?.forward_secret ?? null) : null
+  }
+
+  /** No-op kept for call-site compatibility now that the secret is read live. */
+  private invalidateSlackBotSecretCache(): void {
+    /* secret is now read directly from config; nothing to invalidate */
   }
 
   /** Activate direct connectors that have a stored apiKey in config or a matching env var. */
@@ -3201,8 +3318,11 @@ export class AgentServer {
     // OAuth connectors are "connected" when they have a stored token
     const isOAuthConnected = c.type === 'oauth' && this.oauthFlow.hasToken(c.id) && c.enabled
     const connected = mcpStatus?.connected ?? directStatus?.connected ?? isOAuthConnected
-    const toolCount = mcpStatus?.toolCount ?? directStatus?.toolCount ?? 0
-    const tools = mcpStatus?.tools ?? directStatus?.tools ?? []
+    // Reported toolCount and tools should reflect what the agent will actually see —
+    // i.e. excluding tools the user has marked 'never'.
+    const rawTools = mcpStatus?.tools ?? directStatus?.tools ?? []
+    const perms = c.toolPermissions ?? {}
+    const visibleTools = rawTools.filter((t) => perms[t] !== 'never')
     return {
       id: c.id,
       name: c.name,
@@ -3211,8 +3331,14 @@ export class AgentServer {
       type: c.type,
       connected,
       enabled: c.enabled,
-      toolCount,
-      tools,
+      // Always expose the FULL tool list to the UI so the user can re-enable a 'never' tool.
+      // The toolCount reflects the agent-visible subset.
+      toolCount: visibleTools.length,
+      tools: rawTools,
+      toolPermissions: c.toolPermissions,
+      // Provider-specific runtime metadata (Slack bot identity, team info, etc.)
+      // Sensitive values are stripped before sending to the client.
+      metadata: stripSensitiveMetadata(c.metadata),
     }
   }
 
@@ -3227,9 +3353,15 @@ export class AgentServer {
   private async handleConnectorAdd(msg: { connector: ConnectorConfig }): Promise<void> {
     try {
       addConnector(this.config, msg.connector)
+      if (msg.connector.id === 'slack-bot') this.invalidateSlackBotSecretCache()
 
       if (msg.connector.type === 'mcp' && msg.connector.command) {
         await this.mcpManager.addConnector(this.connectorToMcpConfig(msg.connector))
+        this.mcpManager.setToolPermissions(msg.connector.id, msg.connector.toolPermissions)
+      } else if (msg.connector.toolPermissions) {
+        // Direct connector (api/oauth) — apply persisted permissions to the
+        // ConnectorManager so 'never'/'ask' tools are honoured immediately.
+        this.connectorManager.setToolPermissions(msg.connector.id, msg.connector.toolPermissions)
       }
 
       // Activate direct API connectors immediately using the provided token
@@ -3243,9 +3375,9 @@ export class AgentServer {
         this.refreshAllSessionTools()
       }
 
-      // Start Telegram bot if just connected
-      if (msg.connector.id === 'telegram' && msg.connector.apiKey && !this.telegramBot) {
-        this.startTelegramBot().catch((err) => log.error({ err }, 'Telegram bot failed to start'))
+      // Start Telegram webhook provider if just connected
+      if (msg.connector.id === 'telegram' && msg.connector.apiKey && !this.telegramProvider) {
+        this.startWebhooks().catch((err) => log.error({ err }, 'Webhook startup failed'))
       }
 
       this.sendToClient(Channel.AI, {
@@ -3271,10 +3403,21 @@ export class AgentServer {
         this.sendToClient(Channel.AI, { type: 'error', message: `Connector not found: ${msg.id}` })
         return
       }
+      if (msg.id === 'slack-bot') this.invalidateSlackBotSecretCache()
 
       if (updated.type === 'mcp' && updated.command) {
         await this.mcpManager.removeConnector(msg.id)
         await this.mcpManager.addConnector(this.connectorToMcpConfig(updated))
+        this.mcpManager.setToolPermissions(updated.id, updated.toolPermissions)
+      } else {
+        // Direct connector — keep the ConnectorManager's permission map in
+        // lockstep with the persisted config. Without this, an `update` that
+        // tweaked permissions would only persist them; the live agent would
+        // still see the old set until process restart.
+        this.connectorManager.setToolPermissions(updated.id, updated.toolPermissions)
+        // Tools the agent sees may have changed (a 'never' tool just got
+        // re-enabled, for instance) — push the new tool list into live sessions.
+        this.refreshAllSessionTools()
       }
 
       this.sendToClient(Channel.AI, {
@@ -3291,6 +3434,15 @@ export class AgentServer {
 
   private async handleConnectorRemove(msg: { id: string }): Promise<void> {
     try {
+      // For slack-bot, tell the oauth-proxy to drop the workspace BEFORE we
+      // wipe local config — once metadata.forward_secret is gone we can't
+      // produce a valid disconnect signature any more.
+      if (msg.id === 'slack-bot') {
+        await this.notifyProxySlackBotDisconnect().catch((err) =>
+          log.warn({ err }, 'slack-bot proxy disconnect failed (continuing)'),
+        )
+      }
+
       // Try MCP removal (ignores if not an MCP connector)
       try {
         await this.mcpManager.removeConnector(msg.id)
@@ -3298,7 +3450,9 @@ export class AgentServer {
         /* not an MCP connector — that's fine */
       }
       this.connectorManager.deactivate(msg.id)
+      this.connectorManager.setToolPermissions(msg.id, undefined)
       removeConnectorConfig(this.config, msg.id)
+      if (msg.id === 'slack-bot') this.invalidateSlackBotSecretCache()
       this.refreshAllSessionTools()
       this.sendToClient(Channel.AI, { type: 'connector_removed', id: msg.id })
       log.info({ connectorId: msg.id }, 'Connector removed')
@@ -3313,6 +3467,7 @@ export class AgentServer {
   private async handleConnectorToggle(msg: { id: string; enabled: boolean }): Promise<void> {
     try {
       toggleConnectorConfig(this.config, msg.id, msg.enabled)
+      if (msg.id === 'slack-bot') this.invalidateSlackBotSecretCache()
 
       const isMcpConnector = this.mcpManager.getStatus().some((s) => s.id === msg.id)
       const isDirectConnector =
@@ -3462,6 +3617,42 @@ export class AgentServer {
     })
   }
 
+  private handleConnectorSetToolPermission(msg: {
+    id: string
+    toolName: string
+    permission: ConnectorToolPermission
+  }): void {
+    try {
+      const updated = setConnectorToolPermission(this.config, msg.id, msg.toolName, msg.permission)
+      if (!updated) {
+        this.sendToClient(Channel.AI, { type: 'error', message: `Connector not found: ${msg.id}` })
+        return
+      }
+      // Push the new permission set into both managers — MCP for stdio
+      // connectors, ConnectorManager for direct OAuth/API connectors. Without
+      // the second call, the agent could still call e.g. slack_send_message
+      // even though the user marked it 'never' in the UI, because the only
+      // enforcement was the MCP-prefix check in session.beforeToolCall.
+      this.mcpManager.setToolPermissions(updated.id, updated.toolPermissions)
+      this.connectorManager.setToolPermissions(updated.id, updated.toolPermissions)
+      // Tools the agent sees may have changed — refresh active sessions.
+      this.refreshAllSessionTools()
+      this.sendToClient(Channel.AI, {
+        type: 'connector_updated',
+        connector: this.buildConnectorStatus(updated),
+      })
+      log.info(
+        { connectorId: msg.id, toolName: msg.toolName, permission: msg.permission },
+        'Connector tool permission updated',
+      )
+    } catch (err) {
+      this.sendToClient(Channel.AI, {
+        type: 'error',
+        message: `Failed to set tool permission: ${(err as Error).message}`,
+      })
+    }
+  }
+
   // ── OAuth connector handlers ──────────────────────────────────────
 
   private handleConnectorOAuthStart(msg: { provider: string }): void {
@@ -3494,17 +3685,24 @@ export class AgentServer {
     })
   }
 
-  private handleConnectorOAuthDisconnect(msg: { provider: string }): void {
+  private async handleConnectorOAuthDisconnect(msg: { provider: string }): Promise<void> {
+    // Drop the stored OAuth token first so the connector can't make any more
+    // outbound calls while teardown runs.
     this.oauthFlow.disconnect(msg.provider)
-    // Also remove the connector config if it exists
-    const connector = getConnectors(this.config).find((c) => c.id === msg.provider)
-    if (connector) {
-      removeConnectorConfig(this.config, msg.provider)
+
+    // Then run the full connector-removal pipeline. This is what makes the
+    // slack-bot proxy /_disconnect notify, MCP teardown, ConnectorManager
+    // deactivation, session tool refresh, and forward_secret cache
+    // invalidation all run for OAuth-initiated disconnects too — previously
+    // this path only deleted the token + config and emitted connector_removed,
+    // which left direct-connector tools dangling on live sessions and left the
+    // workspace owned in the oauth-proxy.
+    if (getConnectors(this.config).some((c) => c.id === msg.provider)) {
+      await this.handleConnectorRemove({ id: msg.provider })
+    } else {
+      // No config row to remove — still let the UI know the token is gone.
+      this.sendToClient(Channel.AI, { type: 'connector_removed', id: msg.provider })
     }
-    this.sendToClient(Channel.AI, {
-      type: 'connector_removed',
-      id: msg.provider,
-    })
     log.info({ provider: msg.provider }, 'OAuth connector disconnected')
   }
 
@@ -3512,6 +3710,7 @@ export class AgentServer {
     provider: string
     success: boolean
     error?: string
+    metadata?: Record<string, string>
   }): Promise<void> {
     if (result.success) {
       // Auto-create a connector config for the OAuth provider
@@ -3525,12 +3724,30 @@ export class AgentServer {
           icon: registryEntry?.icon,
           type: 'oauth',
           enabled: true,
+          metadata: result.metadata,
+        })
+      } else if (result.metadata) {
+        // Merge fresh OAuth metadata onto the existing connector. Critical
+        // for slack-bot, where the proxy hands us a per-install forward_secret
+        // that the SlackWebhookProvider must read on every inbound event.
+        updateConnectorConfig(this.config, result.provider, {
+          metadata: { ...(existingConnector.metadata ?? {}), ...result.metadata },
         })
       }
+      if (result.provider === 'slack-bot') this.invalidateSlackBotSecretCache()
 
-      // Activate the direct connector so tools are immediately available
+      // Activate the direct connector so tools are immediately available.
+      // activate() now reports success/failure — surface failure so the
+      // desktop doesn't think the OAuth dance "succeeded" while the
+      // connector is silently inert.
       if (this.connectorManager.hasFactory(result.provider)) {
-        await this.connectorManager.activate(result.provider)
+        const activated = await this.connectorManager.activate(result.provider)
+        if (!activated) {
+          log.error(
+            { provider: result.provider },
+            'OAuth completed but direct connector failed to activate',
+          )
+        }
         this.refreshAllSessionTools()
       }
 
@@ -3568,7 +3785,169 @@ export class AgentServer {
     for (const session of this.sessions.values()) {
       session.refreshConnectorTools()
     }
-    this.telegramBot?.refreshAllSessionTools()
+    this.webhookRunner?.refreshAllSessionTools()
+  }
+
+  /**
+   * Inbound typed notifications from the oauth-proxy. Currently used to tell
+   * the agent its slack-bot install was transferred to a different Anton.
+   *
+   * Authenticated by HMAC-SHA256 over `v1:<ts>:<rawBody>` using the slack-bot
+   * connector's `forward_secret`. Only the proxy that minted that secret can
+   * produce a valid signature.
+   */
+  private async handleProxyNotify(
+    req: import('node:http').IncomingMessage,
+    res: import('node:http').ServerResponse,
+  ): Promise<void> {
+    log.info({ remoteAddr: req.socket.remoteAddress }, 'proxy-notify: inbound')
+    let body = ''
+    for await (const chunk of req) body += (chunk as Buffer).toString('utf8')
+
+    const ts = (req.headers['x-anton-proxy-ts'] as string | undefined) ?? ''
+    const sig = (req.headers['x-anton-proxy-sig'] as string | undefined) ?? ''
+    if (!ts || !sig) {
+      log.warn('proxy-notify: missing signature headers')
+      res.writeHead(401, { 'Content-Type': 'text/plain' })
+      res.end('missing signature')
+      return
+    }
+    const tsNum = Number.parseInt(ts, 10)
+    if (!Number.isFinite(tsNum) || Math.abs(Date.now() / 1000 - tsNum) > 300) {
+      log.warn({ ts, skewSec: Date.now() / 1000 - tsNum }, 'proxy-notify: stale timestamp')
+      res.writeHead(401, { 'Content-Type': 'text/plain' })
+      res.end('stale timestamp')
+      return
+    }
+
+    let payload: { type?: string; team_id?: string; team_name?: string; new_owner_label?: string }
+    try {
+      payload = JSON.parse(body)
+    } catch (err) {
+      log.warn({ err }, 'proxy-notify: invalid JSON body')
+      res.writeHead(400, { 'Content-Type': 'text/plain' })
+      res.end('invalid json')
+      return
+    }
+
+    // The notify channel is per-install — verify against the slack-bot
+    // connector's forward_secret. (When we add more notify-capable connectors
+    // we'll dispatch on payload.type to find the right secret.)
+    if (!payload.type?.startsWith('slack-bot.')) {
+      log.warn({ type: payload.type }, 'proxy-notify: unknown notify type')
+      res.writeHead(400, { 'Content-Type': 'text/plain' })
+      res.end('unknown notify type')
+      return
+    }
+    const secret = this.getSlackBotConnector()?.metadata?.forward_secret
+    if (!secret) {
+      log.warn('proxy-notify: no slack-bot install, nothing to verify against')
+      res.writeHead(404, { 'Content-Type': 'text/plain' })
+      res.end('no slack-bot install')
+      return
+    }
+
+    // The Worker signs notifications using the same base64url helper as the
+    // Slack event forward path. We must compute base64url here too or every
+    // ownership-lost notify will 401 for the same encoding-mismatch reason
+    // the slack-bot webhook verify used to. Keep these in lockstep.
+    const { createHmac, timingSafeEqual } = await import('node:crypto')
+    const expected = `v1=${createHmac('sha256', Buffer.from(secret, 'base64'))
+      .update(`v1:${ts}:${body}`)
+      .digest('base64')
+      .replace(/\+/g, '-')
+      .replace(/\//g, '_')
+      .replace(/=+$/, '')}`
+    const a = Buffer.from(sig)
+    const b = Buffer.from(expected)
+    let valid = false
+    try {
+      valid = a.length === b.length && timingSafeEqual(a, b)
+    } catch {
+      valid = false
+    }
+    if (!valid) {
+      log.warn(
+        {
+          type: payload.type,
+          sigPrefix: sig.slice(0, 16),
+          expectedPrefix: expected.slice(0, 16),
+        },
+        'proxy-notify: HMAC mismatch, rejecting',
+      )
+      res.writeHead(401, { 'Content-Type': 'text/plain' })
+      res.end('bad signature')
+      return
+    }
+    log.info(
+      { type: payload.type, teamId: payload.team_id },
+      'proxy-notify: verified, processing',
+    )
+
+    // Ack first — we don't want the proxy retrying because our cleanup is slow.
+    res.writeHead(200, { 'Content-Type': 'application/json' })
+    res.end('{"ok":true}')
+
+    if (payload.type === 'slack-bot.ownership-lost') {
+      log.warn(
+        { teamId: payload.team_id, newOwner: payload.new_owner_label },
+        'slack-bot ownership transferred to another Anton — disconnecting locally',
+      )
+      try {
+        // Drop the active connector + its tools, then push a UI update.
+        try {
+          this.connectorManager.deactivate('slack-bot')
+        } catch {
+          /* not active — fine */
+        }
+        removeConnectorConfig(this.config, 'slack-bot')
+        this.invalidateSlackBotSecretCache()
+        this.refreshAllSessionTools()
+        this.sendToClient(Channel.AI, { type: 'connector_removed', id: 'slack-bot' })
+      } catch (err) {
+        log.error({ err }, 'failed to drop slack-bot connector after ownership transfer')
+      }
+    }
+  }
+
+  /**
+   * Tell the oauth-proxy to stop routing Slack events for the workspace
+   * currently owned by this Anton. Signed with the per-install forward_secret
+   * so only the current owner can trigger a disconnect.
+   */
+  private async notifyProxySlackBotDisconnect(): Promise<void> {
+    const c = this.getSlackBotConnector()
+    const secret = c?.metadata?.forward_secret
+    const teamId = c?.metadata?.team_id
+    if (!secret || !teamId) return
+
+    const proxyUrl = this.oauthFlow.getProxyUrl() ?? process.env.OAUTH_PROXY_URL
+    if (!proxyUrl) {
+      log.warn('slack-bot disconnect: no proxy URL configured')
+      return
+    }
+
+    const ts = Math.floor(Date.now() / 1000).toString()
+    const { createHmac } = await import('node:crypto')
+    const sig = createHmac('sha256', Buffer.from(secret, 'base64'))
+      .update(`${teamId}:${ts}`)
+      .digest('base64')
+      .replace(/\+/g, '-')
+      .replace(/\//g, '_')
+      .replace(/=+$/, '')
+
+    const res = await fetch(`${proxyUrl.replace(/\/+$/, '')}/_disconnect/slack-bot`, {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        'x-anton-agent-sig': sig,
+      },
+      body: JSON.stringify({ team_id: teamId, ts }),
+      signal: AbortSignal.timeout(5000),
+    })
+    if (!res.ok) {
+      log.warn({ status: res.status }, 'slack-bot /_disconnect responded non-2xx')
+    }
   }
 
   /** Apply connector-specific metadata after activation (e.g. ownerChatId for Telegram). */
@@ -3625,6 +4004,33 @@ export class AgentServer {
       this.activeClient.send(encodeFrame(channel, message))
     }
   }
+}
+
+/**
+ * Drop secrets before sending connector metadata to the desktop client.
+ * Anything that looks like a token, secret, or key is redacted.
+ */
+const SENSITIVE_METADATA_KEYS = new Set([
+  'access_token',
+  'bot_token',
+  'refresh_token',
+  'client_secret',
+  'api_key',
+  'signing_secret',
+  // Per-install HMAC key the proxy uses to sign forwarded Slack events to
+  // the agent-server. Lives in slack-bot metadata; never expose to UI.
+  'forward_secret',
+])
+function stripSensitiveMetadata(
+  metadata: Record<string, string> | undefined,
+): Record<string, string> | undefined {
+  if (!metadata) return undefined
+  const out: Record<string, string> = {}
+  for (const [k, v] of Object.entries(metadata)) {
+    if (SENSITIVE_METADATA_KEYS.has(k)) continue
+    out[k] = v
+  }
+  return Object.keys(out).length > 0 ? out : undefined
 }
 
 function formatFileSize(bytes: number): string {

@@ -12,6 +12,20 @@ Connectors integrate external services (Slack, Gmail, GitHub, etc.) into the age
 
 **OAuth connectors are the default for core services.** MCP and API remain as escape hatches for custom/community connectors.
 
+> **Inbound traffic / bots.** Some connectors don't just *call* services
+> outward — they receive events too (Slack `@mentions`, Telegram messages,
+> GitHub webhooks). All of those plug into a single unified webhook
+> abstraction. See:
+>
+> - `specs/architecture/WEBHOOK_ROUTER.md` — the `WebhookProvider` /
+>   `WebhookRouter` pattern under `/_anton/webhooks/{slug}` that every
+>   inbound integration shares.
+> - `specs/features/SLACK_BOT.md` — the Slack-specific design:
+>   two connectors (`slack` user delegate + `slack-bot` workspace bot),
+>   developer-owned Cloudflare Worker fan-out, per-install `forward_secret`,
+>   and the ownership-transfer UX that lets multiple Antons coexist on the
+>   same Slack app.
+
 ## Architecture
 
 ```
@@ -163,7 +177,7 @@ Simple API key-based integrations. The first `requiredEnv` value maps to `apiKey
 | C → S | `connector_test` | Test connection, list tools |
 | C → S | `connector_registry_list` | Request built-in registry |
 | C → S | `connector_oauth_start` | Start OAuth flow for a provider |
-| C → S | `connector_oauth_disconnect` | Disconnect OAuth connector |
+| C → S | `connector_oauth_disconnect` | Disconnect OAuth connector (drops token then delegates to full removal — see invariant below) |
 | S → C | `connectors_list_response` | Full connector status list |
 | S → C | `connector_added` | Confirmation with status |
 | S → C | `connector_status` | Status update |
@@ -245,8 +259,8 @@ Three managers exist for different connector types:
 
 | Manager | Connector Types | Methods |
 |---------|----------------|---------|
-| `mcpManager` | `mcp` | toggleConnector, testConnector, removeConnector |
-| `connectorManager` | `oauth`, `api` | activate, deactivate, testConnection |
+| `mcpManager` | `mcp` | toggleConnector, testConnector, removeConnector, setToolPermissions, getToolPermission |
+| `connectorManager` | `oauth`, `api` | activate, deactivate, testConnection, setToolPermissions, getToolPermission |
 | `oauthFlow` | `oauth` (tokens) | hasToken, startFlow, disconnect |
 
 Server handlers MUST check connector type before routing to the correct manager. Pattern:
@@ -257,6 +271,41 @@ else if (connectorManager knows about it) → use connectorManager
 else → handle gracefully (don't throw)
 ```
 
+### Per-tool Permissions
+
+**Rule:** Per-tool `never`/`ask` permissions MUST be enforced uniformly for
+both MCP connectors and direct (oauth/api) connectors. The UI exposes the
+toggles for every connector type, and the agent must honour them regardless
+of how the tool is implemented.
+
+Two enforcement layers, mirrored across both managers:
+
+1. **`getAllTools()` filtering** — tools marked `never` are stripped from
+   the list before it reaches the agent, so the model never sees them.
+2. **`session.beforeToolCall` gate** — defence-in-depth. Looks up the tool
+   name in *both* `mcpManager.getToolPermission()` and
+   `connectorManager.getToolPermission()` and combines them (`never` wins
+   over `ask` wins over `auto`). `never` blocks; `ask` routes through the
+   confirm handler before the call runs.
+
+Lifecycle wiring (server.ts) — every place that touches a connector's
+permissions must update the matching manager:
+
+| Event | MCP path | Direct path |
+|---|---|---|
+| Server startup restore | `mcpManager.setToolPermissions` | `connectorManager.setToolPermissions` |
+| `connector_add` | `mcpManager.setToolPermissions` | `connectorManager.setToolPermissions` |
+| `connector_update` | `mcpManager.setToolPermissions` | `connectorManager.setToolPermissions` + `refreshAllSessionTools()` |
+| `connector_set_tool_permission` | `mcpManager.setToolPermissions` | `connectorManager.setToolPermissions` (both, always) |
+| `connector_remove` | (handled via removeConnector) | `connectorManager.setToolPermissions(id, undefined)` |
+
+The previous version of this code only enforced permissions for tools whose
+names started with `mcp_`. Direct-connector tools like `slack_send_message`
+and `github_create_issue` were filtered out of the UI tool count but the
+agent could still call them — the toggle was cosmetic for everything except
+MCP. The fix adds `setToolPermissions` / `getToolPermission` to
+`ConnectorManager` and gates both managers in `beforeToolCall`.
+
 ### Error Surfacing
 
 **Rule:** LLM API errors MUST be surfaced to the user, never swallowed silently.
@@ -265,6 +314,31 @@ else → handle gracefully (don't throw)
 - `translateEvent` in `session.ts` checks `turn_end` for `stopReason === 'error'` and emits an error event
 - `agent_end` checks ALL messages (not just `[0]`) for `errorMessage`
 - Server logs the error with `[session X] LLM ERROR: ...`
+
+### OAuth Disconnect = Full Removal
+
+**Rule:** `connector_oauth_disconnect` MUST run the same teardown sequence as
+`connector_remove`. There is no separate "just delete the token" path.
+
+The handler clears the encrypted token first (so no further outbound calls
+can be made), then delegates to `handleConnectorRemove({ id })`. This
+guarantees that for every OAuth connector — and especially `slack-bot` — the
+disconnect:
+
+- runs provider-specific cleanup hooks (e.g. `notifyProxySlackBotDisconnect`)
+- calls `connectorManager.deactivate(id)` so the active client is dropped
+- calls `connectorManager.setToolPermissions(id, undefined)` so a fresh
+  re-install starts clean
+- calls `refreshAllSessionTools()` so live sessions immediately lose the
+  connector's tools (instead of attempting calls that 401 because the token
+  was just deleted)
+- emits `connector_removed` to the desktop
+
+The previous code path deleted the token + config row and emitted
+`connector_removed`, leaving the proxy-side workspace ownership and live
+session tool lists stale. Both `ConnectorsView.tsx` and `ConnectorsPage.tsx`
+route through the same message, so fixing the server handler covers both
+desktop entry points.
 
 ### Token Storage
 

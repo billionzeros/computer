@@ -179,7 +179,10 @@ export function buildTools(
   config: AgentConfig,
   callbacks?: ToolCallbacks,
   mcpManager?: import('./mcp/mcp-manager.js').McpManager,
-  connectorManager?: { getAllTools(): AgentTool[] },
+  connectorManager?: {
+    getAllTools(): AgentTool[]
+    getToolPermission?(toolName: string): 'auto' | 'ask' | 'never'
+  },
 ): AgentTool[] {
   // Initialize security settings for tools
   setForbiddenPaths(config.security?.forbiddenPaths ?? [])
@@ -613,11 +616,11 @@ export function buildTools(
       name: 'task_tracker',
       label: 'Task Tracker',
       description:
-        'Track your work plan as a checklist. Use this to break complex tasks into steps, ' +
-        'show progress to the user, and stay organized. ' +
+        'Update the task list for the current session. To be used proactively and often to track progress and pending tasks. ' +
+        'Make sure that at least one task is in_progress at all times. ' +
+        'Always provide both content (imperative) and activeForm (present continuous) for each task. ' +
         'Each call replaces the full task list. Mark tasks as pending/in_progress/completed. ' +
-        'Only one task should be in_progress at a time. ' +
-        'Use proactively when a task requires 3+ distinct steps.',
+        'Only one task should be in_progress at a time.',
       parameters: Type.Object({
         tasks: Type.Array(
           Type.Object({

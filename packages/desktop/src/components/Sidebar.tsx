@@ -322,9 +322,7 @@ export function Sidebar({ onViewChange, onOpenSettings }: Props) {
                   icon={Link}
                   label="Connectors"
                   active={currentView === 'connectors'}
-                  onClick={() => {
-                    onOpenSettings('connectors')
-                  }}
+                  onClick={() => setActiveView('connectors')}
                 />
                 <NavItem
                   icon={Puzzle}

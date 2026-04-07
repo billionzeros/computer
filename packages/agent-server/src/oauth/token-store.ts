@@ -67,8 +67,16 @@ export class TokenStore {
       )
       return JSON.parse(plaintext)
     } catch (err) {
-      log.error({ provider, err }, 'failed to load token')
-      return null
+      // A file exists but can't be decrypted — almost always means the agent
+      // token rotated (so the derived HKDF key changed) or the blob was
+      // corrupted. Previous behaviour returned null here, which surfaced
+      // upstream as the misleading "No OAuth token stored" error. Throw a
+      // clear, distinct error so callers can present a "please reconnect"
+      // path instead of hiding the root cause.
+      log.error({ provider, err }, 'failed to decrypt token')
+      throw new Error(
+        `OAuth token for ${provider} exists but could not be decrypted; please reconnect the connector`,
+      )
     }
   }
 

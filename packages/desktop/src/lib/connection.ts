@@ -455,6 +455,14 @@ export class Connection {
     this.send(Channel.AI, { type: 'connector_oauth_disconnect', provider })
   }
 
+  sendConnectorSetToolPermission(
+    id: string,
+    toolName: string,
+    permission: 'auto' | 'ask' | 'never',
+  ) {
+    this.send(Channel.AI, { type: 'connector_set_tool_permission', id, toolName, permission })
+  }
+
   // ── Filesystem ─────────────────────────────────────────────────
 
   sendFilesystemList(path: string) {

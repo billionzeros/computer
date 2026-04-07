@@ -935,6 +935,14 @@ export interface WorkflowActivatedMessage {
 
 // ── Connector management ─────────────────────────────────────────────
 
+/**
+ * Per-tool permission for a connector tool.
+ * - 'auto': always allowed (default if unset)
+ * - 'ask':  allowed but should prompt user before each call (UI persists; runtime enforcement TODO)
+ * - 'never': tool is hidden from the agent entirely
+ */
+export type ConnectorToolPermission = 'auto' | 'ask' | 'never'
+
 export interface ConnectorConfigPayload {
   id: string
   name: string
@@ -949,6 +957,7 @@ export interface ConnectorConfigPayload {
   metadata?: Record<string, string>
   enabled: boolean
   oauthProvider?: string
+  toolPermissions?: Record<string, ConnectorToolPermission>
 }
 
 export interface ConnectorStatusPayload {
@@ -961,6 +970,14 @@ export interface ConnectorStatusPayload {
   enabled: boolean
   toolCount: number
   tools: string[]
+  toolPermissions?: Record<string, ConnectorToolPermission>
+  /**
+   * Provider-specific runtime metadata. Slack stashes the bot identity
+   * (displayName, iconUrl, bot_user_id, team info, user_access_token) here.
+   * Surfaced to the UI so connector detail panels can render provider-specific
+   * settings without a per-provider protocol message.
+   */
+  metadata?: Record<string, string>
   error?: string
 }
 
@@ -1019,6 +1036,13 @@ export interface ConnectorTestMessage {
 
 export interface ConnectorRegistryListMessage {
   type: 'connector_registry_list'
+}
+
+export interface ConnectorSetToolPermissionMessage {
+  type: 'connector_set_tool_permission'
+  id: string
+  toolName: string
+  permission: ConnectorToolPermission
 }
 
 // Server → Client
@@ -1269,6 +1293,7 @@ export type AiMessage =
   | ConnectorTestResponse
   | ConnectorRegistryListMessage
   | ConnectorRegistryListResponse
+  | ConnectorSetToolPermissionMessage
   | ConnectorOAuthStartMessage
   | ConnectorOAuthUrlMessage
   | ConnectorOAuthCompleteMessage

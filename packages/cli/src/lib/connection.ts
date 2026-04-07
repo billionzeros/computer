@@ -206,6 +206,28 @@ export class Connection {
     this.send(Channel.AI, { type: 'provider_set_default', provider, model })
   }
 
+  // ── Connector management ────────────────────────────────────────
+
+  sendConnectorsList() {
+    this.send(Channel.AI, { type: 'connectors_list' })
+  }
+
+  sendConnectorRegistryList() {
+    this.send(Channel.AI, { type: 'connector_registry_list' })
+  }
+
+  sendConnectorOAuthStart(provider: string) {
+    this.send(Channel.AI, { type: 'connector_oauth_start', provider })
+  }
+
+  sendConnectorOAuthDisconnect(provider: string) {
+    this.send(Channel.AI, { type: 'connector_oauth_disconnect', provider })
+  }
+
+  sendConnectorRemove(id: string) {
+    this.send(Channel.AI, { type: 'connector_remove', id })
+  }
+
   // ── Config management ───────────────────────────────────────────
 
   sendConfigQuery(key: 'providers' | 'defaults' | 'security') {

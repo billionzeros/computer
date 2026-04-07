@@ -1,333 +1,375 @@
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
-import { homedir } from 'node:os'
-import { join } from 'node:path'
-import { parse as parseYaml, stringify as stringifyYaml } from 'yaml'
-import { theme } from '../lib/theme.js'
+import { spawn } from 'node:child_process'
+import { Channel } from '@anton/protocol'
+import type {
+  AiMessage,
+  ConnectorRegistryEntryPayload,
+  ConnectorStatusPayload,
+} from '@anton/protocol'
+import { Connection } from '../lib/connection.js'
+import { getDefaultMachine } from '../lib/machines.js'
+import { ICONS, theme } from '../lib/theme.js'
+
+const REQUEST_TIMEOUT_MS = 15_000
+const OAUTH_WAIT_TIMEOUT_MS = 10 * 60 * 1000
+
+interface ConnectorState {
+  connectors: ConnectorStatusPayload[]
+  registry: ConnectorRegistryEntryPayload[]
+}
 
 /**
- * Resolve the .anton directory.
- * Priority: ANTON_DIR env var → /home/anton/.anton (Linux root) → ~/.anton
+ * anton connector                  — list configured + available connectors
+ * anton connector connect <id>     — connect a built-in OAuth connector
+ * anton connector disconnect <id>  — disconnect/remove a configured connector
  */
-function resolveAntonDir(): string {
-  if (process.env.ANTON_DIR) return process.env.ANTON_DIR
-  // On Linux as root, the agent runs as the 'anton' user — use its home
-  if (process.platform === 'linux' && process.getuid?.() === 0) {
-    return '/home/anton/.anton'
-  }
-  return join(homedir(), '.anton')
-}
-
-const ANTON_DIR = resolveAntonDir()
-const CONFIG_PATH = join(ANTON_DIR, 'config.yaml')
-
-interface ConnectorEntry {
-  id: string
-  name: string
-  description?: string
-  icon?: string
-  type: 'mcp' | 'api'
-  apiKey?: string
-  baseUrl?: string
-  command?: string
-  args?: string[]
-  env?: Record<string, string>
-  enabled: boolean
-}
-
-// ── Built-in registry (same as agent-config but duplicated to avoid the dependency) ──
-
-interface RegistryEntry {
-  id: string
-  name: string
-  description: string
-  icon: string
-  type: 'mcp' | 'api'
-  requires: string // Human-readable requirement
-  example: string // Example CLI command
-}
-
-const REGISTRY: RegistryEntry[] = [
-  {
-    id: 'exa-search',
-    name: 'Web Search (Exa)',
-    description: 'Semantic web search with full page content extraction',
-    icon: '🔍',
-    type: 'api',
-    requires: 'Search proxy URL and bearer token',
-    example:
-      'anton connector add exa-search --url https://search-proxy.workers.dev --api-key tok_...',
-  },
-  {
-    id: 'telegram',
-    name: 'Telegram',
-    description: 'Send and receive Telegram messages',
-    icon: '📱',
-    type: 'mcp',
-    requires: 'Telegram Bot Token (from @BotFather)',
-    example: 'anton connector add telegram --env TELEGRAM_BOT_TOKEN=your_token',
-  },
-  {
-    id: 'github',
-    name: 'GitHub',
-    description: 'Manage repos, issues, and PRs',
-    icon: '🐙',
-    type: 'mcp',
-    requires: 'GitHub Personal Access Token',
-    example: 'anton connector add github --env GITHUB_TOKEN=ghp_...',
-  },
-  {
-    id: 'slack',
-    name: 'Slack',
-    description: 'Send messages and manage channels',
-    icon: '💬',
-    type: 'mcp',
-    requires: 'Slack Bot Token',
-    example: 'anton connector add slack --env SLACK_BOT_TOKEN=xoxb-...',
-  },
-  {
-    id: 'notion',
-    name: 'Notion',
-    description: 'Read and write Notion pages and databases',
-    icon: '📝',
-    type: 'mcp',
-    requires: 'Notion API Key',
-    example: 'anton connector add notion --env NOTION_API_KEY=secret_...',
-  },
-  {
-    id: 'linear',
-    name: 'Linear',
-    description: 'Manage issues, projects, and workflows',
-    icon: '📋',
-    type: 'mcp',
-    requires: 'Linear API Key',
-    example: 'anton connector add linear --env LINEAR_API_KEY=lin_api_...',
-  },
-]
-
-// ── Config helpers ──────────────────────────────────────────────────
-
-function loadConnectors(): { config: Record<string, unknown>; connectors: ConnectorEntry[] } {
-  mkdirSync(ANTON_DIR, { recursive: true })
-  if (!existsSync(CONFIG_PATH)) {
-    return { config: {}, connectors: [] }
-  }
-  const raw = readFileSync(CONFIG_PATH, 'utf-8')
-  const config = (parseYaml(raw) as Record<string, unknown>) || {}
-  return { config, connectors: (config.connectors as ConnectorEntry[]) || [] }
-}
-
-function saveConnectors(config: Record<string, unknown>, connectors: ConnectorEntry[]) {
-  config.connectors = connectors
-  writeFileSync(CONFIG_PATH, stringifyYaml(config), 'utf-8')
-}
-
-// ── MCP command defaults ────────────────────────────────────────────
-
-const MCP_COMMANDS: Record<string, { command: string; args: string[] }> = {
-  telegram: { command: 'npx', args: ['-y', 'telegram-mcp-server'] },
-  github: { command: 'npx', args: ['-y', '@modelcontextprotocol/server-github'] },
-  slack: { command: 'npx', args: ['-y', '@modelcontextprotocol/server-slack'] },
-  notion: { command: 'npx', args: ['-y', '@anthropic/mcp-server-notion'] },
-  linear: { command: 'npx', args: ['-y', 'mcp-server-linear'] },
-  gmail: { command: 'npx', args: ['-y', '@anthropic/mcp-server-gmail'] },
-  'google-calendar': { command: 'npx', args: ['-y', '@anthropic/mcp-server-google-calendar'] },
-  'google-drive': { command: 'npx', args: ['-y', '@anthropic/mcp-server-google-drive'] },
-}
-
-// ── Main command ────────────────────────────────────────────────────
-
-/**
- * anton connector                  — list configured + show available
- * anton connector add <id> [opts]  — add a connector
- * anton connector remove <id>      — remove a connector
- */
-export function connectorCommand(args: string[]): void {
+export async function connectorCommand(args: string[]): Promise<void> {
   const action = args[0]
 
   switch (action) {
-    case 'add':
-      handleAdd(args.slice(1))
+    case 'connect':
+      await handleConnect(args[1])
       break
 
+    case 'disconnect':
     case 'remove':
     case 'rm':
-      handleRemove(args[1])
+      await handleDisconnect(args[1])
       break
 
     case 'list':
     case undefined:
-      handleList()
+      await handleList()
       break
 
     default:
-      console.log(`\n  Unknown action: ${action}`)
-      console.log(`  Usage: ${theme.brand('anton connector')} [add|remove|list]\n`)
+      printUsage(`Unknown action: ${action}`)
+      process.exit(1)
   }
 }
 
-// ── Handlers ────────────────────────────────────────────────────────
+async function handleList(): Promise<void> {
+  const conn = await connectToDefaultAgent()
+  try {
+    const { connectors, registry } = await fetchConnectorState(conn)
 
-function handleList() {
-  const { connectors } = loadConnectors()
-
-  // Show configured connectors
-  if (connectors.length > 0) {
-    console.log(`\n  ${theme.bold('Configured Connectors')}\n`)
-    for (const c of connectors) {
-      const status = c.enabled ? theme.success('●') : theme.dim('○')
-      const detail = c.baseUrl || (c.apiKey ? `${c.apiKey.slice(0, 8)}...` : c.command || '')
-      console.log(
-        `  ${status} ${theme.bold(c.name)} ${theme.dim(`(${c.id})`)}  ${theme.dim(detail)}`,
-      )
-    }
-  } else {
-    console.log(`\n  ${theme.dim('No connectors configured.')}`)
-  }
-
-  // Show available connectors from registry
-  const configuredIds = new Set(connectors.map((c) => c.id))
-  const available = REGISTRY.filter((r) => !configuredIds.has(r.id))
-
-  if (available.length > 0) {
-    console.log(`\n  ${theme.bold('Available Connectors')}\n`)
-    for (const r of available) {
-      console.log(`  ${r.icon} ${theme.bold(r.name)} ${theme.dim(`(${r.id})`)}`)
-      console.log(`    ${r.description}`)
-      console.log(`    Requires: ${theme.dim(r.requires)}`)
-      console.log(`    ${theme.dim(`$ ${r.example}`)}`)
-      console.log()
-    }
-  }
-
-  console.log(
-    `  ${theme.dim('Add with:')} ${theme.brand('anton connector add <id> --url <url> | --api-key <key> | --env KEY=value')}\n`,
-  )
-}
-
-function handleAdd(args: string[]) {
-  const id = args[0]
-  if (!id) {
-    console.log(`\n  Usage: ${theme.brand('anton connector add <id>')} [options]`)
-    console.log('\n  Options:')
-    console.log(`    ${theme.dim('--url <url>')}               Base URL (for SearXNG, etc.)`)
-    console.log(`    ${theme.dim('--api-key <key>')}           API key (for Brave Search, etc.)`)
-    console.log(
-      `    ${theme.dim('--env KEY=value')}           Environment variable (for MCP connectors)`,
-    )
-    console.log(`    ${theme.dim('--name <name>')}             Display name`)
-    console.log('\n  Examples:')
-    console.log(
-      `    ${theme.brand('anton connector add exa-search --url https://search-proxy.workers.dev --api-key tok_...')}`,
-    )
-    console.log(`    ${theme.brand('anton connector add github --env GITHUB_TOKEN=ghp_...')}\n`)
-
-    // Show registry
-    console.log(`  ${theme.bold('Available connectors:')}\n`)
-    for (const r of REGISTRY) {
-      console.log(`    ${r.icon} ${theme.bold(r.id.padEnd(16))} ${r.description}`)
-    }
-    console.log()
-    return
-  }
-
-  const url = parseFlag(args, '--url')
-  const apiKey = parseFlag(args, '--api-key')
-  const name = parseFlag(args, '--name')
-  const envPairs = parseEnvFlags(args)
-
-  if (!url && !apiKey && Object.keys(envPairs).length === 0) {
-    // Show what this specific connector needs
-    const reg = REGISTRY.find((r) => r.id === id)
-    if (reg) {
-      console.log(`\n  ${reg.icon} ${theme.bold(reg.name)}`)
-      console.log(`  ${reg.description}`)
-      console.log(`\n  Requires: ${reg.requires}`)
-      console.log('\n  Example:')
-      console.log(`    ${theme.brand(`$ ${reg.example}`)}\n`)
+    if (connectors.length > 0) {
+      console.log(`\n  ${theme.bold('Configured Connectors')}\n`)
+      for (const connector of connectors.sort(sortConfiguredConnectors)) {
+        const status = connector.connected
+          ? theme.success('●')
+          : connector.enabled
+            ? theme.warning('○')
+            : theme.dim('○')
+        const type = theme.dim(`[${connector.type}]`)
+        const tools = connector.toolCount > 0 ? theme.dim(`${connector.toolCount} tools`) : ''
+        const meta =
+          connector.type === 'oauth' && connector.connected ? theme.dim('connected via OAuth') : ''
+        console.log(
+          `  ${status} ${theme.bold(connector.name)} ${theme.dim(`(${connector.id})`)} ${type} ${tools} ${meta}`.trimEnd(),
+        )
+      }
     } else {
-      console.log(`\n  ${theme.error('Must provide --url, --api-key, or --env KEY=value')}\n`)
+      console.log(`\n  ${theme.dim('No connectors configured.')}`)
     }
-    return
-  }
 
-  // Determine connector type
-  const mcpDefaults = MCP_COMMANDS[id]
-  const isApi = !!url || !!apiKey
-  const isMcp = !isApi && (Object.keys(envPairs).length > 0 || !!mcpDefaults)
+    const configuredIds = new Set(connectors.map((c) => c.id))
+    const availableOAuth = registry
+      .filter((entry) => entry.type === 'oauth' && !configuredIds.has(entry.id))
+      .sort((a, b) => a.name.localeCompare(b.name))
 
-  const reg = REGISTRY.find((r) => r.id === id)
-
-  const { config, connectors } = loadConnectors()
-  const filtered = connectors.filter((c) => c.id !== id)
-
-  const connector: ConnectorEntry = {
-    id,
-    name: name || reg?.name || id,
-    description: reg?.description,
-    icon: reg?.icon,
-    type: isApi ? 'api' : 'mcp',
-    enabled: true,
-  }
-
-  if (url) connector.baseUrl = url
-  if (apiKey) connector.apiKey = apiKey
-  if (isMcp) {
-    connector.env = envPairs
-    if (mcpDefaults) {
-      connector.command = mcpDefaults.command
-      connector.args = mcpDefaults.args
-    }
-  }
-
-  filtered.push(connector)
-  saveConnectors(config, filtered)
-
-  console.log(`\n  ${theme.success('✓')} Connector ${theme.bold(connector.name)} added`)
-  if (url) console.log(`    URL:     ${url}`)
-  if (apiKey) console.log(`    API Key: ${apiKey.slice(0, 8)}...`)
-  if (Object.keys(envPairs).length > 0) {
-    for (const [k, v] of Object.entries(envPairs)) {
-      console.log(`    ${k}: ${v.slice(0, 12)}...`)
-    }
-  }
-  console.log(`    Config:  ${CONFIG_PATH}`)
-  console.log(`\n  ${theme.dim('Restart the agent for changes to take effect.')}\n`)
-}
-
-function handleRemove(id?: string) {
-  if (!id) {
-    console.log(`\n  Usage: ${theme.brand('anton connector remove <id>')}\n`)
-    return
-  }
-  const { config, connectors } = loadConnectors()
-  const before = connectors.length
-  const filtered = connectors.filter((c) => c.id !== id)
-  if (filtered.length === before) {
-    console.log(`\n  ${theme.error(`Connector "${id}" not found`)}\n`)
-    return
-  }
-  saveConnectors(config, filtered)
-  console.log(`\n  ${theme.success('✓')} Connector ${theme.bold(id)} removed\n`)
-}
-
-// ── Utils ───────────────────────────────────────────────────────────
-
-function parseFlag(args: string[], flag: string): string | undefined {
-  const idx = args.indexOf(flag)
-  if (idx >= 0 && idx + 1 < args.length) return args[idx + 1]
-  return undefined
-}
-
-function parseEnvFlags(args: string[]): Record<string, string> {
-  const env: Record<string, string> = {}
-  for (let i = 0; i < args.length; i++) {
-    if (args[i] === '--env' && i + 1 < args.length) {
-      const pair = args[i + 1]
-      const eq = pair.indexOf('=')
-      if (eq > 0) {
-        env[pair.slice(0, eq)] = pair.slice(eq + 1)
+    if (availableOAuth.length > 0) {
+      console.log(`\n  ${theme.bold('Available OAuth Connectors')}\n`)
+      for (const entry of availableOAuth) {
+        console.log(`  ${entry.icon} ${theme.bold(entry.name)} ${theme.dim(`(${entry.id})`)}`)
+        console.log(`    ${entry.description}`)
+        console.log(`    ${theme.dim(`$ anton connector connect ${entry.id}`)}`)
+        console.log()
       }
     }
+
+    const nonOAuth = registry.filter(
+      (entry) => entry.type !== 'oauth' && !configuredIds.has(entry.id),
+    )
+    if (nonOAuth.length > 0) {
+      console.log(
+        `  ${theme.dim('Non-OAuth and custom connector setup remains in the desktop app for now.')}\n`,
+      )
+    } else {
+      console.log()
+    }
+  } finally {
+    conn.disconnect()
   }
-  return env
+}
+
+async function handleConnect(id?: string): Promise<void> {
+  if (!id) {
+    printUsage()
+    process.exit(1)
+  }
+
+  const conn = await connectToDefaultAgent()
+  try {
+    const state = await fetchConnectorState(conn)
+    const entry = state.registry.find((item) => item.id === id)
+    if (!entry) {
+      console.error(`\n  ${theme.error(`Unknown connector "${id}"`)}\n`)
+      process.exit(1)
+    }
+    if (entry.type !== 'oauth') {
+      console.error(
+        `\n  ${theme.error(`Connector "${id}" is not OAuth-backed.`)} ${theme.dim('Use the desktop app for non-OAuth/custom connectors.')}\n`,
+      )
+      process.exit(1)
+    }
+
+    const existing = state.connectors.find((item) => item.id === id)
+    if (existing?.connected && existing.enabled) {
+      console.log(`\n  ${theme.success('✓')} ${theme.bold(entry.name)} is already connected.\n`)
+      return
+    }
+
+    console.log(`\n  ${ICONS.connecting} Starting OAuth for ${theme.bold(entry.name)}...`)
+
+    await new Promise<void>((resolve, reject) => {
+      const timer = setTimeout(() => {
+        off()
+        reject(new Error('Timed out waiting for OAuth completion'))
+      }, OAUTH_WAIT_TIMEOUT_MS)
+
+      const cleanup = () => clearTimeout(timer)
+      const off = conn.onMessage((channel, payload) => {
+        if (channel !== Channel.AI) return
+        const msg = payload as AiMessage
+
+        if (msg.type === 'connector_oauth_url' && msg.provider === id) {
+          const opened = openExternalUrl(msg.url)
+          console.log(
+            `  ${theme.success('✓')} ${opened ? 'Opened browser' : 'Open this URL in your browser'}: ${theme.info(msg.url)}`,
+          )
+          return
+        }
+
+        if (msg.type === 'connector_oauth_complete' && msg.provider === id) {
+          cleanup()
+          off()
+          if (msg.success) resolve()
+          else reject(new Error(msg.error || 'OAuth failed'))
+          return
+        }
+
+        if (msg.type === 'error') {
+          cleanup()
+          off()
+          reject(new Error(msg.message))
+        }
+      })
+
+      conn.sendConnectorOAuthStart(id)
+    })
+
+    console.log(`\n  ${theme.success('✓')} Connected ${theme.bold(entry.name)}.\n`)
+  } catch (err) {
+    console.error(`\n  ${theme.error(`Failed to connect ${id}: ${(err as Error).message}`)}\n`)
+    process.exit(1)
+  } finally {
+    conn.disconnect()
+  }
+}
+
+async function handleDisconnect(id?: string): Promise<void> {
+  if (!id) {
+    printUsage()
+    process.exit(1)
+  }
+
+  const conn = await connectToDefaultAgent()
+  try {
+    const state = await fetchConnectorState(conn)
+    const connector = state.connectors.find((item) => item.id === id)
+    if (!connector) {
+      console.error(`\n  ${theme.error(`Connector "${id}" is not configured.`)}\n`)
+      process.exit(1)
+    }
+
+    console.log(`\n  ${ICONS.connecting} Disconnecting ${theme.bold(connector.name)}...`)
+
+    await new Promise<void>((resolve, reject) => {
+      const timer = setTimeout(() => {
+        off()
+        reject(new Error('Timed out waiting for connector removal'))
+      }, REQUEST_TIMEOUT_MS)
+
+      const cleanup = () => clearTimeout(timer)
+      const off = conn.onMessage((channel, payload) => {
+        if (channel !== Channel.AI) return
+        const msg = payload as AiMessage
+
+        if (msg.type === 'connector_removed' && msg.id === id) {
+          cleanup()
+          off()
+          resolve()
+          return
+        }
+
+        if (msg.type === 'error') {
+          cleanup()
+          off()
+          reject(new Error(msg.message))
+        }
+      })
+
+      if (connector.type === 'oauth') conn.sendConnectorOAuthDisconnect(id)
+      else conn.sendConnectorRemove(id)
+    })
+
+    console.log(`\n  ${theme.success('✓')} Disconnected ${theme.bold(connector.name)}.\n`)
+  } catch (err) {
+    console.error(`\n  ${theme.error(`Failed to disconnect ${id}: ${(err as Error).message}`)}\n`)
+    process.exit(1)
+  } finally {
+    conn.disconnect()
+  }
+}
+
+async function connectToDefaultAgent(): Promise<Connection> {
+  const conn = new Connection()
+  const machine = getDefaultMachine()
+  const localTarget = await getLocalAgentTarget()
+
+  const target = machine
+    ? {
+        host: machine.host,
+        port: machine.port,
+        token: machine.token,
+        useTLS: machine.useTLS,
+      }
+    : localTarget
+
+  if (!target) {
+    console.error(
+      `\n  No machine configured. Run ${theme.bold('anton connect <host>')} first, or run this on the Anton machine.\n`,
+    )
+    process.exit(1)
+  }
+
+  try {
+    await conn.connect(target)
+  } catch (err) {
+    console.error(`\n  ${theme.error(`Connection failed: ${(err as Error).message}`)}\n`)
+    process.exit(1)
+  }
+
+  return conn
+}
+
+async function getLocalAgentTarget(): Promise<{
+  host: string
+  port: number
+  token: string
+  useTLS: boolean
+} | null> {
+  try {
+    const { readPortFromService, readTokenFromEnv } = await import('./computer-common.js')
+    const token = readTokenFromEnv()
+    const port = readPortFromService()
+    if (!token || !port) return null
+    return { host: 'localhost', port, token, useTLS: false }
+  } catch {
+    return null
+  }
+}
+
+async function fetchConnectorState(conn: Connection): Promise<ConnectorState> {
+  return new Promise((resolve, reject) => {
+    let connectors: ConnectorStatusPayload[] | null = null
+    let registry: ConnectorRegistryEntryPayload[] | null = null
+
+    const timer = setTimeout(() => {
+      off()
+      reject(new Error('Timed out loading connector state'))
+    }, REQUEST_TIMEOUT_MS)
+
+    const maybeResolve = () => {
+      if (!connectors || !registry) return
+      clearTimeout(timer)
+      off()
+      resolve({ connectors, registry })
+    }
+
+    const off = conn.onMessage((channel, payload) => {
+      if (channel !== Channel.AI) return
+      const msg = payload as AiMessage
+
+      if (msg.type === 'connectors_list_response') {
+        connectors = msg.connectors
+        maybeResolve()
+        return
+      }
+
+      if (msg.type === 'connector_registry_list_response') {
+        registry = msg.entries
+        maybeResolve()
+        return
+      }
+
+      if (msg.type === 'error') {
+        clearTimeout(timer)
+        off()
+        reject(new Error(msg.message))
+      }
+    })
+
+    conn.sendConnectorsList()
+    conn.sendConnectorRegistryList()
+  })
+}
+
+function sortConfiguredConnectors(a: ConnectorStatusPayload, b: ConnectorStatusPayload): number {
+  if (a.connected !== b.connected) return a.connected ? -1 : 1
+  if (a.enabled !== b.enabled) return a.enabled ? -1 : 1
+  return a.name.localeCompare(b.name)
+}
+
+function printUsage(error?: string) {
+  if (error) {
+    console.log(`\n  ${error}`)
+  }
+  console.log(`\n  Usage: ${theme.brand('anton connector')} [list|connect|disconnect]\n`)
+  console.log(
+    `    ${theme.brand('anton connector')}                         List configured connectors`,
+  )
+  console.log(
+    `    ${theme.brand('anton connector connect')} ${theme.dim('<id>')}          Connect a built-in OAuth connector`,
+  )
+  console.log(
+    `    ${theme.brand('anton connector disconnect')} ${theme.dim('<id>')}       Disconnect/remove a configured connector`,
+  )
+  console.log()
+}
+
+function openExternalUrl(url: string): boolean {
+  try {
+    if (process.platform === 'darwin') {
+      const child = spawn('open', [url], { detached: true, stdio: 'ignore' })
+      child.on('error', () => {})
+      child.unref()
+      return true
+    }
+    if (process.platform === 'win32') {
+      const child = spawn('cmd', ['/c', 'start', '', url], {
+        detached: true,
+        stdio: 'ignore',
+      })
+      child.on('error', () => {})
+      child.unref()
+      return true
+    }
+    const child = spawn('xdg-open', [url], { detached: true, stdio: 'ignore' })
+    child.on('error', () => {})
+    child.unref()
+    return true
+  } catch {
+    return false
+  }
 }

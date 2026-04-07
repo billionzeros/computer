@@ -168,6 +168,8 @@ export interface SkillConfig {
 
 // ── Connector types ──────────────────────────────────────────────────
 
+export type ConnectorToolPermission = 'auto' | 'ask' | 'never'
+
 export interface ConnectorConfig {
   id: string
   name: string
@@ -189,6 +191,11 @@ export interface ConnectorConfig {
 
   // Extra per-connector key-value data (e.g. ownerChatId for Telegram)
   metadata?: Record<string, string>
+
+  // Per-tool permission overrides. Tools missing here default to 'auto'.
+  // 'never' tools are filtered out at runtime; 'ask' is persisted but currently
+  // treated as 'auto' at runtime (UI label only — full enforcement is a follow-up).
+  toolPermissions?: Record<string, ConnectorToolPermission>
 
   enabled: boolean
 }
@@ -1379,6 +1386,29 @@ export function getConnectors(config: AgentConfig): ConnectorConfig[] {
   return config.connectors
 }
 
+/**
+ * Set the permission for a single tool on a connector. Setting 'auto' clears
+ * the override (since 'auto' is the implicit default).
+ */
+export function setConnectorToolPermission(
+  config: AgentConfig,
+  id: string,
+  toolName: string,
+  permission: ConnectorToolPermission,
+): ConnectorConfig | null {
+  const connector = config.connectors.find((c) => c.id === id)
+  if (!connector) return null
+  const perms = { ...(connector.toolPermissions ?? {}) }
+  if (permission === 'auto') {
+    delete perms[toolName]
+  } else {
+    perms[toolName] = permission
+  }
+  connector.toolPermissions = Object.keys(perms).length > 0 ? perms : undefined
+  saveConfig(config)
+  return connector
+}
+
 // ── Connector registry (built-in catalog) ───────────────────────────
 
 export interface ConnectorRegistryEntry {
@@ -1500,16 +1530,33 @@ export const CONNECTOR_REGISTRY: ConnectorRegistryEntry[] = [
   {
     id: 'slack',
     name: 'Slack',
-    description: 'Send messages and manage Slack channels',
+    description: 'Let Anton search, read, and post in Slack on your behalf',
     icon: '💬',
     category: 'messaging',
     type: 'oauth',
     oauthProvider: 'slack',
-    oauthScopes: ['channels:read', 'chat:write', 'users:read'],
+    // Personal user-token connector. Installed per Anton user. No bot, no
+    // webhooks, no proxy fan-out — just tools acting as you. Search and
+    // history require a user token (bot tokens cannot call search.messages).
+    oauthScopes: [
+      'search:read',
+      'channels:read',
+      'channels:history',
+      'groups:read',
+      'groups:history',
+      'im:read',
+      'im:history',
+      'mpim:read',
+      'mpim:history',
+      'users:read',
+      'users:read.email',
+      'files:read',
+      'chat:write',
+    ],
     requiredEnv: [],
     featured: true,
     setupGuide: {
-      steps: ['Click Connect to authorize with your Slack workspace'],
+      steps: ['Click Connect to authorize Anton with your Slack account'],
       url: 'https://api.slack.com/apps',
       urlLabel: 'Slack Apps',
     },
@@ -1517,19 +1564,38 @@ export const CONNECTOR_REGISTRY: ConnectorRegistryEntry[] = [
   {
     id: 'slack-bot',
     name: 'Slack (Anton Bot)',
-    description: 'Send messages as Anton with its own identity in Slack',
+    description: 'Install the Anton bot in your workspace so you can @mention it in channels',
     icon: '🤖',
     category: 'messaging',
     type: 'oauth',
     oauthProvider: 'slack-bot',
-    oauthScopes: ['channels:read', 'chat:write', 'chat:write.customize', 'users:read'],
+    // Workspace-level bot connector. One owner per workspace; subsequent
+    // installs from a different Anton trigger a "transfer ownership?" prompt
+    // on the oauth-proxy. Events flow through the proxy and are routed to the
+    // current owner's agent.
+    oauthScopes: [
+      'app_mentions:read',
+      'channels:read',
+      'channels:history',
+      'groups:read',
+      'groups:history',
+      'im:read',
+      'im:history',
+      'mpim:read',
+      'chat:write',
+      'chat:write.customize',
+      'reactions:read',
+      'reactions:write',
+      'users:read',
+      'team:read',
+      'files:read',
+    ],
     requiredEnv: [],
     featured: true,
     setupGuide: {
       steps: [
-        'Add Bot Token Scopes to your Slack App at api.slack.com/apps',
-        'Set the bot display name to "Anton" and add an avatar',
-        'Click Connect to install the bot to your workspace',
+        'Click Connect to install the Anton bot in your Slack workspace',
+        'Invite @Anton to any channel where you want to use it',
       ],
       url: 'https://api.slack.com/apps',
       urlLabel: 'Slack Apps',

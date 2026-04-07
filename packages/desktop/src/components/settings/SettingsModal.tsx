@@ -734,7 +734,7 @@ export function SettingsModal({
                 {activePage === 'general' && <GeneralPage />}
                 {activePage === 'models' && <ModelsPage onClose={onClose} />}
                 {activePage === 'connectors' && (
-                  <ConnectorsPage initialConnectorId={initialConnectorId} />
+                  <ConnectorsPage initialConnectorId={initialConnectorId} onConnected={onClose} />
                 )}
                 {activePage === 'usage' && <UsagePage />}
               </div>

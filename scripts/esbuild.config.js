@@ -13,31 +13,23 @@
 
 const config = {
   agent: {
-    externals: [
-      'node-pty',
-      'chokidar',
-      'playwright-core',
-      'playwright',
-      'chromium-bidi',
-    ],
+    externals: ['node-pty', 'chokidar', 'playwright-core', 'playwright', 'chromium-bidi'],
   },
   cli: {
-    externals: [
-      'node-pty',
-    ],
+    externals: ['node-pty'],
   },
-};
-
-// CLI interface — print flags for shell scripts
-const cmd = process.argv[2];
-if (cmd === 'agent-externals') {
-  console.log(config.agent.externals.map(e => `--external:${e}`).join(' '));
-} else if (cmd === 'cli-externals') {
-  console.log(config.cli.externals.map(e => `--external:${e}`).join(' '));
-} else if (cmd) {
-  console.error(`Unknown command: ${cmd}`);
-  console.error('Usage: node scripts/esbuild.config.js [agent-externals|cli-externals]');
-  process.exit(1);
 }
 
-module.exports = config;
+// CLI interface — print flags for shell scripts
+const cmd = process.argv[2]
+if (cmd === 'agent-externals') {
+  console.log(config.agent.externals.map((e) => `--external:${e}`).join(' '))
+} else if (cmd === 'cli-externals') {
+  console.log(config.cli.externals.map((e) => `--external:${e}`).join(' '))
+} else if (cmd) {
+  console.error(`Unknown command: ${cmd}`)
+  console.error('Usage: node scripts/esbuild.config.js [agent-externals|cli-externals]')
+  process.exit(1)
+}
+
+module.exports = config

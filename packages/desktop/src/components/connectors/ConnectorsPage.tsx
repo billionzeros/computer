@@ -29,7 +29,10 @@ const CATEGORY_ORDER: { key: string; label: string }[] = [
 
 type Tab = 'apps' | 'custom-api' | 'custom-mcp'
 
-export function ConnectorsPage({ initialConnectorId }: { initialConnectorId?: string } = {}) {
+export function ConnectorsPage({
+  initialConnectorId,
+  onConnected,
+}: { initialConnectorId?: string; onConnected?: () => void } = {}) {
   const [tab, setTab] = useState<Tab>('apps')
   const [search, setSearch] = useState('')
   const connectors = connectorStore((s) => s.connectors)
@@ -84,6 +87,7 @@ export function ConnectorsPage({ initialConnectorId }: { initialConnectorId?: st
             connectors={connectors}
             search={search}
             initialConnectorId={initialConnectorId}
+            onConnected={onConnected}
           />
         )}
         {tab === 'custom-api' && <CustomApiTab connectors={connectors} search={search} />}
@@ -100,11 +104,13 @@ function AppsTab({
   connectors,
   search,
   initialConnectorId,
+  onConnected,
 }: {
   registry: ConnectorRegistryInfo[]
   connectors: ConnectorStatusInfo[]
   search: string
   initialConnectorId?: string
+  onConnected?: () => void
 }) {
   const [setupId, setSetupId] = useState<string | null>(initialConnectorId ?? null)
 
@@ -123,6 +129,7 @@ function AppsTab({
           entry={entry}
           existing={connectors.find((c) => c.id === entry.id)}
           onBack={() => setSetupId(null)}
+          onConnected={onConnected}
         />
       )
     }
@@ -191,10 +198,12 @@ function AppSetup({
   entry,
   existing,
   onBack,
+  onConnected,
 }: {
   entry: ConnectorRegistryInfo
   existing?: ConnectorStatusInfo
   onBack: () => void
+  onConnected?: () => void
 }) {
   const [envValues, setEnvValues] = useState<Record<string, string>>({})
   const [optionalValues, setOptionalValues] = useState<Record<string, string>>({})
@@ -230,7 +239,11 @@ function AppSetup({
         setOauthWaiting(false)
         unsub()
         if (complete.success) {
-          onBack()
+          // Refresh the connector list so the new view picks up the change,
+          // then close the modal entirely (or pop back if no close handler).
+          connectorStore.getState().listConnectors()
+          if (onConnected) onConnected()
+          else onBack()
         } else {
           setTestResult({
             success: false,
@@ -292,7 +305,9 @@ function AppSetup({
       if (msg.type === 'connector_added' || msg.type === 'connector_status') {
         setTesting(false)
         unsub()
-        onBack()
+        connectorStore.getState().listConnectors()
+        if (onConnected) onConnected()
+        else onBack()
       }
     })
 

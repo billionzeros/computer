@@ -3,7 +3,13 @@ export type { ActivateWorkflowHandler } from './tools/activate-workflow.js'
 export type { SharedStateHandler } from './tools/shared-state.js'
 export type { JobActionHandler, JobToolInput } from './tools/job.js'
 export type { DeliverResultHandler } from './tools/deliver-result.js'
-export { McpClient, McpManager, type McpServerConfig, type ConnectorStatus } from './mcp/index.js'
+export {
+  McpClient,
+  McpManager,
+  type McpServerConfig,
+  type ConnectorStatus,
+  type McpToolPermission,
+} from './mcp/index.js'
 export {
   type CompactionConfig,
   type CompactionState,

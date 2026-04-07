@@ -23,8 +23,18 @@ function defineTool<T extends TSchema>(
   return def as AgentTool
 }
 
-export function createSlackTools(api: SlackAPI): AgentTool[] {
-  return [
+export interface SlackToolsOptions {
+  /**
+   * Which token type backs this connector.
+   * - `user` (xoxp): full read/write surface including search.messages.
+   * - `bot`  (xoxb): everything except search.* (Slack rejects bot tokens
+   *   for those endpoints with `not_allowed_token_type`).
+   */
+  mode: 'user' | 'bot'
+}
+
+export function createSlackTools(api: SlackAPI, opts: SlackToolsOptions): AgentTool[] {
+  const all: AgentTool[] = [
     defineTool({
       name: 'slack_list_channels',
       label: 'List Channels',
@@ -209,4 +219,26 @@ export function createSlackTools(api: SlackAPI): AgentTool[] {
       },
     }),
   ]
+
+  if (opts.mode === 'user') return all
+
+  // Bot mode:
+  //   1. Strip `slack_search` — bot tokens (xoxb) get `not_allowed_token_type`
+  //      from search.* endpoints, so the tool can never succeed.
+  //   2. Rename the surviving tools from `slack_*` to `slack_bot_*`.
+  //      Both the user and bot connectors are often active simultaneously
+  //      (personal delegate + workspace Anton) and share the same tool bodies,
+  //      but the agent must see them as DISTINCT tools so that
+  //      `ConnectorManager.getAllTools` doesn't return duplicate names and
+  //      `getToolPermission` doesn't leak permissions across connectors
+  //      (it resolves by scanning connector tool lists for a name match).
+  //      Keeping the names distinct at construction time is cheaper and less
+  //      error-prone than disambiguating downstream.
+  return all
+    .filter((t) => t.name !== 'slack_search')
+    .map((t) => ({
+      ...t,
+      name: t.name.replace(/^slack_/, 'slack_bot_'),
+      label: `Bot: ${t.label}`,
+    }))
 }

@@ -25,10 +25,49 @@ export interface ConnectorStatus {
   error?: string
 }
 
+/** Per-tool permission override applied at runtime. Anything missing from the map defaults to 'auto'. */
+export type McpToolPermission = 'auto' | 'ask' | 'never'
+
 export class McpManager {
   private clients = new Map<string, McpClient>()
   private configs = new Map<string, McpServerConfig>()
   private healthTimer: NodeJS.Timeout | null = null
+  /** Per-connector tool permission overrides. */
+  private toolPermissions = new Map<string, Record<string, McpToolPermission>>()
+
+  /**
+   * Replace the per-tool permission overrides for a connector. Tools missing
+   * from the map (or set to 'auto') execute normally. 'never' tools are
+   * filtered from getAllTools() entirely. 'ask' tools require user confirmation
+   * via the session confirm handler before each call.
+   */
+  setToolPermissions(id: string, perms: Record<string, McpToolPermission> | undefined): void {
+    if (!perms || Object.keys(perms).length === 0) {
+      this.toolPermissions.delete(id)
+    } else {
+      this.toolPermissions.set(id, { ...perms })
+    }
+  }
+
+  /**
+   * Look up the runtime permission for an agent-facing tool name. Returns 'auto'
+   * for any tool that does not belong to a known MCP connector or has no override.
+   *
+   * Agent tool names produced by mcp-tool-adapter are `mcp_${connectorId}_${toolName}`.
+   * Connector ids may themselves contain underscores, so we match by prefix against
+   * each known connector id.
+   */
+  getToolPermission(agentToolName: string): McpToolPermission {
+    if (!agentToolName.startsWith('mcp_')) return 'auto'
+    for (const [connectorId, perms] of this.toolPermissions) {
+      const prefix = `mcp_${connectorId}_`
+      if (agentToolName.startsWith(prefix)) {
+        const rawName = agentToolName.slice(prefix.length)
+        return perms[rawName] ?? 'auto'
+      }
+    }
+    return 'auto'
+  }
 
   /**
    * Start all enabled connectors from config.
@@ -79,17 +118,20 @@ export class McpManager {
     client.on('disconnected', () => {
       log.info({ connector: id }, 'connector disconnected')
       this.clients.delete(id)
-      // Auto-reconnect after 5 seconds
+      // Auto-reconnect after a randomised 5-10s delay. The jitter prevents a
+      // thundering-herd respawn when multiple MCP processes drop together
+      // (e.g. after the agent host briefly loses power or sleeps).
+      const delayMs = 5_000 + Math.floor(Math.random() * 5_000)
       setTimeout(async () => {
         if (this.configs.has(id) && this.configs.get(id)?.enabled !== false) {
           try {
-            log.info({ connector: id }, 'auto-reconnecting')
+            log.info({ connector: id, delayMs }, 'auto-reconnecting')
             await this.start(id)
           } catch (err) {
             log.error({ connector: id, err }, 'auto-reconnect failed')
           }
         }
-      }, 5_000)
+      }, delayMs)
     })
 
     client.on('error', (err: Error) => {
@@ -181,8 +223,16 @@ export class McpManager {
   getAllTools(): AgentTool[] {
     const tools: AgentTool[] = []
     for (const client of this.clients.values()) {
-      if (client.isConnected()) {
-        tools.push(...mcpClientToAgentTools(client))
+      if (!client.isConnected()) continue
+      const connectorPerms = this.toolPermissions.get(client.config.id)
+      for (const tool of mcpClientToAgentTools(client)) {
+        // Filter 'never' tools — agent should not even see them
+        if (connectorPerms) {
+          const prefix = `mcp_${client.config.id}_`
+          const rawName = tool.name.startsWith(prefix) ? tool.name.slice(prefix.length) : tool.name
+          if (connectorPerms[rawName] === 'never') continue
+        }
+        tools.push(tool)
       }
     }
     return tools
