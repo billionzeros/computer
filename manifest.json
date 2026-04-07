@@ -1,6 +1,6 @@
 {
   "version": "1.0.42",
-  "gitHash": "",
+  "gitHash": "d88c0cb",
   "releaseUrl": "https://github.com/OmGuptaIND/computer/releases",
   "changelog": "Fixes:\n- update CLI updater",
   "publishedAt": "2026-04-07T09:33:34.370Z",
