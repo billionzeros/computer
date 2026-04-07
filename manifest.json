@@ -1,12 +1,12 @@
 {
-  "version": "1.0.39",
-  "gitHash": "b43992d",
+  "version": "1.0.40",
+  "gitHash": "",
   "releaseUrl": "https://github.com/OmGuptaIND/computer/releases",
-  "changelog": "Features:\n- auto-elevate to root via sudo in computer commands instead of exiting",
-  "publishedAt": "2026-04-07T07:51:36.120Z",
-  "cli": "https://github.com/OmGuptaIND/computer/releases/download/v1.0.39/anton-cli.mjs",
+  "changelog": "Fixes:\n- update issue:",
+  "publishedAt": "2026-04-07T08:32:15.456Z",
+  "cli": "https://github.com/OmGuptaIND/computer/releases/download/v1.0.40/anton-cli.mjs",
   "sidecar": {
-    "linux-arm64": "https://github.com/OmGuptaIND/computer/releases/download/v1.0.39/anton-sidecar-linux-arm64",
-    "linux-amd64": "https://github.com/OmGuptaIND/computer/releases/download/v1.0.39/anton-sidecar-linux-amd64"
+    "linux-arm64": "https://github.com/OmGuptaIND/computer/releases/download/v1.0.40/anton-sidecar-linux-arm64",
+    "linux-amd64": "https://github.com/OmGuptaIND/computer/releases/download/v1.0.40/anton-sidecar-linux-amd64"
   }
 }
