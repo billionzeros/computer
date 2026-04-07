@@ -2,7 +2,7 @@
  * Shared constants, types, and helpers for `anton computer *` commands.
  */
 
-import { execSync } from 'node:child_process'
+import { execSync, spawnSync } from 'node:child_process'
 import { existsSync, readFileSync } from 'node:fs'
 import { createInterface } from 'node:readline'
 import { ICONS, theme } from '../lib/theme.js'
@@ -91,7 +91,7 @@ export function execSilent(cmd: string): boolean {
   }
 }
 
-/** Require Linux + root. Exits with message if not met. */
+/** Require Linux + root. Auto-re-execs with sudo if not root. */
 export function requireLinuxRoot(): void {
   if (process.platform !== 'linux') {
     fail('Platform check', `Expected linux, got ${process.platform}`)
@@ -100,12 +100,17 @@ export function requireLinuxRoot(): void {
   }
 
   const isRoot = process.getuid?.() === 0
-  if (!isRoot) {
-    fail('Root check', 'Not running as root')
-    console.log(`\n  ${theme.dim('Re-run with sudo:')}`)
-    console.log(`    ${theme.bold('sudo anton computer <command>')}\n`)
-    process.exit(1)
-  }
+  if (isRoot) return
+
+  // Re-exec ourselves under sudo, preserving args and stdio.
+  // Avoids the "sudo su -" dance — user just runs `anton computer update`.
+  console.log(`  ${theme.dim('Elevating to root via sudo...')}`)
+  const result = spawnSync(
+    'sudo',
+    ['--preserve-env=PATH', process.execPath, process.argv[1], ...process.argv.slice(2)],
+    { stdio: 'inherit' },
+  )
+  process.exit(result.status ?? 1)
 }
 
 /** Read token from env file, returns masked or raw. */

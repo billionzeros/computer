@@ -253,6 +253,15 @@ WRAPPER
   chmod +x "$wrapper_path"
   ok "Installed to ${install_dir}/"
 
+  # Symlink to /usr/local/bin so root + other users can find it without PATH edits
+  if [[ -w /usr/local/bin ]] || sudo -n true 2>/dev/null; then
+    if [[ -w /usr/local/bin ]]; then
+      ln -sf "$wrapper_path" /usr/local/bin/anton 2>/dev/null && ok "Symlinked /usr/local/bin/anton" || true
+    else
+      sudo ln -sf "$wrapper_path" /usr/local/bin/anton 2>/dev/null && ok "Symlinked /usr/local/bin/anton" || true
+    fi
+  fi
+
   # PATH
   step "Configuring PATH"
   add_to_path "$install_dir"
