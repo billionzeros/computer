@@ -614,6 +614,47 @@ export interface SchedulerRunResponse {
   error?: string
 }
 
+// Skill list messages
+export interface SkillListMessage {
+  type: 'skill_list'
+}
+
+export interface SkillListResponseSkill {
+  name: string
+  description: string
+  icon?: string
+  category?: string
+  featured?: boolean
+  prompt: string
+  whenToUse?: string
+  context?: 'inline' | 'fork'
+  allowedTools?: string[]
+  tools?: string[]
+  schedule?: string
+  model?: string
+  source: 'builtin' | 'user' | 'project'
+  skillDir?: string
+  assets?: {
+    agents?: string[]
+    scripts?: string[]
+    references?: string[]
+    other?: string[]
+  }
+  parameters?: {
+    name: string
+    label: string
+    type: 'text' | 'select' | 'boolean'
+    placeholder?: string
+    options?: string[]
+    required?: boolean
+  }[]
+}
+
+export interface SkillListResponse {
+  type: 'skill_list_response'
+  skills: SkillListResponseSkill[]
+}
+
 // Project management
 export interface ProjectCreateMessage {
   type: 'project_create'
@@ -1230,6 +1271,9 @@ export type AiMessage =
   | SchedulerListResponse
   | SchedulerRunMessage
   | SchedulerRunResponse
+  // Skills
+  | SkillListMessage
+  | SkillListResponse
   // Projects
   | ProjectCreateMessage
   | ProjectCreatedMessage

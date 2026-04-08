@@ -463,6 +463,12 @@ export class Connection {
     this.send(Channel.AI, { type: 'connector_set_tool_permission', id, toolName, permission })
   }
 
+  // ── Skills ────────────────────────────────────────────────────
+
+  sendSkillList() {
+    this.send(Channel.AI, { type: 'skill_list' })
+  }
+
   // ── Filesystem ─────────────────────────────────────────────────
 
   sendFilesystemList(path: string) {

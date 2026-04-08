@@ -53,6 +53,7 @@ import {
   updateProjectStats,
 } from '@anton/agent-config'
 import { GIT_HASH, VERSION } from '@anton/agent-config'
+import { loadSkills } from '@anton/agent-config'
 import {
   CONNECTOR_REGISTRY,
   type ConnectorConfig,
@@ -1005,6 +1006,11 @@ export class AgentServer {
         this.handleProviderSetModels(msg)
         break
 
+      // ── Skills ──
+      case 'skill_list':
+        this.handleSkillList()
+        break
+
       // ── Scheduler ──
       case 'scheduler_list':
         this.handleSchedulerList()
@@ -1738,6 +1744,22 @@ export class AgentServer {
   }
 
   // ── Scheduler handlers ────────────────────────────────────────
+
+  private handleSkillList() {
+    try {
+      const skills = loadSkills()
+      this.sendToClient(Channel.AI, {
+        type: 'skill_list_response',
+        skills,
+      })
+    } catch (err) {
+      console.error('Failed to load skills:', err)
+      this.sendToClient(Channel.AI, {
+        type: 'skill_list_response',
+        skills: [],
+      })
+    }
+  }
 
   private handleSchedulerList() {
     if (!this.scheduler) {

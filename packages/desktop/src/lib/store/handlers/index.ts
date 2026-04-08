@@ -13,6 +13,7 @@ import { sessionStore } from '../sessionStore.js'
 import { uiStore } from '../uiStore.js'
 import { handleChatMessage } from './chatHandler.js'
 import { handleConnectorMessage } from './connectorHandler.js'
+import { handleSkillMessage } from './skillHandler.js'
 import { handleControlMessage } from './controlHandler.js'
 import { handleEventsMessage } from './eventsHandler.js'
 import { handleInteractionMessage } from './interactionHandler.js'
@@ -144,4 +145,5 @@ export function handleWsMessage(channel: number, msg: IncomingMessage): void {
   if (handleProviderMessage(aiMsg)) return
   if (handleProjectMessage(aiMsg)) return
   if (handleConnectorMessage(aiMsg)) return
+  if (handleSkillMessage(aiMsg)) return
 }
