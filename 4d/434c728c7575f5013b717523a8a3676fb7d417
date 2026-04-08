@@ -1,0 +1,45 @@
+specs/features/sub-agents.md
+  2da9e157727fa3a8 1-129
+packages/protocol/src/messages.ts
+  2da9e157727fa3a8 559
+packages/agent-core/src/session.ts
+  2da9e157727fa3a8 140
+packages/desktop/src/lib/store/handlers/chatHandler.ts
+  2da9e157727fa3a8 82
+packages/desktop/src/components/chat/groupMessages.ts
+  2da9e157727fa3a8 15,74,77,135-136,139,189,272
+packages/desktop/src/components/chat/MessageList.tsx
+  2da9e157727fa3a8 205
+packages/agent-config/src/references.ts
+  2da9e157727fa3a8 12-14,17-39,64,101-102
+packages/agent-config/package.json
+  2da9e157727fa3a8 13
+packages/agent-core/src/agent.ts
+  2da9e157727fa3a8 53-93,944-948,951,953-968,978,1032-1035
+packages/agent-config/src/config.ts
+  2da9e157727fa3a8 13-14,268-284,1322,1325-1326,1360,1364,1366-1367
+packages/desktop/src/components/chat/SubAgentGroup.tsx
+  2da9e157727fa3a8 10-15,19,25,62
+packages/agent-config/prompts/system.md
+  2da9e157727fa3a8 351-401
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.2.6",
+  "base_commit_sha": "4d434c728c7575f5013b717523a8a3676fb7d417",
+  "prompts": {
+    "2da9e157727fa3a8": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "d5f2aa18-09b6-4c10-9a43-0d2c4746cfa1",
+        "model": "claude-opus-4-6"
+      },
+      "human_author": "Om Gupta",
+      "messages": [],
+      "total_additions": 368,
+      "total_deletions": 76,
+      "accepted_lines": 325,
+      "overriden_lines": 0
+    }
+  }
+}
