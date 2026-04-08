@@ -1,6 +1,6 @@
 {
   "version": "1.0.44",
-  "gitHash": "",
+  "gitHash": "723a7c6",
   "releaseUrl": "https://github.com/OmGuptaIND/computer/releases",
   "changelog": "Fixes:\n- remove changelog from update modal so update button is visible\n- stop dropping Slack app_mention events in active threads\n- show connected email for Google OAuth connectors",
   "publishedAt": "2026-04-08T16:35:15.446Z",
