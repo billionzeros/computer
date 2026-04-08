@@ -70,7 +70,18 @@ export function MessageBubble({ message, isLastThinking }: Props) {
 
       {message.role === 'tool' && <ToolCallBlock message={message} />}
 
-      {message.role === 'system' && (
+      {message.role === 'system' && message.askUserAnswers && (
+        <div className="ask-user-summary">
+          {Object.entries(message.askUserAnswers).map(([question, answer]) => (
+            <div key={question} className="ask-user-summary__item">
+              <div className="ask-user-summary__question">{question}</div>
+              <div className="ask-user-summary__answer">{answer}</div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {message.role === 'system' && !message.askUserAnswers && (
         <div
           className={message.isError ? 'system-message system-message--error' : 'system-message'}
         >

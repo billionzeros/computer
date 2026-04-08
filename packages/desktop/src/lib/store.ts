@@ -33,6 +33,7 @@ export interface ChatMessage {
   isThinking?: boolean // thinking/reasoning content from the model
   parentToolCallId?: string // set when this message is from a sub-agent
   isSteering?: boolean // sent while agent was working
+  askUserAnswers?: Record<string, string>
 }
 
 export interface CitationSource {

@@ -26,6 +26,7 @@ export interface ChatMessage {
   isThinking?: boolean
   parentToolCallId?: string
   isSteering?: boolean
+  askUserAnswers?: Record<string, string>
 }
 
 export interface CitationSource {

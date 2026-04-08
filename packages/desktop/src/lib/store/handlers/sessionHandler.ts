@@ -99,16 +99,14 @@ export function handleSessionMessage(msg: AiMessage): boolean {
           )
           if (call?.toolName === 'ask_user' && entry.content) {
             try {
-              const answers = JSON.parse(entry.content)
-              const summary = Object.entries(answers)
-                .map(([q, a]) => `**${q}** → ${a}`)
-                .join('\n')
-              if (summary) {
+              const answers = JSON.parse(entry.content) as Record<string, string>
+              if (Object.keys(answers).length > 0) {
                 askUserSummaries.push({
                   id: `askuser_hist_${entry.toolId}`,
                   role: 'system',
-                  content: summary,
+                  content: '',
                   timestamp: entry.ts,
+                  askUserAnswers: answers,
                 })
               }
             } catch {

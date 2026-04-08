@@ -121,14 +121,12 @@ export function TaskDetailView() {
     (answers: Record<string, string>) => {
       if (!pendingAskUser) return
       sessionStore.getState().sendAskUserResponse(pendingAskUser.id, answers)
-      const summary = Object.entries(answers)
-        .map(([q, a]) => `**${q}** → ${a}`)
-        .join('\n')
       addMessage({
         id: `askuser_${Date.now()}`,
         role: 'system',
-        content: summary,
+        content: '',
         timestamp: Date.now(),
+        askUserAnswers: answers,
       })
       if (activeSessionId) {
         sessionStore.getState().updateSessionState(activeSessionId, { pendingAskUser: null })

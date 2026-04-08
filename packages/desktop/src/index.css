@@ -2173,6 +2173,40 @@ button {
 }
 
 /* ═══════════════════════════════════════════════════════════════════
+   ASK-USER Q&A SUMMARY
+   ═══════════════════════════════════════════════════════════════════ */
+
+.ask-user-summary {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-width: 420px;
+}
+
+.ask-user-summary__item {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: rgba(var(--overlay), 0.04);
+  border: 1px solid var(--border);
+}
+
+.ask-user-summary__question {
+  font-size: 12px;
+  line-height: 1.4;
+  color: var(--text-muted);
+}
+
+.ask-user-summary__answer {
+  font-size: 13px;
+  line-height: 1.4;
+  color: var(--text-primary);
+  font-weight: 500;
+}
+
+/* ═══════════════════════════════════════════════════════════════════
    TOOL CALLS & RESULTS
    ═══════════════════════════════════════════════════════════════════ */
 

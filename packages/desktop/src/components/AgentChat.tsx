@@ -241,15 +241,12 @@ export function AgentChat() {
     (answers: Record<string, string>) => {
       if (!pendingAskUser) return
       sessionStore.getState().sendAskUserResponse(pendingAskUser.id, answers)
-      // Show a summary of answers in the chat
-      const summary = Object.entries(answers)
-        .map(([q, a]) => `**${q}** → ${a}`)
-        .join('\n')
       addMessage({
         id: `askuser_${Date.now()}`,
         role: 'system',
-        content: summary,
+        content: '',
         timestamp: Date.now(),
+        askUserAnswers: answers,
       })
       if (activeSessionId) {
         sessionStore.getState().updateSessionState(activeSessionId, { pendingAskUser: null })
