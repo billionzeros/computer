@@ -11,6 +11,7 @@ import { createLogger } from '@anton/logger'
 import { toTelegramMd } from '../format/telegram-md.js'
 import type {
   CanonicalEvent,
+  CanonicalImageAttachment,
   OutboundImage,
   SurfaceInfo,
   WebhookProvider,
@@ -63,7 +64,7 @@ export class TelegramWebhookProvider implements WebhookProvider {
     return ok
   }
 
-  parse(req: WebhookRequest): CanonicalEvent[] {
+  async parse(req: WebhookRequest): Promise<CanonicalEvent[]> {
     let update: TelegramUpdate
     try {
       update = JSON.parse(req.rawBody.toString('utf8')) as TelegramUpdate
@@ -79,15 +80,43 @@ export class TelegramWebhookProvider implements WebhookProvider {
     }
 
     const msg = update.message
-    if (!msg?.text) {
-      log.info({ updateId: update.update_id }, 'parse: update has no text message, dropping')
+    if (!msg) {
+      log.info({ updateId: update.update_id }, 'parse: update has no message, dropping')
+      return []
+    }
+
+    // Handle photo messages — download the image and attach it.
+    const hasPhoto = msg.photo && msg.photo.length > 0
+    const text = (msg.text ?? msg.caption ?? '').trim()
+
+    if (!text && !hasPhoto) {
+      log.info({ updateId: update.update_id }, 'parse: update has no text or photo, dropping')
       return []
     }
 
     const chatId = msg.chat.id
-    const text = msg.text.trim()
-    if (!text) {
-      log.info({ chatId }, 'parse: empty text after trim, dropping')
+    let attachments: CanonicalImageAttachment[] | undefined
+
+    if (hasPhoto) {
+      // Telegram sends multiple sizes; the last element is the largest.
+      const largest = msg.photo![msg.photo!.length - 1]
+      try {
+        const attachment = await this.downloadPhoto(largest.file_id)
+        if (attachment) {
+          attachments = [attachment]
+          log.info(
+            { chatId, fileId: largest.file_id, sizeBytes: attachment.sizeBytes },
+            'parse: downloaded photo attachment',
+          )
+        }
+      } catch (err) {
+        log.warn({ err, chatId, fileId: largest.file_id }, 'parse: failed to download photo')
+      }
+    }
+
+    // If we still have no text and the photo download failed, drop.
+    if (!text && !attachments?.length) {
+      log.info({ chatId }, 'parse: no text and photo download failed, dropping')
       return []
     }
 
@@ -96,20 +125,19 @@ export class TelegramWebhookProvider implements WebhookProvider {
         chatId,
         updateId: update.update_id,
         textBytes: text.length,
+        hasPhoto,
         fromUsername: msg.from?.username,
       },
       'parse: canonical event',
     )
-
-    // Typing indicator is now kicked off in onTurnStart() for symmetry
-    // with onTurnEnd(). The router calls onTurnStart after parse returns.
 
     return [
       {
         provider: this.slug,
         sessionId: `telegram-${chatId}`,
         deliveryId: `telegram-${update.update_id}`,
-        text,
+        text: text || '[image]',
+        attachments,
         surface: buildTelegramSurface(msg),
         context: {
           chatId,
@@ -118,6 +146,52 @@ export class TelegramWebhookProvider implements WebhookProvider {
         },
       },
     ]
+  }
+
+  /**
+   * Download a photo from Telegram using the getFile API.
+   * Returns a CanonicalImageAttachment with base64-encoded bytes, or
+   * undefined if the download fails.
+   */
+  private async downloadPhoto(fileId: string): Promise<CanonicalImageAttachment | undefined> {
+    // Step 1: get the file path from Telegram.
+    const fileRes = await fetch(`${TELEGRAM_API}/bot${this.token}/getFile`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ file_id: fileId }),
+    })
+    if (!fileRes.ok) {
+      log.warn({ status: fileRes.status }, 'getFile request failed')
+      return undefined
+    }
+    const fileData = (await fileRes.json()) as {
+      ok: boolean
+      result?: { file_id: string; file_path?: string; file_size?: number }
+    }
+    if (!fileData.ok || !fileData.result?.file_path) {
+      log.warn({ fileData }, 'getFile returned no file_path')
+      return undefined
+    }
+
+    // Step 2: download the actual file bytes.
+    const downloadUrl = `${TELEGRAM_API}/file/bot${this.token}/${fileData.result.file_path}`
+    const dlRes = await fetch(downloadUrl)
+    if (!dlRes.ok) {
+      log.warn({ status: dlRes.status }, 'photo download failed')
+      return undefined
+    }
+    const bytes = Buffer.from(await dlRes.arrayBuffer())
+    const filePath = fileData.result.file_path
+    const ext = filePath.split('.').pop()?.toLowerCase() ?? 'jpg'
+    const mimeType = ext === 'png' ? 'image/png' : 'image/jpeg'
+
+    return {
+      id: fileId,
+      name: filePath.split('/').pop() ?? `photo.${ext}`,
+      mimeType,
+      data: bytes.toString('base64'),
+      sizeBytes: bytes.byteLength,
+    }
   }
 
   // ── Lifecycle hooks ───────────────────────────────────────────────
@@ -673,6 +747,8 @@ interface TelegramUpdate {
     from?: { id: number; first_name: string; username?: string }
     chat: { id: number; type: string; first_name?: string; username?: string }
     text?: string
+    caption?: string
+    photo?: { file_id: string; file_unique_id: string; width: number; height: number; file_size?: number }[]
     date: number
   }
   callback_query?: {
