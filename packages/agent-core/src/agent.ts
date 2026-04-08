@@ -1213,6 +1213,9 @@ export function buildTools(
   }
 
   // ── Web search (Exa via CF worker proxy) ──────────────────────────
+  // Skip registration when exa_search is already available via MCP connector
+  // (avoids a useless stub that just says "use exa_search instead").
+  // Still register when nothing is configured so the user gets setup instructions.
   {
     const exa = config.connectors.find(
       (c) => c.id === 'exa-search' && c.enabled && c.baseUrl && c.apiKey,
@@ -1220,62 +1223,56 @@ export function buildTools(
     const provider: import('./tools/web-search.js').SearchProvider | null =
       exa?.baseUrl && exa?.apiKey ? { baseUrl: exa.baseUrl, token: exa.apiKey } : null
 
-    tools.push(
-      defineTool({
-        name: 'web_search',
-        label: 'Web Search',
-        description:
-          'Search the web using Exa semantic search. Returns titles, URLs, and full page content as markdown. ' +
-          'Use for researching topics, discovering resources, and answering questions that need up-to-date data. ' +
-          'Results include extracted page content, not just snippets.',
-        parameters: Type.Object({
-          query: Type.String({ description: 'Search query' }),
-          numResults: Type.Optional(
-            Type.Number({ description: 'Number of results (default: 10, max: 30)' }),
-          ),
-          category: Type.Optional(
-            Type.String({
-              description:
-                'Focus area: "news", "research paper", "company", "personal site", "financial report", "people"',
-            }),
-          ),
-          startPublishedDate: Type.Optional(
-            Type.String({
-              description:
-                'Filter results published after this ISO date (e.g. "2025-01-01T00:00:00.000Z")',
-            }),
-          ),
-          endPublishedDate: Type.Optional(
-            Type.String({ description: 'Filter results published before this ISO date' }),
-          ),
-        }),
-        async execute(_toolCallId, params) {
-          if (!provider) {
-            // Check if exa_search is available via connectors (MCP-based Exa)
-            const hasExaConnector = connectorManager
-              ?.getAllTools()
-              .some((t) => t.name === 'exa_search')
-            if (hasExaConnector) {
+    const hasExaConnector =
+      !provider && connectorManager?.getAllTools().some((t) => t.name === 'exa_search')
+
+    if (!hasExaConnector) {
+      tools.push(
+        defineTool({
+          name: 'web_search',
+          label: 'Web Search',
+          description:
+            'Search the web using Exa semantic search. Returns titles, URLs, and full page content as markdown. ' +
+            'Use for researching topics, discovering resources, and answering questions that need up-to-date data. ' +
+            'Results include extracted page content, not just snippets.',
+          parameters: Type.Object({
+            query: Type.String({ description: 'Search query' }),
+            numResults: Type.Optional(
+              Type.Number({ description: 'Number of results (default: 10, max: 30)' }),
+            ),
+            category: Type.Optional(
+              Type.String({
+                description:
+                  'Focus area: "news", "research paper", "company", "personal site", "financial report", "people"',
+              }),
+            ),
+            startPublishedDate: Type.Optional(
+              Type.String({
+                description:
+                  'Filter results published after this ISO date (e.g. "2025-01-01T00:00:00.000Z")',
+              }),
+            ),
+            endPublishedDate: Type.Optional(
+              Type.String({ description: 'Filter results published before this ISO date' }),
+            ),
+          }),
+          async execute(_toolCallId, params) {
+            if (!provider) {
               return toolResult(
-                'The web_search proxy is not configured, but the Exa connector is available. ' +
-                  'Use the exa_search tool instead — it provides the same web search functionality.',
+                'Web search is not configured. To enable it:\n\n' +
+                  '1. Go to Settings → Connectors\n' +
+                  '2. Find "Web Search (Exa)" and click Connect\n' +
+                  '3. Enter your Exa API key\n\n' +
+                  'In the meantime, you can use the browser tool to fetch specific URLs if you have them.',
                 true,
               )
             }
-            return toolResult(
-              'Web search is not configured. To enable it:\n\n' +
-                '1. Go to Settings → Connectors\n' +
-                '2. Find "Web Search (Exa)" and click Connect\n' +
-                '3. Enter your Exa API key\n\n' +
-                'In the meantime, you can use the browser tool to fetch specific URLs if you have them.',
-              true,
-            )
-          }
-          const output = await executeWebSearch(params, provider)
-          return toolResult(output)
-        },
-      }),
-    )
+            const output = await executeWebSearch(params, provider)
+            return toolResult(output)
+          },
+        }),
+      )
+    }
   }
 
   // ── MCP tools (from connected connectors) ─────────────────────────
