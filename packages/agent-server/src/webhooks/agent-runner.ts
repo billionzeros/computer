@@ -126,6 +126,8 @@ export class WebhookAgentRunner {
         if (ev.type === 'text') {
           chunks.push(ev.content)
           textEvents += 1
+        } else if (ev.type === 'tool_call') {
+          chunks.length = 0
         } else if (ev.type === 'browser_state') {
           browserStateEvents += 1
           if (ev.screenshot) {
