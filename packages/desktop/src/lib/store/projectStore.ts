@@ -28,10 +28,6 @@ interface ProjectState {
   projectSessions: SessionMeta[]
   projectSessionsLoading: boolean
 
-  // Project files
-  projectFiles: { name: string; size: number; mimeType: string }[]
-  projectFilesLoading: boolean
-
   // Project agents
   projectAgents: AgentSession[]
   projectAgentsLoading: boolean
@@ -63,7 +59,6 @@ interface ProjectState {
   updateProject: (id: string, changes: Partial<Project>) => void
   removeProject: (id: string) => void
   setProjectSessions: (sessions: SessionMeta[]) => void
-  setProjectFiles: (files: { name: string; size: number; mimeType: string }[]) => void
   setProjectAgents: (agents: AgentSession[]) => void
   setSelectedAgent: (id: string | null) => void
   setActiveProjectSession: (sessionId: string | null) => void
@@ -90,16 +85,6 @@ interface ProjectState {
   updateProjectRemote: (id: string, changes: Record<string, unknown>) => void
   listProjects: () => void
   listProjectSessions: (projectId: string) => void
-  listProjectFiles: (projectId: string) => void
-  uploadProjectFile: (
-    projectId: string,
-    filename: string,
-    base64: string,
-    mimeType: string,
-    size: number,
-  ) => void
-  createTextFile: (projectId: string, filename: string, content: string) => void
-  deleteProjectFile: (projectId: string, filename: string) => void
   listAgents: (projectId: string) => void
   createAgent: (
     projectId: string,
@@ -156,8 +141,6 @@ export const projectStore = create<ProjectState>((set, get) => ({
   activeProjectSessionId: null,
   projectSessions: [],
   projectSessionsLoading: false,
-  projectFiles: [],
-  projectFilesLoading: false,
   projectAgents: [],
   projectAgentsLoading: false,
   selectedAgentId: null,
@@ -194,8 +177,6 @@ export const projectStore = create<ProjectState>((set, get) => ({
       // Clear ALL project-scoped state to prevent cross-project leaks
       projectSessions: [],
       projectSessionsLoading: !!id,
-      projectFiles: [],
-      projectFilesLoading: !!id,
       projectAgents: [],
       projectAgentsLoading: !!id,
       selectedAgentId: null,
@@ -242,7 +223,6 @@ export const projectStore = create<ProjectState>((set, get) => ({
 
   setProjectSessions: (sessions) =>
     set({ projectSessions: sessions, projectSessionsLoading: false }),
-  setProjectFiles: (files) => set({ projectFiles: files, projectFilesLoading: false }),
   setProjectAgents: (agents) => set({ projectAgents: agents, projectAgentsLoading: false }),
   setSelectedAgent: (id) => set({ selectedAgentId: id }),
   setActiveProjectSession: (sessionId) => set({ activeProjectSessionId: sessionId }),
@@ -262,12 +242,6 @@ export const projectStore = create<ProjectState>((set, get) => ({
   updateProjectRemote: (id, changes) => connection.sendProjectUpdate(id, changes),
   listProjects: () => connection.sendProjectsList(),
   listProjectSessions: (projectId) => connection.sendProjectSessionsList(projectId),
-  listProjectFiles: (projectId) => connection.sendProjectFilesList(projectId),
-  uploadProjectFile: (projectId, filename, base64, mimeType, size) =>
-    connection.sendProjectFileUpload(projectId, filename, base64, mimeType, size),
-  createTextFile: (projectId, filename, content) =>
-    connection.sendProjectFileTextCreate(projectId, filename, content),
-  deleteProjectFile: (projectId, filename) => connection.sendProjectFileDelete(projectId, filename),
   listAgents: (projectId) => connection.sendAgentsList(projectId),
   createAgent: (projectId, config) => connection.sendAgentCreate(projectId, config),
   agentAction: (projectId, agentId, action) =>
@@ -304,8 +278,6 @@ export const projectStore = create<ProjectState>((set, get) => ({
       activeProjectSessionId: null,
       projectSessions: [],
       projectSessionsLoading: false,
-      projectFiles: [],
-      projectFilesLoading: false,
       projectAgents: [],
       projectAgentsLoading: false,
       selectedAgentId: null,
@@ -327,8 +299,6 @@ export const projectStore = create<ProjectState>((set, get) => ({
     set({
       projectSessions: [],
       projectSessionsLoading: false,
-      projectFiles: [],
-      projectFilesLoading: false,
       projectAgents: [],
       projectAgentsLoading: false,
       selectedAgentId: null,

@@ -12,6 +12,7 @@ import {
 import { homedir, hostname } from 'node:os'
 import { join } from 'node:path'
 import { parse as parseYaml, stringify as stringifyYaml } from 'yaml'
+import { copyImageToWorkspace } from './image-storage.js'
 
 // ── Provider types ──────────────────────────────────────────────────
 
@@ -52,9 +53,13 @@ export interface PersistedImageBlock {
   type: 'image'
   mimeType: string
   storagePath: string
+  workspacePath?: string // workspace-relative path (e.g. .uploads/photo.png)
   name?: string
   sizeBytes?: number
 }
+
+// Re-export extractProjectId from image-storage (kept here for backward compat)
+export { extractProjectId } from './image-storage.js'
 
 /** A single message line in messages.jsonl */
 export interface SessionMessage {
@@ -812,12 +817,22 @@ function serializeSessionContent(
     )
     const absolutePath = join(sessionDir(sessionId), relativePath)
     const imageBuffer = Buffer.from(value.data, 'base64')
+
+    // Always write to session images dir (safety net)
     writeFileSync(absolutePath, imageBuffer)
+
+    // Dual-write to workspace .uploads/ if available
+    const sanitizedName =
+      typeof value.name === 'string'
+        ? sanitizeAttachmentName(value.name)
+        : relativePath.split('/').pop() || 'image'
+    const wsRelativePath = copyImageToWorkspace(sessionId, absolutePath, sanitizedName)
 
     return {
       type: 'image',
       mimeType: value.mimeType,
       storagePath: relativePath,
+      workspacePath: wsRelativePath,
       name: typeof value.name === 'string' ? value.name : relativePath.split('/').pop(),
       sizeBytes:
         typeof value.sizeBytes === 'number' && Number.isFinite(value.sizeBytes)

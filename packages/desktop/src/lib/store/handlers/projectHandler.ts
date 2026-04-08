@@ -37,9 +37,7 @@ export function handleProjectMessage(msg: AiMessage): boolean {
     }
 
     case 'project_files_list_response': {
-      if (msg.projectId === projectStore.getState().activeProjectId) {
-        projectStore.getState().setProjectFiles(msg.files)
-      }
+      // Legacy handler — project files are now managed via Files sidebar
       return true
     }
 

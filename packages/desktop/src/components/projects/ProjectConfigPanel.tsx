@@ -6,12 +6,11 @@ import {
   FolderOpen,
   Pencil,
   Plus,
-  Type,
-  Upload,
   X,
 } from 'lucide-react'
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { projectStore } from '../../lib/store/projectStore.js'
+import { uiStore } from '../../lib/store/uiStore.js'
 import { Skeleton, SkeletonLines } from '../Skeleton.js'
 import { Modal } from '../ui/Modal.js'
 
@@ -163,212 +162,22 @@ function MemoryEditModal({
   )
 }
 
-// ── Text File Create Modal ────────────────────────────────────────
-
-function TextFileModal({
-  open,
-  onClose,
-  projectId,
-}: {
-  open: boolean
-  onClose: () => void
-  projectId: string
-}) {
-  const [filename, setFilename] = useState('')
-  const [content, setContent] = useState('')
-
-  useEffect(() => {
-    if (open) {
-      setFilename('')
-      setContent('')
-    }
-  }, [open])
-
-  function handleSave() {
-    if (!filename.trim()) return
-    projectStore.getState().createTextFile(projectId, filename.trim(), content)
-    onClose()
-  }
-
-  return (
-    <Modal open={open} onClose={onClose} title="Add Text Content">
-      <div className="context-modal">
-        <div className="form-field">
-          <label className="form-field__label" htmlFor="text-file-filename">
-            Filename
-          </label>
-          <input
-            id="text-file-filename"
-            className="form-field__input"
-            value={filename}
-            onChange={(e) => setFilename(e.target.value)}
-            placeholder="e.g. notes.md, config.json"
-          />
-        </div>
-        <textarea
-          className="context-modal__textarea"
-          value={content}
-          onChange={(e) => setContent(e.target.value)}
-          placeholder="File contents..."
-          style={{ marginTop: 8 }}
-        />
-        <div className="context-modal__footer">
-          <button type="button" className="button button--secondary" onClick={onClose}>
-            Cancel
-          </button>
-          <button
-            type="button"
-            className="button button--primary"
-            onClick={handleSave}
-            disabled={!filename.trim()}
-          >
-            Save
-          </button>
-        </div>
-      </div>
-    </Modal>
-  )
-}
-
 // ── Files Section ─────────────────────────────────────────────────
 
-function FilesSection({ projectId }: { projectId: string }) {
-  const [showMenu, setShowMenu] = useState(false)
-  const [textModalOpen, setTextModalOpen] = useState(false)
-  const fileInputRef = useRef<HTMLInputElement>(null)
-  const projectFiles = projectStore((s) => s.projectFiles)
-
-  useEffect(() => {
-    projectStore.getState().listProjectFiles(projectId)
-  }, [projectId])
-
-  function handleFileUpload(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0]
-    if (!file) return
-
-    if (file.size > 10 * 1024 * 1024) {
-      alert('File size must be under 10MB')
-      return
-    }
-
-    const reader = new FileReader()
-    reader.onload = () => {
-      const result = reader.result as string
-      // Remove the data:...;base64, prefix
-      const base64 = result.split(',')[1] || ''
-      projectStore.getState().uploadProjectFile(projectId, file.name, base64, file.type, file.size)
-    }
-    reader.readAsDataURL(file)
-
-    // Reset input so same file can be uploaded again
-    e.target.value = ''
-  }
-
-  function handleDelete(filename: string) {
-    projectStore.getState().deleteProjectFile(projectId, filename)
-  }
-
-  function formatSize(bytes: number): string {
-    if (bytes < 1024) return `${bytes} B`
-    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
-    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
-  }
-
+function FilesSection() {
   return (
-    <>
-      <ConfigSection
-        icon={<FolderOpen size={14} strokeWidth={1.5} />}
-        title="Files"
-        defaultOpen={projectFiles.length > 0}
-        headerAction={
-          <div className="files-add-wrap">
-            <button
-              type="button"
-              className="config-section__icon-btn"
-              onClick={() => setShowMenu(!showMenu)}
-              aria-label="Add files"
-            >
-              <Plus size={14} strokeWidth={1.5} />
-            </button>
-            {showMenu && (
-              <>
-                <div
-                  className="files-add-backdrop"
-                  onClick={() => setShowMenu(false)}
-                  onKeyDown={(e) => e.key === 'Escape' && setShowMenu(false)}
-                />
-                <div className="files-add-menu">
-                  <button
-                    type="button"
-                    className="files-add-menu__item"
-                    onClick={() => {
-                      setShowMenu(false)
-                      fileInputRef.current?.click()
-                    }}
-                  >
-                    <Upload size={14} strokeWidth={1.5} />
-                    <span>Upload from device</span>
-                  </button>
-                  <button
-                    type="button"
-                    className="files-add-menu__item"
-                    onClick={() => {
-                      setShowMenu(false)
-                      setTextModalOpen(true)
-                    }}
-                  >
-                    <Type size={14} strokeWidth={1.5} />
-                    <span>Add text content</span>
-                  </button>
-                </div>
-              </>
-            )}
-          </div>
-        }
+    <ConfigSection
+      icon={<FolderOpen size={14} strokeWidth={1.5} />}
+      title="Files"
+    >
+      <button
+        type="button"
+        className="config-section__link"
+        onClick={() => uiStore.getState().setActiveView('files')}
       >
-        {projectFiles.length > 0 ? (
-          <div className="files-list">
-            {projectFiles.map((f) => {
-              const ext = f.name.split('.').pop()?.toUpperCase() || 'FILE'
-              return (
-                <div key={f.name} className="file-card">
-                  <div className="file-card__info">
-                    <span className="file-card__name">{f.name}</span>
-                    <span className="file-card__size">{formatSize(f.size)}</span>
-                  </div>
-                  <div className="file-card__actions">
-                    <span className="file-card__badge">{ext}</span>
-                    <button
-                      type="button"
-                      className="file-card__delete"
-                      onClick={() => handleDelete(f.name)}
-                      aria-label={`Delete ${f.name}`}
-                    >
-                      <X size={12} strokeWidth={1.5} />
-                    </button>
-                  </div>
-                </div>
-              )
-            })}
-          </div>
-        ) : (
-          <p className="config-section__hint">Start by attaching files to your project.</p>
-        )}
-      </ConfigSection>
-
-      <input
-        ref={fileInputRef}
-        type="file"
-        style={{ display: 'none' }}
-        onChange={handleFileUpload}
-      />
-
-      <TextFileModal
-        open={textModalOpen}
-        onClose={() => setTextModalOpen(false)}
-        projectId={projectId}
-      />
-    </>
+        Manage files <ChevronRight size={12} strokeWidth={1.5} />
+      </button>
+    </ConfigSection>
   )
 }
 
@@ -446,7 +255,7 @@ export function ProjectConfigPanel({ project, loading }: Props) {
         </ConfigSection>
 
         {/* Files */}
-        <FilesSection projectId={project.id} />
+        <FilesSection />
 
         {/* Memory */}
         <ConfigSection

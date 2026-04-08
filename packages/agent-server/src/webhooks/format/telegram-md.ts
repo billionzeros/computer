@@ -28,16 +28,20 @@
 
 export function toTelegramMd(input: string): string {
   if (!input) return input
-  const segments = splitOnFences(input)
+  const segments = splitOnCodeBlocks(input)
   for (let i = 0; i < segments.length; i += 2) {
     segments[i] = transformProse(segments[i])
   }
   return segments.join('')
 }
 
-function splitOnFences(input: string): string[] {
+/**
+ * Split on fenced code blocks AND inline code spans so that asterisks
+ * and underscores inside code survive the prose transforms unmodified.
+ */
+function splitOnCodeBlocks(input: string): string[] {
   const out: string[] = []
-  const re = /```[\s\S]*?```/g
+  const re = /```[\s\S]*?```|`[^`\n]+`/g
   let lastIndex = 0
   let m: RegExpExecArray | null
   m = re.exec(input)
@@ -67,6 +71,11 @@ function transformProse(prose: string): string {
   // Strikethrough: legacy Markdown has no strike — drop the markers
   // so the text still reads naturally instead of showing `~~raw~~`.
   out = out.replace(/~~([^~\n]+?)~~/g, '$1')
+
+  // Escape bare `*` followed by `/` — common in cron expressions and
+  // glob patterns (e.g. `*/10 * * * *`). Without escaping, Telegram
+  // interprets the first `*` as a bold opener and mangles the text.
+  out = out.replace(/\*(?=\/)/g, '\\*')
 
   return out
 }

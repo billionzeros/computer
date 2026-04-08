@@ -219,14 +219,9 @@ export class TelegramWebhookProvider implements WebhookProvider {
   async sendMessage(event: CanonicalEvent, text: string): Promise<string | undefined> {
     const chatId = event.context.chatId as number
     const formatted = toTelegramMd(text)
-    const res = await fetch(`${TELEGRAM_API}/bot${this.token}/sendMessage`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        chat_id: chatId,
-        text: formatted || text,
-        parse_mode: 'Markdown',
-      }),
+    const res = await this.telegramPostWithMdFallback('sendMessage', {
+      chat_id: chatId,
+      text: formatted || text,
     })
     if (!res.ok) {
       const body = await res.text().catch(() => '<unreadable>')
@@ -244,15 +239,10 @@ export class TelegramWebhookProvider implements WebhookProvider {
   async editMessage(event: CanonicalEvent, messageId: string, text: string): Promise<void> {
     const chatId = event.context.chatId as number
     const formatted = toTelegramMd(text)
-    const res = await fetch(`${TELEGRAM_API}/bot${this.token}/editMessageText`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        chat_id: chatId,
-        message_id: Number.parseInt(messageId, 10),
-        text: formatted || text,
-        parse_mode: 'Markdown',
-      }),
+    const res = await this.telegramPostWithMdFallback('editMessageText', {
+      chat_id: chatId,
+      message_id: Number.parseInt(messageId, 10),
+      text: formatted || text,
     })
     if (!res.ok) {
       const body = await res.text().catch(() => '<unreadable>')
@@ -273,22 +263,17 @@ export class TelegramWebhookProvider implements WebhookProvider {
   ): Promise<void> {
     const chatId = event.context.chatId as number
     const text = `⚠️ *Confirmation required*\n\`\`\`\n${command}\n\`\`\`\n${reason}`
-    await fetch(`${TELEGRAM_API}/bot${this.token}/sendMessage`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        chat_id: chatId,
-        text,
-        parse_mode: 'Markdown',
-        reply_markup: {
-          inline_keyboard: [
-            [
-              { text: '✅ Allow', callback_data: `confirm_approve:${interactionId}` },
-              { text: '❌ Deny', callback_data: `confirm_deny:${interactionId}` },
-            ],
+    await this.telegramPostWithMdFallback('sendMessage', {
+      chat_id: chatId,
+      text,
+      reply_markup: {
+        inline_keyboard: [
+          [
+            { text: '✅ Allow', callback_data: `confirm_approve:${interactionId}` },
+            { text: '❌ Deny', callback_data: `confirm_deny:${interactionId}` },
           ],
-        },
-      }),
+        ],
+      },
     })
   }
 
@@ -306,22 +291,17 @@ export class TelegramWebhookProvider implements WebhookProvider {
     const truncated =
       content.length > 3500 ? `${content.slice(0, 3500)}…\n\n_(plan truncated)_` : content
     const text = `📋 *Plan: ${title}*\n\n${toTelegramMd(truncated)}\n\nReply *approve* or use the buttons below.`
-    await fetch(`${TELEGRAM_API}/bot${this.token}/sendMessage`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        chat_id: chatId,
-        text,
-        parse_mode: 'Markdown',
-        reply_markup: {
-          inline_keyboard: [
-            [
-              { text: '✅ Approve', callback_data: `plan_approve:${interactionId}` },
-              { text: '❌ Reject', callback_data: `plan_reject:${interactionId}` },
-            ],
+    await this.telegramPostWithMdFallback('sendMessage', {
+      chat_id: chatId,
+      text,
+      reply_markup: {
+        inline_keyboard: [
+          [
+            { text: '✅ Approve', callback_data: `plan_approve:${interactionId}` },
+            { text: '❌ Reject', callback_data: `plan_reject:${interactionId}` },
           ],
-        },
-      }),
+        ],
+      },
     })
   }
 
@@ -423,6 +403,41 @@ export class TelegramWebhookProvider implements WebhookProvider {
     })
   }
 
+  /**
+   * POST to a Telegram method with `parse_mode: 'Markdown'`. If the API
+   * returns a 400 mentioning "can't parse entities", retry the same
+   * payload without `parse_mode` so the message still arrives as plain
+   * text rather than being silently lost.
+   */
+  private async telegramPostWithMdFallback(
+    method: string,
+    payload: Record<string, unknown>,
+  ): Promise<Response> {
+    const url = `${TELEGRAM_API}/bot${this.token}/${method}`
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ...payload, parse_mode: 'Markdown' }),
+    })
+    if (res.status === 400) {
+      const body = await res.text().catch(() => '')
+      if (body.includes("can't parse entities")) {
+        log.warn(
+          { method, chatId: payload.chat_id },
+          'Markdown parse failed, retrying without parse_mode',
+        )
+        return fetch(url, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        })
+      }
+      // Body already consumed — re-wrap so callers can still read it.
+      return new Response(body, { status: 400, statusText: res.statusText })
+    }
+    return res
+  }
+
   // ── Reply ─────────────────────────────────────────────────────────
 
   async reply(event: CanonicalEvent, text: string, images: OutboundImage[]): Promise<void> {
@@ -443,14 +458,9 @@ export class TelegramWebhookProvider implements WebhookProvider {
         'reply: sending text',
       )
       for (const [i, chunk] of chunks.entries()) {
-        const res = await fetch(`${TELEGRAM_API}/bot${this.token}/sendMessage`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            chat_id: chatId,
-            text: chunk,
-            parse_mode: 'Markdown',
-          }),
+        const res = await this.telegramPostWithMdFallback('sendMessage', {
+          chat_id: chatId,
+          text: chunk,
         })
         if (!res.ok) {
           const body = await res.text().catch(() => '<unreadable>')

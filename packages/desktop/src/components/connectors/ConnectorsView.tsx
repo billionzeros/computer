@@ -12,14 +12,14 @@
  *   - 'never' → tool is filtered out of getAllTools(), agent never sees it
  */
 
-import { Check, Plug, Search, X } from 'lucide-react'
-import { useEffect, useMemo, useState } from 'react'
+import { Check, ExternalLink, Loader2, Plug, Plus, Search, Trash2 } from 'lucide-react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { connection } from '../../lib/connection.js'
 import { useStore } from '../../lib/store.js'
 import { connectorStore } from '../../lib/store/connectorStore.js'
 import type { ConnectorRegistryInfo, ConnectorStatusInfo } from '../../lib/store/types.js'
 import { ConnectorIcon } from './ConnectorIcons.js'
-import { AppSetup, ConnectorsPage } from './ConnectorsPage.js'
+import { AppSetup } from './ConnectorsPage.js'
 
 type ToolPermission = 'auto' | 'ask' | 'never'
 
@@ -53,6 +53,19 @@ function getPermission(
   return perms?.[toolName] ?? 'auto'
 }
 
+// ── Sidebar item type ─────────────────────────────────────────────────
+// For multi-account connectors we group all instances under the registry id.
+
+interface SidebarItem {
+  /** The registry id (or connector id for non-registry entries) */
+  id: string
+  name: string
+  /** All connected instances for this connector */
+  instances: ConnectorStatusInfo[]
+  entry?: ConnectorRegistryInfo
+  connected: boolean
+}
+
 // ── Main view ──────────────────────────────────────────────────────────
 
 export function ConnectorsView() {
@@ -60,7 +73,6 @@ export function ConnectorsView() {
   const registry = connectorStore((s) => s.connectorRegistry)
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [search, setSearch] = useState('')
-  const [showAddModal, setShowAddModal] = useState(false)
   const [connectPopupId, setConnectPopupId] = useState<string | null>(null)
 
   // Refresh data when connection comes up
@@ -72,18 +84,26 @@ export function ConnectorsView() {
     }
   }, [connectionStatus])
 
-  // Listen for open-connector events (from ConnectorToolbar / App.tsx)
+  // Listen for open-connector events (from ConnectorToolbar / App.tsx).
+  // The event may carry a UUID instance id, so resolve it to the group id
+  // (registryId) that the sidebar uses.
   useEffect(() => {
     const handler = (e: Event) => {
       const detail = (e as CustomEvent).detail
       if (detail?.connectorId) {
-        setSelectedId(detail.connectorId)
+        const rawId: string = detail.connectorId
+        const state = connectorStore.getState()
+        // Resolve instance UUID → group id
+        const inst = state.connectors.find((c) => c.id === rawId)
+        const groupId = inst?.registryId ?? rawId
+
+        setSelectedId(groupId)
         // If not connected, show the connect popup
-        const isConnected = connectorStore.getState().connectors.some(
-          (c) => c.id === detail.connectorId && c.connected,
+        const isConnected = state.connectors.some(
+          (c) => (c.registryId ?? c.id) === groupId && c.connected,
         )
         if (!isConnected) {
-          setConnectPopupId(detail.connectorId)
+          setConnectPopupId(groupId)
         }
       }
     }
@@ -91,38 +111,62 @@ export function ConnectorsView() {
     return () => window.removeEventListener('open-connector', handler)
   }, [])
 
-  // Auto-select the first connected connector if nothing is selected
-  useEffect(() => {
-    if (!selectedId && connectors.length > 0) {
-      const firstConnected = connectors.find((c) => c.connected)
-      setSelectedId(firstConnected?.id ?? connectors[0]?.id ?? null)
-    }
-  }, [connectors, selectedId])
-
   // Build sidebar list: connected (top), not connected (bottom).
-  // Connected = anything in `connectors` with connected=true.
-  // Not connected = registry entries that are not yet configured/connected,
-  // plus configured-but-disconnected entries.
+  // Multi-account connectors are grouped under a single entry.
   const { connectedItems, notConnectedItems } = useMemo(() => {
-    const connectedIds = new Set<string>()
-    const connected: Array<{ id: string; name: string; status: ConnectorStatusInfo }> = []
+    // Group connectors by their registry id (or own id if no registryId)
+    const groupMap = new Map<string, { instances: ConnectorStatusInfo[]; name: string }>()
+
     for (const c of connectors) {
-      if (c.connected) {
-        connectedIds.add(c.id)
-        connected.push({ id: c.id, name: c.name, status: c })
+      const groupId = c.registryId ?? c.id
+      const existing = groupMap.get(groupId)
+      if (existing) {
+        existing.instances.push(c)
+      } else {
+        groupMap.set(groupId, { instances: [c], name: c.name })
       }
     }
 
-    const available: Array<{ id: string; name: string; entry?: ConnectorRegistryInfo }> = []
+    const connectedIds = new Set<string>()
+    const connected: SidebarItem[] = []
+
+    for (const [groupId, group] of groupMap) {
+      const anyConnected = group.instances.some((c) => c.connected)
+      if (anyConnected) {
+        connectedIds.add(groupId)
+        const entry = registry.find((r) => r.id === groupId)
+        connected.push({
+          id: groupId,
+          name: entry?.name ?? group.name,
+          instances: group.instances,
+          entry,
+          connected: true,
+        })
+      }
+    }
+
+    const available: SidebarItem[] = []
     for (const entry of registry) {
       if (!connectedIds.has(entry.id)) {
-        available.push({ id: entry.id, name: entry.name, entry })
+        const group = groupMap.get(entry.id)
+        available.push({
+          id: entry.id,
+          name: entry.name,
+          instances: group?.instances ?? [],
+          entry,
+          connected: false,
+        })
       }
     }
-    // Configured but disconnected — show in "not connected" too
-    for (const c of connectors) {
-      if (!c.connected && !registry.some((r) => r.id === c.id)) {
-        available.push({ id: c.id, name: c.name })
+    // Configured but disconnected and not in registry
+    for (const [groupId, group] of groupMap) {
+      if (!connectedIds.has(groupId) && !registry.some((r) => r.id === groupId)) {
+        available.push({
+          id: groupId,
+          name: group.name,
+          instances: group.instances,
+          connected: false,
+        })
       }
     }
 
@@ -135,12 +179,19 @@ export function ConnectorsView() {
     }
   }, [connectors, registry, search])
 
+  // Auto-select the first connected connector if nothing is selected
+  useEffect(() => {
+    if (!selectedId) {
+      const first = connectedItems[0] ?? notConnectedItems[0]
+      if (first) setSelectedId(first.id)
+    }
+  }, [connectedItems, notConnectedItems, selectedId])
+
   const selected = useMemo(() => {
     if (!selectedId) return null
-    const status = connectors.find((c) => c.id === selectedId)
-    const entry = registry.find((r) => r.id === selectedId)
-    return { status, entry }
-  }, [selectedId, connectors, registry])
+    const all = [...connectedItems, ...notConnectedItems]
+    return all.find((i) => i.id === selectedId) ?? null
+  }, [selectedId, connectedItems, notConnectedItems])
 
   return (
     <div className="connectors-view">
@@ -148,15 +199,6 @@ export function ConnectorsView() {
       <aside className="connectors-view__sidebar">
         <div className="connectors-view__sidebar-header">
           <span className="connectors-view__sidebar-title">Connectors</span>
-          <button
-            type="button"
-            className="connectors-view__sidebar-add"
-            onClick={() => setShowAddModal(true)}
-            title="Add a connector"
-            aria-label="Add a connector"
-          >
-            +
-          </button>
         </div>
 
         <div className="connectors-view__search">
@@ -178,6 +220,7 @@ export function ConnectorsView() {
                   key={item.id}
                   id={item.id}
                   name={item.name}
+                  accountCount={item.instances.filter((i) => i.connected).length}
                   active={selectedId === item.id}
                   onClick={() => setSelectedId(item.id)}
                 />
@@ -193,6 +236,7 @@ export function ConnectorsView() {
                   key={item.id}
                   id={item.id}
                   name={item.name}
+                  accountCount={0}
                   active={selectedId === item.id}
                   onClick={() => setSelectedId(item.id)}
                 />
@@ -212,8 +256,8 @@ export function ConnectorsView() {
       <section className="connectors-view__detail">
         {selected ? (
           <ConnectorDetail
-            status={selected.status}
-            entry={selected.entry}
+            key={selected.id}
+            item={selected}
             onConnect={(id) => setConnectPopupId(id)}
           />
         ) : (
@@ -223,39 +267,6 @@ export function ConnectorsView() {
           </div>
         )}
       </section>
-
-      {/* ── Add-connector modal (reuses existing setup flow) ── */}
-      {showAddModal && (
-        <div
-          className="connectors-view__modal-backdrop"
-          onClick={() => setShowAddModal(false)}
-          onKeyDown={(e) => {
-            if (e.key === 'Escape') setShowAddModal(false)
-          }}
-          role="presentation"
-        >
-          <div
-            className="connectors-view__modal"
-            onClick={(e) => e.stopPropagation()}
-            onKeyDown={(e) => e.stopPropagation()}
-          >
-            <button
-              type="button"
-              className="connectors-view__modal-close"
-              onClick={() => setShowAddModal(false)}
-              aria-label="Close"
-            >
-              <X size={18} strokeWidth={1.5} />
-            </button>
-            <ConnectorsPage
-              onConnected={(connectedId) => {
-                setShowAddModal(false)
-                if (connectedId) setSelectedId(connectedId)
-              }}
-            />
-          </div>
-        </div>
-      )}
 
       {/* ── Connect popup (small centered dialog like AppSetup) ── */}
       {connectPopupId && (() => {
@@ -283,11 +294,13 @@ export function ConnectorsView() {
 function SidebarRow({
   id,
   name,
+  accountCount,
   active,
   onClick,
 }: {
   id: string
   name: string
+  accountCount: number
   active: boolean
   onClick: () => void
 }) {
@@ -301,6 +314,11 @@ function SidebarRow({
         <ConnectorIcon id={id} size={18} />
       </span>
       <span className="connectors-view__row-name">{name}</span>
+      {accountCount > 1 && (
+        <span style={{ fontSize: 10, color: 'var(--text-muted)', flexShrink: 0 }}>
+          {accountCount}
+        </span>
+      )}
     </button>
   )
 }
@@ -308,14 +326,17 @@ function SidebarRow({
 // ── Detail pane ────────────────────────────────────────────────────────
 
 function ConnectorDetail({
-  status,
-  entry,
+  item,
   onConnect,
 }: {
-  status?: ConnectorStatusInfo
-  entry?: ConnectorRegistryInfo
+  item: SidebarItem
   onConnect?: (id: string) => void
 }) {
+  const [oauthWaiting, setOauthWaiting] = useState(false)
+  const [oauthError, setOauthError] = useState<string | null>(null)
+  // Track active OAuth cleanup so we can tear it down on unmount
+  const oauthCleanupRef = useRef<(() => void) | null>(null)
+
   // Listen for OAuth completion to refresh
   useEffect(() => {
     const unsub = connection.onMessage((_channel, msg) => {
@@ -326,34 +347,131 @@ function ConnectorDetail({
     return unsub
   }, [])
 
-  const id = status?.id ?? entry?.id
-  const name = status?.name ?? entry?.name ?? 'Unknown'
-  const description = status?.description ?? entry?.description
-  const isConnected = !!status?.connected
-  const tools = status?.tools ?? []
-  const perms = status?.toolPermissions
+  // Clean up any in-flight OAuth on unmount
+  useEffect(() => {
+    return () => { oauthCleanupRef.current?.() }
+  }, [])
 
-  if (!id) return null
+  const { id, name, entry, instances, connected: isConnected } = item
+  const description = instances[0]?.description ?? entry?.description
+  const isOAuth = entry?.type === 'oauth'
+  const isMultiAccount = entry?.multiAccount
 
-  const handleDisconnect = () => {
-    if (entry?.type === 'oauth') {
-      connectorStore.getState().disconnectOAuth(id)
+  // Aggregate tools from all connected instances
+  const allTools = useMemo(() => {
+    const toolSet = new Set<string>()
+    for (const inst of instances) {
+      if (inst.connected) {
+        for (const t of inst.tools ?? []) toolSet.add(t)
+      }
+    }
+    return Array.from(toolSet)
+  }, [instances])
+
+  // Use first connected instance's permissions as reference
+  const permsInstance = instances.find((i) => i.connected)
+  const perms = permsInstance?.toolPermissions
+
+  const connectedInstances = instances.filter((i) => i.connected)
+
+  const handleDisconnect = (instanceId: string) => {
+    if (isOAuth) {
+      connectorStore.getState().disconnectOAuth(instanceId)
     } else {
-      connectorStore.getState().removeConnectorRemote(id)
+      connectorStore.getState().removeConnectorRemote(instanceId)
     }
   }
 
   const handleConnect = () => {
+    // OAuth connectors can start the flow inline — no popup needed
+    if (isOAuth) {
+      startOAuthFlow(id)
+      return
+    }
+    // Non-OAuth needs the AppSetup popup for env var fields / setup guide
     if (onConnect && id) onConnect(id)
   }
 
+  const startOAuthFlow = (instanceId: string, registryId?: string) => {
+    setOauthWaiting(true)
+    setOauthError(null)
+    connectorStore.getState().startOAuth(instanceId, registryId)
+
+    let timeoutId: ReturnType<typeof setTimeout>
+    const unsub = connection.onMessage((_channel, msg) => {
+      if (msg.type === 'connector_oauth_url' && (msg as unknown as { provider: string }).provider === instanceId) {
+        const url = (msg as unknown as { url: string }).url
+        if ((window as unknown as { __TAURI__?: unknown }).__TAURI__) {
+          import('@tauri-apps/plugin-shell').then(({ open }) => open(url))
+        } else {
+          window.open(url, '_blank')
+        }
+      }
+      if (msg.type === 'connector_oauth_complete' && (msg as unknown as { provider: string }).provider === instanceId) {
+        const complete = msg as unknown as { success: boolean; error?: string }
+        cleanup()
+        if (complete.success) {
+          connectorStore.getState().listConnectors()
+        } else {
+          setOauthError(complete.error || 'Authorization failed')
+          if (registryId) {
+            connectorStore.getState().removeConnectorRemote(instanceId)
+          }
+        }
+      }
+    })
+
+    const cleanup = () => {
+      clearTimeout(timeoutId)
+      setOauthWaiting(false)
+      unsub()
+      oauthCleanupRef.current = null
+    }
+
+    oauthCleanupRef.current = () => {
+      cleanup()
+      if (registryId) {
+        connectorStore.getState().removeConnectorRemote(instanceId)
+      }
+    }
+
+    timeoutId = setTimeout(() => {
+      setOauthError('Authorization timed out')
+      cleanup()
+      if (registryId) {
+        connectorStore.getState().removeConnectorRemote(instanceId)
+      }
+    }, 120_000)
+  }
+
+  const handleAddAnotherAccount = () => {
+    if (!entry) return
+    const newId = crypto.randomUUID()
+    connectorStore.getState().addConnectorRemote({
+      id: newId,
+      name: entry.name,
+      description: entry.description,
+      icon: entry.icon,
+      type: entry.type,
+      registryId: entry.id,
+      enabled: true,
+    })
+    startOAuthFlow(newId, entry.id)
+  }
+
+  const handleReauthorize = (instanceId: string, registryId?: string) => {
+    startOAuthFlow(instanceId, registryId)
+  }
+
   const setPermission = (toolName: string, permission: ToolPermission) => {
-    connectorStore.getState().setToolPermission(id, toolName, permission)
+    // Set permission on the first connected instance (they share the same tool set)
+    const targetId = permsInstance?.id ?? id
+    connectorStore.getState().setToolPermission(targetId, toolName, permission)
   }
 
   // Group tools by read/write classification
-  const readOnly = tools.filter(isReadOnlyTool)
-  const writeDelete = tools.filter((t: string) => !isReadOnlyTool(t))
+  const readOnly = allTools.filter(isReadOnlyTool)
+  const writeDelete = allTools.filter((t: string) => !isReadOnlyTool(t))
 
   return (
     <div className="connectors-view__detail-inner">
@@ -363,43 +481,128 @@ function ConnectorDetail({
           <ConnectorIcon id={id} size={28} />
         </div>
         <div className="connectors-view__detail-title">{name}</div>
-        {isConnected ? (
+        {isConnected && !isMultiAccount ? (
           <button
             type="button"
             className="connectors-view__btn connectors-view__btn--ghost"
-            onClick={handleDisconnect}
+            onClick={() => handleDisconnect(connectedInstances[0]?.id ?? id)}
           >
             Disconnect
           </button>
-        ) : (
+        ) : !isConnected ? (
           <button
             type="button"
             className="connectors-view__btn connectors-view__btn--primary"
             onClick={handleConnect}
+            disabled={oauthWaiting}
           >
-            Connect
+            {oauthWaiting ? (
+              <><Loader2 size={14} className="animate-spin" /> Waiting...</>
+            ) : (
+              'Connect'
+            )}
           </button>
-        )}
+        ) : null}
       </div>
 
       {description && <p className="connectors-view__detail-desc">{description}</p>}
 
-      {!isConnected && (
+      {/* Connected accounts (multi-account or single with account info) */}
+      {isConnected && connectedInstances.length > 0 && (
+        <div className="connectors-view__accounts">
+          <div className="connectors-view__accounts-title">
+            Connected account{connectedInstances.length > 1 ? 's' : ''}
+          </div>
+          {connectedInstances.map((inst) => (
+            <div key={inst.id} className="connectors-view__account-row">
+              <div className="connectors-view__account-info">
+                <span className="connectors-view__account-dot connectors-view__account-dot--connected" />
+                <span className="connectors-view__account-label">
+                  {inst.accountLabel ?? inst.accountEmail ?? inst.name}
+                </span>
+                <span className="connectors-view__account-tools">
+                  {inst.toolCount ?? inst.tools?.length ?? 0} tools
+                </span>
+              </div>
+              <div className="connectors-view__account-actions">
+                {entry?.setupGuide?.reauthorizeHint && (
+                  <button
+                    type="button"
+                    className="connectors-view__btn connectors-view__btn--ghost"
+                    style={{ fontSize: 11, padding: '3px 8px' }}
+                    onClick={() => handleReauthorize(inst.id, inst.registryId)}
+                    title={entry.setupGuide.reauthorizeHint}
+                  >
+                    <ExternalLink size={12} strokeWidth={1.5} /> Re-authorize
+                  </button>
+                )}
+                {isMultiAccount && (
+                  <button
+                    type="button"
+                    className="connectors-view__btn connectors-view__btn--ghost"
+                    style={{ fontSize: 11, padding: '3px 8px', color: '#ef4444' }}
+                    onClick={() => handleDisconnect(inst.id)}
+                  >
+                    <Trash2 size={12} strokeWidth={1.5} /> Disconnect
+                  </button>
+                )}
+              </div>
+            </div>
+          ))}
+
+          {/* Add another account button */}
+          {isMultiAccount && isOAuth && (
+            <button
+              type="button"
+              className="connectors-view__add-account"
+              onClick={handleAddAnotherAccount}
+              disabled={oauthWaiting}
+            >
+              {oauthWaiting ? (
+                <Loader2 size={14} className="animate-spin" />
+              ) : (
+                <Plus size={14} strokeWidth={1.5} />
+              )}
+              {oauthWaiting ? 'Waiting for authorization...' : 'Add another account'}
+            </button>
+          )}
+
+          {oauthError && (
+            <div style={{ fontSize: 12, color: '#ef4444', marginTop: 6 }}>
+              {oauthError}
+            </div>
+          )}
+        </div>
+      )}
+
+      {!isConnected && !oauthWaiting && !oauthError && (
         <div className="connectors-view__detail-empty">
           <Plug size={20} strokeWidth={1.25} />
           <p>This connector is not connected yet. Click Connect to set it up.</p>
         </div>
       )}
 
-      {isConnected && tools.length === 0 && (
+      {!isConnected && oauthWaiting && (
+        <p style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 8 }}>
+          A browser window should open. Authorize the app, then come back here.
+        </p>
+      )}
+
+      {!isConnected && oauthError && (
+        <div style={{ fontSize: 12, color: '#ef4444', marginTop: 8 }}>
+          {oauthError}
+        </div>
+      )}
+
+      {isConnected && allTools.length === 0 && (
         <div className="connectors-view__detail-empty">
           <p>No tools reported by this connector yet.</p>
         </div>
       )}
 
-      {isConnected && id === 'slack-bot' && <SlackBotIdentityCard status={status} />}
+      {isConnected && id === 'slack-bot' && <SlackBotIdentityCard status={instances.find((i) => i.id === 'slack-bot')} />}
 
-      {isConnected && tools.length > 0 && (
+      {isConnected && allTools.length > 0 && (
         <div className="connectors-view__perms">
           <div className="connectors-view__perms-header">
             <h3 className="connectors-view__perms-title">Tool permissions</h3>
@@ -466,12 +669,6 @@ function ToolGroup({
 }
 
 // ── Slack: bot identity card ──────────────────────────────────────────
-//
-// Slack's `chat:write.customize` scope (which we request on install) lets us
-// override the username + avatar on every chat.postMessage call. This card
-// lets the user pick what Anton looks like in their workspace without ever
-// touching api.slack.com. Values are persisted as connector metadata via
-// the existing connector_update message.
 
 function SlackBotIdentityCard({ status }: { status?: ConnectorStatusInfo }) {
   const initialName = status?.metadata?.displayName ?? ''
@@ -481,7 +678,6 @@ function SlackBotIdentityCard({ status }: { status?: ConnectorStatusInfo }) {
   const [saving, setSaving] = useState(false)
   const [savedAt, setSavedAt] = useState<number | null>(null)
 
-  // If the metadata changes from elsewhere (refresh after save), pick it up.
   useEffect(() => {
     setDisplayName(status?.metadata?.displayName ?? '')
     setIconUrl(status?.metadata?.iconUrl ?? '')
@@ -492,7 +688,6 @@ function SlackBotIdentityCard({ status }: { status?: ConnectorStatusInfo }) {
   const handleSave = async () => {
     setSaving(true)
     try {
-      // Merge with existing metadata so we don't clobber bot_user_id, team_id, etc.
       const existing = status?.metadata ?? {}
       const merged: Record<string, string> = {}
       for (const [k, v] of Object.entries(existing)) {
@@ -500,12 +695,6 @@ function SlackBotIdentityCard({ status }: { status?: ConnectorStatusInfo }) {
       }
       if (displayName.trim()) merged.displayName = displayName.trim()
       if (iconUrl.trim()) merged.iconUrl = iconUrl.trim()
-      // Save against the bot connector — `chat:write.customize` lives on the
-      // xoxb token, and the SlackWebhookProvider's getBotIdentity() reads from
-      // the slack-bot connector's metadata. The previous version of this card
-      // wrote to id 'slack' (the user-token connector), which (a) never
-      // applied to bot replies and (b) clobbered the wrong connector's
-      // metadata if both were installed.
       connectorStore.getState().updateConnectorRemote('slack-bot', { metadata: merged })
       setSavedAt(Date.now())
     } finally {
@@ -553,7 +742,7 @@ function SlackBotIdentityCard({ status }: { status?: ConnectorStatusInfo }) {
             onClick={handleSave}
             disabled={!dirty || saving}
           >
-            {saving ? 'Saving…' : 'Save'}
+            {saving ? 'Saving...' : 'Save'}
           </button>
           {savedAt && !dirty && <span style={{ fontSize: 11, opacity: 0.6 }}>Saved</span>}
         </div>

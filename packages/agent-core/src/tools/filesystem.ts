@@ -8,8 +8,21 @@
 
 import { execSync } from 'node:child_process'
 import { mkdirSync, readFileSync, readdirSync, statSync, writeFileSync } from 'node:fs'
-import { dirname, join } from 'node:path'
+import { basename, dirname, extname, join } from 'node:path'
 import { checkForbiddenPath } from './security.js'
+
+const IMAGE_EXTS = new Set([
+  '.png',
+  '.jpg',
+  '.jpeg',
+  '.gif',
+  '.webp',
+  '.avif',
+  '.bmp',
+  '.ico',
+  '.heic',
+  '.heif',
+])
 
 export interface FsToolInput {
   operation: 'read' | 'write' | 'list' | 'search' | 'tree'
@@ -74,6 +87,13 @@ export function executeFilesystem(input: FsToolInput): string {
 
     switch (operation) {
       case 'read': {
+        const ext = extname(path).toLowerCase()
+        if (IMAGE_EXTS.has(ext)) {
+          const stat = statSync(path)
+          const name = basename(path)
+          const sizeKB = Math.round(stat.size / 1024)
+          return `[Image file: ${name} | Size: ${sizeKB}KB]\nCannot display image content in text. The image was already shown in the conversation when uploaded.`
+        }
         const data = readFileSync(path, 'utf-8')
         if (data.length > 100_000) {
           return `${data.slice(0, 100_000)}\n\n... (truncated, file is ${data.length} bytes)`

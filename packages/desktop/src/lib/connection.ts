@@ -302,35 +302,6 @@ export class Connection {
     this.send(Channel.AI, { type: 'project_preference_delete', projectId, preferenceId })
   }
 
-  sendProjectFileUpload(
-    projectId: string,
-    filename: string,
-    content: string,
-    mimeType: string,
-    sizeBytes: number,
-  ) {
-    this.send(Channel.AI, {
-      type: 'project_file_upload',
-      projectId,
-      filename,
-      content,
-      mimeType,
-      sizeBytes,
-    })
-  }
-
-  sendProjectFileTextCreate(projectId: string, filename: string, content: string) {
-    this.send(Channel.AI, { type: 'project_file_text_create', projectId, filename, content })
-  }
-
-  sendProjectFileDelete(projectId: string, filename: string) {
-    this.send(Channel.AI, { type: 'project_file_delete', projectId, filename })
-  }
-
-  sendProjectFilesList(projectId: string) {
-    this.send(Channel.AI, { type: 'project_files_list', projectId })
-  }
-
   sendProjectSessionsList(projectId: string) {
     this.send(Channel.AI, { type: 'project_sessions_list', projectId })
   }
@@ -518,7 +489,14 @@ export class Connection {
   }
 
   onFilesystemReadResponse(
-    handler: (path: string, content: string, truncated: boolean, error?: string) => void,
+    handler: (
+      path: string,
+      content: string,
+      truncated: boolean,
+      error?: string,
+      encoding?: string,
+      mimeType?: string,
+    ) => void,
   ) {
     return this.onRawMessage((channel, payload) => {
       if (channel === Channel.FILESYNC && payload.type === 'fs_read_response') {
@@ -527,6 +505,8 @@ export class Connection {
           payload.content as string,
           !!payload.truncated,
           payload.error as string | undefined,
+          payload.encoding as string | undefined,
+          payload.mimeType as string | undefined,
         )
       }
     })

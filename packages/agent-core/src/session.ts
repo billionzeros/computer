@@ -1804,14 +1804,26 @@ export class Session {
 
     // Layer 3: Current context — workspace, project, date
     const contextLines: string[] = []
-    if (this.workspacePath) {
-      contextLines.push(`- Workspace: ${this.workspacePath}/`)
-      contextLines.push(
-        'Use this directory for any files you need to create or store during this conversation.',
-      )
-    }
     if (this.projectContext) {
       contextLines.push(this.projectContext)
+    }
+    if (this.workspacePath) {
+      if (this.projectContext) {
+        // Project exists — workspace is scratch space only
+        contextLines.push(`- Scratch space: ${this.workspacePath}/`)
+        contextLines.push(
+          '  Use ONLY for transient files: temp scripts, intermediate outputs, debug logs.',
+        )
+        contextLines.push(
+          '  Files here are not visible to the user. Use the project workspace for anything the user should see.',
+        )
+      } else {
+        // No project — workspace is the only workspace
+        contextLines.push(`- Workspace: ${this.workspacePath}/`)
+        contextLines.push(
+          'Use this directory for any files you need to create or store during this conversation.',
+        )
+      }
     }
     contextLines.push(`- Date: ${new Date().toISOString().split('T')[0]}`)
     prompt += Session.systemReminder('Current Context', contextLines.join('\n'))

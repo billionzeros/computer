@@ -458,10 +458,14 @@ export function buildProjectContext(project: Project, projectId: string): string
   if (project.description) lines.push(`- Description: ${project.description}`)
   if (project.type) lines.push(`- Type: ${project.type}`)
   if (project.workspacePath) {
-    lines.push(`- Project workspace: ${project.workspacePath}/`)
+    lines.push(`- Project files: ${project.workspacePath}/`)
     lines.push(
-      `- IMPORTANT: Use ${project.workspacePath}/ as the working directory for all shell commands and file operations in this project.`,
+      `  Use for ALL user-facing files: code, images, documents, generated artifacts.`,
     )
+    lines.push(
+      `  This is your primary working directory for shell commands and file operations.`,
+    )
+    lines.push(`  User-uploaded images are in ${project.workspacePath}/.uploads/`)
   }
 
   // Load project instructions (instructions.md)

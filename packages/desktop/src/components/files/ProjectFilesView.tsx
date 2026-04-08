@@ -53,7 +53,7 @@ const CODE_EXTS = new Set([
 ])
 const DATA_EXTS = new Set(['json', 'yaml', 'yml', 'csv', 'xml', 'toml', 'sql'])
 const TEXT_EXTS = new Set(['md', 'txt', 'log', 'pdf', 'doc', 'docx'])
-const IMAGE_EXTS = new Set(['png', 'jpg', 'jpeg', 'gif', 'svg', 'ico', 'webp', 'avif'])
+const IMAGE_EXTS = new Set(['png', 'jpg', 'jpeg', 'gif', 'svg', 'ico', 'webp', 'avif', 'bmp', 'heic', 'heif'])
 
 function getCategory(name: string): string {
   const ext = name.split('.').pop()?.toLowerCase() || ''
@@ -85,6 +85,9 @@ function getMimeType(name: string): string {
     ico: 'image/x-icon',
     webp: 'image/webp',
     avif: 'image/avif',
+    bmp: 'image/bmp',
+    heic: 'image/heic',
+    heif: 'image/heif',
   }
   return mimes[ext] || 'application/octet-stream'
 }
@@ -128,7 +131,7 @@ export function ProjectFilesView() {
   // File viewer (right panel)
   const [viewingFile, setViewingFile] = useState<{ name: string; path: string } | null>(null)
   const [viewContent, setViewContent] = useState<string | null>(null)
-  const [viewLoading, setViewLoading] = useState(false)
+const [viewLoading, setViewLoading] = useState(false)
   const [viewError, setViewError] = useState<string | null>(null)
   const [viewIsImage, setViewIsImage] = useState(false)
 
@@ -211,16 +214,18 @@ export function ProjectFilesView() {
 
   // Listen for fs_read (file viewer)
   useEffect(() => {
-    const unsub = connection.onFilesystemReadResponse((_path, content, _trunc, err) => {
-      if (err) {
-        setViewError(err)
-        setViewLoading(false)
-      } else {
-        setViewContent(content)
-        setViewLoading(false)
-        setViewError(null)
-      }
-    })
+    const unsub = connection.onFilesystemReadResponse(
+      (_path, content, _trunc, err) => {
+        if (err) {
+          setViewError(err)
+          setViewLoading(false)
+        } else {
+          setViewContent(content)
+          setViewLoading(false)
+          setViewError(null)
+        }
+      },
+    )
     return unsub
   }, [])
 
