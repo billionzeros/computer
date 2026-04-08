@@ -1,0 +1,33 @@
+packages/agent-config/prompts/system.md
+  4ebd331daccf8599 345-359,363-375
+specs/architecture/project-context-and-memory.md
+  4ebd331daccf8599 32-34,50-53,140,142,144-148,152-153,155,163-170,172-183,187,193-194,328-331,333-340,348,361-364,376,380-391
+packages/agent-core/src/session.ts
+  4ebd331daccf8599 37-45,269-272,574-580,649-650,787-791,956-961,1012-1079
+packages/agent-core/src/memory-extraction.ts
+  4ebd331daccf8599 1-516
+packages/agent-server/src/server.ts
+  4ebd331daccf8599 3138-3142
+specs/features/background-memory-extraction.md
+  4ebd331daccf8599 1-150
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.2.6",
+  "base_commit_sha": "305bd31759b544dc1a163778a0ffcc6373a976fb",
+  "prompts": {
+    "4ebd331daccf8599": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "8c70f780-4671-4046-92bf-38d454989b10",
+        "model": "claude-opus-4-6"
+      },
+      "human_author": "Om Gupta",
+      "messages": [],
+      "total_additions": 1016,
+      "total_deletions": 173,
+      "accepted_lines": 877,
+      "overriden_lines": 0
+    }
+  }
+}
