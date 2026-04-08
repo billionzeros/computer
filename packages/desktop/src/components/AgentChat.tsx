@@ -15,7 +15,7 @@ import { ContextIndicator } from './chat/ContextIndicator.js'
 import { EmptyState } from './chat/EmptyState.js'
 import { MessageList } from './chat/MessageList.js'
 import { PlanReviewOverlay } from './chat/PlanReviewOverlay.js'
-import { SkillDialog } from './skills/SkillDialog.js'
+import { SkillDetail } from './skills/SkillDetail.js'
 
 export function AgentChat() {
   const activeConv = useStore((s) => s.getActiveConversation())
@@ -309,7 +309,7 @@ export function AgentChat() {
         />
       )}
 
-      <SkillDialog skill={selectedSkill} onClose={() => setSelectedSkill(null)} />
+      <SkillDetail skill={selectedSkill} onClose={() => setSelectedSkill(null)} />
     </div>
   )
 }
