@@ -66,9 +66,6 @@ export function UpdateBanner() {
             <div className="update-banner__version">
               Update available: v{updateInfo.latestVersion}
             </div>
-            {updateInfo.changelog && (
-              <div className="update-banner__changelog">{updateInfo.changelog}</div>
-            )}
             <button
               type="button"
               className="update-banner__action"
