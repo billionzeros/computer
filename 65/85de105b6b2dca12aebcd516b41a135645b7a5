@@ -1,0 +1,27 @@
+packages/agent-server/src/webhooks/index.ts
+  539ebb297b59c119 9
+packages/agent-server/src/server.ts
+  539ebb297b59c119 36,93,3409-3433
+packages/agent-server/src/webhooks/agent-runner.ts
+  539ebb297b59c119 16,23-42,127,514-527,534,541
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.2.5",
+  "base_commit_sha": "6585de105b6b2dca12aebcd516b41a135645b7a5",
+  "prompts": {
+    "539ebb297b59c119": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "43a33133-e0a1-4677-a5c2-1dab0fe80eea",
+        "model": "claude-opus-4-6"
+      },
+      "human_author": "Om Gupta",
+      "messages": [],
+      "total_additions": 85,
+      "total_deletions": 32,
+      "accepted_lines": 66,
+      "overriden_lines": 0
+    }
+  }
+}
