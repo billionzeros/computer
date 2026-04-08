@@ -1,13 +1,14 @@
 import {
+  ArrowLeft,
   ChevronRight,
   File,
   FileCode,
   FileSpreadsheet,
   FileText,
   Folder,
+  FolderOpen,
   Image,
   Loader2,
-  RefreshCw,
   Trash2,
   Upload,
 } from 'lucide-react'
@@ -23,7 +24,6 @@ interface FileEntry {
   size: string
 }
 
-// Hidden entries to filter out by default
 const HIDDEN_NAMES = new Set(['.DS_Store', '.anton.json', 'Thumbs.db', '.git'])
 
 const CODE_EXTS = new Set([
@@ -60,20 +60,20 @@ function getCategory(name: string): string {
   return 'other'
 }
 
-function getFileIcon(entry: FileEntry) {
-  if (entry.type === 'dir') return <Folder size={16} strokeWidth={1.5} />
+function getFileIcon(entry: FileEntry, size = 18) {
+  if (entry.type === 'dir') return <Folder size={size} strokeWidth={1.5} />
   const cat = getCategory(entry.name)
   switch (cat) {
     case 'code':
-      return <FileCode size={16} strokeWidth={1.5} />
+      return <FileCode size={size} strokeWidth={1.5} />
     case 'data':
-      return <FileSpreadsheet size={16} strokeWidth={1.5} />
+      return <FileSpreadsheet size={size} strokeWidth={1.5} />
     case 'text':
-      return <FileText size={16} strokeWidth={1.5} />
+      return <FileText size={size} strokeWidth={1.5} />
     case 'image':
-      return <Image size={16} strokeWidth={1.5} />
+      return <Image size={size} strokeWidth={1.5} />
     default:
-      return <File size={16} strokeWidth={1.5} />
+      return <File size={size} strokeWidth={1.5} />
   }
 }
 
@@ -88,37 +88,35 @@ export function ProjectFilesView() {
   const activeProject = projects.find((p) => p.id === activeProjectId)
   const startDir = activeProject?.workspacePath || '/root'
 
-  // Navigation
   const [cwd, setCwd] = useState(startDir)
   const [entries, setEntries] = useState<FileEntry[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [showHidden, setShowHidden] = useState(false)
-  const expectedPathRef = useRef(startDir)
 
-  // Selection & preview
   const [selected, setSelected] = useState<FileEntry | null>(null)
   const [previewContent, setPreviewContent] = useState<string | null>(null)
   const [previewLoading, setPreviewLoading] = useState(false)
   const [previewError, setPreviewError] = useState<string | null>(null)
 
-  // Upload & delete
   const [dragging, setDragging] = useState(false)
   const [deleteTarget, setDeleteTarget] = useState<string | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const listRef = useRef<HTMLDivElement>(null)
 
-  // Breadcrumb parts
+  // Breadcrumb
   const pathParts = useMemo(() => {
-    const projectLabel = activeProject?.name || 'Project'
-    if (cwd === startDir) return [projectLabel]
+    const label = activeProject?.name || 'Project'
+    if (cwd === startDir) return [label]
     if (cwd.startsWith(`${startDir}/`)) {
       const rel = cwd.slice(startDir.length + 1)
-      return [projectLabel, ...rel.split('/').filter(Boolean)]
+      return [label, ...rel.split('/').filter(Boolean)]
     }
     return cwd === '/' ? ['/'] : ['/', ...cwd.split('/').filter(Boolean)]
   }, [cwd, startDir, activeProject?.name])
 
-  // List a directory
+  const canGoBack = cwd !== startDir && cwd !== '/'
+
   const listDir = useCallback((path: string) => {
     setLoading(true)
     setError(null)
@@ -126,11 +124,9 @@ export function ProjectFilesView() {
     setCwd(path)
     setSelected(null)
     setPreviewContent(null)
-    expectedPathRef.current = path
     uiStore.getState().sendFilesystemList(path)
   }, [])
 
-  // Listen for fs_list responses
   useEffect(() => {
     const unsub = connection.onFilesystemResponse((newEntries, err) => {
       if (err) {
@@ -145,7 +141,6 @@ export function ProjectFilesView() {
     return unsub
   }, [])
 
-  // Listen for fs_read responses (preview)
   useEffect(() => {
     const unsub = connection.onFilesystemReadResponse((_path, content, _trunc, err) => {
       if (err) {
@@ -160,13 +155,12 @@ export function ProjectFilesView() {
     return unsub
   }, [])
 
-  // Timeout for loading
   useEffect(() => {
     if (!loading) return
     const timer = setTimeout(() => {
       setLoading((prev) => {
         if (prev) {
-          setError('No response — restart the agent server to enable file browsing.')
+          setError('No response — restart the agent server.')
           return false
         }
         return prev
@@ -175,18 +169,16 @@ export function ProjectFilesView() {
     return () => clearTimeout(timer)
   }, [loading])
 
-  // Load on mount / project switch
   useEffect(() => {
     listDir(startDir)
   }, [listDir, startDir])
 
-  // Filter & sort entries
   const visibleEntries = useMemo(() => {
     let filtered = entries
     if (!showHidden) {
       filtered = filtered.filter((e) => !HIDDEN_NAMES.has(e.name) && !e.name.startsWith('.'))
     }
-    return filtered.sort((a, b) => {
+    return [...filtered].sort((a, b) => {
       if (a.type === 'dir' && b.type !== 'dir') return -1
       if (a.type !== 'dir' && b.type === 'dir') return 1
       return a.name.localeCompare(b.name)
@@ -197,16 +189,18 @@ export function ProjectFilesView() {
     if (index === 0) {
       listDir(pathParts[0] === '/' ? '/' : startDir)
     } else {
-      const isAbsRoot = pathParts[0] === '/'
-      const base = isAbsRoot ? '' : startDir
-      const path = `${base}/${pathParts.slice(1, index + 1).join('/')}`
-      listDir(path)
+      const base = pathParts[0] === '/' ? '' : startDir
+      listDir(`${base}/${pathParts.slice(1, index + 1).join('/')}`)
     }
+  }
+
+  const goBack = () => {
+    const parent = cwd.split('/').slice(0, -1).join('/') || '/'
+    listDir(parent)
   }
 
   const handleEntryClick = (entry: FileEntry) => {
     setSelected(entry)
-    // Load preview for text-based files
     if (entry.type === 'file' && isPreviewable(entry.name)) {
       const filePath = cwd === '/' ? `/${entry.name}` : `${cwd}/${entry.name}`
       setPreviewLoading(true)
@@ -222,12 +216,10 @@ export function ProjectFilesView() {
 
   const handleEntryDoubleClick = (entry: FileEntry) => {
     if (entry.type === 'dir') {
-      const newPath = cwd === '/' ? `/${entry.name}` : `${cwd}/${entry.name}`
-      listDir(newPath)
+      listDir(cwd === '/' ? `/${entry.name}` : `${cwd}/${entry.name}`)
     }
   }
 
-  // Upload
   const handleUpload = useCallback(
     (files: FileList) => {
       if (!activeProjectId) return
@@ -244,7 +236,6 @@ export function ProjectFilesView() {
               file.type || 'application/octet-stream',
               file.size,
             )
-          // Refresh after upload
           setTimeout(() => listDir(cwd), 500)
         }
         reader.readAsDataURL(file)
@@ -253,7 +244,6 @@ export function ProjectFilesView() {
     [activeProjectId, cwd, listDir],
   )
 
-  // Delete
   const handleDelete = useCallback(
     (filename: string) => {
       if (!activeProjectId) return
@@ -269,9 +259,7 @@ export function ProjectFilesView() {
     e.preventDefault()
     setDragging(true)
   }, [])
-
   const handleDragLeave = useCallback(() => setDragging(false), [])
-
   const handleDrop = useCallback(
     (e: React.DragEvent) => {
       e.preventDefault()
@@ -281,9 +269,16 @@ export function ProjectFilesView() {
     [handleUpload],
   )
 
-  const itemCount = visibleEntries.length
+  // Click on empty space deselects
+  const handleListBgClick = (e: React.MouseEvent) => {
+    if (e.target === listRef.current) {
+      setSelected(null)
+      setPreviewContent(null)
+    }
+  }
+
   const dirCount = visibleEntries.filter((e) => e.type === 'dir').length
-  const fileCount = itemCount - dirCount
+  const fileCount = visibleEntries.length - dirCount
 
   return (
     <div
@@ -292,50 +287,51 @@ export function ProjectFilesView() {
       onDragLeave={handleDragLeave}
       onDrop={handleDrop}
     >
-      {/* Toolbar */}
-      <div className="finder-toolbar">
-        <div className="finder-breadcrumb">
+      {/* Path bar */}
+      <div className="finder-pathbar">
+        <button
+          type="button"
+          className={`finder-pathbar__back${!canGoBack ? ' finder-pathbar__back--disabled' : ''}`}
+          onClick={canGoBack ? goBack : undefined}
+          disabled={!canGoBack}
+        >
+          <ArrowLeft size={15} strokeWidth={1.8} />
+        </button>
+
+        <div className="finder-pathbar__path">
           {pathParts.map((part, i) => (
-            // biome-ignore lint/suspicious/noArrayIndexKey: breadcrumb parts can have duplicate names
-            <span key={`${part}-${i}`} className="finder-breadcrumb__segment">
-              {i > 0 && (
-                <ChevronRight size={12} strokeWidth={1.5} className="finder-breadcrumb__sep" />
-              )}
+            // biome-ignore lint/suspicious/noArrayIndexKey: breadcrumb segments can repeat
+            <span key={`${part}-${i}`} className="finder-pathbar__segment">
+              {i > 0 && <ChevronRight size={11} strokeWidth={2} className="finder-pathbar__sep" />}
               <button
                 type="button"
                 onClick={() => navigateToBreadcrumb(i)}
-                className={`finder-breadcrumb__btn${i === pathParts.length - 1 ? ' finder-breadcrumb__btn--active' : ''}`}
+                className={`finder-pathbar__crumb${i === pathParts.length - 1 ? ' finder-pathbar__crumb--current' : ''}`}
               >
+                {i === 0 && (
+                  <Folder size={13} strokeWidth={1.5} className="finder-pathbar__folder-icon" />
+                )}
                 {part === '/' ? '~' : part}
               </button>
             </span>
           ))}
         </div>
 
-        <div className="finder-toolbar__actions">
-          <label className="finder-toggle">
+        <div className="finder-pathbar__actions">
+          <label className="finder-pathbar__toggle">
             <input
               type="checkbox"
               checked={showHidden}
               onChange={(e) => setShowHidden(e.target.checked)}
             />
-            <span>Hidden</span>
+            Hidden
           </label>
           <button
             type="button"
-            className="finder-toolbar__btn"
-            onClick={() => listDir(cwd)}
-            aria-label="Refresh"
-          >
-            <RefreshCw size={14} strokeWidth={1.5} className={loading ? 'spin' : ''} />
-          </button>
-          <button
-            type="button"
-            className="finder-toolbar__btn finder-toolbar__btn--upload"
+            className="finder-pathbar__action"
             onClick={() => fileInputRef.current?.click()}
           >
             <Upload size={14} strokeWidth={1.5} />
-            Upload
           </button>
           <input
             ref={fileInputRef}
@@ -350,75 +346,55 @@ export function ProjectFilesView() {
         </div>
       </div>
 
-      {/* Main body: file list + preview */}
+      {/* Body */}
       <div className="finder-body">
-        <div className="finder-list">
-          {/* Column header */}
-          <div className="finder-list__header">
-            <span className="finder-list__header-name">Name</span>
-            <span className="finder-list__header-size">Size</span>
-          </div>
-
-          {/* Loading */}
+        {/* File list */}
+        {/* biome-ignore lint/a11y/useKeyWithClickEvents: deselect on background click */}
+        <div ref={listRef} className="finder-list" onClick={handleListBgClick}>
           {loading && (
-            <div className="finder-status">
-              <Loader2 size={18} strokeWidth={1.5} className="spin" />
-              <span>Loading...</span>
+            <div className="finder-empty">
+              <Loader2 size={20} strokeWidth={1.5} className="spin" />
             </div>
           )}
 
-          {/* Error */}
           {error && (
-            <div className="finder-status finder-status--error">
-              <span>{error}</span>
+            <div className="finder-empty">
+              <p className="finder-empty__error">{error}</p>
             </div>
           )}
 
-          {/* Empty */}
           {!loading && !error && visibleEntries.length === 0 && (
-            <div className="finder-status">
-              <span>Empty folder</span>
+            <div className="finder-empty">
+              <FolderOpen size={40} strokeWidth={0.8} />
+              <p>This folder is empty</p>
+              <span className="finder-empty__hint">Drop files here or use the upload button</span>
             </div>
           )}
 
-          {/* Parent directory */}
-          {cwd !== startDir && cwd !== '/' && !loading && (
-            <button
-              type="button"
-              onClick={() => {
-                const parent = cwd.split('/').slice(0, -1).join('/') || '/'
-                listDir(parent)
-              }}
-              className="finder-row finder-row--parent"
-            >
-              <span className="finder-row__icon">
-                <Folder size={16} strokeWidth={1.5} />
-              </span>
-              <span className="finder-row__name">..</span>
-              <span className="finder-row__size" />
-            </button>
-          )}
-
-          {/* Entries */}
-          {visibleEntries.map((entry) => (
+          {visibleEntries.map((entry, idx) => (
             <button
               type="button"
               key={entry.name}
               onClick={() => handleEntryClick(entry)}
               onDoubleClick={() => handleEntryDoubleClick(entry)}
-              className={`finder-row${entry.type === 'dir' ? ' finder-row--dir' : ''}${selected?.name === entry.name ? ' finder-row--selected' : ''}`}
+              className={`finder-item${selected?.name === entry.name ? ' finder-item--selected' : ''}${entry.type === 'dir' ? ' finder-item--dir' : ''}${idx % 2 === 1 ? ' finder-item--alt' : ''}`}
             >
               <span
-                className={`finder-row__icon finder-row__icon--${entry.type === 'dir' ? 'dir' : getCategory(entry.name)}`}
+                className={`finder-item__icon finder-item__icon--${entry.type === 'dir' ? 'dir' : getCategory(entry.name)}`}
               >
                 {getFileIcon(entry)}
               </span>
-              <span className="finder-row__name">{entry.name}</span>
-              <span className="finder-row__size">{entry.type === 'file' ? entry.size : ''}</span>
+              <span className="finder-item__name">{entry.name}</span>
+              {entry.type === 'file' && entry.size && (
+                <span className="finder-item__size">{entry.size}</span>
+              )}
+              {entry.type === 'dir' && (
+                <ChevronRight size={14} strokeWidth={1.5} className="finder-item__chevron" />
+              )}
               {entry.type === 'file' && (
                 <button
                   type="button"
-                  className="finder-row__delete"
+                  className="finder-item__delete"
                   onClick={(e) => {
                     e.stopPropagation()
                     setDeleteTarget(entry.name)
@@ -432,8 +408,8 @@ export function ProjectFilesView() {
         </div>
 
         {/* Preview panel */}
-        {selected && (
-          <div className="finder-preview">
+        <div className={`finder-preview${selected ? ' finder-preview--open' : ''}`}>
+          {selected ? (
             <FilePreview
               name={selected.name}
               type={selected.type}
@@ -442,24 +418,38 @@ export function ProjectFilesView() {
               loading={previewLoading}
               error={previewError}
             />
-          </div>
-        )}
+          ) : (
+            <div className="finder-preview__empty">
+              <File size={28} strokeWidth={0.8} />
+              <span>Select a file to preview</span>
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Status bar */}
       <div className="finder-statusbar">
-        <span>
-          {itemCount} item{itemCount !== 1 ? 's' : ''}
-          {dirCount > 0 && ` · ${dirCount} folder${dirCount !== 1 ? 's' : ''}`}
-          {fileCount > 0 && ` · ${fileCount} file${fileCount !== 1 ? 's' : ''}`}
-        </span>
+        {!loading && !error && (
+          <span>
+            {visibleEntries.length} item{visibleEntries.length !== 1 ? 's' : ''}
+            {dirCount > 0 && fileCount > 0 && (
+              <span className="finder-statusbar__detail">
+                {' '}
+                &mdash; {dirCount} folder{dirCount !== 1 ? 's' : ''}, {fileCount} file
+                {fileCount !== 1 ? 's' : ''}
+              </span>
+            )}
+          </span>
+        )}
       </div>
 
       {/* Drag overlay */}
       {dragging && (
-        <div className="finder-drop-overlay">
-          <Upload size={28} strokeWidth={1.5} />
-          <span>Drop files to upload</span>
+        <div className="finder-drop">
+          <div className="finder-drop__inner">
+            <Upload size={24} strokeWidth={1.5} />
+            <span>Drop to upload</span>
+          </div>
         </div>
       )}
 
@@ -480,7 +470,7 @@ export function ProjectFilesView() {
             <div className="modal-card__body">
               <h3>Delete &ldquo;{deleteTarget}&rdquo;?</h3>
               <p style={{ color: 'var(--text-muted)', marginTop: '8px' }}>
-                This will permanently delete the file from the project workspace.
+                This will permanently remove it from your project.
               </p>
             </div>
             <div className="modal-card__footer">
