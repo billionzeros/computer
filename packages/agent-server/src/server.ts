@@ -1034,16 +1034,29 @@ export class AgentServer {
 
       case 'fs_read': {
         const filePath = msg.path || ''
+        const encoding = msg.encoding === 'base64' ? 'base64' : 'utf-8'
         try {
           const { readFileSync } = await import('node:fs')
-          const content = readFileSync(filePath, 'utf-8')
-          const truncated = content.length > 100_000 ? content.slice(0, 100_000) : content
-          this.sendToClient(Channel.FILESYNC, {
-            type: 'fs_read_response',
-            path: filePath,
-            content: truncated,
-            truncated: content.length > 100_000,
-          })
+          if (encoding === 'base64') {
+            const buf = readFileSync(filePath)
+            const b64 = buf.toString('base64')
+            this.sendToClient(Channel.FILESYNC, {
+              type: 'fs_read_response',
+              path: filePath,
+              content: b64,
+              encoding: 'base64',
+              truncated: false,
+            })
+          } else {
+            const content = readFileSync(filePath, 'utf-8')
+            const truncated = content.length > 100_000 ? content.slice(0, 100_000) : content
+            this.sendToClient(Channel.FILESYNC, {
+              type: 'fs_read_response',
+              path: filePath,
+              content: truncated,
+              truncated: content.length > 100_000,
+            })
+          }
         } catch (err: unknown) {
           this.sendToClient(Channel.FILESYNC, {
             type: 'fs_read_response',
