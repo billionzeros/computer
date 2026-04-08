@@ -260,12 +260,12 @@ export function ConnectorsView() {
       {/* ── Connect popup (small centered dialog like AppSetup) ── */}
       {connectPopupId && (() => {
         const popupEntry = registry.find((r) => r.id === connectPopupId)
-        const popupExisting = connectors.find((c) => c.id === connectPopupId)
+        const popupInstances = connectors.filter((c) => (c.registryId ?? c.id) === connectPopupId)
         if (!popupEntry) return null
         return (
           <AppSetup
             entry={popupEntry}
-            existing={popupExisting}
+            instances={popupInstances}
             onBack={() => setConnectPopupId(null)}
             onConnected={() => {
               setConnectPopupId(null)

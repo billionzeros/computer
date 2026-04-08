@@ -79,7 +79,7 @@ import { createLogger } from '@anton/logger'
 import { Channel, decodeFrame, encodeFrame, parseJsonPayload } from '@anton/protocol'
 import type { AiMessage, ChannelId, ControlMessage, TerminalMessage } from '@anton/protocol'
 import { WebSocket, WebSocketServer } from 'ws'
-import { OAuthFlow, TokenStore, oauthCallbackHandler } from './oauth/index.js'
+import { OAuthFlow, TokenStore, fetchAccountIdentity, oauthCallbackHandler } from './oauth/index.js'
 import type { Scheduler } from './scheduler.js'
 import { Updater } from './updater.js'
 import {
@@ -3296,16 +3296,23 @@ export class AgentServer {
 
     // Only activate connectors that are enabled in config
     const enabledConnectors = getConnectors(this.config)
-    const enabledIds = new Set(enabledConnectors.filter((c) => c.enabled).map((c) => c.id))
+    const enabledMap = new Map(enabledConnectors.filter((c) => c.enabled).map((c) => [c.id, c]))
 
-    const toActivate = connected.filter(
-      (id) => this.connectorManager.hasFactory(id) && enabledIds.has(id),
-    )
+    const toActivate = connected.filter((id) => {
+      const cfg = enabledMap.get(id)
+      if (!cfg) return false
+      const factoryId = cfg.registryId ?? id
+      return this.connectorManager.hasFactory(factoryId)
+    })
     if (toActivate.length === 0) return
 
     log.info({ count: toActivate.length }, 'Activating OAuth connectors')
     for (const providerId of toActivate) {
-      await this.connectorManager.activate(providerId)
+      const cfg = enabledMap.get(providerId)!
+      await this.connectorManager.activate(providerId, {
+        registryId: cfg.registryId,
+        accountDisplayName: cfg.accountLabel ?? cfg.accountEmail,
+      })
     }
   }
 
@@ -3436,17 +3443,21 @@ export class AgentServer {
   /** Activate direct connectors that have a stored apiKey in config or a matching env var. */
   private startApiConnectors(): void {
     const apiConnectors = getConnectors(this.config).filter(
-      (c) => c.type === 'api' && c.enabled && this.connectorManager.hasFactory(c.id),
+      (c) => c.type === 'api' && c.enabled && this.connectorManager.hasFactory(c.registryId ?? c.id),
     )
 
     for (const c of apiConnectors) {
       // Prefer stored apiKey from config, fall back to env var
+      const envKey = (c.registryId ?? c.id).toUpperCase()
       const token =
         c.apiKey ??
-        process.env[`${c.id.toUpperCase()}_BOT_TOKEN`] ??
-        process.env[`${c.id.toUpperCase()}_API_KEY`]
+        process.env[`${envKey}_BOT_TOKEN`] ??
+        process.env[`${envKey}_API_KEY`]
       if (token) {
-        this.connectorManager.activateWithToken(c.id, token)
+        this.connectorManager.activateWithToken(c.id, token, {
+          registryId: c.registryId,
+          accountDisplayName: c.accountLabel ?? c.accountEmail,
+        })
         this.applyConnectorMetadata(c.id, c.metadata)
         log.info({ connectorId: c.id }, 'Activated API connector')
       }
@@ -3492,6 +3503,10 @@ export class AgentServer {
       // Provider-specific runtime metadata (Slack bot identity, team info, etc.)
       // Sensitive values are stripped before sending to the client.
       metadata: stripSensitiveMetadata(c.metadata),
+      // Multi-account fields
+      registryId: c.registryId,
+      accountEmail: c.accountEmail,
+      accountLabel: c.accountLabel,
     }
   }
 
@@ -3518,12 +3533,16 @@ export class AgentServer {
       }
 
       // Activate direct API connectors immediately using the provided token
+      const apiFactoryId = msg.connector.registryId ?? msg.connector.id
       if (
         msg.connector.type === 'api' &&
         msg.connector.apiKey &&
-        this.connectorManager.hasFactory(msg.connector.id)
+        this.connectorManager.hasFactory(apiFactoryId)
       ) {
-        this.connectorManager.activateWithToken(msg.connector.id, msg.connector.apiKey)
+        this.connectorManager.activateWithToken(msg.connector.id, msg.connector.apiKey, {
+          registryId: msg.connector.registryId,
+          accountDisplayName: msg.connector.accountLabel ?? msg.connector.accountEmail,
+        })
         this.applyConnectorMetadata(msg.connector.id, msg.connector.metadata)
         this.refreshAllSessionTools()
       }
@@ -3808,8 +3827,11 @@ export class AgentServer {
 
   // ── OAuth connector handlers ──────────────────────────────────────
 
-  private handleConnectorOAuthStart(msg: { provider: string }): void {
-    const entry = CONNECTOR_REGISTRY.find((e) => e.id === msg.provider)
+  private handleConnectorOAuthStart(msg: { provider: string; registryId?: string }): void {
+    // For multi-account, the provider is a UUID instance ID — resolve the
+    // registry entry from registryId or fall back to the provider itself.
+    const lookupId = msg.registryId ?? msg.provider
+    const entry = CONNECTOR_REGISTRY.find((e) => e.id === lookupId)
     const scopes = entry?.oauthScopes
 
     // Build provider-specific extra params
@@ -3868,8 +3890,23 @@ export class AgentServer {
     if (result.success) {
       // Auto-create a connector config for the OAuth provider
       const existingConnector = getConnectors(this.config).find((c) => c.id === result.provider)
+      // Resolve registryId: the connector config may have one (multi-account UUID),
+      // or the provider IS the registryId (single-account backward compat).
+      const registryId = existingConnector?.registryId ?? result.provider
+      const registryEntry = CONNECTOR_REGISTRY.find((r) => r.id === registryId)
+
+      // Fetch account identity (email/username) from the provider
+      let accountEmail: string | undefined
+      try {
+        const token = await this.oauthFlow.getToken(result.provider)
+        if (token) {
+          accountEmail = (await fetchAccountIdentity(registryId, token)) ?? undefined
+        }
+      } catch (err) {
+        log.warn({ provider: result.provider, err }, 'Failed to fetch account identity')
+      }
+
       if (!existingConnector) {
-        const registryEntry = CONNECTOR_REGISTRY.find((r) => r.id === result.provider)
         addConnector(this.config, {
           id: result.provider,
           name: registryEntry?.name || result.provider,
@@ -3878,23 +3915,34 @@ export class AgentServer {
           type: 'oauth',
           enabled: true,
           metadata: result.metadata,
+          // Multi-account: only set registryId if it differs from the id
+          registryId: registryId !== result.provider ? registryId : undefined,
+          accountEmail,
         })
-      } else if (result.metadata) {
-        // Merge fresh OAuth metadata onto the existing connector. Critical
-        // for slack-bot, where the proxy hands us a per-install forward_secret
-        // that the SlackWebhookProvider must read on every inbound event.
-        updateConnectorConfig(this.config, result.provider, {
-          metadata: { ...(existingConnector.metadata ?? {}), ...result.metadata },
-        })
+      } else {
+        const updates: Partial<ConnectorConfig> = {}
+        if (result.metadata) {
+          // Merge fresh OAuth metadata onto the existing connector. Critical
+          // for slack-bot, where the proxy hands us a per-install forward_secret
+          // that the SlackWebhookProvider must read on every inbound event.
+          updates.metadata = { ...(existingConnector.metadata ?? {}), ...result.metadata }
+        }
+        if (accountEmail) {
+          updates.accountEmail = accountEmail
+        }
+        if (Object.keys(updates).length > 0) {
+          updateConnectorConfig(this.config, result.provider, updates)
+        }
       }
       if (result.provider === 'slack-bot') this.invalidateSlackBotSecretCache()
 
       // Activate the direct connector so tools are immediately available.
-      // activate() now reports success/failure — surface failure so the
-      // desktop doesn't think the OAuth dance "succeeded" while the
-      // connector is silently inert.
-      if (this.connectorManager.hasFactory(result.provider)) {
-        const activated = await this.connectorManager.activate(result.provider)
+      const factoryId = registryId
+      if (this.connectorManager.hasFactory(factoryId)) {
+        const activated = await this.connectorManager.activate(result.provider, {
+          registryId: registryId !== result.provider ? registryId : undefined,
+          accountDisplayName: accountEmail,
+        })
         if (!activated) {
           log.error(
             { provider: result.provider },
@@ -3904,25 +3952,17 @@ export class AgentServer {
         this.refreshAllSessionTools()
       }
 
-      // Push updated connector status so the desktop store updates immediately
-      const registryEntry2 = CONNECTOR_REGISTRY.find((r) => r.id === result.provider)
-      const connStatus = this.connectorManager.getStatus().find((s) => s.id === result.provider)
-      const toolCount = connStatus?.toolCount ?? 0
-      this.sendToClient(Channel.AI, {
-        type: 'connector_added',
-        connector: {
-          id: result.provider,
-          name: registryEntry2?.name || result.provider,
-          description: registryEntry2?.description,
-          icon: registryEntry2?.icon,
-          type: 'oauth' as const,
-          connected: true,
-          enabled: true,
-          toolCount,
-        },
-      })
+      // Push updated connector status so the desktop store updates immediately.
+      // Re-read the config to get the fully-saved version with accountEmail etc.
+      const freshConfig = getConnectors(this.config).find((c) => c.id === result.provider)
+      if (freshConfig) {
+        this.sendToClient(Channel.AI, {
+          type: 'connector_added',
+          connector: this.buildConnectorStatus(freshConfig),
+        })
+      }
 
-      log.info({ provider: result.provider }, 'OAuth connector connected')
+      log.info({ provider: result.provider, accountEmail }, 'OAuth connector connected')
     }
 
     this.sendToClient(Channel.AI, {

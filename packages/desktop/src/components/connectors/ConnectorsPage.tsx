@@ -124,10 +124,14 @@ function AppsTab({
   if (setupId) {
     const entry = registry.find((r) => r.id === setupId)
     if (entry) {
+      // Find all instances that belong to this registry entry (multi-account support)
+      const instances = connectors.filter(
+        (c) => (c.registryId ?? c.id) === entry.id,
+      )
       return (
         <AppSetup
           entry={entry}
-          existing={connectors.find((c) => c.id === entry.id)}
+          instances={instances}
           onBack={() => setSetupId(null)}
           onConnected={() => onConnected?.(entry.id)}
         />
@@ -144,12 +148,14 @@ function AppsTab({
   })).filter((g) => g.entries.length > 0)
 
   const renderCard = (entry: ConnectorRegistryInfo) => {
-    const existing = connectors.find((c) => c.id === entry.id)
+    const instances = connectors.filter((c) => (c.registryId ?? c.id) === entry.id)
+    const anyConnected = instances.some((c) => c.connected)
+    const connectedCount = instances.filter((c) => c.connected).length
     return (
       <button
         key={entry.id}
         type="button"
-        className={`connector-card${existing?.connected ? ' connector-card--connected' : ''}`}
+        className={`connector-card${anyConnected ? ' connector-card--connected' : ''}`}
         onClick={() => setSetupId(entry.id)}
       >
         <div className="connector-card__icon-wrap">
@@ -158,7 +164,10 @@ function AppsTab({
         <div className="connector-card__info">
           <div className="connector-card__name">
             {entry.name}
-            {existing?.connected && <span className="connector-card__dot" title="Connected" />}
+            {anyConnected && <span className="connector-card__dot" title="Connected" />}
+            {connectedCount > 1 && (
+              <span className="connector-card__badge">{connectedCount} accounts</span>
+            )}
           </div>
           <div className="connector-card__desc">{entry.description}</div>
         </div>
@@ -196,12 +205,12 @@ function AppsTab({
 
 export function AppSetup({
   entry,
-  existing,
+  instances,
   onBack,
   onConnected,
 }: {
   entry: ConnectorRegistryInfo
-  existing?: ConnectorStatusInfo
+  instances: ConnectorStatusInfo[]
   onBack: () => void
   onConnected?: () => void
 }) {
@@ -216,17 +225,21 @@ export function AppSetup({
     error?: string
   } | null>(null)
 
-  const isConfigured = existing != null
+  // Backward compat: first instance is the "primary" existing connector
+  const existing = instances.length > 0 ? instances[0] : undefined
+  const isConfigured = instances.length > 0
   const isOAuth = entry.type === 'oauth'
   const allEnvFilled = entry.requiredEnv.every((k) => envValues[k])
+  const canAddAnother = entry.multiAccount && isConfigured
 
-  const handleOAuthConnect = () => {
+  const startOAuthFlow = (instanceId: string, registryId?: string) => {
     setOauthWaiting(true)
-    connectorStore.getState().startOAuth(entry.id)
+    // Send OAuth start with registryId for multi-account UUID instances
+    connectorStore.getState().startOAuth(instanceId, registryId)
 
+    let timeoutId: ReturnType<typeof setTimeout>
     const unsub = connection.onMessage((_channel, msg) => {
-      if (msg.type === 'connector_oauth_url') {
-        // Open the authorization URL in the system browser
+      if (msg.type === 'connector_oauth_url' && (msg as unknown as { provider: string }).provider === instanceId) {
         const url = (msg as unknown as { url: string }).url
         if ((window as unknown as { __TAURI__?: unknown }).__TAURI__) {
           import('@tauri-apps/plugin-shell').then(({ open }) => open(url))
@@ -234,17 +247,20 @@ export function AppSetup({
           window.open(url, '_blank')
         }
       }
-      if (msg.type === 'connector_oauth_complete') {
+      if (msg.type === 'connector_oauth_complete' && (msg as unknown as { provider: string }).provider === instanceId) {
         const complete = msg as unknown as { success: boolean; error?: string }
+        clearTimeout(timeoutId)
         setOauthWaiting(false)
         unsub()
         if (complete.success) {
-          // Refresh the connector list so the new view picks up the change,
-          // then close the modal entirely (or pop back if no close handler).
           connectorStore.getState().listConnectors()
           if (onConnected) onConnected()
           else onBack()
         } else {
+          // Clean up pre-created config on failure (for multi-account UUID instances)
+          if (registryId) {
+            connectorStore.getState().removeConnectorRemote(instanceId)
+          }
           setTestResult({
             success: false,
             tools: [],
@@ -254,11 +270,39 @@ export function AppSetup({
       }
     })
 
-    // 2-minute timeout for the full OAuth flow
-    setTimeout(() => {
+    timeoutId = setTimeout(() => {
       setOauthWaiting(false)
       unsub()
+      // Clean up pre-created config on timeout (for multi-account UUID instances)
+      if (registryId) {
+        connectorStore.getState().removeConnectorRemote(instanceId)
+      }
     }, 120_000)
+  }
+
+  const handleOAuthConnect = () => {
+    startOAuthFlow(entry.id)
+  }
+
+  const handleAddAnotherAccount = () => {
+    // Generate UUID for the new instance, set registryId to the entry.id
+    const newId = crypto.randomUUID()
+    // Pre-create the connector config so the server knows the registryId
+    connectorStore.getState().addConnectorRemote({
+      id: newId,
+      name: entry.name,
+      description: entry.description,
+      icon: entry.icon,
+      type: entry.type,
+      registryId: entry.id,
+      enabled: true,
+    })
+    // Start OAuth for the new instance
+    startOAuthFlow(newId, entry.id)
+  }
+
+  const handleReauthorize = (instanceId: string, registryId?: string) => {
+    startOAuthFlow(instanceId, registryId)
   }
 
   const handleConnect = () => {
@@ -267,7 +311,6 @@ export function AppSetup({
       if (envValues[key]) env[key] = envValues[key]
     }
 
-    // For API-type connectors, map env values to apiKey or baseUrl
     let apiKey: string | undefined
     let baseUrl: string | undefined
     if (entry.type === 'api' && entry.requiredEnv.length > 0) {
@@ -279,7 +322,6 @@ export function AppSetup({
       }
     }
 
-    // Collect optional fields into metadata
     const metadata: Record<string, string> = {}
     for (const field of entry.optionalFields ?? []) {
       if (optionalValues[field.key]) metadata[field.key] = optionalValues[field.key]
@@ -317,33 +359,44 @@ export function AppSetup({
     }, 20_000)
   }
 
-  const handleDisconnect = () => {
+  const handleDisconnect = (instanceId: string) => {
+    // Capture count at call time — we check the fresh store state on response
+    const wasLastInstance = instances.length <= 1
+
     if (isOAuth) {
-      connectorStore.getState().disconnectOAuth(entry.id)
+      connectorStore.getState().disconnectOAuth(instanceId)
     } else {
-      connectorStore.getState().removeConnectorRemote(entry.id)
+      connectorStore.getState().removeConnectorRemote(instanceId)
     }
 
+    let timeoutId: ReturnType<typeof setTimeout>
     const unsub = connection.onMessage((_channel, msg) => {
-      if (msg.type === 'connector_removed') {
+      if (msg.type === 'connector_removed' && (msg as unknown as { id: string }).id === instanceId) {
+        clearTimeout(timeoutId)
         unsub()
-        onBack()
+        connectorStore.getState().listConnectors()
+        if (wasLastInstance) onBack()
       }
     })
 
-    setTimeout(() => {
+    timeoutId = setTimeout(() => {
       unsub()
-      onBack()
+      // Check fresh store state on timeout
+      const remaining = connectorStore.getState().connectors.filter(
+        (c) => (c.registryId ?? c.id) === entry.id,
+      )
+      if (remaining.length === 0) onBack()
     }, 5_000)
   }
 
   const handleTest = () => {
+    const testId = existing?.id ?? entry.id
     setTesting(true)
     setTestResult(null)
-    connectorStore.getState().testConnectorRemote(entry.id)
+    connectorStore.getState().testConnectorRemote(testId)
 
     const unsub = connection.onMessage((_channel, msg) => {
-      if (msg.type === 'connector_test_response' && msg.id === entry.id) {
+      if (msg.type === 'connector_test_response' && msg.id === testId) {
         setTesting(false)
         setTestResult({
           success: msg.success as boolean,
@@ -389,21 +442,70 @@ export function AppSetup({
         {/* Description */}
         <p className="app-detail__desc">{entry.description}</p>
 
-        {/* Status badge for connected */}
-        {isConfigured && existing?.connected && (
-          <div className="app-detail__status app-detail__status--connected">
-            <Check size={14} /> Connected — {existing.toolCount} tools available
+        {/* Connected accounts list (multi-account) */}
+        {isConfigured && instances.length > 0 && (
+          <div className="app-detail__accounts">
+            {instances.map((inst) => (
+              <div key={inst.id} className="app-detail__account-row">
+                <div className="app-detail__account-info">
+                  <span className={`app-detail__account-dot${inst.connected ? ' app-detail__account-dot--connected' : ''}`} />
+                  <span className="app-detail__account-name">
+                    {inst.accountLabel ?? inst.accountEmail ?? inst.name}
+                  </span>
+                  {inst.connected && (
+                    <span className="app-detail__account-tools">
+                      {inst.toolCount} tools
+                    </span>
+                  )}
+                </div>
+                <div className="app-detail__account-actions">
+                  {entry.setupGuide?.reauthorizeHint && inst.connected && (
+                    <button
+                      type="button"
+                      className="app-detail__action-btn app-detail__action-btn--small"
+                      onClick={() => handleReauthorize(inst.id, inst.registryId)}
+                      title={entry.setupGuide.reauthorizeHint}
+                    >
+                      <ExternalLink size={12} /> Re-authorize
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    className="app-detail__action-btn app-detail__action-btn--danger app-detail__action-btn--small"
+                    onClick={() => handleDisconnect(inst.id)}
+                  >
+                    <Trash2 size={12} /> Disconnect
+                  </button>
+                </div>
+              </div>
+            ))}
           </div>
         )}
 
-        {isConfigured && !existing?.connected && (
-          <div className="app-detail__status app-detail__status--error">
-            <PowerOff size={14} /> Disconnected
-            {existing?.error && ` — ${existing.error}`}
-          </div>
+        {/* Add another account button (multi-account) */}
+        {canAddAnother && isOAuth && (
+          <button
+            type="button"
+            className="app-detail__connect app-detail__connect--secondary"
+            onClick={handleAddAnotherAccount}
+            disabled={oauthWaiting}
+          >
+            {oauthWaiting ? (
+              <Loader2 size={16} className="animate-spin" />
+            ) : (
+              <Plus size={16} strokeWidth={2} />
+            )}
+            {oauthWaiting ? 'Waiting for authorization...' : 'Add another account'}
+          </button>
         )}
 
-        {/* OAuth one-click connect */}
+        {oauthWaiting && (
+          <p className="app-detail__oauth-hint">
+            A browser window should open. Authorize the app, then come back here.
+          </p>
+        )}
+
+        {/* OAuth one-click connect (first account) */}
         {!isConfigured && isOAuth && (
           <button
             type="button"
@@ -418,12 +520,6 @@ export function AppSetup({
             )}
             {oauthWaiting ? 'Waiting for authorization...' : `Connect with ${entry.name}`}
           </button>
-        )}
-
-        {oauthWaiting && (
-          <p className="app-detail__oauth-hint">
-            A browser window should open. Authorize the app, then come back here.
-          </p>
         )}
 
         {/* Connect button for non-OAuth (not yet configured) */}
@@ -505,8 +601,8 @@ export function AppSetup({
           </div>
         )}
 
-        {/* Actions for already-configured connector */}
-        {isConfigured && (
+        {/* Actions for already-configured connector (single account, non-multi) */}
+        {isConfigured && !entry.multiAccount && (
           <div className="app-detail__configured-actions">
             <button
               type="button"
@@ -520,7 +616,7 @@ export function AppSetup({
             <button
               type="button"
               className="app-detail__action-btn app-detail__action-btn--danger"
-              onClick={handleDisconnect}
+              onClick={() => handleDisconnect(existing!.id)}
             >
               <Trash2 size={14} /> Disconnect
             </button>

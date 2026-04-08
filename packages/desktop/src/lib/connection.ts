@@ -423,6 +423,10 @@ export class Connection {
     apiKey?: string
     baseUrl?: string
     enabled: boolean
+    registryId?: string
+    accountEmail?: string
+    accountLabel?: string
+    metadata?: Record<string, string>
   }) {
     this.send(Channel.AI, { type: 'connector_add', connector })
   }
@@ -447,8 +451,8 @@ export class Connection {
     this.send(Channel.AI, { type: 'connector_registry_list' })
   }
 
-  sendConnectorOAuthStart(provider: string) {
-    this.send(Channel.AI, { type: 'connector_oauth_start', provider })
+  sendConnectorOAuthStart(provider: string, registryId?: string) {
+    this.send(Channel.AI, { type: 'connector_oauth_start', provider, ...(registryId ? { registryId } : {}) })
   }
 
   sendConnectorOAuthDisconnect(provider: string) {
