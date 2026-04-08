@@ -1,0 +1,21 @@
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.2.6",
+  "base_commit_sha": "1eabb13deb0a92ea9b22785f24918f799f9eeb06",
+  "prompts": {
+    "4ebd331daccf8599": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "8c70f780-4671-4046-92bf-38d454989b10",
+        "model": "claude-opus-4-6"
+      },
+      "human_author": "Om Gupta",
+      "messages": [],
+      "total_additions": 0,
+      "total_deletions": 0,
+      "accepted_lines": 129,
+      "overriden_lines": 0
+    }
+  }
+}
