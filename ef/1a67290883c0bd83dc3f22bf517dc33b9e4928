@@ -1,0 +1,31 @@
+packages/desktop/src/components/files/ProjectFilesView.tsx
+  7f6cc5b2cad49fb6 3,14,18,67-71,102-120,122,149-160,162-163,166-167,169,184-193,198-224,226,241,246-257,276,280-283,287-294,296-301,304-329,346,351,368-369,426,466-480,489,503-512,518-589,593-650,675,688
+packages/agent-server/src/server.ts
+  7f6cc5b2cad49fb6 900,916,964-999
+packages/desktop/src/lib/connection.ts
+  7f6cc5b2cad49fb6 468-469,476-481,523-538
+packages/desktop/src/lib/store/uiStore.ts
+  7f6cc5b2cad49fb6 68,179
+packages/desktop/src/index.css
+  7f6cc5b2cad49fb6 16386-16537
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.2.5",
+  "base_commit_sha": "ef1a67290883c0bd83dc3f22bf517dc33b9e4928",
+  "prompts": {
+    "7f6cc5b2cad49fb6": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "c9c42184-5718-43a7-8ea5-0bdee0f2806a",
+        "model": "claude-opus-4-6"
+      },
+      "human_author": "Om Gupta",
+      "messages": [],
+      "total_additions": 551,
+      "total_deletions": 62,
+      "accepted_lines": 542,
+      "overriden_lines": 2
+    }
+  }
+}
