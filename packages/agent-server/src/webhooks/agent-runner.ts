@@ -13,12 +13,32 @@
  */
 
 import type { AgentConfig } from '@anton/agent-config'
-import type { McpManager, Session, SurfaceInfo } from '@anton/agent-core'
+import type { JobActionHandler, McpManager, Session, SurfaceInfo } from '@anton/agent-core'
 import { createSession, resumeSession } from '@anton/agent-core'
 import type { ConnectorManager } from '@anton/connectors'
 import { createLogger } from '@anton/logger'
 import type { TaskItem } from '@anton/protocol'
 import type { CanonicalEvent, OutboundImage, WebhookProvider, WebhookRunResult } from './provider.js'
+
+/**
+ * Extra session options resolved per-session by the host (e.g. project-scoped
+ * callbacks like onJobAction). The server builds this from webhook bindings
+ * so that Telegram/Slack sessions get the same tools as desktop sessions.
+ */
+export interface WebhookSessionOptions {
+  projectId?: string
+  projectContext?: string
+  projectWorkspacePath?: string
+  projectType?: string
+  onJobAction?: JobActionHandler
+  availableWorkflows?: { name: string; description: string; whenToUse: string }[]
+}
+
+/**
+ * Callback the server provides to resolve project-scoped session options
+ * from a webhook session ID (using bindings to look up the projectId).
+ */
+export type WebhookSessionOptionsBuilder = (sessionId: string) => WebhookSessionOptions | undefined
 
 const log = createLogger('webhook-runner')
 
@@ -104,6 +124,7 @@ export class WebhookAgentRunner {
     private config: AgentConfig,
     private mcpManager: McpManager,
     private connectorManager: ConnectorManager,
+    private sessionOptionsBuilder?: WebhookSessionOptionsBuilder,
   ) {}
 
   /** Check if a session has a pending interaction awaiting user response. */
@@ -490,29 +511,34 @@ export class WebhookAgentRunner {
     let session = this.sessions.get(sessionId)
     if (session) return session
 
+    // Resolve project-scoped options (projectId, onJobAction, etc.) from
+    // webhook bindings so the session gets the same tools as desktop sessions.
+    const extra = this.sessionOptionsBuilder?.(sessionId)
+    if (extra?.projectId) {
+      log.info({ sessionId, projectId: extra.projectId }, 'webhook session bound to project')
+    }
+
+    const baseOpts = {
+      mcpManager: this.mcpManager,
+      connectorManager: this.connectorManager,
+      surface,
+      ...extra,
+    }
+
     // resumeSession is a "try to rehydrate" helper — it can throw on
     // corrupted state, version skew, or filesystem errors. Historically we
     // let that propagate into runOne() and the webhook silently failed.
     // Treat any throw the same as "no saved session" and fall through to a
     // fresh createSession so the conversation keeps flowing.
     try {
-      session =
-        resumeSession(sessionId, this.config, {
-          mcpManager: this.mcpManager,
-          connectorManager: this.connectorManager,
-          surface,
-        }) ?? undefined
+      session = resumeSession(sessionId, this.config, baseOpts) ?? undefined
     } catch (err) {
       log.warn({ sessionId, err }, 'resumeSession threw, starting fresh')
       session = undefined
     }
 
     if (!session) {
-      session = createSession(sessionId, this.config, {
-        mcpManager: this.mcpManager,
-        connectorManager: this.connectorManager,
-        surface,
-      })
+      session = createSession(sessionId, this.config, baseOpts)
     }
 
     this.sessions.set(sessionId, session)

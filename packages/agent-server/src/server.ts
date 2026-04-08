@@ -33,6 +33,7 @@ import {
   getProjectSessionsDir,
   getProvidersList,
   listProjectFiles,
+  listProjectIndex,
   listProjectSessions,
   listProjectWorkflows,
   listSessionMetas,
@@ -89,6 +90,7 @@ import {
   WebhookAgentRunner,
   WebhookRouter,
 } from './webhooks/index.js'
+import { extractBindingKey, getBinding } from './webhooks/bindings.js'
 import {
   getBuiltinWorkflowPath,
   listBuiltinWorkflows,
@@ -3404,6 +3406,31 @@ export class AgentServer {
         this.config,
         this.mcpManager,
         this.connectorManager,
+        (sessionId) => {
+          // Resolve project binding for this webhook session so that
+          // project-scoped tools (agent, workflow, etc.) are available.
+          const bindingKey = extractBindingKey(sessionId)
+          const binding = getBinding(bindingKey)
+          let projectId = binding?.projectId
+
+          // Fall back to the default project when no explicit binding exists.
+          if (!projectId) {
+            const defaultProject = listProjectIndex().find((p) => p.isDefault)
+            if (defaultProject) projectId = defaultProject.id
+          }
+
+          if (!projectId) return undefined
+          const project = loadProject(projectId)
+          if (!project) return undefined
+          return {
+            projectId,
+            projectContext: buildProjectContext(project, projectId),
+            projectWorkspacePath: project.workspacePath,
+            projectType: project.type,
+            onJobAction: this.buildAgentActionHandler(sessionId),
+            availableWorkflows: this.getAvailableWorkflowsForPrompt(),
+          }
+        },
       )
     }
     if (!this.webhookRouter) {
