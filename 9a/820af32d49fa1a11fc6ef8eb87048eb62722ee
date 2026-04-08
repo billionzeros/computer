@@ -1,0 +1,53 @@
+packages/agent-server/src/webhooks/providers/telegram.ts
+  190dc503fadbd352 14,67,83-84,88-93,98-119,128,139-140,151-194,750-751
+packages/agent-config/src/skills.ts
+  15b2792d27ed6644 23,127-128,169-170
+packages/agent-server/src/webhooks/providers/slack.ts
+  f6795ed736b64df4 300-314
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.2.5",
+  "base_commit_sha": "9a820af32d49fa1a11fc6ef8eb87048eb62722ee",
+  "prompts": {
+    "15b2792d27ed6644": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "c4eae69a-6fd4-4082-a093-5f1e5d0e4356",
+        "model": "claude-opus-4-6"
+      },
+      "human_author": "Om Gupta",
+      "messages": [],
+      "total_additions": 0,
+      "total_deletions": 0,
+      "accepted_lines": 5,
+      "overriden_lines": 0
+    },
+    "190dc503fadbd352": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "1d4ac83f-9168-418e-b85f-74b8d565e9f9",
+        "model": "claude-opus-4-6"
+      },
+      "human_author": "Om Gupta",
+      "messages": [],
+      "total_additions": 0,
+      "total_deletions": 0,
+      "accepted_lines": 81,
+      "overriden_lines": 0
+    },
+    "f6795ed736b64df4": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "be6b66b2-94e7-4d16-bd0e-6f696a895181",
+        "model": "claude-opus-4-6"
+      },
+      "human_author": "Om Gupta",
+      "messages": [],
+      "total_additions": 0,
+      "total_deletions": 0,
+      "accepted_lines": 15,
+      "overriden_lines": 0
+    }
+  }
+}
