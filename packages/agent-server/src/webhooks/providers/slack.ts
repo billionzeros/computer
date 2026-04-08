@@ -297,6 +297,21 @@ export class SlackWebhookProvider implements WebhookProvider {
       }
     }
 
+    // When a user @mentions the bot in an active thread, Slack delivers
+    // both a `message` event and an `app_mention` event with different
+    // event_ids.  The `message` event is already accepted above, so drop
+    // the redundant `app_mention` to avoid double-processing.
+    if (ev.type === 'app_mention' && !isDirectChat) {
+      const threadTs = ev.thread_ts
+      if (threadTs && this.isThreadActive(ev.channel, threadTs)) {
+        log.info(
+          { channel: ev.channel, threadTs },
+          'parse: app_mention in active thread, dropping (message event will handle)',
+        )
+        return []
+      }
+    }
+
     const text = await this.stripMention(ev.text ?? '')
     const imageFiles = (ev.files ?? []).filter(isSupportedImage)
     if (!text && imageFiles.length === 0) {
