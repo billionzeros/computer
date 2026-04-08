@@ -2,9 +2,10 @@ import { motion } from 'framer-motion'
 import { Activity, Box, Clock, Database, FileText, Globe, Rocket, Shield } from 'lucide-react'
 import type React from 'react'
 import { useEffect, useState } from 'react'
-import { type Skill, getSkills } from '../../lib/skills.js'
+import { type Skill, getSkillCommand, getSkills } from '../../lib/skills.js'
+import { skillIconMap } from '../skills/SkillCard.js'
 
-const iconMap: Record<string, React.ElementType> = {
+const fallbackIconMap: Record<string, React.ElementType> = {
   rocket: Rocket,
   activity: Activity,
   globe: Globe,
@@ -24,11 +25,13 @@ interface Props {
 
 export function SlashCommandMenu({ filter, onSelect, onClose, visible }: Props) {
   const [selectedIndex, setSelectedIndex] = useState(0)
-  const skills = getSkills().filter(
-    (s) =>
-      s.command.toLowerCase().includes(filter.toLowerCase()) ||
-      s.name.toLowerCase().includes(filter.toLowerCase()),
-  )
+  const skills = getSkills().filter((s) => {
+    const cmd = getSkillCommand(s)
+    return (
+      cmd.toLowerCase().includes(filter.toLowerCase()) ||
+      s.name.toLowerCase().includes(filter.toLowerCase())
+    )
+  })
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: filter drives index reset
   useEffect(() => {
@@ -72,11 +75,12 @@ export function SlashCommandMenu({ filter, onSelect, onClose, visible }: Props) 
         <span className="slash-menu__headerLabel">Skills</span>
       </div>
       {skills.map((skill, i) => {
-        const Icon = iconMap[skill.icon] || Activity
+        const Icon = skillIconMap[skill.icon || ''] || fallbackIconMap[skill.icon || ''] || Activity
+        const command = getSkillCommand(skill)
         return (
           <button
             type="button"
-            key={skill.id}
+            key={skill.name}
             onClick={() => onSelect(skill)}
             className={
               i === selectedIndex ? 'slash-menu__item slash-menu__item--active' : 'slash-menu__item'
@@ -86,7 +90,7 @@ export function SlashCommandMenu({ filter, onSelect, onClose, visible }: Props) 
             <div className="slash-menu__itemCopy">
               <div className="slash-menu__itemRow">
                 <span className="slash-menu__itemName">{skill.name}</span>
-                <span className="slash-menu__itemCommand">{skill.command}</span>
+                <span className="slash-menu__itemCommand">{command}</span>
               </div>
               <p className="slash-menu__itemDescription">{skill.description}</p>
             </div>

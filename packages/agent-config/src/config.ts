@@ -158,12 +158,50 @@ export interface AgentConfig {
   }
 }
 
+export interface SkillParameter {
+  name: string
+  label: string
+  type: 'text' | 'select' | 'boolean'
+  placeholder?: string
+  options?: string[]
+  required?: boolean
+}
+
+export interface SkillAssets {
+  agents?: string[]
+  scripts?: string[]
+  references?: string[]
+  other?: string[]
+}
+
 export interface SkillConfig {
+  // Identity
   name: string
   description: string
+  icon?: string
+  category?: string
+  featured?: boolean
+
+  // Prompt (loaded from SKILL.md body)
   prompt: string
-  schedule?: string
+  whenToUse?: string
+
+  // Execution
+  context?: 'inline' | 'fork'
+  allowedTools?: string[]
   tools?: string[]
+  schedule?: string
+  model?: string
+
+  // Source
+  source: 'builtin' | 'user' | 'project'
+  skillDir?: string
+
+  // Bundled assets (populated by scanning skill directory)
+  assets?: SkillAssets
+
+  // Parameters (for UI form)
+  parameters?: SkillParameter[]
 }
 
 // ── Connector types ──────────────────────────────────────────────────

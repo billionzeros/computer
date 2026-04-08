@@ -759,6 +759,21 @@ export function listProjectAgents(projectId: string): AgentSession[] {
   return agents.sort((a, b) => (b.lastActiveAt ?? 0) - (a.lastActiveAt ?? 0))
 }
 
+/**
+ * Lightweight project listing — reads the index file only, no session-count
+ * refresh. Use this in hot paths (slash commands, bindings) where you just
+ * need names/ids, not up-to-date stats.
+ */
+export function listProjectIndex(): Project[] {
+  return loadIndex()
+}
+
+/** Case-insensitive substring search for projects by name. */
+export function findProjectsByName(query: string): Project[] {
+  const lower = query.toLowerCase()
+  return loadIndex().filter((p) => p.name.toLowerCase().includes(lower))
+}
+
 /** Update project stats (e.g. after session creation) */
 export function updateProjectStats(projectId: string): void {
   const project = loadProject(projectId)

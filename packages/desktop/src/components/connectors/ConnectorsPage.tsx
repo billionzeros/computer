@@ -218,7 +218,7 @@ export function AppSetup({
 
   const isConfigured = existing != null
   const isOAuth = entry.type === 'oauth'
-  const allEnvFilled = entry.requiredEnv.every((k) => envValues[k])
+  const allEnvFilled = entry.requiredEnv.every((k: string) => envValues[k])
 
   const handleOAuthConnect = () => {
     setOauthWaiting(true)
@@ -445,7 +445,7 @@ export function AppSetup({
               <div className="app-detail__setup-guide">
                 <h4 className="app-detail__setup-guide-title">How to get your credentials</h4>
                 <ol className="app-detail__setup-guide-steps">
-                  {entry.setupGuide.steps.map((step) => (
+                  {entry.setupGuide.steps.map((step: string) => (
                     <li key={step}>{step}</li>
                   ))}
                 </ol>
@@ -460,7 +460,7 @@ export function AppSetup({
                 </a>
               </div>
             )}
-            {entry.requiredEnv.map((envKey) => (
+            {entry.requiredEnv.map((envKey: string) => (
               <div key={envKey} className="app-detail__field">
                 <label htmlFor={`env-${envKey}`}>{envKey}</label>
                 <input
@@ -472,7 +472,7 @@ export function AppSetup({
                 />
               </div>
             ))}
-            {(entry.optionalFields ?? []).map((field) => (
+            {(entry.optionalFields ?? []).map((field: { key: string; label: string; hint?: string }) => (
               <div key={field.key} className="app-detail__field">
                 <label htmlFor={`opt-${field.key}`}>
                   {field.label} <span className="app-detail__field-optional">(optional)</span>

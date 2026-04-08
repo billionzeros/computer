@@ -32,7 +32,7 @@ function sanitizeConnector(c: ConnectorStatusInfo): ConnectorStatusInfo {
       dirty = true
       continue
     }
-    out[k] = v
+    out[k] = v as string
   }
   if (!dirty) return c
   // eslint-disable-next-line no-console

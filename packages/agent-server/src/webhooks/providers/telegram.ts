@@ -6,6 +6,7 @@
  * just: verify, parse, reply.
  */
 
+import { listCommands } from '@anton/agent-core'
 import { createLogger } from '@anton/logger'
 import { toTelegramMd } from '../format/telegram-md.js'
 import type {
@@ -485,6 +486,33 @@ export class TelegramWebhookProvider implements WebhookProvider {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ chat_id: chatId, action: 'typing' }),
     })
+  }
+
+  /**
+   * Register slash commands with the Telegram Bot Commands menu.
+   * Call once on startup — Telegram stores them server-side. Users see
+   * autocomplete when typing `/` in the chat.
+   */
+  async registerCommands(): Promise<void> {
+    const cmds = listCommands().map((c) => ({
+      command: c.name,
+      description: c.description,
+    }))
+    try {
+      const res = await fetch(`${TELEGRAM_API}/bot${this.token}/setMyCommands`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ commands: cmds }),
+      })
+      const data = (await res.json()) as { ok: boolean; description?: string }
+      if (data.ok) {
+        log.info({ count: cmds.length }, 'Telegram bot commands registered')
+      } else {
+        log.warn({ description: data.description }, 'setMyCommands failed')
+      }
+    } catch (err) {
+      log.warn({ err }, 'setMyCommands threw (non-fatal)')
+    }
   }
 
   /** Register the webhook URL with Telegram. */

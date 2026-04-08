@@ -268,7 +268,7 @@ export function AskUserInline({ questions, onSubmit }: Props) {
                 <span className="ask-inline__question-text">{q.question}</span>
               </div>
               <div className="ask-inline__pills">
-                {options.map((opt) => (
+                {options.map((opt: { label: string; description?: string }) => (
                   <button
                     key={opt.label}
                     type="button"

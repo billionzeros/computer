@@ -62,6 +62,9 @@ export type MessageHandler = (channel: number, message: IncomingMessage) => void
 type RawPayload = { type: string; [key: string]: unknown }
 type RawMessageHandler = (channel: number, payload: RawPayload) => void
 
+const PING_INTERVAL_MS = 30_000 // send ping every 30s
+const MAX_MISSED_PONGS = 2 // close after 2 missed pongs (60s unresponsive)
+
 export class Connection {
   private ws: WebSocket | null = null
   private config: ConnectionConfig | null = null
@@ -72,6 +75,9 @@ export class Connection {
   private reconnectTimer: number | null = null
   private agentId = ''
   private agentVersion = ''
+  private pingTimer: number | null = null
+  private pongReceived = false
+  private missedPongs = 0
 
   get status() {
     return this._status
@@ -121,6 +127,7 @@ export class Connection {
   }
 
   disconnect() {
+    this.stopPingLoop()
     if (this.reconnectTimer) {
       clearTimeout(this.reconnectTimer)
       this.reconnectTimer = null
@@ -463,6 +470,12 @@ export class Connection {
     this.send(Channel.AI, { type: 'connector_set_tool_permission', id, toolName, permission })
   }
 
+  // ── Skills ────────────────────────────────────────────────────
+
+  sendSkillList() {
+    this.send(Channel.AI, { type: 'skill_list' })
+  }
+
   // ── Filesystem ─────────────────────────────────────────────────
 
   sendFilesystemList(path: string, showHidden?: boolean) {
@@ -481,8 +494,16 @@ export class Connection {
     this.send(Channel.FILESYNC, { type: 'fs_delete', path })
   }
 
-  sendFilesystemWrite(path: string, content: string, encoding: string) {
+  sendFilesystemWrite(path: string, content: string, encoding: 'base64' | 'utf-8' = 'base64') {
     this.send(Channel.FILESYNC, { type: 'fs_write', path, content, encoding })
+  }
+
+  onFilesystemWriteResponse(handler: (path: string, success: boolean, error?: string) => void) {
+    return this.onRawMessage((channel, payload) => {
+      if (channel === Channel.FILESYNC && payload.type === 'fs_write_response') {
+        handler(payload.path as string, !!payload.success, payload.error as string | undefined)
+      }
+    })
   }
 
   onFilesystemResponse(
@@ -540,12 +561,33 @@ export class Connection {
     })
   }
 
-  onFilesystemWriteResponse(handler: (path: string, success: boolean, error?: string) => void) {
-    return this.onRawMessage((channel, payload) => {
-      if (channel === Channel.FILESYNC && payload.type === 'fs_write_response') {
-        handler(payload.path as string, !!payload.success, payload.error as string | undefined)
+  private startPingLoop() {
+    this.stopPingLoop()
+    this.missedPongs = 0
+    this.pongReceived = true
+    this.pingTimer = window.setInterval(() => {
+      if (!this.pongReceived) {
+        this.missedPongs++
+        if (this.missedPongs >= MAX_MISSED_PONGS) {
+          console.warn('[WS] No pong received, closing connection')
+          this.stopPingLoop()
+          this.ws?.close(4000, 'Ping timeout')
+          return
+        }
+      } else {
+        this.missedPongs = 0
       }
-    })
+      this.pongReceived = false
+      this.send(Channel.CONTROL, { type: 'ping' })
+    }, PING_INTERVAL_MS)
+  }
+
+  private stopPingLoop() {
+    if (this.pingTimer) {
+      clearInterval(this.pingTimer)
+      this.pingTimer = null
+    }
+
   }
 
   private doConnect() {
@@ -583,6 +625,9 @@ export class Connection {
             this.agentId = m.agentId
             this.agentVersion = m.version
             this.setStatus('connected', `Agent: ${this.agentId}`)
+            this.startPingLoop()
+          } else if (payload.type === 'pong') {
+            this.pongReceived = true
           } else if (payload.type === 'auth_error') {
             const m = payload as import('@anton/protocol').AuthErrorMessage
             this.setStatus('error', `Auth failed: ${m.reason}`)
@@ -605,6 +650,7 @@ export class Connection {
     }
 
     this.ws.onclose = (event) => {
+      this.stopPingLoop()
       console.log(
         `[WS] Closed: code=${event.code} reason=${event.reason} wasClean=${event.wasClean}`,
       )

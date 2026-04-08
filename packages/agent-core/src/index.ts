@@ -44,6 +44,14 @@ export {
   type MemoryItemWithSource,
   assembleConversationContext,
 } from './context.js'
+export {
+  executeCommand,
+  listCommands,
+  parseCommand,
+  type Command,
+  type CommandContext,
+  type CommandResult,
+} from './commands.js'
 export { executePublish, type PublishInput } from './tools/publish.js'
 export { initTracing, flushTraces, hashPromptVersion } from './tracing.js'
 export { closeBrowserSession } from './tools/browser.js'

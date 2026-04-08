@@ -53,6 +53,7 @@ import {
   updateProjectStats,
 } from '@anton/agent-config'
 import { GIT_HASH, VERSION } from '@anton/agent-config'
+import { loadSkills } from '@anton/agent-config'
 import {
   CONNECTOR_REGISTRY,
   type ConnectorConfig,
@@ -524,10 +525,22 @@ export class AgentServer {
               this.sendToClient(Channel.CONTROL, authOk)
               log.info('Client authenticated')
 
-              this.sendToClient(Channel.EVENTS, {
-                type: 'agent_status',
-                status: this.pendingPrompts.size > 0 ? 'working' : 'idle',
-              })
+              // Send per-session status for active turns so the client
+              // knows exactly which sessions are still working after reconnect
+              for (const sessionId of this.activeTurns) {
+                this.sendToClient(Channel.EVENTS, {
+                  type: 'agent_status',
+                  status: 'working',
+                  sessionId,
+                })
+              }
+              // If nothing is active, send a global idle to clear any stale client state
+              if (this.activeTurns.size === 0) {
+                this.sendToClient(Channel.EVENTS, {
+                  type: 'agent_status',
+                  status: 'idle',
+                })
+              }
 
               // Re-send any pending interactive prompts (ask_user, confirm, etc.)
               for (const [, prompt] of this.pendingPrompts) {
@@ -1097,6 +1110,35 @@ export class AgentServer {
         break
       }
 
+      case 'fs_write': {
+        const writePath = msg.path || ''
+        const writeContent = (msg as { content?: string }).content || ''
+        const writeEncoding = (msg as { encoding?: string }).encoding || 'base64'
+        try {
+          const { writeFileSync, mkdirSync } = await import('node:fs')
+          const { dirname } = await import('node:path')
+          mkdirSync(dirname(writePath), { recursive: true })
+          const buf =
+            writeEncoding === 'base64'
+              ? Buffer.from(writeContent, 'base64')
+              : Buffer.from(writeContent, 'utf-8')
+          writeFileSync(writePath, buf)
+          this.sendToClient(Channel.FILESYNC, {
+            type: 'fs_write_response',
+            path: writePath,
+            success: true,
+          })
+        } catch (err: unknown) {
+          this.sendToClient(Channel.FILESYNC, {
+            type: 'fs_write_response',
+            path: writePath,
+            success: false,
+            error: (err as Error).message,
+          })
+        }
+        break
+      }
+
       default:
         log.warn({ msgType: msg.type }, 'Unknown filesync message type')
     }
@@ -1144,6 +1186,11 @@ export class AgentServer {
 
       case 'provider_set_models':
         this.handleProviderSetModels(msg)
+        break
+
+      // ── Skills ──
+      case 'skill_list':
+        this.handleSkillList()
         break
 
       // ── Scheduler ──
@@ -1882,6 +1929,22 @@ export class AgentServer {
   }
 
   // ── Scheduler handlers ────────────────────────────────────────
+
+  private handleSkillList() {
+    try {
+      const skills = loadSkills()
+      this.sendToClient(Channel.AI, {
+        type: 'skill_list_response',
+        skills,
+      })
+    } catch (err) {
+      console.error('Failed to load skills:', err)
+      this.sendToClient(Channel.AI, {
+        type: 'skill_list_response',
+        skills: [],
+      })
+    }
+  }
 
   private handleSchedulerList() {
     if (!this.scheduler) {
@@ -3339,6 +3402,8 @@ export class AgentServer {
       } else {
         log.warn('Telegram token present but DOMAIN not set; webhook not registered')
       }
+      // Register slash commands with Telegram's Bot Commands menu (fire-and-forget)
+      this.telegramProvider.registerCommands().catch(() => {})
     }
 
     // ── Slack bot ────────────────────────────────────────────────

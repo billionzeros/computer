@@ -353,7 +353,7 @@ function ConnectorDetail({
 
   // Group tools by read/write classification
   const readOnly = tools.filter(isReadOnlyTool)
-  const writeDelete = tools.filter((t) => !isReadOnlyTool(t))
+  const writeDelete = tools.filter((t: string) => !isReadOnlyTool(t))
 
   return (
     <div className="connectors-view__detail-inner">
@@ -496,7 +496,7 @@ function SlackBotIdentityCard({ status }: { status?: ConnectorStatusInfo }) {
       const existing = status?.metadata ?? {}
       const merged: Record<string, string> = {}
       for (const [k, v] of Object.entries(existing)) {
-        if (k !== 'displayName' && k !== 'iconUrl') merged[k] = v
+        if (k !== 'displayName' && k !== 'iconUrl') merged[k] = v as string
       }
       if (displayName.trim()) merged.displayName = displayName.trim()
       if (iconUrl.trim()) merged.iconUrl = iconUrl.trim()
