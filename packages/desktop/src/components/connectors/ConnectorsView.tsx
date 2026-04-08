@@ -19,7 +19,7 @@ import { useStore } from '../../lib/store.js'
 import { connectorStore } from '../../lib/store/connectorStore.js'
 import type { ConnectorRegistryInfo, ConnectorStatusInfo } from '../../lib/store/types.js'
 import { ConnectorIcon } from './ConnectorIcons.js'
-import { ConnectorsPage } from './ConnectorsPage.js'
+import { AppSetup, ConnectorsPage } from './ConnectorsPage.js'
 
 type ToolPermission = 'auto' | 'ask' | 'never'
 
@@ -61,6 +61,7 @@ export function ConnectorsView() {
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [search, setSearch] = useState('')
   const [showAddModal, setShowAddModal] = useState(false)
+  const [connectPopupId, setConnectPopupId] = useState<string | null>(null)
 
   // Refresh data when connection comes up
   const connectionStatus = useStore((s) => s.connectionStatus)
@@ -70,6 +71,25 @@ export function ConnectorsView() {
       connectorStore.getState().listConnectorRegistry()
     }
   }, [connectionStatus])
+
+  // Listen for open-connector events (from ConnectorToolbar / App.tsx)
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const detail = (e as CustomEvent).detail
+      if (detail?.connectorId) {
+        setSelectedId(detail.connectorId)
+        // If not connected, show the connect popup
+        const isConnected = connectorStore.getState().connectors.some(
+          (c) => c.id === detail.connectorId && c.connected,
+        )
+        if (!isConnected) {
+          setConnectPopupId(detail.connectorId)
+        }
+      }
+    }
+    window.addEventListener('open-connector', handler)
+    return () => window.removeEventListener('open-connector', handler)
+  }, [])
 
   // Auto-select the first connected connector if nothing is selected
   useEffect(() => {
@@ -191,7 +211,11 @@ export function ConnectorsView() {
       {/* ── Right detail pane ────────────────────────────── */}
       <section className="connectors-view__detail">
         {selected ? (
-          <ConnectorDetail status={selected.status} entry={selected.entry} />
+          <ConnectorDetail
+            status={selected.status}
+            entry={selected.entry}
+            onConnect={(id) => setConnectPopupId(id)}
+          />
         ) : (
           <div className="connectors-view__placeholder">
             <Plug size={32} strokeWidth={1.25} />
@@ -223,10 +247,33 @@ export function ConnectorsView() {
             >
               <X size={18} strokeWidth={1.5} />
             </button>
-            <ConnectorsPage />
+            <ConnectorsPage
+              onConnected={(connectedId) => {
+                setShowAddModal(false)
+                if (connectedId) setSelectedId(connectedId)
+              }}
+            />
           </div>
         </div>
       )}
+
+      {/* ── Connect popup (small centered dialog like AppSetup) ── */}
+      {connectPopupId && (() => {
+        const popupEntry = registry.find((r) => r.id === connectPopupId)
+        const popupExisting = connectors.find((c) => c.id === connectPopupId)
+        if (!popupEntry) return null
+        return (
+          <AppSetup
+            entry={popupEntry}
+            existing={popupExisting}
+            onBack={() => setConnectPopupId(null)}
+            onConnected={() => {
+              setConnectPopupId(null)
+              setSelectedId(connectPopupId)
+            }}
+          />
+        )
+      })()}
     </div>
   )
 }
@@ -263,9 +310,11 @@ function SidebarRow({
 function ConnectorDetail({
   status,
   entry,
+  onConnect,
 }: {
   status?: ConnectorStatusInfo
   entry?: ConnectorRegistryInfo
+  onConnect?: (id: string) => void
 }) {
   // Listen for OAuth completion to refresh
   useEffect(() => {
@@ -295,11 +344,7 @@ function ConnectorDetail({
   }
 
   const handleConnect = () => {
-    // Surface the existing setup flow via the legacy ConnectorsPage modal.
-    // Cheaper than re-implementing OAuth/credential collection here.
-    window.dispatchEvent(
-      new CustomEvent('open-settings', { detail: { tab: 'connectors', connectorId: id } }),
-    )
+    if (onConnect && id) onConnect(id)
   }
 
   const setPermission = (toolName: string, permission: ToolPermission) => {

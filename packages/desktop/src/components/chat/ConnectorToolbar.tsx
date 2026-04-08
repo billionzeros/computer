@@ -1,4 +1,4 @@
-import { Plus, Settings2, Unplug, X } from 'lucide-react'
+import { Plug, Plus, Unplug, X } from 'lucide-react'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { useStore } from '../../lib/store.js'
@@ -155,7 +155,7 @@ export function ConnectorPill() {
               )}
             </button>
             <button type="button" className="connector-dropdown__footer-btn" onClick={openSettings}>
-              <Settings2 size={16} strokeWidth={1.5} />
+              <Plug size={16} strokeWidth={1.5} />
               <span>Manage connectors</span>
             </button>
           </div>

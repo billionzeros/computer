@@ -32,7 +32,7 @@ type Tab = 'apps' | 'custom-api' | 'custom-mcp'
 export function ConnectorsPage({
   initialConnectorId,
   onConnected,
-}: { initialConnectorId?: string; onConnected?: () => void } = {}) {
+}: { initialConnectorId?: string; onConnected?: (connectorId?: string) => void } = {}) {
   const [tab, setTab] = useState<Tab>('apps')
   const [search, setSearch] = useState('')
   const connectors = connectorStore((s) => s.connectors)
@@ -110,7 +110,7 @@ function AppsTab({
   connectors: ConnectorStatusInfo[]
   search: string
   initialConnectorId?: string
-  onConnected?: () => void
+  onConnected?: (connectorId?: string) => void
 }) {
   const [setupId, setSetupId] = useState<string | null>(initialConnectorId ?? null)
 
@@ -129,7 +129,7 @@ function AppsTab({
           entry={entry}
           existing={connectors.find((c) => c.id === entry.id)}
           onBack={() => setSetupId(null)}
-          onConnected={onConnected}
+          onConnected={() => onConnected?.(entry.id)}
         />
       )
     }
@@ -194,7 +194,7 @@ function AppsTab({
 
 // ── App Setup (Manus-style centered modal) ─────────────────────────
 
-function AppSetup({
+export function AppSetup({
   entry,
   existing,
   onBack,

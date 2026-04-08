@@ -37,10 +37,7 @@ export function App() {
   const [connected, setConnected] = useState(false)
   const [showMachineInfo, setShowMachineInfo] = useState(false)
   const [showSettings, setShowSettings] = useState(false)
-  const [settingsPage, setSettingsPage] = useState<'general' | 'models' | 'connectors' | 'usage'>(
-    'general',
-  )
-  const [settingsConnectorId, setSettingsConnectorId] = useState<string | undefined>()
+  const [settingsPage, setSettingsPage] = useState<'general' | 'models' | 'usage'>('general')
   const [showCreateProject, setShowCreateProject] = useState(false)
   const status = useConnectionStatus()
   const activeView = uiStore((s) => s.activeView)
@@ -193,13 +190,23 @@ export function App() {
   useEffect(() => {
     const handler = (e: Event) => {
       const detail = (e as CustomEvent).detail
+      if (detail?.tab === 'connectors') {
+        // Navigate to sidebar connectors view instead of settings modal
+        setActiveView('connectors')
+        if (detail?.connectorId) {
+          // Dispatch a follow-up event so ConnectorsView can select + open the connector
+          window.dispatchEvent(
+            new CustomEvent('open-connector', { detail: { connectorId: detail.connectorId } }),
+          )
+        }
+        return
+      }
       setSettingsPage(detail?.tab ?? 'general')
-      setSettingsConnectorId(detail?.connectorId)
       setShowSettings(true)
     }
     window.addEventListener('open-settings', handler)
     return () => window.removeEventListener('open-settings', handler)
-  }, [])
+  }, [setActiveView])
 
   const handleDisconnect = () => {
     connection.disconnect()
@@ -386,12 +393,8 @@ export function App() {
         {showCreateProject && <CreateProjectModal onClose={() => setShowCreateProject(false)} />}
         <SettingsModal
           open={showSettings}
-          onClose={() => {
-            setShowSettings(false)
-            setSettingsConnectorId(undefined)
-          }}
+          onClose={() => setShowSettings(false)}
           initialPage={settingsPage}
-          initialConnectorId={settingsConnectorId}
         />
         <DebugOverlay />
         <WelcomeModal

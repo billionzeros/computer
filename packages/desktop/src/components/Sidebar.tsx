@@ -34,7 +34,7 @@ interface Props {
   onDisconnect: () => void
   activeView: string
   onViewChange: (view: 'agent' | 'terminal') => void
-  onOpenSettings: (page?: 'general' | 'models' | 'connectors' | 'usage') => void
+  onOpenSettings: (page?: 'general' | 'models' | 'usage') => void
   onOpenMachineInfo: () => void
 }
 

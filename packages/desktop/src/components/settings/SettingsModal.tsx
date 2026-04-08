@@ -8,7 +8,6 @@ import {
   EyeOff,
   Monitor,
   Moon,
-  Plug,
   Plus,
   RotateCcw,
   Settings,
@@ -22,21 +21,18 @@ import type { ProviderInfo } from '../../lib/store/types.js'
 import { uiStore } from '../../lib/store/uiStore.js'
 import { usageStore } from '../../lib/store/usageStore.js'
 import { formatModelName, providerIcons } from '../chat/model-utils.js'
-import { ConnectorsPage } from '../connectors/ConnectorsPage.js'
 
-type SettingsPage = 'general' | 'models' | 'connectors' | 'usage'
+type SettingsPage = 'general' | 'models' | 'usage'
 
 interface Props {
   open: boolean
   onClose: () => void
   initialPage?: SettingsPage
-  initialConnectorId?: string
 }
 
 const NAV_ITEMS: { key: SettingsPage; label: string; icon: React.ReactNode }[] = [
   { key: 'general', label: 'Settings', icon: <Settings size={16} strokeWidth={1.5} /> },
   { key: 'models', label: 'AI Models', icon: <Cpu size={16} strokeWidth={1.5} /> },
-  { key: 'connectors', label: 'Connectors', icon: <Plug size={16} strokeWidth={1.5} /> },
   { key: 'usage', label: 'Usage', icon: <BarChart3 size={16} strokeWidth={1.5} /> },
 ]
 
@@ -670,7 +666,6 @@ export function SettingsModal({
   open,
   onClose,
   initialPage = 'general',
-  initialConnectorId,
 }: Props) {
   const [activePage, setActivePage] = useState<SettingsPage>(initialPage)
 
@@ -733,9 +728,6 @@ export function SettingsModal({
               <div className="settings-modal__content-body">
                 {activePage === 'general' && <GeneralPage />}
                 {activePage === 'models' && <ModelsPage onClose={onClose} />}
-                {activePage === 'connectors' && (
-                  <ConnectorsPage initialConnectorId={initialConnectorId} onConnected={onClose} />
-                )}
                 {activePage === 'usage' && <UsagePage />}
               </div>
             </div>
