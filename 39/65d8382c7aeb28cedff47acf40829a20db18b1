@@ -1,0 +1,25 @@
+packages/desktop/src/lib/agent-utils.ts
+  659d9d2ca221b085 30-43,45-46,48-50,52,54-91
+packages/desktop/src/components/chat/AskUserInline.tsx
+  659d9d2ca221b085 4,65,75
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.2.5",
+  "base_commit_sha": "3965d8382c7aeb28cedff47acf40829a20db18b1",
+  "prompts": {
+    "659d9d2ca221b085": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "bbad8fa2-d9d0-4cb9-9ff8-94d90d8847a9",
+        "model": "claude-opus-4-6"
+      },
+      "human_author": "Om Gupta",
+      "messages": [],
+      "total_additions": 61,
+      "total_deletions": 6,
+      "accepted_lines": 61,
+      "overriden_lines": 0
+    }
+  }
+}
