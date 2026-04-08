@@ -497,6 +497,21 @@ export class Connection {
     })
   }
 
+  onFilesystemReadResponse(
+    handler: (path: string, content: string, truncated: boolean, error?: string) => void,
+  ) {
+    return this.onRawMessage((channel, payload) => {
+      if (channel === Channel.FILESYNC && payload.type === 'fs_read_response') {
+        handler(
+          payload.path as string,
+          payload.content as string,
+          !!payload.truncated,
+          payload.error as string | undefined,
+        )
+      }
+    })
+  }
+
   private doConnect() {
     if (!this.config) return
     const { host, port, token, useTLS } = this.config

@@ -1,129 +1,233 @@
 import {
+  ChevronRight,
   File,
   FileCode,
   FileSpreadsheet,
   FileText,
-  FileType,
-  FolderOpen,
+  Folder,
   Image,
   Loader2,
+  RefreshCw,
   Trash2,
   Upload,
 } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { connection } from '../../lib/connection.js'
 import { projectStore } from '../../lib/store/projectStore.js'
+import { uiStore } from '../../lib/store/uiStore.js'
+import { FilePreview } from './FilePreview.js'
 
-type FileTypeFilter = 'all' | 'code' | 'data' | 'text' | 'image' | 'other'
-
-const FILE_CATEGORIES: Record<string, FileTypeFilter> = {
-  // Code
-  js: 'code',
-  jsx: 'code',
-  ts: 'code',
-  tsx: 'code',
-  py: 'code',
-  rs: 'code',
-  go: 'code',
-  sh: 'code',
-  rb: 'code',
-  java: 'code',
-  c: 'code',
-  cpp: 'code',
-  html: 'code',
-  css: 'code',
-  scss: 'code',
-  // Data
-  json: 'data',
-  yaml: 'data',
-  yml: 'data',
-  csv: 'data',
-  xml: 'data',
-  toml: 'data',
-  sql: 'data',
-  // Text
-  md: 'text',
-  txt: 'text',
-  log: 'text',
-  pdf: 'text',
-  doc: 'text',
-  docx: 'text',
-  // Image
-  png: 'image',
-  jpg: 'image',
-  jpeg: 'image',
-  gif: 'image',
-  svg: 'image',
-  ico: 'image',
-  webp: 'image',
+interface FileEntry {
+  name: string
+  type: 'file' | 'dir' | 'link'
+  size: string
 }
 
-function getFileCategory(name: string): FileTypeFilter {
+// Hidden entries to filter out by default
+const HIDDEN_NAMES = new Set(['.DS_Store', '.anton.json', 'Thumbs.db', '.git'])
+
+const CODE_EXTS = new Set([
+  'js',
+  'jsx',
+  'ts',
+  'tsx',
+  'py',
+  'rs',
+  'go',
+  'sh',
+  'rb',
+  'java',
+  'c',
+  'cpp',
+  'html',
+  'css',
+  'scss',
+  'swift',
+  'kt',
+  'vue',
+  'svelte',
+])
+const DATA_EXTS = new Set(['json', 'yaml', 'yml', 'csv', 'xml', 'toml', 'sql'])
+const TEXT_EXTS = new Set(['md', 'txt', 'log', 'pdf', 'doc', 'docx'])
+const IMAGE_EXTS = new Set(['png', 'jpg', 'jpeg', 'gif', 'svg', 'ico', 'webp'])
+
+function getCategory(name: string): string {
   const ext = name.split('.').pop()?.toLowerCase() || ''
-  return FILE_CATEGORIES[ext] || 'other'
+  if (CODE_EXTS.has(ext)) return 'code'
+  if (DATA_EXTS.has(ext)) return 'data'
+  if (TEXT_EXTS.has(ext)) return 'text'
+  if (IMAGE_EXTS.has(ext)) return 'image'
+  return 'other'
 }
 
-function getFileIcon(name: string) {
-  const cat = getFileCategory(name)
+function getFileIcon(entry: FileEntry) {
+  if (entry.type === 'dir') return <Folder size={16} strokeWidth={1.5} />
+  const cat = getCategory(entry.name)
   switch (cat) {
     case 'code':
-      return <FileCode size={24} strokeWidth={1.2} />
+      return <FileCode size={16} strokeWidth={1.5} />
     case 'data':
-      return <FileSpreadsheet size={24} strokeWidth={1.2} />
+      return <FileSpreadsheet size={16} strokeWidth={1.5} />
     case 'text':
-      return <FileText size={24} strokeWidth={1.2} />
+      return <FileText size={16} strokeWidth={1.5} />
     case 'image':
-      return <Image size={24} strokeWidth={1.2} />
+      return <Image size={16} strokeWidth={1.5} />
     default:
-      return <File size={24} strokeWidth={1.2} />
+      return <File size={16} strokeWidth={1.5} />
   }
 }
 
-function getFileExt(name: string): string {
-  return `.${name.split('.').pop()?.toLowerCase() || '?'}`
-}
-
-function formatSize(bytes: number): string {
-  if (bytes < 1024) return `${bytes} B`
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
-  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
-}
-
-const FILTER_LABELS: Record<FileTypeFilter, string> = {
-  all: 'All types',
-  code: 'Code',
-  data: 'Data',
-  text: 'Documents',
-  image: 'Images',
-  other: 'Other',
+function isPreviewable(name: string): boolean {
+  const ext = name.split('.').pop()?.toLowerCase() || ''
+  return CODE_EXTS.has(ext) || DATA_EXTS.has(ext) || TEXT_EXTS.has(ext) || ext === 'svg'
 }
 
 export function ProjectFilesView() {
   const activeProjectId = projectStore((s) => s.activeProjectId)
   const projects = projectStore((s) => s.projects)
-  const projectFiles = projectStore((s) => s.projectFiles)
-  const projectFilesLoading = projectStore((s) => s.projectFilesLoading)
   const activeProject = projects.find((p) => p.id === activeProjectId)
+  const startDir = activeProject?.workspacePath || '/root'
 
-  const [filter, setFilter] = useState<FileTypeFilter>('all')
-  const [filterOpen, setFilterOpen] = useState(false)
+  // Navigation
+  const [cwd, setCwd] = useState(startDir)
+  const [entries, setEntries] = useState<FileEntry[]>([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+  const [showHidden, setShowHidden] = useState(false)
+  const expectedPathRef = useRef(startDir)
+
+  // Selection & preview
+  const [selected, setSelected] = useState<FileEntry | null>(null)
+  const [previewContent, setPreviewContent] = useState<string | null>(null)
+  const [previewLoading, setPreviewLoading] = useState(false)
+  const [previewError, setPreviewError] = useState<string | null>(null)
+
+  // Upload & delete
   const [dragging, setDragging] = useState(false)
   const [deleteTarget, setDeleteTarget] = useState<string | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
-  // Fetch files on mount and project change
-  useEffect(() => {
-    if (activeProjectId) {
-      projectStore.getState().listProjectFiles(activeProjectId)
+  // Breadcrumb parts
+  const pathParts = useMemo(() => {
+    const projectLabel = activeProject?.name || 'Project'
+    if (cwd === startDir) return [projectLabel]
+    if (cwd.startsWith(`${startDir}/`)) {
+      const rel = cwd.slice(startDir.length + 1)
+      return [projectLabel, ...rel.split('/').filter(Boolean)]
     }
-  }, [activeProjectId])
+    return cwd === '/' ? ['/'] : ['/', ...cwd.split('/').filter(Boolean)]
+  }, [cwd, startDir, activeProject?.name])
 
-  const filtered = useMemo(() => {
-    if (filter === 'all') return projectFiles
-    return projectFiles.filter((f) => getFileCategory(f.name) === filter)
-  }, [projectFiles, filter])
+  // List a directory
+  const listDir = useCallback((path: string) => {
+    setLoading(true)
+    setError(null)
+    setEntries([])
+    setCwd(path)
+    setSelected(null)
+    setPreviewContent(null)
+    expectedPathRef.current = path
+    uiStore.getState().sendFilesystemList(path)
+  }, [])
 
-  // Group by "date" — we don't have real timestamps from listProjectFiles,
-  // so just show as a flat list for now
+  // Listen for fs_list responses
+  useEffect(() => {
+    const unsub = connection.onFilesystemResponse((newEntries, err) => {
+      if (err) {
+        setError(err)
+        setLoading(false)
+      } else {
+        setEntries(newEntries)
+        setLoading(false)
+        setError(null)
+      }
+    })
+    return unsub
+  }, [])
+
+  // Listen for fs_read responses (preview)
+  useEffect(() => {
+    const unsub = connection.onFilesystemReadResponse((_path, content, _trunc, err) => {
+      if (err) {
+        setPreviewError(err)
+        setPreviewLoading(false)
+      } else {
+        setPreviewContent(content)
+        setPreviewLoading(false)
+        setPreviewError(null)
+      }
+    })
+    return unsub
+  }, [])
+
+  // Timeout for loading
+  useEffect(() => {
+    if (!loading) return
+    const timer = setTimeout(() => {
+      setLoading((prev) => {
+        if (prev) {
+          setError('No response — restart the agent server to enable file browsing.')
+          return false
+        }
+        return prev
+      })
+    }, 5000)
+    return () => clearTimeout(timer)
+  }, [loading])
+
+  // Load on mount / project switch
+  useEffect(() => {
+    listDir(startDir)
+  }, [listDir, startDir])
+
+  // Filter & sort entries
+  const visibleEntries = useMemo(() => {
+    let filtered = entries
+    if (!showHidden) {
+      filtered = filtered.filter((e) => !HIDDEN_NAMES.has(e.name) && !e.name.startsWith('.'))
+    }
+    return filtered.sort((a, b) => {
+      if (a.type === 'dir' && b.type !== 'dir') return -1
+      if (a.type !== 'dir' && b.type === 'dir') return 1
+      return a.name.localeCompare(b.name)
+    })
+  }, [entries, showHidden])
+
+  const navigateToBreadcrumb = (index: number) => {
+    if (index === 0) {
+      listDir(pathParts[0] === '/' ? '/' : startDir)
+    } else {
+      const isAbsRoot = pathParts[0] === '/'
+      const base = isAbsRoot ? '' : startDir
+      const path = `${base}/${pathParts.slice(1, index + 1).join('/')}`
+      listDir(path)
+    }
+  }
+
+  const handleEntryClick = (entry: FileEntry) => {
+    setSelected(entry)
+    // Load preview for text-based files
+    if (entry.type === 'file' && isPreviewable(entry.name)) {
+      const filePath = cwd === '/' ? `/${entry.name}` : `${cwd}/${entry.name}`
+      setPreviewLoading(true)
+      setPreviewContent(null)
+      setPreviewError(null)
+      connection.sendFilesystemRead(filePath)
+    } else {
+      setPreviewContent(null)
+      setPreviewLoading(false)
+      setPreviewError(null)
+    }
+  }
+
+  const handleEntryDoubleClick = (entry: FileEntry) => {
+    if (entry.type === 'dir') {
+      const newPath = cwd === '/' ? `/${entry.name}` : `${cwd}/${entry.name}`
+      listDir(newPath)
+    }
+  }
+
+  // Upload
   const handleUpload = useCallback(
     (files: FileList) => {
       if (!activeProjectId) return
@@ -140,27 +244,25 @@ export function ProjectFilesView() {
               file.type || 'application/octet-stream',
               file.size,
             )
-          // Refresh file list after a short delay
-          setTimeout(() => {
-            projectStore.getState().listProjectFiles(activeProjectId)
-          }, 500)
+          // Refresh after upload
+          setTimeout(() => listDir(cwd), 500)
         }
         reader.readAsDataURL(file)
       }
     },
-    [activeProjectId],
+    [activeProjectId, cwd, listDir],
   )
 
+  // Delete
   const handleDelete = useCallback(
     (filename: string) => {
       if (!activeProjectId) return
       projectStore.getState().deleteProjectFile(activeProjectId, filename)
       setDeleteTarget(null)
-      setTimeout(() => {
-        projectStore.getState().listProjectFiles(activeProjectId)
-      }, 300)
+      setSelected(null)
+      setTimeout(() => listDir(cwd), 300)
     },
-    [activeProjectId],
+    [activeProjectId, cwd, listDir],
   )
 
   const handleDragOver = useCallback((e: React.DragEvent) => {
@@ -168,192 +270,238 @@ export function ProjectFilesView() {
     setDragging(true)
   }, [])
 
-  const handleDragLeave = useCallback(() => {
-    setDragging(false)
-  }, [])
+  const handleDragLeave = useCallback(() => setDragging(false), [])
 
   const handleDrop = useCallback(
     (e: React.DragEvent) => {
       e.preventDefault()
       setDragging(false)
-      if (e.dataTransfer.files.length > 0) {
-        handleUpload(e.dataTransfer.files)
-      }
+      if (e.dataTransfer.files.length > 0) handleUpload(e.dataTransfer.files)
     },
     [handleUpload],
   )
 
+  const itemCount = visibleEntries.length
+  const dirCount = visibleEntries.filter((e) => e.type === 'dir').length
+  const fileCount = itemCount - dirCount
+
   return (
     <div
-      className={`pf-view${dragging ? ' pf-view--dragging' : ''}`}
+      className={`finder${dragging ? ' finder--dragging' : ''}`}
       onDragOver={handleDragOver}
       onDragLeave={handleDragLeave}
       onDrop={handleDrop}
     >
-      <div className="pf-view__inner">
-        <p className="pf-view__desc">
-          Files in <strong>{activeProject?.name || 'your project'}</strong>
-          {activeProject?.workspacePath && (
-            <span className="pf-view__path">{activeProject.workspacePath}</span>
-          )}
-        </p>
-
-        {/* Toolbar */}
-        <div className="pf-toolbar">
-          <div className="pf-toolbar__left">
-            <div className="pf-filter">
-              <button
-                type="button"
-                className="pf-filter__btn"
-                onClick={() => setFilterOpen(!filterOpen)}
-              >
-                {FILTER_LABELS[filter]}
-                <FileType size={12} strokeWidth={1.5} />
-              </button>
-              {filterOpen && (
-                <>
-                  <div
-                    className="pf-filter__backdrop"
-                    onClick={() => setFilterOpen(false)}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Escape') setFilterOpen(false)
-                    }}
-                    role="button"
-                    tabIndex={-1}
-                  />
-                  <div className="pf-filter__dropdown">
-                    {(Object.keys(FILTER_LABELS) as FileTypeFilter[]).map((key) => (
-                      <button
-                        key={key}
-                        type="button"
-                        className={`pf-filter__item${filter === key ? ' pf-filter__item--active' : ''}`}
-                        onClick={() => {
-                          setFilter(key)
-                          setFilterOpen(false)
-                        }}
-                      >
-                        {FILTER_LABELS[key]}
-                      </button>
-                    ))}
-                  </div>
-                </>
+      {/* Toolbar */}
+      <div className="finder-toolbar">
+        <div className="finder-breadcrumb">
+          {pathParts.map((part, i) => (
+            // biome-ignore lint/suspicious/noArrayIndexKey: breadcrumb parts can have duplicate names
+            <span key={`${part}-${i}`} className="finder-breadcrumb__segment">
+              {i > 0 && (
+                <ChevronRight size={12} strokeWidth={1.5} className="finder-breadcrumb__sep" />
               )}
-            </div>
-          </div>
-
-          <div className="pf-toolbar__right">
-            <button
-              type="button"
-              className="pf-upload-btn"
-              onClick={() => fileInputRef.current?.click()}
-            >
-              <Upload size={14} strokeWidth={1.5} />
-              Upload
-            </button>
-            <input
-              ref={fileInputRef}
-              type="file"
-              multiple
-              style={{ display: 'none' }}
-              onChange={(e) => {
-                if (e.target.files) handleUpload(e.target.files)
-                e.target.value = ''
-              }}
-            />
-          </div>
-        </div>
-
-        {/* File grid */}
-        <div className="pf-grid">
-          {projectFilesLoading && filtered.length === 0 && (
-            <div className="pf-empty">
-              <Loader2 size={24} strokeWidth={1.5} className="spin" />
-              <span>Loading files...</span>
-            </div>
-          )}
-
-          {!projectFilesLoading && filtered.length === 0 && (
-            <div className="pf-empty">
-              <FolderOpen size={32} strokeWidth={1} />
-              <span>No files yet</span>
-              <p>Upload files or let the AI create them during tasks.</p>
-            </div>
-          )}
-
-          {filtered.map((file) => (
-            <div key={file.name} className={`pf-card pf-card--${getFileCategory(file.name)}`}>
-              <div className="pf-card__icon">{getFileIcon(file.name)}</div>
-              <div className="pf-card__info">
-                <span className="pf-card__name" title={file.name}>
-                  {file.name}
-                </span>
-                <span className="pf-card__meta">
-                  <span className="pf-card__ext">{getFileExt(file.name)}</span>
-                  <span className="pf-card__size">{formatSize(file.size)}</span>
-                </span>
-              </div>
               <button
                 type="button"
-                className="pf-card__delete"
-                onClick={(e) => {
-                  e.stopPropagation()
-                  setDeleteTarget(file.name)
-                }}
+                onClick={() => navigateToBreadcrumb(i)}
+                className={`finder-breadcrumb__btn${i === pathParts.length - 1 ? ' finder-breadcrumb__btn--active' : ''}`}
               >
-                <Trash2 size={13} strokeWidth={1.5} />
+                {part === '/' ? '~' : part}
               </button>
-            </div>
+            </span>
           ))}
         </div>
 
-        {/* Drag overlay */}
-        {dragging && (
-          <div className="pf-drop-overlay">
-            <Upload size={32} strokeWidth={1.5} />
-            <span>Drop files to upload</span>
-          </div>
-        )}
-
-        {/* Delete confirmation */}
-        {deleteTarget && (
-          <div
-            className="modal-overlay"
-            onClick={() => setDeleteTarget(null)}
-            onKeyDown={(e) => {
-              if (e.key === 'Escape') setDeleteTarget(null)
-            }}
+        <div className="finder-toolbar__actions">
+          <label className="finder-toggle">
+            <input
+              type="checkbox"
+              checked={showHidden}
+              onChange={(e) => setShowHidden(e.target.checked)}
+            />
+            <span>Hidden</span>
+          </label>
+          <button
+            type="button"
+            className="finder-toolbar__btn"
+            onClick={() => listDir(cwd)}
+            aria-label="Refresh"
           >
-            <div
-              className="modal-card modal-card--sm"
-              onClick={(e) => e.stopPropagation()}
-              onKeyDown={(e) => e.stopPropagation()}
-            >
-              <div className="modal-card__body">
-                <h3>Delete "{deleteTarget}"?</h3>
-                <p style={{ color: 'var(--text-muted)', marginTop: '8px' }}>
-                  This will permanently delete the file from the project workspace.
-                </p>
-              </div>
-              <div className="modal-card__footer">
-                <button
-                  type="button"
-                  className="button button--ghost"
-                  onClick={() => setDeleteTarget(null)}
-                >
-                  Cancel
-                </button>
-                <button
-                  type="button"
-                  className="button button--danger"
-                  onClick={() => handleDelete(deleteTarget)}
-                >
-                  Delete
-                </button>
-              </div>
+            <RefreshCw size={14} strokeWidth={1.5} className={loading ? 'spin' : ''} />
+          </button>
+          <button
+            type="button"
+            className="finder-toolbar__btn finder-toolbar__btn--upload"
+            onClick={() => fileInputRef.current?.click()}
+          >
+            <Upload size={14} strokeWidth={1.5} />
+            Upload
+          </button>
+          <input
+            ref={fileInputRef}
+            type="file"
+            multiple
+            style={{ display: 'none' }}
+            onChange={(e) => {
+              if (e.target.files) handleUpload(e.target.files)
+              e.target.value = ''
+            }}
+          />
+        </div>
+      </div>
+
+      {/* Main body: file list + preview */}
+      <div className="finder-body">
+        <div className="finder-list">
+          {/* Column header */}
+          <div className="finder-list__header">
+            <span className="finder-list__header-name">Name</span>
+            <span className="finder-list__header-size">Size</span>
+          </div>
+
+          {/* Loading */}
+          {loading && (
+            <div className="finder-status">
+              <Loader2 size={18} strokeWidth={1.5} className="spin" />
+              <span>Loading...</span>
             </div>
+          )}
+
+          {/* Error */}
+          {error && (
+            <div className="finder-status finder-status--error">
+              <span>{error}</span>
+            </div>
+          )}
+
+          {/* Empty */}
+          {!loading && !error && visibleEntries.length === 0 && (
+            <div className="finder-status">
+              <span>Empty folder</span>
+            </div>
+          )}
+
+          {/* Parent directory */}
+          {cwd !== startDir && cwd !== '/' && !loading && (
+            <button
+              type="button"
+              onClick={() => {
+                const parent = cwd.split('/').slice(0, -1).join('/') || '/'
+                listDir(parent)
+              }}
+              className="finder-row finder-row--parent"
+            >
+              <span className="finder-row__icon">
+                <Folder size={16} strokeWidth={1.5} />
+              </span>
+              <span className="finder-row__name">..</span>
+              <span className="finder-row__size" />
+            </button>
+          )}
+
+          {/* Entries */}
+          {visibleEntries.map((entry) => (
+            <button
+              type="button"
+              key={entry.name}
+              onClick={() => handleEntryClick(entry)}
+              onDoubleClick={() => handleEntryDoubleClick(entry)}
+              className={`finder-row${entry.type === 'dir' ? ' finder-row--dir' : ''}${selected?.name === entry.name ? ' finder-row--selected' : ''}`}
+            >
+              <span
+                className={`finder-row__icon finder-row__icon--${entry.type === 'dir' ? 'dir' : getCategory(entry.name)}`}
+              >
+                {getFileIcon(entry)}
+              </span>
+              <span className="finder-row__name">{entry.name}</span>
+              <span className="finder-row__size">{entry.type === 'file' ? entry.size : ''}</span>
+              {entry.type === 'file' && (
+                <button
+                  type="button"
+                  className="finder-row__delete"
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    setDeleteTarget(entry.name)
+                  }}
+                >
+                  <Trash2 size={13} strokeWidth={1.5} />
+                </button>
+              )}
+            </button>
+          ))}
+        </div>
+
+        {/* Preview panel */}
+        {selected && (
+          <div className="finder-preview">
+            <FilePreview
+              name={selected.name}
+              type={selected.type}
+              size={selected.size}
+              content={previewContent}
+              loading={previewLoading}
+              error={previewError}
+            />
           </div>
         )}
       </div>
+
+      {/* Status bar */}
+      <div className="finder-statusbar">
+        <span>
+          {itemCount} item{itemCount !== 1 ? 's' : ''}
+          {dirCount > 0 && ` · ${dirCount} folder${dirCount !== 1 ? 's' : ''}`}
+          {fileCount > 0 && ` · ${fileCount} file${fileCount !== 1 ? 's' : ''}`}
+        </span>
+      </div>
+
+      {/* Drag overlay */}
+      {dragging && (
+        <div className="finder-drop-overlay">
+          <Upload size={28} strokeWidth={1.5} />
+          <span>Drop files to upload</span>
+        </div>
+      )}
+
+      {/* Delete confirmation */}
+      {deleteTarget && (
+        <div
+          className="modal-overlay"
+          onClick={() => setDeleteTarget(null)}
+          onKeyDown={(e) => {
+            if (e.key === 'Escape') setDeleteTarget(null)
+          }}
+        >
+          <div
+            className="modal-card modal-card--sm"
+            onClick={(e) => e.stopPropagation()}
+            onKeyDown={(e) => e.stopPropagation()}
+          >
+            <div className="modal-card__body">
+              <h3>Delete &ldquo;{deleteTarget}&rdquo;?</h3>
+              <p style={{ color: 'var(--text-muted)', marginTop: '8px' }}>
+                This will permanently delete the file from the project workspace.
+              </p>
+            </div>
+            <div className="modal-card__footer">
+              <button
+                type="button"
+                className="button button--ghost"
+                onClick={() => setDeleteTarget(null)}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="button button--danger"
+                onClick={() => handleDelete(deleteTarget)}
+              >
+                Delete
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
