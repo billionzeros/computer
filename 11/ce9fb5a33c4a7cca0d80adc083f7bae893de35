@@ -1,0 +1,23 @@
+packages/agent-server/src/webhooks/agent-runner.ts
+  e3098b80169d07d8 129-130
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.2.5",
+  "base_commit_sha": "11ce9fb5a33c4a7cca0d80adc083f7bae893de35",
+  "prompts": {
+    "e3098b80169d07d8": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "4008eea0-9576-415e-9ac1-d7498b2842af",
+        "model": "claude-opus-4-6"
+      },
+      "human_author": "Om Gupta",
+      "messages": [],
+      "total_additions": 8,
+      "total_deletions": 6,
+      "accepted_lines": 2,
+      "overriden_lines": 0
+    }
+  }
+}
