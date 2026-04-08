@@ -69,6 +69,7 @@ export function Terminal() {
       fontFamily: "'SF Mono', 'Fira Code', 'JetBrains Mono', Menlo, monospace",
       fontSize: 13,
       lineHeight: 1.3,
+      convertEol: true,
       cursorBlink: true,
       cursorStyle: 'bar',
       scrollback: 10000,
