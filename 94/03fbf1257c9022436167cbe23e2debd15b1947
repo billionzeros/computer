@@ -1,0 +1,25 @@
+packages/desktop/src/components/skills/SkillsPanel.tsx
+  2074df53c2fdbfc6 108
+packages/desktop/src/index.css
+  2074df53c2fdbfc6 4356,4361,4364,4370,4376,4385-4386,4390,4406,4417,4427,4429,4433,4448,4518,4530,4537-4538,4619-4620,4632,4640,4645,4649,4654,4658,4664,4670,4691,4703,4708,4728,4734,4762,4774,4799,4804
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.2.5",
+  "base_commit_sha": "9403fbf1257c9022436167cbe23e2debd15b1947",
+  "prompts": {
+    "2074df53c2fdbfc6": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "1d637412-89e1-47fc-a3e0-f45d26eb2e4e",
+        "model": "claude-opus-4-6"
+      },
+      "human_author": "Om Gupta",
+      "messages": [],
+      "total_additions": 38,
+      "total_deletions": 38,
+      "accepted_lines": 38,
+      "overriden_lines": 0
+    }
+  }
+}
