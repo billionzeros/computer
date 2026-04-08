@@ -9,7 +9,7 @@
  *   Port 9877 (config.port + 1) → wss:// with self-signed TLS
  */
 
-import { type ChildProcess, execSync, spawn } from 'node:child_process'
+import { execSync } from 'node:child_process'
 import { existsSync, readFileSync, readdirSync } from 'node:fs'
 import { createServer as createHttpServer } from 'node:http'
 import { createServer as createHttpsServer } from 'node:https'
@@ -78,6 +78,7 @@ import { CONNECTOR_FACTORIES, ConnectorManager } from '@anton/connectors'
 import { createLogger } from '@anton/logger'
 import { Channel, decodeFrame, encodeFrame, parseJsonPayload } from '@anton/protocol'
 import type { AiMessage, ChannelId, ControlMessage, TerminalMessage } from '@anton/protocol'
+import * as pty from 'node-pty'
 import { WebSocket, WebSocketServer } from 'ws'
 import { OAuthFlow, TokenStore, oauthCallbackHandler } from './oauth/index.js'
 import type { Scheduler } from './scheduler.js'
@@ -167,7 +168,7 @@ export class AgentServer {
   private webhookRunner: WebhookAgentRunner | null = null
   private telegramProvider: TelegramWebhookProvider | null = null
   private slackBotProvider: SlackWebhookProvider | null = null
-  private ptys: Map<string, ChildProcess> = new Map()
+  private ptys: Map<string, pty.IPty> = new Map()
 
   constructor(config: AgentConfig) {
     this.config = config
@@ -203,9 +204,9 @@ export class AgentServer {
       log.error({ err }, 'Error stopping MCP servers')
     }
     // Kill any active PTY sessions
-    for (const [id, pty] of this.ptys) {
+    for (const [id, proc] of this.ptys) {
       try {
-        pty.kill()
+        proc.kill()
       } catch {
         /* best-effort */
       }
@@ -524,7 +525,7 @@ export class AgentServer {
         // Kill all PTY sessions
         for (const [id, p] of this.ptys) {
           try {
-            p.kill('SIGTERM')
+            p.kill()
           } catch {}
           this.ptys.delete(id)
         }
@@ -824,7 +825,7 @@ export class AgentServer {
         const existing = this.ptys.get(msg.id)
         if (existing) {
           try {
-            existing.kill('SIGTERM')
+            existing.kill()
           } catch {}
           this.ptys.delete(msg.id)
         }
@@ -833,30 +834,38 @@ export class AgentServer {
         const cols = msg.cols || 80
         const rows = msg.rows || 24
 
-        const p = spawn(shell, ['-i'], {
-          stdio: ['pipe', 'pipe', 'pipe'],
-          cwd: msg.cwd || process.env.HOME || '/',
-          env: {
-            ...process.env,
-            TERM: 'xterm-256color',
-            COLUMNS: String(cols),
-            LINES: String(rows),
-          },
-        })
+        let p: pty.IPty
+        try {
+          p = pty.spawn(shell, [], {
+            name: 'xterm-256color',
+            cols,
+            rows,
+            cwd: msg.cwd || process.env.HOME || '/',
+            env: {
+              ...process.env,
+              TERM: 'xterm-256color',
+            } as Record<string, string>,
+          })
+        } catch (err) {
+          log.error({ err, ptyId: msg.id, shell }, 'Failed to spawn PTY')
+          this.sendToClient(Channel.TERMINAL, { type: 'pty_close', id: msg.id })
+          break
+        }
 
         this.ptys.set(msg.id, p)
 
-        const onData = (data: Buffer) => {
-          const b64 = data.toString('base64')
-          this.sendToClient(Channel.TERMINAL, { type: 'pty_data', id: msg.id, data: b64 })
-        }
+        p.onData((data: string) => {
+          const b64 = Buffer.from(data, 'utf-8').toString('base64')
+          try {
+            this.sendToClient(Channel.TERMINAL, { type: 'pty_data', id: msg.id, data: b64 })
+          } catch {}
+        })
 
-        p.stdout?.on('data', onData)
-        p.stderr?.on('data', onData)
-
-        p.on('exit', () => {
+        p.onExit(() => {
           this.ptys.delete(msg.id)
-          this.sendToClient(Channel.TERMINAL, { type: 'pty_close', id: msg.id })
+          try {
+            this.sendToClient(Channel.TERMINAL, { type: 'pty_close', id: msg.id })
+          } catch {}
         })
 
         log.info({ ptyId: msg.id, shell }, 'PTY spawned')
@@ -865,15 +874,18 @@ export class AgentServer {
 
       case 'pty_data': {
         const p = this.ptys.get(msg.id)
-        if (p?.stdin?.writable) {
-          const decoded = Buffer.from(msg.data, 'base64').toString('binary')
-          p.stdin.write(decoded)
+        if (p) {
+          const decoded = Buffer.from(msg.data, 'base64').toString('utf-8')
+          p.write(decoded)
         }
         break
       }
 
       case 'pty_resize': {
-        // child_process doesn't support resize — ignored for now
+        const p = this.ptys.get(msg.id)
+        if (p) {
+          p.resize(msg.cols, msg.rows)
+        }
         break
       }
 
@@ -881,7 +893,7 @@ export class AgentServer {
         const p = this.ptys.get(msg.id)
         if (p) {
           try {
-            p.kill('SIGTERM')
+            p.kill()
           } catch {}
           this.ptys.delete(msg.id)
         }

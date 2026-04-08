@@ -10,6 +10,24 @@ import '@xterm/xterm/css/xterm.css'
 
 const TERMINAL_ID = 't1'
 
+const encoder = new TextEncoder()
+const decoder = new TextDecoder()
+
+function toBase64(str: string): string {
+  const bytes = encoder.encode(str)
+  let binary = ''
+  for (let i = 0; i < bytes.length; i++) {
+    binary += String.fromCharCode(bytes[i])
+  }
+  return btoa(binary)
+}
+
+function fromBase64(b64: string): string {
+  const binary = atob(b64)
+  const bytes = Uint8Array.from(binary, (c) => c.charCodeAt(0))
+  return decoder.decode(bytes)
+}
+
 export function Terminal() {
   const containerRef = useRef<HTMLDivElement>(null)
   const termRef = useRef<XTerm | null>(null)
@@ -71,15 +89,15 @@ export function Terminal() {
     sendTerminalSpawn(TERMINAL_ID, cols, rows, workspacePathRef.current)
 
     term.onData((data) => {
-      sendTerminalData(TERMINAL_ID, btoa(data))
+      sendTerminalData(TERMINAL_ID, toBase64(data))
     })
 
     const unsub = connection.onMessage((channel, msg) => {
       if (channel === Channel.TERMINAL && msg.type === 'pty_data' && msg.id === TERMINAL_ID) {
         try {
-          term.write(atob(msg.data as string))
-        } catch {
-          term.write(msg.data as string)
+          term.write(fromBase64(msg.data as string))
+        } catch (err) {
+          console.error('Failed to decode terminal data:', err)
         }
       }
     })
@@ -93,6 +111,7 @@ export function Terminal() {
     return () => {
       unsub()
       resizeObserver.disconnect()
+      connection.send(Channel.TERMINAL, { type: 'pty_close', id: TERMINAL_ID })
       term.dispose()
     }
   }, [])

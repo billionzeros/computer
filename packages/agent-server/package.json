@@ -15,12 +15,13 @@
   "dependencies": {
     "@anton/agent-config": "workspace:*",
     "@anton/agent-core": "workspace:*",
-    "@anton/logger": "workspace:*",
     "@anton/connectors": "workspace:*",
+    "@anton/logger": "workspace:*",
     "@anton/protocol": "workspace:*",
-    "ws": "^8.18.0",
+    "better-sqlite3": "^11.7.0",
     "chokidar": "^4.0.0",
-    "better-sqlite3": "^11.7.0"
+    "node-pty": "^1.1.0",
+    "ws": "^8.18.0"
   },
   "devDependencies": {
     "@types/better-sqlite3": "^7.6.0",
