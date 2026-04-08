@@ -1,0 +1,33 @@
+packages/desktop/src/App.tsx
+  03676f26f887be23 40,193-203,209,396
+packages/desktop/src/components/connectors/ConnectorsPage.tsx
+  03676f26f887be23 35,113,132,197
+packages/desktop/src/components/Sidebar.tsx
+  03676f26f887be23 37
+packages/desktop/src/components/chat/ConnectorToolbar.tsx
+  03676f26f887be23 1,158
+packages/desktop/src/components/settings/SettingsModal.tsx
+  03676f26f887be23 25
+packages/desktop/src/components/connectors/ConnectorsView.tsx
+  03676f26f887be23 22,64,75-92,214-218,250-255,259-276,313,317,347
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.2.5",
+  "base_commit_sha": "ab33e8b9194d8cfcd08425a436154f35fe3a2ebd",
+  "prompts": {
+    "03676f26f887be23": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "ee8bffc0-ed2b-421d-bb61-8f4fe1eadf72",
+        "model": "claude-opus-4-6"
+      },
+      "human_author": "Om Gupta",
+      "messages": [],
+      "total_additions": 76,
+      "total_deletions": 36,
+      "accepted_lines": 75,
+      "overriden_lines": 0
+    }
+  }
+}
