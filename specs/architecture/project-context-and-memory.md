@@ -29,10 +29,9 @@ Every project (including "My Computer") has:
 │   ├── api-spec.md           # Text snippet
 │   ├── design-doc.pdf        # Uploaded file
 │   └── data.csv              # Uploaded file
-├── memory/                   # AI auto-generated memories (NEW — project-scoped)
-│   ├── MEMORY.md             # Index file (like Claude Code)
-│   ├── user-preferences.md   # Auto-extracted memory
-│   └── tech-stack.md         # Auto-extracted memory
+├── memory/                   # AI auto-generated memories (project-scoped)
+│   ├── user-preferences.md   # Auto-extracted memory (frontmatter format)
+│   └── tech-stack.md         # Auto-extracted memory (frontmatter format)
 ├── conversations/            # Project-scoped sessions
 ├── context/
 │   ├── session-history.jsonl # Summaries of completed sessions
@@ -48,8 +47,10 @@ Every project (including "My Computer") has:
 | `context.notes` — single text field in project.json | `instructions.md` — dedicated file, shown prominently in UI |
 | `context.summary` — auto-updated by LLM | `memory/` — multiple auto-extracted memory files |
 | No knowledge base | Knowledge = workspace files. Uploads go to `workspacePath/`. Shown on Files page. |
-| Global memory in `~/.anton/memory/` | Still exists, but project memory in `~/.anton/projects/{id}/memory/` takes priority |
-| Memory tool saves flat .md files | Memory tool saves to project-scoped directory when projectId is set |
+| Global memory in `~/.anton/memory/` | Still exists; background extraction writes to project-scoped `~/.anton/projects/{id}/memory/` when projectId is set |
+| Memory tool saves flat .md files | Memory tool still uses old format (global/conversation); background extraction uses frontmatter format (project-scoped) |
+| 4-line "use memory proactively" prompt | Detailed 4-type taxonomy with when-to-save triggers, exclusions, and structured format |
+| No automatic memory extraction | Background extraction runs every 4 user messages via cheap LLM, fire-and-forget |
 
 ---
 
@@ -136,25 +137,22 @@ during the conversation, like a developer using the terminal.
 
 **What:** AI auto-generated facts learned from conversations. The AI decides what's worth remembering.
 
-**How it works (current):**
-- LLM has a `memory` tool with save/recall/list/forget
-- Saves `.md` files to `~/.anton/memory/` (global) or conversation-scoped
-- Loaded into system prompt on session start
+**Two mechanisms (dual-layer):**
 
-**What changes:**
-- Memory tool now saves to **project-scoped** directory: `~/.anton/projects/{projectId}/memory/`
-- Each project has its own memory that grows independently
-- Global memory (`~/.anton/memory/`) still exists as cross-project knowledge
-- `MEMORY.md` index file per project (like Claude Code) — keeps memory organized
-- Memory types via frontmatter: `user`, `feedback`, `project`, `reference`
+1. **Memory tool** (agent-initiated) — the `memory` tool with save/recall/list/forget. The agent can explicitly save memories during a conversation based on enhanced system prompt instructions (4 types, when-to-save triggers, structured format). Saves to `~/.anton/memory/` (global) or `~/.anton/conversations/{convId}/memory/` (conversation-scoped).
 
-**Memory file format:**
+2. **Background extraction** (automatic) — after each turn completes, a lightweight background process serializes recent messages and calls a cheap LLM (e.g., `gemini-3.1-flash-lite`) to extract durable memories the agent missed. Runs every 4 user messages, fire-and-forget, ~$0.0003 per extraction. Writes directly to project-scoped directory when `projectId` exists. See `specs/features/background-memory-extraction.md` for full details.
+
+**Mutual exclusion:** If the agent already saved a memory via the memory tool during a turn, background extraction skips that turn and advances its cursor (prevents duplicates).
+
+**Memory file format (background extraction):**
 
 ```markdown
 ---
-name: User prefers Playwright
-description: User chose Playwright over Puppeteer for scraping
+name: user-prefers-playwright
+description: User prefers Playwright over Puppeteer for browser automation
 type: feedback
+extracted: 2026-04-09T12:00:00.000Z
 ---
 
 User prefers Playwright over Puppeteer for browser automation.
@@ -162,16 +160,38 @@ User prefers Playwright over Puppeteer for browser automation.
 **How to apply:** Default to Playwright for any new scraping task in this project.
 ```
 
+**Memory file format (memory tool — legacy):**
+
+```markdown
+# User prefers Playwright
+
+_Saved: 2026-04-09T12:00:00.000Z_
+
+User prefers Playwright over Puppeteer for browser automation.
+```
+
+Both formats coexist in the same directory. The dedup logic reads both (tries frontmatter `name:` first, falls back to `#` heading, falls back to filename).
+
+**Memory types (4 categories):**
+- `user` — role, expertise, preferences
+- `feedback` — corrections/confirmations on approach (includes Why)
+- `project` — tech decisions, architecture, goals, deadlines
+- `reference` — pointers to external systems (URLs, project names)
+
+**Memory scope:**
+- **Background extraction:** project-scoped (`~/.anton/projects/{projectId}/memory/`) when projectId exists, else global (`~/.anton/memory/`)
+- **Memory tool:** global or conversation-scoped (project scope not yet wired — see Phase 6b below)
+
 **Injection priority (highest to lowest):**
 1. Project instructions (`instructions.md`)
-2. Project memory (`memory/MEMORY.md` + referenced files)
+2. Project memory (`~/.anton/projects/{projectId}/memory/`)
 3. Global memory (`~/.anton/memory/`)
 4. Session history (last 5 sessions)
 5. Knowledge items (listed as available, inlined if small)
 
 **Inspiration:**
-- Claude Code: Auto-memory with MEMORY.md index, frontmatter types, background extraction
-- The current Anton memory tool (save/recall/list/forget) — keep this, just scope it
+- Claude Code: Auto-memory with background extraction, frontmatter types
+- The current Anton memory tool (save/recall/list/forget) — enhanced with detailed system prompt instructions
 
 ---
 
@@ -305,18 +325,27 @@ The following reference materials are available for this project:
 {content of leads-template.csv}
 </project-knowledge>
 
-<project-memory>
-## Memories
-- User prefers Playwright over Puppeteer for browser automation
-- Auth uses BrightData residential proxies on port 22225
-- LinkedIn scraping requires 3s delay between requests
-</project-memory>
+<system-reminder name="Memory">
+## Global Memory
+### User prefers Playwright
+User prefers Playwright over Puppeteer for browser automation.
+
+## Conversation Memory
+### Auth config
+Auth uses BrightData residential proxies on port 22225.
+
+## Relevant Context (from other conversations)
+### LinkedIn rate limits (from: scraper-v2-session)
+LinkedIn scraping requires 3s delay between requests.
+</system-reminder>
 
 <recent-sessions>
 - Set up initial scraper: Wrote Python script with Playwright...
 - Configure output format: Added CSV export with headers...
 </recent-sessions>
 ```
+
+**Note:** Project-scoped memories (from background extraction) are not yet loaded into the system prompt — that's Phase 6d. Currently, only global and conversation-scoped memories (from the memory tool) are injected via `session.ts` Layer 4.
 
 ---
 
@@ -329,7 +358,10 @@ The following reference materials are available for this project:
 | **Phase 3: Knowledge = Workspace Files** | Uploads go to `workspacePath/`, Files page redesigned as visual grid with drag-drop, AI creates files in same directory | Done |
 | **Phase 4: Unified Workspace** | FileBrowser scoped to workspace, Terminal spawns in workspace, custom workspacePath on project creation | Done |
 | **Phase 5: Files Page Redesign** | `ProjectFilesView` replaces Terminal+FileBrowser, Perplexity-style cards, type filtering, upload | Done |
-| **Phase 6: Project-Scoped Memory** | Memory tool saves to project dir, MEMORY.md index, frontmatter types | Not yet |
+| **Phase 6a: Background Memory Extraction** | Automatic end-of-turn extraction via cheap LLM, frontmatter format, project-scoped writes, enhanced system prompt with 4-type taxonomy | Done |
+| **Phase 6b: Memory Tool Project Scope** | Wire the memory tool's save/recall to use project-scoped directory when `projectId` is set (currently still global/conversation) | Not yet |
+| **Phase 6c: MEMORY.md Index** | Add an index file per project listing all memories (like Claude Code). Not strictly needed — memories work without it. | Not yet |
+| **Phase 6d: Memory Loading** | Update `context.ts` / `session.ts` to load project-scoped memories (from background extraction) into the system prompt alongside global memories | Not yet |
 
 ---
 
@@ -341,6 +373,19 @@ The following reference materials are available for this project:
 | Auto-memory extraction | Claude Code | `/Users/omg/Desktop/01/claude-code/src/services/extractMemories/` |
 | Memory types + frontmatter | Claude Code | `/Users/omg/Desktop/01/claude-code/src/memdir/memoryTypes.ts` |
 | MEMORY.md index pattern | Claude Code | `/Users/omg/Desktop/01/claude-code/src/memdir/` |
+| Extraction prompts | Claude Code | `/Users/omg/Desktop/01/claude-code/src/services/extractMemories/prompts.ts` |
 | Project instructions UI | Claude Projects | claude.ai — "Set project instructions" |
 | Knowledge add menu | Claude Projects | claude.ai — "+ Add Content" (text, file, Google Doc) |
 | Space instructions + files | Perplexity | perplexity.ai — Space settings |
+
+## Anton Implementation
+
+| Feature | File |
+|---------|------|
+| Background extraction engine | `packages/agent-core/src/memory-extraction.ts` |
+| Session integration (hooks, state) | `packages/agent-core/src/session.ts` |
+| Server-side trigger (fire-and-forget) | `packages/agent-server/src/server.ts` |
+| Enhanced system prompt (memory guidelines) | `packages/agent-config/prompts/system.md` |
+| Memory tool (save/recall/list/forget) | `packages/agent-core/src/tools/memory.ts` |
+| Memory loading into context | `packages/agent-core/src/context.ts` |
+| Model catalog (extraction model resolution) | `packages/agent-core/src/anton-models.ts` |

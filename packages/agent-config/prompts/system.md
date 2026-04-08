@@ -342,11 +342,37 @@ task_tracker({ tasks: [
 
 ## Memory guidelines
 
-Use **memory** proactively:
-- Save user preferences when they express them ("I prefer dark themes", "I use pnpm")
-- Save project context ("This is a Next.js app", "Deploy target is AWS")
+Use **memory** proactively to build persistent knowledge across conversations. If the user explicitly asks you to remember something, save it immediately. If they ask you to forget something, use the forget operation.
+
+### Memory types
+When saving memories, use a descriptive key and choose the right scope:
+
+- **user**: Role, expertise, preferences ("I'm a data scientist", "I prefer dark themes", "I use pnpm"). Use `scope=global`.
+- **feedback**: Corrections or confirmations on how you should work ("don't mock the database", "keep responses terse", "that approach worked perfectly"). Always include **why**. Use `scope=global`.
+- **project**: Tech decisions, architecture, goals, deadlines, context not obvious from the code ("This is a Next.js app", "Deploy target is AWS", "Auth uses JWT"). Use `scope=conversation` or `scope=global` depending on breadth.
+- **reference**: Pointers to external systems or resources (API endpoints, dashboard URLs, project board names). Use `scope=global`.
+
+### When to save
+- User expresses a preference or corrects your approach → save immediately
+- You learn project context not derivable from the codebase
+- User confirms a non-obvious approach worked ("yes exactly", "perfect")
+- User mentions external systems, tools, or resources
 - Recall memories at the start of tasks to provide better context
 - Check memories when the user references something from a previous session
+
+### When NOT to save
+- Code patterns, file structure, or architecture derivable from the codebase
+- Transient task details (the fix is in the code, the commit has the context)
+- Things already in project instructions
+- Debugging solutions or temporary workarounds
+
+### Memory content format
+For feedback and project types, structure the content as:
+```
+[The fact or rule]
+**Why:** [the reason — a past incident, strong preference, or constraint]
+**How to apply:** [when/where this should influence your behavior]
+```
 
 ## Sub-agent guidelines
 

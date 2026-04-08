@@ -34,6 +34,15 @@ import type {
 import { completeSimple, getModel as piGetModel } from '@mariozechner/pi-ai'
 import type { Api, ImageContent, Model, TextContent, ThinkingContent } from '@mariozechner/pi-ai'
 import { getAntonModel } from './anton-models.js'
+import {
+  createExtractionState,
+  createResumedExtractionState,
+  extractMemories,
+  shouldExtract,
+  trackUserMessage,
+  advanceExtractionCursor,
+  type ExtractionResult,
+} from './memory-extraction.js'
 
 const OPENROUTER_BASE_URL = 'https://openrouter.ai/api/v1'
 
@@ -256,6 +265,10 @@ export class Session {
   private _lastTasks: PersistedTaskItem[] = []
   // Whether we need to inject task context on the next user message (set on resume)
   private _needsTaskResumeHint = false
+
+  // Background memory extraction state
+  private _extractionState: ReturnType<typeof createExtractionState>
+  private _memoryToolSavedThisTurn = false
 
   constructor(opts: {
     id: string
@@ -558,6 +571,13 @@ export class Session {
         return undefined
       },
     })
+
+    // Initialize extraction state — for resumed sessions, set cursor to current
+    // message count so we don't re-scan historical messages
+    const existingMessageCount = (opts.existingMessages || []).length
+    this._extractionState = existingMessageCount > 0
+      ? createResumedExtractionState(existingMessageCount)
+      : createExtractionState()
   }
 
   setConfirmHandler(handler: ConfirmHandler) {
@@ -626,6 +646,8 @@ export class Session {
     this._turnCount = 0
     this._maxTokensRecoveryCount = 0
     this._processStartedAt = Date.now()
+    this._extractionState.agentUsedMemoryTool = false
+    this._memoryToolSavedThisTurn = false
     let trimmedMessage = userMessage.trim()
     const hasAttachments = attachments.length > 0
 
@@ -761,6 +783,11 @@ export class Session {
           assistantText += ev.content
         }
         events.push(ev)
+
+        // Track if the agent saved a memory this turn (suppresses background extraction)
+        if (ev.type === 'tool_call' && ev.name === 'memory' && ev.input?.operation === 'save') {
+          this._memoryToolSavedThisTurn = true
+        }
 
         // Braintrust: start a child span for each tool call
         if (traceSpan && ev.type === 'tool_call') {
@@ -926,6 +953,12 @@ export class Session {
       // but this ensures we capture any title or compaction state changes)
       this.persist()
 
+      // Mark if the main agent saved a memory this turn (skip background extraction).
+      // Only suppress on 'save' — recall/list/forget don't write new memories.
+      if (this._memoryToolSavedThisTurn) {
+        this._extractionState.agentUsedMemoryTool = true
+      }
+
       // Close the trace span in normal flow
       closeTraceSpan()
 
@@ -974,6 +1007,74 @@ export class Session {
   /** Get current compaction state for status queries. */
   getCompactionState(): CompactionState {
     return { ...this.compactionState }
+  }
+
+  /**
+   * Background memory extraction — runs fire-and-forget after processMessage.
+   * Checks throttle conditions, serializes recent messages, calls a cheap LLM
+   * to extract durable memories, and writes them to disk.
+   */
+  async maybeExtractMemories(): Promise<ExtractionResult | null> {
+    // Skip ephemeral sub-agent sessions
+    if (this.ephemeral) return null
+
+    // Track this user message
+    trackUserMessage(this._extractionState)
+
+    // Check if we should run extraction
+    if (!shouldExtract(this._extractionState)) {
+      // If skipped because the agent already saved a memory, advance the cursor
+      // so the next extraction doesn't re-scan these messages and duplicate them
+      if (this._extractionState.agentUsedMemoryTool) {
+        const messages = this.piAgent.state.messages
+        advanceExtractionCursor(this._extractionState, messages.length)
+      }
+      return null
+    }
+
+    const messages = this.piAgent.state.messages
+    // Clamp cursor — compaction can shrink the message array, making the old
+    // index point past the end. In that case, reset to 0 (scan everything).
+    const sinceIndex = this._extractionState.lastProcessedIndex <= messages.length
+      ? this._extractionState.lastProcessedIndex
+      : 0
+
+    this.log.info(
+      { sinceIndex, messageCount: messages.length - sinceIndex },
+      'running background memory extraction',
+    )
+
+    this._extractionState.inProgress = true
+    try {
+      const result = await extractMemories({
+        messages,
+        sinceIndex,
+        projectId: this.projectId,
+        provider: this.provider,
+        fallbackModel: this.resolvedModel,
+        getApiKey: (provider: string) =>
+          this.resolveApiKey(provider, this.clientApiKey, this.config),
+      })
+
+      // Advance cursor regardless of whether memories were saved
+      if (!result.skipped) {
+        advanceExtractionCursor(this._extractionState, messages.length)
+      }
+
+      if (result.memories.length > 0) {
+        this.log.info(
+          { count: result.memories.length, keys: result.memories.map((m) => m.key) },
+          'memories extracted',
+        )
+      }
+
+      return result
+    } catch (err) {
+      this.log.warn({ err }, 'background memory extraction failed')
+      return null
+    } finally {
+      this._extractionState.inProgress = false
+    }
   }
 
   /** Get cumulative token usage for this session. */

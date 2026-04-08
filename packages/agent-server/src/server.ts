@@ -3135,6 +3135,11 @@ export class AgentServer {
         'Turn complete',
       )
 
+      // Fire-and-forget: background memory extraction
+      session.maybeExtractMemories().catch((err) => {
+        log.warn({ err, sessionId }, 'background memory extraction failed')
+      })
+
       // Track session in project history if this is a project session
       const sessionInfo = session.getInfo()
       if (session.projectId && sessionInfo.title) {
