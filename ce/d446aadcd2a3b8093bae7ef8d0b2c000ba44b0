@@ -1,0 +1,98 @@
+packages/agent-server/src/webhooks/providers/slack-identity.ts
+  eef7ef7345dc4c8d 49-63,65-72,116,121,175,177-178,226,228-230,260-266,275-276,281-285
+  39b12bdc0bb542d9 1-48,73-115,117-120,122-174,176,179-225,227,231-259,267-274,277-280,286-291
+packages/agent-server/src/webhooks/index.ts
+  39b12bdc0bb542d9 11-13,17
+packages/agent-core/src/agent.ts
+  39b12bdc0bb542d9 183,186,1292,1295-1296
+packages/agent-config/src/config.ts
+  14f685ffbf6f46d2 1362,1364-1372
+  39b12bdc0bb542d9 1602
+packages/connectors/src/slack/api.ts
+  39b12bdc0bb542d9 99-144
+packages/agent-server/src/webhooks/format/slack-mrkdwn.ts
+  39b12bdc0bb542d9 1-77,85-86,193
+  eef7ef7345dc4c8d 78-84,87-192
+packages/agent-server/src/webhooks/router.ts
+  eef7ef7345dc4c8d 32-43,96-101,103,105,107-124,127-128,146
+  39b12bdc0bb542d9 247-274,276-278,280-288,297,302,307-313
+packages/agent-server/src/webhooks/agent-runner.ts
+  14f685ffbf6f46d2 98,103-104,123-124
+  39b12bdc0bb542d9 14,18,52-54,60-61,63,67,76,95,109-115,120-122,129-137,141-154,161-162,164,168,185,199,210
+packages/agent-server/src/server.ts
+  eef7ef7345dc4c8d 3228-3234
+packages/connectors/src/types.ts
+  39b12bdc0bb542d9 4-16,25-36
+packages/connectors/src/connector-manager.ts
+  39b12bdc0bb542d9 153-159,161,164-174
+packages/agent-core/src/index.ts
+  39b12bdc0bb542d9 38
+specs/features/SLACK_THREAD_SESSIONS.md
+  eef7ef7345dc4c8d 43,76-82
+  39b12bdc0bb542d9 1-42,44-75,83-257
+packages/agent-core/src/session.ts
+  39b12bdc0bb542d9 138-149,168,211,257-258,284,1790,1792-1793,1891-1901,1923-1971,1993,2009-2010,2053-2054,2066,2102,2110-2111,2152-2153,2166
+packages/agent-server/src/webhooks/provider.ts
+  14f685ffbf6f46d2 52-59,71-82
+  eef7ef7345dc4c8d 19
+  39b12bdc0bb542d9 33,35-36,60-66,85-112,136-140
+packages/agent-server/src/webhooks/providers/slack.ts
+  eef7ef7345dc4c8d 42-43,86-102,122-125,161-163,165-167,169-174,189-198,235-238,286-287,341-346,350-352,420-486,497-498,503,548-561,862-879,884-888,895-911,914,916-922
+  14f685ffbf6f46d2 29,301-309,313-338,356-360,362-364,370-371,582,584-598,600-617,853-861,880-883,889-894,912-913,915,923-952
+  39b12bdc0bb542d9 26,30-31,36,72-74,78,80-85,103-117,265-269,271-277,288-297,339-340,353-355,361,372,375-377,379,385,395-419,506-517,519-539,568-569,578,618-852
+packages/connectors/src/slack/index.ts
+  39b12bdc0bb542d9 2,57-65
+packages/agent-server/src/webhooks/providers/telegram.ts
+  39b12bdc0bb542d9 10-16,107-112,117,123-152,155-164,170-200,277-303
+  eef7ef7345dc4c8d 68,308-317,320,323-326,331-361,363-367,372-402
+packages/agent-server/src/webhooks/format/telegram-md.ts
+  39b12bdc0bb542d9 1-72
+packages/connectors/src/slack/tools.ts
+  39b12bdc0bb542d9 221-341
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.2.5",
+  "base_commit_sha": "ced446aadcd2a3b8093bae7ef8d0b2c000ba44b0",
+  "prompts": {
+    "14f685ffbf6f46d2": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "bee9d117-c3d8-433d-946c-89ef61824b06",
+        "model": "claude-opus-4-6"
+      },
+      "human_author": "Om Gupta",
+      "messages": [],
+      "total_additions": 193,
+      "total_deletions": 6,
+      "accepted_lines": 171,
+      "overriden_lines": 0
+    },
+    "39b12bdc0bb542d9": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "2e76d390-888b-4947-bfbc-33bc5561d29c",
+        "model": "claude-opus-4-6"
+      },
+      "human_author": "Om Gupta",
+      "messages": [],
+      "total_additions": 1868,
+      "total_deletions": 152,
+      "accepted_lines": 1598,
+      "overriden_lines": 1
+    },
+    "eef7ef7345dc4c8d": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "4707fea9-bf98-452d-84ee-d6e0ea2a2081",
+        "model": "claude-opus-4-6"
+      },
+      "human_author": "Om Gupta",
+      "messages": [],
+      "total_additions": 573,
+      "total_deletions": 88,
+      "accepted_lines": 495,
+      "overriden_lines": 1
+    }
+  }
+}
