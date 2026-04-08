@@ -426,7 +426,7 @@ export class SlackWebhookProvider implements WebhookProvider {
     // decides when to inject it (only on new sessions, into the system prompt).
     let threadContext: string | undefined
     const isThreadReply = ev.thread_ts && ev.thread_ts !== ev.ts
-    if (isThreadReply) {
+    if (isThreadReply && ev.thread_ts) {
       threadContext = await this.fetchThreadContext(ev.channel, ev.thread_ts, ev.ts)
       if (threadContext) {
         log.info(
