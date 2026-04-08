@@ -1,0 +1,29 @@
+packages/desktop/src/lib/store/handlers/sessionHandler.ts
+  910319903e3a3d93 11,305-307,309
+packages/desktop/src/lib/store/connectionStore.ts
+  910319903e3a3d93 14,64-66
+packages/desktop/src/lib/conversationCache.ts
+  910319903e3a3d93 22-25,28
+packages/agent-config/src/config.ts
+  910319903e3a3d93 1342-1344
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.2.6",
+  "base_commit_sha": "937a12a41c011f8ca8201a574713871f92013668",
+  "prompts": {
+    "910319903e3a3d93": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "6774ed49-9293-4e92-a1be-b6c2b5f3cb78",
+        "model": "claude-opus-4-6"
+      },
+      "human_author": "Om Gupta",
+      "messages": [],
+      "total_additions": 89,
+      "total_deletions": 76,
+      "accepted_lines": 31,
+      "overriden_lines": 4
+    }
+  }
+}
