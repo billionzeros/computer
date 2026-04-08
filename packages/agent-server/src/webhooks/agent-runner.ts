@@ -11,11 +11,11 @@
  */
 
 import type { AgentConfig } from '@anton/agent-config'
-import type { McpManager, Session } from '@anton/agent-core'
+import type { McpManager, Session, SurfaceInfo } from '@anton/agent-core'
 import { createSession, resumeSession } from '@anton/agent-core'
 import type { ConnectorManager } from '@anton/connectors'
 import { createLogger } from '@anton/logger'
-import type { CanonicalEvent } from './provider.js'
+import type { CanonicalEvent, OutboundImage, WebhookRunResult } from './provider.js'
 
 const log = createLogger('webhook-runner')
 
@@ -49,20 +49,22 @@ export class WebhookAgentRunner {
   ) {}
 
   /**
-   * Run the agent on a canonical event and return the final text response.
+   * Run the agent on a canonical event and return the turn's reply —
+   * final text plus any outbound images the session emitted during the
+   * turn (currently: the last browser screenshot, if any).
    *
    * If the same session is already mid-flight, this call queues behind the
    * in-flight one and resolves once its turn runs. The router then calls
    * `provider.reply()` with this event's response, preserving FIFO order.
    *
-   * Returns an empty string only if the per-session queue is full (we drop
-   * to protect memory) — the router treats empty replies as no-op.
+   * Returns an empty result only if the per-session queue is full (we drop
+   * to protect memory) — the router treats empty text + no images as no-op.
    */
-  run(event: CanonicalEvent): Promise<string> {
+  run(event: CanonicalEvent): Promise<WebhookRunResult> {
     const existing = this.chains.get(event.sessionId)
     if (existing && existing.depth >= MAX_QUEUE_DEPTH) {
       log.warn({ sessionId: event.sessionId, depth: existing.depth }, 'queue full, dropping event')
-      return Promise.resolve('')
+      return Promise.resolve({ text: '', images: [] })
     }
 
     const entry: SessionChain = existing ?? { tail: Promise.resolve(), depth: 0 }
@@ -71,7 +73,7 @@ export class WebhookAgentRunner {
 
     // Use both `then` callbacks so an upstream failure (e.g. previous agent
     // throw) does not poison the queue — every queued event still gets to run.
-    const myTurn: Promise<string> = prevTail.then(
+    const myTurn: Promise<WebhookRunResult> = prevTail.then(
       () => this.runOne(event),
       () => this.runOne(event),
     )
@@ -90,38 +92,80 @@ export class WebhookAgentRunner {
     return myTurn
   }
 
-  private async runOne(event: CanonicalEvent): Promise<string> {
+  private async runOne(event: CanonicalEvent): Promise<WebhookRunResult> {
     const { sessionId } = event
     const started = Date.now()
+    const attachmentCount = event.attachments?.length ?? 0
     log.info(
-      { sessionId, provider: event.provider, textBytes: event.text.length },
+      {
+        sessionId,
+        provider: event.provider,
+        textBytes: event.text.length,
+        attachmentCount,
+      },
       'runOne: start',
     )
     try {
-      const session = this.getOrCreateSession(sessionId)
+      const session = this.getOrCreateSession(sessionId, event.surface)
+      // Refresh the surface every turn — the same sessionId can span
+      // multiple threads/users in a channel, and we want the model to see
+      // the up-to-date label. No-op when surface is undefined (desktop).
+      if (event.surface) {
+        session.setSurface(event.surface)
+      }
       const chunks: string[] = []
       let textEvents = 0
       let totalEvents = 0
-      for await (const ev of session.processMessage(event.text)) {
+
+      let lastBrowserScreenshot: { data: string; url: string; title: string } | null = null
+      let browserStateEvents = 0
+
+      const attachments = (event.attachments ?? []) as Parameters<typeof session.processMessage>[1]
+      for await (const ev of session.processMessage(event.text, attachments)) {
         totalEvents += 1
         if (ev.type === 'text') {
           chunks.push(ev.content)
           textEvents += 1
+        } else if (ev.type === 'browser_state') {
+          browserStateEvents += 1
+          if (ev.screenshot) {
+            lastBrowserScreenshot = {
+              data: ev.screenshot,
+              url: ev.url,
+              title: ev.title,
+            }
+          }
         }
       }
       const out = sanitizeResponse(chunks.join(''))
+
+      const images: OutboundImage[] = []
+      if (lastBrowserScreenshot) {
+        images.push({
+          id: `browser-${Date.now()}`,
+          data: lastBrowserScreenshot.data,
+          mimeType: 'image/jpeg',
+          // Use the page title (or URL as fallback) as the caption so
+          // the user sees what they're looking at without the model
+          // having to narrate it.
+          caption: lastBrowserScreenshot.title || lastBrowserScreenshot.url,
+        })
+      }
+
       log.info(
         {
           sessionId,
           durationMs: Date.now() - started,
           totalEvents,
           textEvents,
+          browserStateEvents,
+          imageCount: images.length,
           replyBytes: out.length,
-          empty: out.length === 0,
+          empty: out.length === 0 && images.length === 0,
         },
         'runOne: complete',
       )
-      return out
+      return { text: out, images }
     } catch (err) {
       // Catch-and-log so upstream router sees the error surface properly
       // instead of an opaque rejected promise in a `.catch(...)`. Still
@@ -138,7 +182,7 @@ export class WebhookAgentRunner {
     }
   }
 
-  private getOrCreateSession(sessionId: string): Session {
+  private getOrCreateSession(sessionId: string, surface?: SurfaceInfo): Session {
     let session = this.sessions.get(sessionId)
     if (session) return session
 
@@ -152,6 +196,7 @@ export class WebhookAgentRunner {
         resumeSession(sessionId, this.config, {
           mcpManager: this.mcpManager,
           connectorManager: this.connectorManager,
+          surface,
         }) ?? undefined
     } catch (err) {
       log.warn({ sessionId, err }, 'resumeSession threw, starting fresh')
@@ -162,6 +207,7 @@ export class WebhookAgentRunner {
       session = createSession(sessionId, this.config, {
         mcpManager: this.mcpManager,
         connectorManager: this.connectorManager,
+        surface,
       })
     }
 

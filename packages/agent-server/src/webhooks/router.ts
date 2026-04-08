@@ -29,6 +29,18 @@ const DEDUP_MAX = 1024
  * touch I/O, but tight enough that a wedge is bounded.
  */
 const PARSE_TIMEOUT_MS = 10_000
+/**
+ * Hard ceiling on inbound webhook body size. The endpoint is publicly
+ * reachable (the only thing in front is a trusted proxy, but we treat the
+ * worker as the trust boundary, not the network), so without a cap an
+ * unauthenticated client could stream arbitrary bytes and OOM the
+ * process. Real provider events are kilobytes — Slack envelopes top out
+ * around ~50 KB even with image metadata, Telegram updates are smaller,
+ * so 2 MiB is several orders of magnitude of headroom and still
+ * comfortably below any node memory pressure. The check fires before
+ * verify(), so the attacker cost stays bounded.
+ */
+const MAX_BODY_BYTES = 2 * 1024 * 1024
 
 export class WebhookRouter {
   private providers = new Map<string, WebhookProvider>()
@@ -81,13 +93,39 @@ export class WebhookRouter {
       return true
     }
 
-    let body = ''
+    // Buffer chunks as Buffers (NOT as a UTF-8 string). HMAC verification
+    // is byte-exact and decoding through `chunk.toString('utf8')` lossily
+    // replaces invalid sequences with U+FFFD — sometimes intermittently,
+    // when a multi-byte char straddles a chunk boundary. Concatenating raw
+    // Buffers preserves every byte for both signature and JSON parsing.
+    const chunks: Buffer[] = []
     let bodyBytes = 0
+    let aborted = false
     req.on('data', (chunk: Buffer) => {
-      body += chunk.toString('utf8')
+      if (aborted) return
       bodyBytes += chunk.length
+      // Refuse runaway bodies before they can OOM us. The check fires
+      // before verify(), which is intentional: an unauthenticated caller
+      // shouldn't be able to consume arbitrary memory just by streaming
+      // bytes at us. Send 413 and tear the socket down.
+      if (bodyBytes > MAX_BODY_BYTES) {
+        aborted = true
+        log.warn(
+          { slug, bodyBytes, maxBytes: MAX_BODY_BYTES },
+          'inbound webhook body exceeded MAX_BODY_BYTES, aborting',
+        )
+        if (!res.headersSent) {
+          res.writeHead(413, { 'Content-Type': 'text/plain', Connection: 'close' })
+          res.end('Payload too large')
+        }
+        req.destroy()
+        return
+      }
+      chunks.push(chunk)
     })
     req.on('end', () => {
+      if (aborted) return
+      const body = Buffer.concat(chunks, bodyBytes)
       log.debug({ slug, bodyBytes }, 'body fully received, dispatching')
       this.dispatch(provider, body, req, res, queryString).catch((err) => {
         log.error({ err, slug }, 'dispatch failed')
@@ -105,7 +143,7 @@ export class WebhookRouter {
 
   private async dispatch(
     provider: WebhookProvider,
-    rawBody: string,
+    rawBody: Buffer,
     req: IncomingMessage,
     res: ServerResponse,
     queryString: string,
@@ -206,10 +244,48 @@ export class WebhookRouter {
   private async processEvent(provider: WebhookProvider, event: CanonicalEvent): Promise<void> {
     const slug = provider.slug
     const started = Date.now()
-    const reply = await this.runner.run(event)
+
+    // Fire-and-forget start hook — never let a decorative side-effect
+    // (e.g. a Slack reactions.add round-trip) block the actual turn.
+    // Awaiting here only to surface errors into the log, not to gate
+    // the model call on it.
+    if (provider.onTurnStart) {
+      try {
+        await provider.onTurnStart(event)
+      } catch (err) {
+        log.warn({ err, slug, sessionId: event.sessionId }, 'onTurnStart failed (ignored)')
+      }
+    }
+
+    let result: Awaited<ReturnType<typeof this.runner.run>>
+    try {
+      result = await this.runner.run(event)
+    } catch (err) {
+      log.error({ err, slug, sessionId: event.sessionId }, 'runner threw')
+      if (provider.onTurnEnd) {
+        try {
+          await provider.onTurnEnd(event, { ok: false })
+        } catch (hookErr) {
+          log.warn({ err: hookErr, slug, sessionId: event.sessionId }, 'onTurnEnd failed (ignored)')
+        }
+      }
+      throw err
+    }
+
     const runnerMs = Date.now() - started
-    if (!reply) {
+    const { text: reply, images } = result
+    const hasContent = reply.length > 0 || images.length > 0
+    if (!hasContent) {
       log.info({ slug, sessionId: event.sessionId, runnerMs }, 'runner returned no reply')
+      // Still treat empty as "ok" — it just means dedup dropped this, not
+      // that anything broke. The eye reaction gets cleared.
+      if (provider.onTurnEnd) {
+        try {
+          await provider.onTurnEnd(event, { ok: true })
+        } catch (err) {
+          log.warn({ err, slug, sessionId: event.sessionId }, 'onTurnEnd failed (ignored)')
+        }
+      }
       return
     }
     log.info(
@@ -218,14 +294,23 @@ export class WebhookRouter {
         sessionId: event.sessionId,
         runnerMs,
         replyBytes: reply.length,
+        imageCount: images.length,
       },
       'runner produced reply, sending',
     )
     try {
-      await provider.reply(event, reply)
+      await provider.reply(event, reply, images)
       log.info({ slug, sessionId: event.sessionId }, 'reply sent')
     } catch (err) {
       log.error({ err, slug, sessionId: event.sessionId }, 'reply failed')
+    }
+
+    if (provider.onTurnEnd) {
+      try {
+        await provider.onTurnEnd(event, { ok: true })
+      } catch (err) {
+        log.warn({ err, slug, sessionId: event.sessionId }, 'onTurnEnd failed (ignored)')
+      }
     }
   }
 

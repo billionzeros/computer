@@ -8,9 +8,13 @@
 export { WebhookAgentRunner } from './agent-runner.js'
 export type {
   CanonicalEvent,
+  CanonicalImageAttachment,
+  OutboundImage,
+  SurfaceInfo,
   WebhookHandshakeResponse,
   WebhookProvider,
   WebhookRequest,
+  WebhookRunResult,
 } from './provider.js'
 export { SlackWebhookProvider, type SlackWebhookOpts } from './providers/slack.js'
 export { TelegramWebhookProvider } from './providers/telegram.js'

@@ -1359,7 +1359,17 @@ export function updateConnector(
 ): ConnectorConfig | null {
   const idx = config.connectors.findIndex((c) => c.id === id)
   if (idx === -1) return null
-  config.connectors[idx] = { ...config.connectors[idx], ...changes }
+  const current = config.connectors[idx]
+
+  const mergedMetadata =
+    changes.metadata !== undefined
+      ? { ...(current.metadata ?? {}), ...changes.metadata }
+      : current.metadata
+  config.connectors[idx] = {
+    ...current,
+    ...changes,
+    ...(changes.metadata !== undefined ? { metadata: mergedMetadata } : {}),
+  }
   saveConfig(config)
   return config.connectors[idx]
 }
@@ -1589,6 +1599,7 @@ export const CONNECTOR_REGISTRY: ConnectorRegistryEntry[] = [
       'users:read',
       'team:read',
       'files:read',
+      'files:write',
     ],
     requiredEnv: [],
     featured: true,

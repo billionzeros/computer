@@ -180,9 +180,10 @@ export function buildTools(
   callbacks?: ToolCallbacks,
   mcpManager?: import('./mcp/mcp-manager.js').McpManager,
   connectorManager?: {
-    getAllTools(): AgentTool[]
+    getAllTools(surface?: string): AgentTool[]
     getToolPermission?(toolName: string): 'auto' | 'ask' | 'never'
   },
+  surface?: string,
 ): AgentTool[] {
   // Initialize security settings for tools
   setForbiddenPaths(config.security?.forbiddenPaths ?? [])
@@ -1288,9 +1289,12 @@ export function buildTools(
 
   // ── Direct connector tools (OAuth-based connectors) ───────────────
   if (connectorManager) {
-    const directTools = connectorManager.getAllTools()
+    const directTools = connectorManager.getAllTools(surface)
     if (directTools.length > 0) {
-      log.info({ count: directTools.length }, 'adding direct connector tools')
+      log.info(
+        { count: directTools.length, surface: surface ?? 'unfiltered' },
+        'adding direct connector tools',
+      )
       tools.push(...directTools)
     }
   }

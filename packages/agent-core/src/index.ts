@@ -35,6 +35,7 @@ export {
   type SessionEvent,
   type SessionInfo,
   type SubAgentEventHandler,
+  type SurfaceInfo,
 } from './session.js'
 export {
   type ContextInfo,

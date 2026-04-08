@@ -16,8 +16,7 @@
  */
 
 export interface WebhookRequest {
-  /** Raw request body, exactly as received (signature schemes need this). */
-  rawBody: string
+  rawBody: Buffer
   /** HTTP headers (lowercased keys). */
   headers: Record<string, string | undefined>
   /** Parsed query string. */
@@ -30,6 +29,10 @@ export interface WebhookHandshakeResponse {
   body: string
   contentType?: string
 }
+
+import type { SurfaceInfo } from '@anton/agent-core'
+
+export type { SurfaceInfo }
 
 /**
  * Canonical, provider-agnostic event the agent runner consumes.
@@ -46,8 +49,65 @@ export interface CanonicalEvent {
   deliveryId?: string
   /** User-visible text the agent should respond to. */
   text: string
+  /**
+   * Image attachments the user uploaded with this message. Providers that
+   * support file uploads (Slack file_share, Telegram photo, …) should
+   * download the bytes and base64-encode them into this shape; the runner
+   * passes them straight through to Session.processMessage. Non-image files
+   * are silently dropped today — the model only understands images.
+   */
+  attachments?: CanonicalImageAttachment[]
+  /**
+   * Where this message is coming from. The runner passes this to the
+   * Session every turn (not just on create) so an existing session picks
+   * up new thread/user identity without a restart. Omit for desktop; the
+   * runner treats absence as "local desktop client".
+   */
+  surface?: SurfaceInfo
   /** Free-form provider context, opaque to the router. */
   context: Record<string, unknown>
+}
+
+/**
+ * Shape the agent-core Session expects for multimodal input. Mirrors
+ * `ChatImageAttachmentInput` in @anton/protocol (we don't import it here to
+ * keep the webhook layer decoupled from the desktop protocol package).
+ */
+export interface CanonicalImageAttachment {
+  id: string
+  name: string
+  mimeType: string
+  /** base64-encoded image bytes (no data: URL prefix). */
+  data: string
+  sizeBytes: number
+}
+
+/**
+ * An image the agent wants to send *back* to the user — e.g. a browser
+ * screenshot or generated chart. Collected by the webhook runner from
+ * events the session emits during a turn and handed to the provider's
+ * reply() method for upload.
+ */
+export interface OutboundImage {
+  /** base64-encoded image bytes (no data: URL prefix). */
+  data: string
+  /** e.g. `image/jpeg`, `image/png`. */
+  mimeType: string
+  /** Optional short caption — used as Slack file title / Telegram photo caption. */
+  caption?: string
+  /** Stable id for logging. */
+  id: string
+}
+
+/**
+ * Rich result type returned by the webhook runner for a single turn.
+ * Replaces the previous `Promise<string>` so the router can hand outbound
+ * images to the provider alongside the text reply. Absent/empty fields
+ * are the common case and should be treated as "nothing to send".
+ */
+export interface WebhookRunResult {
+  text: string
+  images: OutboundImage[]
 }
 
 export interface WebhookProvider {
@@ -73,9 +133,9 @@ export interface WebhookProvider {
    */
   parse(req: WebhookRequest): Promise<CanonicalEvent[]> | CanonicalEvent[]
 
-  /**
-   * Send a textual reply for a given event back to the originating source.
-   * Called after the agent runner has produced a response.
-   */
-  reply(event: CanonicalEvent, text: string): Promise<void>
+  reply(event: CanonicalEvent, text: string, images: OutboundImage[]): Promise<void>
+
+  onTurnStart?(event: CanonicalEvent): Promise<void> | void
+
+  onTurnEnd?(event: CanonicalEvent, result: { ok: boolean }): Promise<void> | void
 }

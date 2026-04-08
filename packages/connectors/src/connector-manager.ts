@@ -150,10 +150,28 @@ export class ConnectorManager {
    * Get all tools from all active connectors. Tools the user has marked as
    * `never` are filtered out so the agent never sees them — beforeToolCall in
    * the session is the defence-in-depth check for the same condition.
+   *
+   * When `surface` is provided, connectors that declare a `surfaces`
+   * restriction only contribute their tools when the requested surface
+   * matches. Connectors with no `surfaces` field are always visible
+   * (the existing behaviour for every connector that hasn't opted in).
+   * When `surface` is omitted, no surface filtering happens — that's
+   * the desktop default and what every existing call site expects.
    */
-  getAllTools(): AgentTool[] {
+  getAllTools(surface?: string): AgentTool[] {
     const tools: AgentTool[] = []
     for (const [connectorId, connector] of this.connectors) {
+      // Surface gate: skip the whole connector if it declared a
+      // surface allowlist and the current surface isn't on it.
+      // Connectors without a `surfaces` field pass through unchanged.
+      if (
+        surface &&
+        connector.surfaces &&
+        connector.surfaces.length > 0 &&
+        !connector.surfaces.includes(surface)
+      ) {
+        continue
+      }
       const perms = this.toolPermissions.get(connectorId)
       for (const tool of connector.getTools()) {
         if (perms?.[tool.name] === 'never') continue

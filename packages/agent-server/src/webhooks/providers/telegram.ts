@@ -7,7 +7,14 @@
  */
 
 import { createLogger } from '@anton/logger'
-import type { CanonicalEvent, WebhookProvider, WebhookRequest } from '../provider.js'
+import { toTelegramMd } from '../format/telegram-md.js'
+import type {
+  CanonicalEvent,
+  OutboundImage,
+  SurfaceInfo,
+  WebhookProvider,
+  WebhookRequest,
+} from '../provider.js'
 
 const log = createLogger('telegram-webhook')
 
@@ -58,7 +65,7 @@ export class TelegramWebhookProvider implements WebhookProvider {
   parse(req: WebhookRequest): CanonicalEvent[] {
     let update: TelegramUpdate
     try {
-      update = JSON.parse(req.rawBody) as TelegramUpdate
+      update = JSON.parse(req.rawBody.toString('utf8')) as TelegramUpdate
     } catch (err) {
       log.warn({ err }, 'parse: invalid JSON body')
       return []
@@ -97,40 +104,100 @@ export class TelegramWebhookProvider implements WebhookProvider {
         sessionId: `telegram-${chatId}`,
         deliveryId: `telegram-${update.update_id}`,
         text,
-        context: { chatId },
+        surface: buildTelegramSurface(msg),
+        context: {
+          chatId,
+          messageId: msg.message_id,
+          userId: msg.from?.id,
+        },
       },
     ]
   }
 
-  async reply(event: CanonicalEvent, text: string): Promise<void> {
+  async reply(event: CanonicalEvent, text: string, images: OutboundImage[]): Promise<void> {
     const chatId = event.context.chatId as number
     // Whatever happens below, stop the keepalive first so we don't leak the
     // interval past the reply.
     this.stopTyping(chatId)
 
-    const chunks = splitMessage(text, MAX_MESSAGE_LENGTH)
-    log.info({ chatId, chunks: chunks.length, totalBytes: text.length }, 'reply: sending')
-    for (const [i, chunk] of chunks.entries()) {
-      const res = await fetch(`${TELEGRAM_API}/bot${this.token}/sendMessage`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          chat_id: chatId,
-          text: chunk,
-          parse_mode: 'Markdown',
-        }),
-      })
-      if (!res.ok) {
-        const body = await res.text().catch(() => '<unreadable>')
-        log.warn(
-          { status: res.status, chatId, chunkIndex: i, body: body.slice(0, 200) },
-          'sendMessage failed',
-        )
-      } else {
-        log.debug({ chatId, chunkIndex: i, chunkBytes: chunk.length }, 'sendMessage ok')
+    // Transform CommonMark → Telegram legacy Markdown before splitting so
+    // the chunk boundaries line up with the text that actually gets sent.
+    // Transform-then-split also avoids accidentally cutting a heading
+    // mid-rewrite.
+    const formatted = toTelegramMd(text)
+    if (formatted.length > 0) {
+      const chunks = splitMessage(formatted, MAX_MESSAGE_LENGTH)
+      log.info(
+        { chatId, chunks: chunks.length, totalBytes: formatted.length, imageCount: images.length },
+        'reply: sending text',
+      )
+      for (const [i, chunk] of chunks.entries()) {
+        const res = await fetch(`${TELEGRAM_API}/bot${this.token}/sendMessage`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            chat_id: chatId,
+            text: chunk,
+            parse_mode: 'Markdown',
+          }),
+        })
+        if (!res.ok) {
+          const body = await res.text().catch(() => '<unreadable>')
+          log.warn(
+            { status: res.status, chatId, chunkIndex: i, body: body.slice(0, 200) },
+            'sendMessage failed',
+          )
+        } else {
+          log.debug({ chatId, chunkIndex: i, chunkBytes: chunk.length }, 'sendMessage ok')
+        }
+      }
+    }
+
+    // Send each image as its own sendPhoto call. Telegram has a 1024-char
+    // limit on the `caption` field, so we attach the (truncated) caption
+    // when short enough and skip it otherwise — the text has already
+    // shipped via sendMessage above and is the primary narration.
+    for (const img of images) {
+      try {
+        await this.sendPhoto(chatId, img)
+      } catch (err) {
+        log.warn({ err, chatId, imageId: img.id }, 'sendPhoto failed, continuing')
       }
     }
     log.info({ chatId }, 'reply: done')
+  }
+
+  /**
+   * Send a single image as a photo message. Uses multipart/form-data to
+   * upload the raw bytes — Telegram also accepts a URL in the `photo`
+   * field, but base64-to-multipart is the safer default because we don't
+   * need the bytes to be publicly reachable.
+   */
+  private async sendPhoto(chatId: number, image: OutboundImage): Promise<void> {
+    const bytes = Buffer.from(image.data, 'base64')
+    const form = new FormData()
+    form.append('chat_id', String(chatId))
+    // Telegram caps caption at 1024 chars; anything longer would 400. The
+    // full text has already been sent via sendMessage, so a trimmed label
+    // is fine here.
+    if (image.caption) {
+      const caption =
+        image.caption.length > 1024 ? `${image.caption.slice(0, 1021)}...` : image.caption
+      form.append('caption', caption)
+    }
+    const ext = image.mimeType === 'image/png' ? 'png' : 'jpg'
+    const blob = new Blob([new Uint8Array(bytes)], { type: image.mimeType })
+    form.append('photo', blob, `${image.id}.${ext}`)
+
+    const res = await fetch(`${TELEGRAM_API}/bot${this.token}/sendPhoto`, {
+      method: 'POST',
+      body: form,
+    })
+    if (!res.ok) {
+      const body = await res.text().catch(() => '<unreadable>')
+      throw new Error(`sendPhoto ${res.status}: ${body.slice(0, 200)}`)
+    }
+    log.debug({ chatId, imageId: image.id, sizeBytes: bytes.byteLength }, 'sendPhoto ok')
   }
 
   /**
@@ -207,27 +274,132 @@ export class TelegramWebhookProvider implements WebhookProvider {
   }
 }
 
+/**
+ * Build the SurfaceInfo for a Telegram message. Short labels only —
+ * the prompt injection is re-rendered on every turn, so long strings
+ * show up in every system prompt.
+ */
+function buildTelegramSurface(msg: NonNullable<TelegramUpdate['message']>): SurfaceInfo {
+  const chatType = msg.chat.type
+  const userLabel = msg.from
+    ? msg.from.username
+      ? `${msg.from.first_name} (@${msg.from.username})`
+      : msg.from.first_name
+    : undefined
+  const where =
+    chatType === 'private'
+      ? `Telegram DM${userLabel ? ` with ${userLabel}` : ''}`
+      : `Telegram ${chatType} chat`
+  const details: Record<string, string> = { 'chat type': chatType }
+  if (msg.from?.id) details['user id'] = String(msg.from.id)
+  return {
+    kind: 'telegram',
+    label: where,
+    userLabel,
+    format: 'telegram-md',
+    details,
+  }
+}
+
 function splitMessage(text: string, maxLen: number): string[] {
   if (text.length <= maxLen) return [text]
   const chunks: string[] = []
   let remaining = text
+  // Track an open code fence across chunk boundaries. Telegram's legacy
+  // Markdown parser treats ` ``` ` as fenced-code-block delimiters; if a
+  // chunk ends inside a fence, the renderer will either eat the rest of
+  // the message as code or fail to parse and 400 the request. We close
+  // the fence at the end of the outgoing chunk and re-open it at the
+  // start of the next so each chunk is balanced on its own. The same
+  // logic preserves the opening language tag (e.g. ` ```ts `) — we
+  // remember it from the most recent unclosed fence and reuse it when
+  // re-opening.
+  let openFence: string | null = null // the exact opening line, e.g. "```ts"
   while (remaining.length > 0) {
     if (remaining.length <= maxLen) {
-      chunks.push(remaining)
+      chunks.push(openFence ? `${openFence}\n${remaining}` : remaining)
       break
     }
-    // Prefer the latest newline, then the latest space, before falling back
-    // to a hard cut. The previous version only accepted newlines past the
-    // halfway mark, which produced mid-word breaks for long unstructured
-    // paragraphs.
+    // Prefer the latest newline, then the latest space, before falling
+    // back to a hard cut. The previous version only accepted newlines
+    // past the halfway mark, which produced mid-word breaks for long
+    // unstructured paragraphs.
     let cutAt = remaining.lastIndexOf('\n', maxLen)
     if (cutAt < maxLen / 4) cutAt = remaining.lastIndexOf(' ', maxLen)
     if (cutAt < maxLen / 4) cutAt = maxLen
     else cutAt += 1 // include the delimiter in the previous chunk
-    chunks.push(remaining.slice(0, cutAt))
+
+    // Reserve room for a closing fence on this chunk and an opening
+    // fence on the next, so neither pushes us over `maxLen`. The
+    // worst-case overhead is `\n```\n` (5 bytes) + the open line
+    // (`openFence.length + 1`). Recompute cutAt under the tighter
+    // budget if needed.
+    const reserve = openFence ? 5 + openFence.length + 1 : 0
+    if (reserve > 0 && cutAt > maxLen - reserve) {
+      const tightMax = maxLen - reserve
+      let altCut = remaining.lastIndexOf('\n', tightMax)
+      if (altCut < tightMax / 4) altCut = remaining.lastIndexOf(' ', tightMax)
+      if (altCut < tightMax / 4) altCut = tightMax
+      else altCut += 1
+      cutAt = altCut
+    }
+
+    let head = remaining.slice(0, cutAt)
+    // Update the open-fence state from the chunk we're about to emit.
+    // Walk every fence in `head` to find the trailing parity: if we end
+    // inside a fence, remember its opening line for the next chunk.
+    const updated = updateFenceState(head, openFence)
+    if (updated.endsOpen && updated.openLine) {
+      // Close the dangling fence at the end of this chunk so Telegram
+      // sees a balanced block, and re-open with the same language at
+      // the start of the next.
+      head = `${head.endsWith('\n') ? head : `${head}\n`}\`\`\``
+      openFence = updated.openLine
+    } else {
+      openFence = null
+    }
+    chunks.push(head)
     remaining = remaining.slice(cutAt)
+    if (openFence && remaining.length > 0) {
+      // Prepend the re-opened fence to the next chunk so the renderer
+      // continues the code block from where we cut.
+      remaining = `${openFence}\n${remaining}`
+    }
   }
   return chunks
+}
+
+/**
+ * Walk every ` ``` ` line in `chunk` and return the resulting fence
+ * state at the end of the chunk:
+ *   - `endsOpen`: true if there's an unclosed fence at the end.
+ *   - `openLine`: the exact opening fence line (e.g. "```ts") if
+ *     `endsOpen` is true, so the next chunk can re-open with the same
+ *     language tag. Falls back to a bare "```".
+ *
+ * Anchors on `^\`\`\`` lines, which is what Telegram's legacy Markdown
+ * recognises. Inline ` ``` ` mid-line is ignored.
+ */
+function updateFenceState(
+  chunk: string,
+  inheritedOpen: string | null,
+): { endsOpen: boolean; openLine: string | null } {
+  let open = inheritedOpen
+  const lines = chunk.split('\n')
+  for (const line of lines) {
+    if (!line.startsWith('```')) continue
+    if (open) {
+      // Closing the current fence. The closing line is just "```";
+      // any text after the backticks on a closing line is non-standard
+      // and we ignore it.
+      open = null
+    } else {
+      // Opening a new fence. Remember the full line so we can repeat
+      // the language tag on the next chunk.
+      open = line.length > 3 ? line : '```'
+    }
+  }
+  return { endsOpen: open !== null, openLine: open }
 }
 
 interface TelegramUpdate {

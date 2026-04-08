@@ -96,6 +96,52 @@ export class SlackAPI {
     })
   }
 
+  /**
+   * Edit a previously-posted message. Bot tokens may only edit
+   * messages they themselves authored — Slack returns `cant_update_message`
+   * otherwise. Useful for turning "looking into this..." placeholders
+   * into the real answer in a single bubble (no two-message trail).
+   */
+  async updateMessage(
+    channel: string,
+    ts: string,
+    text: string,
+  ): Promise<{ channel: string; ts: string; text: string }> {
+    return this.call('chat.update', { channel, ts, text })
+  }
+
+  /**
+   * Resolve a Slack permalink for a specific message. Used by Anton when
+   * referencing a prior message in a different thread or channel — much
+   * better than pasting raw IDs into the reply text.
+   */
+  async getPermalink(channel: string, messageTs: string): Promise<{ permalink: string }> {
+    // chat.getPermalink is one of the few Slack endpoints that uses
+    // form-encoded query params instead of a JSON body. It works fine
+    // via POST + JSON body though — keep the call() helper consistent.
+    return this.call('chat.getPermalink', { channel, message_ts: messageTs })
+  }
+
+  /**
+   * Look up a single channel by id. Returns name, topic, purpose,
+   * privacy state, member count. Cheaper than listChannels when you
+   * already know the id and only need that one channel.
+   */
+  async getChannelInfo(channelId: string): Promise<{
+    channel: {
+      id: string
+      name?: string
+      is_private?: boolean
+      is_im?: boolean
+      is_mpim?: boolean
+      topic?: { value: string }
+      purpose?: { value: string }
+      num_members?: number
+    }
+  }> {
+    return this.call('conversations.info', { channel: channelId })
+  }
+
   async getHistory(
     channel: string,
     opts: { limit?: number; oldest?: string; latest?: string } = {},

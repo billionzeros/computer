@@ -3225,6 +3225,13 @@ export class AgentServer {
         },
       })
       this.webhookRouter.register(this.slackBotProvider)
+
+      try {
+        const ids = listSessionMetas().map((m) => m.id)
+        this.slackBotProvider.rehydrateActiveThreadsFromSessionIds(ids)
+      } catch (err) {
+        log.warn({ err }, 'failed to rehydrate slack activeThreads from session list')
+      }
     }
   }
 
@@ -3879,10 +3886,7 @@ export class AgentServer {
       res.end('bad signature')
       return
     }
-    log.info(
-      { type: payload.type, teamId: payload.team_id },
-      'proxy-notify: verified, processing',
-    )
+    log.info({ type: payload.type, teamId: payload.team_id }, 'proxy-notify: verified, processing')
 
     // Ack first — we don't want the proxy retrying because our cleanup is slow.
     res.writeHead(200, { 'Content-Type': 'application/json' })

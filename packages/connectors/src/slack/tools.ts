@@ -218,6 +218,127 @@ export function createSlackTools(api: SlackAPI, opts: SlackToolsOptions): AgentT
         }
       },
     }),
+
+    // ── New tools added in the bot tool surface pass ──────────────────
+    // These four wrap Slack endpoints that the bot needs but didn't have
+    // a tool for previously. None require new OAuth scopes — chat:write,
+    // users:read, channels:read, groups:read are all already requested.
+
+    defineTool({
+      name: 'slack_edit_message',
+      label: 'Edit Message',
+      description:
+        '[Slack] Edit a message you previously posted. Use to turn ' +
+        '"looking into this..." placeholders into the real answer in ' +
+        'a single bubble. Bots can only edit their own messages.',
+      parameters: Type.Object({
+        channel: Type.String({ description: 'Channel ID where the message lives' }),
+        ts: Type.String({ description: 'Timestamp of the message to edit' }),
+        text: Type.String({ description: 'New message text (Slack mrkdwn supported)' }),
+      }),
+      async execute(_id, params) {
+        try {
+          const result = await api.updateMessage(params.channel, params.ts, params.text)
+          return toolResult(`Message ${result.ts} updated in ${result.channel}`)
+        } catch (err) {
+          return toolResult(`Error editing message: ${(err as Error).message}`, true)
+        }
+      },
+    }),
+
+    defineTool({
+      name: 'slack_lookup_user',
+      label: 'Look Up User',
+      description:
+        '[Slack] Resolve a single Slack user id (e.g. U02V7RLA64C) to ' +
+        "their display name, real name, and email. Use when you've " +
+        'been given a user id and need to address the human by name, ' +
+        'or when @-mentioning by id is not enough. Cheaper than ' +
+        'list_users when you already have the id.',
+      parameters: Type.Object({
+        user_id: Type.String({ description: 'Slack user id, e.g. U02V7RLA64C' }),
+      }),
+      async execute(_id, params) {
+        try {
+          const result = await api.getUserInfo(params.user_id)
+          return toolResult(
+            JSON.stringify(
+              {
+                id: result.user.id,
+                name: result.user.name,
+                real_name: result.user.real_name,
+                display_name: result.user.profile.display_name,
+                email: result.user.profile.email,
+                status: result.user.profile.status_text,
+              },
+              null,
+              2,
+            ),
+          )
+        } catch (err) {
+          return toolResult(`Error looking up user: ${(err as Error).message}`, true)
+        }
+      },
+    }),
+
+    defineTool({
+      name: 'slack_get_channel_info',
+      label: 'Get Channel Info',
+      description:
+        '[Slack] Get details about a single channel by id: name, ' +
+        'topic, purpose, privacy, member count. Use when you need to ' +
+        'know what channel you are in (the surface prompt has the id ' +
+        'but not always the human name) or when you want to read the ' +
+        'channel topic before posting.',
+      parameters: Type.Object({
+        channel: Type.String({ description: 'Channel id, e.g. C0AQZ5B419V' }),
+      }),
+      async execute(_id, params) {
+        try {
+          const result = await api.getChannelInfo(params.channel)
+          return toolResult(
+            JSON.stringify(
+              {
+                id: result.channel.id,
+                name: result.channel.name,
+                private: result.channel.is_private,
+                is_dm: result.channel.is_im,
+                is_group_dm: result.channel.is_mpim,
+                topic: result.channel.topic?.value,
+                purpose: result.channel.purpose?.value,
+                members: result.channel.num_members,
+              },
+              null,
+              2,
+            ),
+          )
+        } catch (err) {
+          return toolResult(`Error getting channel info: ${(err as Error).message}`, true)
+        }
+      },
+    }),
+
+    defineTool({
+      name: 'slack_get_permalink',
+      label: 'Get Message Permalink',
+      description:
+        '[Slack] Resolve a permanent URL for a specific message. Use ' +
+        'when you want to reference a previous message by link instead ' +
+        'of pasting its raw text — much better for cross-thread or ' +
+        'cross-channel citations.',
+      parameters: Type.Object({
+        channel: Type.String({ description: 'Channel id where the message lives' }),
+        message_ts: Type.String({ description: 'Timestamp of the message to link to' }),
+      }),
+      async execute(_id, params) {
+        try {
+          const result = await api.getPermalink(params.channel, params.message_ts)
+          return toolResult(result.permalink)
+        } catch (err) {
+          return toolResult(`Error getting permalink: ${(err as Error).message}`, true)
+        }
+      },
+    }),
   ]
 
   if (opts.mode === 'user') return all

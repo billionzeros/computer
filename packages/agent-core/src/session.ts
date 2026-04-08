@@ -135,6 +135,18 @@ export interface SessionInfo {
   usage?: import('@anton/protocol').TokenUsage
 }
 
+export interface SurfaceInfo {
+  kind: 'desktop' | 'slack' | 'telegram' | (string & {})
+  /** One-line label for the location, e.g. `Slack #eng in "Huddle01"`. */
+  label?: string
+  /** One-line label for the user, e.g. `Om Gupta (@om)`. */
+  userLabel?: string
+  /** Output dialect — drives a prompt hint and (separately) the reply formatter. */
+  format?: 'commonmark' | 'slack-mrkdwn' | 'telegram-md'
+  /** Short key/value bag rendered as bullet lines in the surface prompt section. */
+  details?: Record<string, string>
+}
+
 /** Fallback max messages if compaction fails */
 const FALLBACK_MAX_MESSAGES = 100
 
@@ -153,7 +165,7 @@ export class Session {
   private planConfirmHandler?: PlanConfirmHandler
   private askUserHandler?: AskUserHandler
   _connectorManager?: {
-    getAllTools(): AgentTool[]
+    getAllTools(surface?: string): AgentTool[]
     getToolPermission?(toolName: string): 'auto' | 'ask' | 'never'
   }
   _mcpManager?: import('./mcp/mcp-manager.js').McpManager
@@ -196,6 +208,7 @@ export class Session {
   private agentMemory?: string
   private firstMessage?: string
   public contextInfo?: ContextInfo
+  private surface?: SurfaceInfo
 
   // Braintrust tracing
   private parentTraceSpan?: Span // when this is a sub-agent, inherit parent's span
@@ -241,6 +254,8 @@ export class Session {
     thinkingLevel?: 'off' | 'minimal' | 'low' | 'medium' | 'high'
     parentTraceSpan?: Span // for sub-agents: nest under parent's trace
     workflowMetadata?: { workflowId: string; agentKey: string; promptVersion: string }
+    /** Where this session is talking — Slack/Telegram/desktop. Injected into system prompt. */
+    surface?: SurfaceInfo
   }) {
     this.id = opts.id
     this.log = withContext(baseLog, { sessionId: opts.id })
@@ -266,6 +281,7 @@ export class Session {
     this.maxTurns = opts.maxTurns ?? 0
     this.parentTraceSpan = opts.parentTraceSpan
     this.workflowMetadata = opts.workflowMetadata
+    this.surface = opts.surface
 
     // Set up conversation workspace (skip for ephemeral sub-agents)
     if (!this.ephemeral) {
@@ -1771,6 +1787,10 @@ export class Session {
     contextLines.push(`- Date: ${new Date().toISOString().split('T')[0]}`)
     prompt += Session.systemReminder('Current Context', contextLines.join('\n'))
 
+    if (this.surface && this.surface.kind !== 'desktop') {
+      prompt += Session.systemReminder('Current Surface', renderSurfaceBlock(this.surface))
+    }
+
     // Layer 4: Memory — global, conversation, and cross-conversation
     if (this.memoryData) {
       const memSections: string[] = []
@@ -1868,6 +1888,18 @@ Do not call this on every turn — only once per session when there is something
   }
 
   /**
+   * Update where this session is talking. Called by the webhook runner on
+   * every turn so a Slack session picks up the current thread's user /
+   * channel label even when the session already existed. Rebuilds and
+   * re-installs the system prompt (cheap — string concat + one setter).
+   * Pass `undefined` to revert to desktop defaults.
+   */
+  setSurface(surface: SurfaceInfo | undefined): void {
+    this.surface = surface
+    this.piAgent.setSystemPrompt(this.getSystemPrompt())
+  }
+
+  /**
    * Load conversation context (memories) for this session.
    * Call after construction with the first user message for cross-conversation matching.
    */
@@ -1885,6 +1917,56 @@ Do not call this on every turn — only once per session when there is something
     this.piAgent.setSystemPrompt(this.getSystemPrompt())
     return contextInfo
   }
+}
+
+/**
+ * Render the "Current Surface" system-reminder body. Kept outside the class
+ * so the text is easy to tweak without touching the prompt-assembly logic,
+ * and so the exact string is trivially grep-able. The guidance here should
+ * be short and directive — it appears on every turn.
+ */
+function renderSurfaceBlock(surface: SurfaceInfo): string {
+  const lines: string[] = []
+  if (surface.label) {
+    lines.push(`You are currently replying on ${surface.label}.`)
+  } else {
+    lines.push(`You are currently replying on ${surface.kind}.`)
+  }
+  if (surface.userLabel) {
+    lines.push(`The human on the other end is ${surface.userLabel}.`)
+  }
+  if (surface.details) {
+    for (const [k, v] of Object.entries(surface.details)) {
+      if (v) lines.push(`- ${k}: ${v}`)
+    }
+  }
+
+  // Formatting guidance. Short and directive — the reply-path formatter
+  // will catch slips anyway, but telling the model up front produces
+  // cleaner output and fewer escape artefacts.
+  if (surface.format === 'slack-mrkdwn') {
+    lines.push(
+      '',
+      'Format your replies as Slack mrkdwn, NOT CommonMark:',
+      '- Bold uses *single asterisks*, never **double**.',
+      '- No `#` / `##` headings — use *bold* as a heading substitute.',
+      '- Links are `<https://url|text>`, not `[text](url)`.',
+      '- Strikethrough is `~text~`, not `~~text~~`.',
+      '- Keep replies short. Slack is a chat, not a document — link to',
+      '  longer output rather than pasting it inline.',
+    )
+  } else if (surface.format === 'telegram-md') {
+    lines.push(
+      '',
+      'Format your replies for Telegram (legacy Markdown):',
+      '- Bold uses *single asterisks*, not **double**.',
+      '- No `#` / `##` headings — use *bold* as a heading substitute.',
+      '- Telegram renders on mobile — keep replies short and scan-able.',
+      '- Avoid wide tables; Telegram wraps them into an unreadable mess.',
+    )
+  }
+
+  return lines.join('\n')
 }
 
 /**
@@ -1908,7 +1990,7 @@ export function createSession(
     projectType?: string
     mcpManager?: import('./mcp/mcp-manager.js').McpManager
     connectorManager?: {
-      getAllTools(): import('@mariozechner/pi-agent-core').AgentTool[]
+      getAllTools(surface?: string): import('@mariozechner/pi-agent-core').AgentTool[]
       getToolPermission?(toolName: string): 'auto' | 'ask' | 'never'
     }
     onJobAction?: import('./tools/job.js').JobActionHandler
@@ -1924,6 +2006,8 @@ export function createSession(
     availableWorkflows?: { name: string; description: string; whenToUse: string }[]
     /** Workflow metadata for Braintrust tracing (workflow ID, agent key, prompt version) */
     workflowMetadata?: { workflowId: string; agentKey: string; promptVersion: string }
+    /** Where the session is talking — Slack/Telegram/desktop. Omit for desktop. */
+    surface?: SurfaceInfo
   },
 ): Session {
   const provider = opts?.provider || config.defaults.provider
@@ -1962,7 +2046,13 @@ export function createSession(
     provider,
     model,
     config,
-    tools: buildTools(config, toolCallbacks, opts?.mcpManager, opts?.connectorManager),
+    tools: buildTools(
+      config,
+      toolCallbacks,
+      opts?.mcpManager,
+      opts?.connectorManager,
+      opts?.surface?.kind,
+    ),
     apiKey: opts?.apiKey,
     ephemeral: opts?.ephemeral,
     projectId: opts?.projectId,
@@ -1973,6 +2063,7 @@ export function createSession(
     availableWorkflows: opts?.availableWorkflows,
     maxDurationMs: opts?.maxDurationMs,
     workflowMetadata: opts?.workflowMetadata,
+    surface: opts?.surface,
   })
   sessionRef.session = session
   session._connectorManager = opts?.connectorManager
@@ -2008,7 +2099,7 @@ export function resumeSession(
     projectType?: string
     mcpManager?: import('./mcp/mcp-manager.js').McpManager
     connectorManager?: {
-      getAllTools(): import('@mariozechner/pi-agent-core').AgentTool[]
+      getAllTools(surface?: string): import('@mariozechner/pi-agent-core').AgentTool[]
       getToolPermission?(toolName: string): 'auto' | 'ask' | 'never'
     }
     onJobAction?: import('./tools/job.js').JobActionHandler
@@ -2016,6 +2107,8 @@ export function resumeSession(
     maxDurationMs?: number
     agentInstructions?: string
     agentMemory?: string
+    /** Where the session is talking — Slack/Telegram/desktop. Omit for desktop. */
+    surface?: SurfaceInfo
   },
 ): Session | null {
   const basePath = opts?.projectId ? getProjectSessionsDir(opts.projectId) : undefined
@@ -2052,7 +2145,13 @@ export function resumeSession(
     provider: persisted.provider,
     model: persisted.model,
     config,
-    tools: buildTools(config, toolCallbacks, opts?.mcpManager, opts?.connectorManager),
+    tools: buildTools(
+      config,
+      toolCallbacks,
+      opts?.mcpManager,
+      opts?.connectorManager,
+      opts?.surface?.kind,
+    ),
     existingMessages: persisted.messages,
     title: persisted.title,
     createdAt: persisted.createdAt,
@@ -2064,6 +2163,7 @@ export function resumeSession(
     agentMemory: opts?.agentMemory,
     lastTasks: persisted.lastTasks,
     maxDurationMs: opts?.maxDurationMs,
+    surface: opts?.surface,
   })
   sessionRef.session = session
   session._connectorManager = opts?.connectorManager

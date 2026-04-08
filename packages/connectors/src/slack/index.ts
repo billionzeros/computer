@@ -1,5 +1,5 @@
 import type { AgentTool } from '@mariozechner/pi-agent-core'
-import type { DirectConnector } from '../types.js'
+import type { ConnectorSurface, DirectConnector } from '../types.js'
 import { SlackAPI } from './api.js'
 import { createSlackTools } from './tools.js'
 
@@ -54,6 +54,15 @@ export class SlackUserConnector implements DirectConnector {
 export class SlackBotConnector implements DirectConnector {
   readonly id = 'slack-bot'
   readonly name = 'Slack (Anton Bot)'
+  /**
+   * Bot tools are gated to Slack sessions only. They use the workspace
+   * bot token (xoxb-) to post inside *this specific workspace*; exposing
+   * them in a desktop session would mean Anton offering to "send a
+   * message in #eng" from a context that has nothing to do with that
+   * workspace, which is incoherent. ConnectorManager.getAllTools(surface)
+   * filters this connector out for any non-Slack surface.
+   */
+  readonly surfaces: ConnectorSurface[] = ['slack']
 
   private api = new SlackAPI()
   private tools: AgentTool[] = createSlackTools(this.api, { mode: 'bot' })
