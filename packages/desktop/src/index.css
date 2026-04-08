@@ -16065,7 +16065,6 @@ button {
 .fv {
   flex: 1;
   display: flex;
-  flex-direction: column;
   overflow: hidden;
   position: relative;
 }
@@ -16074,15 +16073,48 @@ button {
   background: rgba(99, 102, 241, 0.02);
 }
 
-.fv-inner {
+.fv-left {
   flex: 1;
   display: flex;
   flex-direction: column;
-  max-width: 960px;
-  width: 100%;
-  margin: 0 auto;
-  padding: 20px 28px 0;
+  padding: 20px 24px 0;
   overflow: hidden;
+  min-width: 0;
+}
+
+.fv-divider {
+  width: 6px;
+  cursor: col-resize;
+  margin: 0 -3px;
+  z-index: 5;
+  position: relative;
+  flex-shrink: 0;
+}
+
+.fv-divider::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 50%;
+  width: 1px;
+  background: var(--border);
+  transition: width 0.12s, background 0.12s;
+  transform: translateX(-50%);
+}
+
+.fv-divider:hover::after,
+.fv-divider--active::after {
+  width: 2px;
+  background: rgba(var(--overlay), 0.2);
+}
+
+.fv-right {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  min-width: 0;
 }
 
 /* ── Breadcrumb bar ── */
@@ -16284,7 +16316,7 @@ button {
   height: 36px;
   background: transparent;
   border: none;
-  cursor: default;
+  cursor: pointer;
   text-align: left;
   width: 100%;
   gap: 10px;
@@ -16299,8 +16331,13 @@ button {
   background: rgba(var(--overlay), 0.05);
 }
 
-.fv-row--dir {
-  cursor: pointer;
+.fv-row--active {
+  background: rgba(var(--overlay), 0.08);
+}
+
+.fv-row--active .fv-row__name {
+  color: var(--accent, #818cf8);
+  font-weight: 500;
 }
 
 .fv-row__icon {
@@ -16418,6 +16455,49 @@ button {
   color: var(--text-muted);
 }
 
+/* Inline new-folder row */
+.fv-row--new {
+  background: rgba(var(--overlay), 0.04);
+  border: 1px dashed var(--border-strong);
+  border-radius: 8px;
+  cursor: default;
+}
+
+.fv-row__inline-input {
+  flex: 1;
+  background: transparent;
+  border: none;
+  outline: none;
+  font-size: 13px;
+  color: var(--text);
+  font-family: inherit;
+  padding: 0;
+  min-width: 0;
+}
+
+.fv-row__inline-input::placeholder {
+  color: var(--text-subtle);
+}
+
+.fv-row__inline-cancel {
+  flex-shrink: 0;
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--text-subtle);
+  padding: 2px;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: color 0.12s, background 0.12s;
+}
+
+.fv-row__inline-cancel:hover {
+  color: var(--text);
+  background: rgba(var(--overlay), 0.08);
+}
+
 /* ── Context menu ── */
 .fv-ctx {
   position: fixed;
@@ -16457,14 +16537,9 @@ button {
   color: var(--danger);
 }
 
-/* ── File viewer modal ── */
+/* ── File viewer panel (right side) ── */
 .fv-viewer {
-  width: min(720px, 90vw);
-  max-height: 80vh;
-  background: var(--bg-elevated);
-  border: 1px solid var(--border-strong);
-  border-radius: 14px;
-  box-shadow: var(--shadow-lg);
+  flex: 1;
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -16474,8 +16549,17 @@ button {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 12px 16px;
+  padding: 14px 20px;
   border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+  height: 48px;
+}
+
+.fv-viewer__title-row {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  overflow: hidden;
 }
 
 .fv-viewer__title {
@@ -16483,6 +16567,9 @@ button {
   font-weight: 600;
   color: var(--text);
   font-family: var(--font-mono);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .fv-viewer__close {
@@ -16508,6 +16595,7 @@ button {
   flex: 1;
   overflow: auto;
   padding: 0;
+  background: var(--bg);
 }
 
 .fv-viewer__status {

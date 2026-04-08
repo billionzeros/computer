@@ -105,7 +105,7 @@ export function ProjectFilesView() {
   const [newFolderOpen, setNewFolderOpen] = useState(false)
   const [newFolderName, setNewFolderName] = useState('')
 
-  // File viewer
+  // File viewer (right panel)
   const [viewingFile, setViewingFile] = useState<{ name: string; path: string } | null>(null)
   const [viewContent, setViewContent] = useState<string | null>(null)
   const [viewLoading, setViewLoading] = useState(false)
@@ -117,6 +117,13 @@ export function ProjectFilesView() {
     x: number
     y: number
   } | null>(null)
+
+  // Draggable divider
+  const [leftWidth, setLeftWidth] = useState(() =>
+    Math.max(360, Math.floor(window.innerWidth * 0.35)),
+  )
+  const dragRef = useRef<{ startX: number; startW: number } | null>(null)
+  const [isDividerDragging, setIsDividerDragging] = useState(false)
 
   const fileInputRef = useRef<HTMLInputElement>(null)
   const newFolderInputRef = useRef<HTMLInputElement>(null)
@@ -223,6 +230,18 @@ export function ProjectFilesView() {
     return unsub
   }, [refresh])
 
+  // Listen for fs_write response (upload)
+  useEffect(() => {
+    const unsub = connection.onFilesystemWriteResponse((_path, success, err) => {
+      if (success) {
+        refresh()
+      } else {
+        setError(`Upload failed: ${err}`)
+      }
+    })
+    return unsub
+  }, [refresh])
+
   // Timeout
   useEffect(() => {
     if (!loading) return
@@ -256,6 +275,41 @@ export function ProjectFilesView() {
     return () => window.removeEventListener('click', close)
   }, [contextMenu])
 
+  // Divider drag logic
+  const handleDividerStart = useCallback(
+    (e: React.MouseEvent) => {
+      e.preventDefault()
+      dragRef.current = { startX: e.clientX, startW: leftWidth }
+      setIsDividerDragging(true)
+    },
+    [leftWidth],
+  )
+
+  useEffect(() => {
+    if (!isDividerDragging) return
+    const onMove = (e: MouseEvent) => {
+      if (!dragRef.current) return
+      const delta = e.clientX - dragRef.current.startX
+      const minW = Math.max(300, Math.floor(window.innerWidth * 0.2))
+      const maxW = Math.floor(window.innerWidth * 0.6)
+      setLeftWidth(Math.min(maxW, Math.max(minW, dragRef.current.startW + delta)))
+    }
+    const onUp = () => {
+      setIsDividerDragging(false)
+      dragRef.current = null
+    }
+    document.addEventListener('mousemove', onMove)
+    document.addEventListener('mouseup', onUp)
+    document.body.style.cursor = 'col-resize'
+    document.body.style.userSelect = 'none'
+    return () => {
+      document.removeEventListener('mousemove', onMove)
+      document.removeEventListener('mouseup', onUp)
+      document.body.style.cursor = ''
+      document.body.style.userSelect = ''
+    }
+  }, [isDividerDragging])
+
   // Filter, search, sort
   const visibleEntries = useMemo(() => {
     let filtered = entries
@@ -273,13 +327,15 @@ export function ProjectFilesView() {
     })
   }, [entries, showHidden, search])
 
-  const resolvePath = (name: string) => (cwd === '/' ? `/${name}` : `${cwd}/${name}`)
+  const resolvePath = useCallback(
+    (name: string) => (cwd === '/' ? `/${name}` : `${cwd}/${name}`),
+    [cwd],
+  )
 
   const handleEntryClick = (entry: FileEntry) => {
     if (entry.type === 'dir') {
       listDir(resolvePath(entry.name))
     } else {
-      // Open file viewer
       openFileViewer(entry)
     }
   }
@@ -301,18 +357,22 @@ export function ProjectFilesView() {
     setContextMenu({ entry, x: e.clientX, y: e.clientY })
   }
 
-  // New Folder
+  // New Folder — inline row in file list (Finder-style)
   const handleNewFolder = () => {
     setNewFolderOpen(true)
     setNewFolderName('')
-    setTimeout(() => newFolderInputRef.current?.focus(), 50)
+    setTimeout(() => newFolderInputRef.current?.focus(), 30)
   }
 
   const submitNewFolder = () => {
     const name = newFolderName.trim()
     if (!name) return
-    const path = resolvePath(name)
-    connection.sendFilesystemMkdir(path)
+    connection.sendFilesystemMkdir(resolvePath(name))
+  }
+
+  const cancelNewFolder = () => {
+    setNewFolderOpen(false)
+    setNewFolderName('')
   }
 
   // Delete (uses FILESYNC fs_delete for absolute path)
@@ -326,29 +386,19 @@ export function ProjectFilesView() {
     connection.sendFilesystemDelete(deleteTarget.path)
   }
 
-  // Upload
+  // Upload — writes to current directory via FILESYNC fs_write
   const handleUpload = useCallback(
     (files: FileList) => {
-      if (!activeProjectId) return
       for (const file of Array.from(files)) {
         const reader = new FileReader()
         reader.onload = () => {
           const base64 = (reader.result as string).split(',')[1] || ''
-          projectStore
-            .getState()
-            .uploadProjectFile(
-              activeProjectId,
-              file.name,
-              base64,
-              file.type || 'application/octet-stream',
-              file.size,
-            )
-          setTimeout(() => refresh(), 500)
+          connection.sendFilesystemWrite(resolvePath(file.name), base64, 'base64')
         }
         reader.readAsDataURL(file)
       }
     },
-    [activeProjectId, refresh],
+    [resolvePath],
   )
 
   const handleDragOver = useCallback((e: React.DragEvent) => {
@@ -366,6 +416,7 @@ export function ProjectFilesView() {
   )
 
   const canGoUp = cwd !== startDir
+  const hasFileOpen = !!viewingFile
 
   return (
     <div
@@ -374,7 +425,15 @@ export function ProjectFilesView() {
       onDragLeave={handleDragLeave}
       onDrop={handleDrop}
     >
-      <div className="fv-inner">
+      {/* Left panel — file tree */}
+      <div
+        className="fv-left"
+        style={{
+          width: hasFileOpen ? leftWidth : '100%',
+          maxWidth: hasFileOpen ? leftWidth : undefined,
+          flexShrink: hasFileOpen ? 0 : 1,
+        }}
+      >
         {/* Breadcrumb bar */}
         <div className="fv-bar">
           <div className="fv-crumbs">
@@ -382,7 +441,6 @@ export function ProjectFilesView() {
               <Home size={14} strokeWidth={1.8} />
             </button>
             {breadcrumbs.map((crumb, i) => (
-              // biome-ignore lint/suspicious/noArrayIndexKey: breadcrumb segments can share names
               <span key={`${crumb.path}-${i}`} className="fv-crumbs__item">
                 <ChevronRight size={13} strokeWidth={1.8} className="fv-crumbs__sep" />
                 <button
@@ -456,13 +514,6 @@ export function ProjectFilesView() {
             </div>
           )}
 
-          {!loading && !error && visibleEntries.length === 0 && (
-            <div className="fv-empty">
-              <FolderOpen size={40} strokeWidth={0.8} />
-              <p>{search ? 'No files match your search' : 'This folder is empty'}</p>
-            </div>
-          )}
-
           {/* Go up row */}
           {canGoUp && !loading && (
             <button
@@ -480,11 +531,45 @@ export function ProjectFilesView() {
             </button>
           )}
 
+          {/* Inline new folder row */}
+          {newFolderOpen && (
+            <div className="fv-row fv-row--dir fv-row--new">
+              <span className="fv-row__icon fv-row__icon--dir">
+                <FolderPlus size={18} strokeWidth={1.5} />
+              </span>
+              <input
+                ref={newFolderInputRef}
+                type="text"
+                className="fv-row__inline-input"
+                placeholder="Folder name…"
+                value={newFolderName}
+                onChange={(e) => setNewFolderName(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') submitNewFolder()
+                  if (e.key === 'Escape') cancelNewFolder()
+                }}
+                onBlur={() => {
+                  if (!newFolderName.trim()) cancelNewFolder()
+                }}
+              />
+              <button type="button" className="fv-row__inline-cancel" onClick={cancelNewFolder}>
+                <X size={14} strokeWidth={1.8} />
+              </button>
+            </div>
+          )}
+
+          {!loading && !error && visibleEntries.length === 0 && !newFolderOpen && (
+            <div className="fv-empty">
+              <FolderOpen size={40} strokeWidth={0.8} />
+              <p>{search ? 'No files match your search' : 'This folder is empty'}</p>
+            </div>
+          )}
+
           {visibleEntries.map((entry) => (
             <button
               type="button"
               key={entry.name}
-              className={`fv-row${entry.type === 'dir' ? ' fv-row--dir' : ''}`}
+              className={`fv-row${entry.type === 'dir' ? ' fv-row--dir' : ''}${viewingFile?.name === entry.name && entry.type === 'file' ? ' fv-row--active' : ''}`}
               onClick={() => handleEntryClick(entry)}
               onContextMenu={(e) => handleContextMenu(e, entry)}
             >
@@ -514,6 +599,53 @@ export function ProjectFilesView() {
           ))}
         </div>
       </div>
+
+      {/* Divider */}
+      {hasFileOpen && (
+        <div
+          className={`fv-divider${isDividerDragging ? ' fv-divider--active' : ''}`}
+          onMouseDown={handleDividerStart}
+        />
+      )}
+
+      {/* Right panel — file viewer */}
+      {hasFileOpen && (
+        <div className="fv-right">
+          <div className="fv-viewer">
+            <div className="fv-viewer__header">
+              <div className="fv-viewer__title-row">
+                <span
+                  className={`fv-row__icon fv-row__icon--${getCategory(viewingFile.name)}`}
+                  style={{ marginRight: 8 }}
+                >
+                  {getFileIcon({ name: viewingFile.name, type: 'file', size: '' })}
+                </span>
+                <span className="fv-viewer__title">{viewingFile.name}</span>
+              </div>
+              <button
+                type="button"
+                className="fv-viewer__close"
+                onClick={() => setViewingFile(null)}
+              >
+                <X size={16} strokeWidth={1.8} />
+              </button>
+            </div>
+            <div className="fv-viewer__body">
+              {viewLoading && (
+                <div className="fv-viewer__status">
+                  <Loader2 size={20} strokeWidth={1.5} className="spin" />
+                </div>
+              )}
+              {viewError && (
+                <div className="fv-viewer__status fv-viewer__status--error">{viewError}</div>
+              )}
+              {!viewLoading && !viewError && viewContent !== null && (
+                <pre className="fv-viewer__code">{viewContent}</pre>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Context menu */}
       {contextMenu && (
@@ -555,97 +687,6 @@ export function ProjectFilesView() {
             <Trash2 size={14} strokeWidth={1.5} />
             Delete
           </button>
-        </div>
-      )}
-
-      {/* File viewer modal */}
-      {viewingFile && (
-        <div
-          className="modal-overlay"
-          onClick={() => setViewingFile(null)}
-          onKeyDown={(e) => {
-            if (e.key === 'Escape') setViewingFile(null)
-          }}
-        >
-          <div
-            className="fv-viewer"
-            onClick={(e) => e.stopPropagation()}
-            onKeyDown={(e) => e.stopPropagation()}
-          >
-            <div className="fv-viewer__header">
-              <span className="fv-viewer__title">{viewingFile.name}</span>
-              <button
-                type="button"
-                className="fv-viewer__close"
-                onClick={() => setViewingFile(null)}
-              >
-                <X size={16} strokeWidth={1.8} />
-              </button>
-            </div>
-            <div className="fv-viewer__body">
-              {viewLoading && (
-                <div className="fv-viewer__status">
-                  <Loader2 size={20} strokeWidth={1.5} className="spin" />
-                </div>
-              )}
-              {viewError && (
-                <div className="fv-viewer__status fv-viewer__status--error">{viewError}</div>
-              )}
-              {!viewLoading && !viewError && viewContent !== null && (
-                <pre className="fv-viewer__code">{viewContent}</pre>
-              )}
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* New Folder modal */}
-      {newFolderOpen && (
-        <div
-          className="modal-overlay"
-          onClick={() => setNewFolderOpen(false)}
-          onKeyDown={(e) => {
-            if (e.key === 'Escape') setNewFolderOpen(false)
-          }}
-        >
-          <div
-            className="modal-card modal-card--sm"
-            onClick={(e) => e.stopPropagation()}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter') submitNewFolder()
-              e.stopPropagation()
-            }}
-          >
-            <div className="modal-card__body">
-              <h3>New Folder</h3>
-              <input
-                ref={newFolderInputRef}
-                type="text"
-                className="fv-search__input"
-                style={{ marginTop: '12px' }}
-                placeholder="Folder name..."
-                value={newFolderName}
-                onChange={(e) => setNewFolderName(e.target.value)}
-              />
-            </div>
-            <div className="modal-card__footer">
-              <button
-                type="button"
-                className="button button--ghost"
-                onClick={() => setNewFolderOpen(false)}
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                className="button button--primary"
-                onClick={submitNewFolder}
-                disabled={!newFolderName.trim()}
-              >
-                Create
-              </button>
-            </div>
-          </div>
         </div>
       )}
 
