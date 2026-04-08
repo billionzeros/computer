@@ -1,0 +1,25 @@
+packages/agent-config/src/config.ts
+  cea153fbef8dc345 255-259,308-312
+packages/agent-core/src/anton-models.ts
+  cea153fbef8dc345 299-300,308-309,311-313,317-318,321,326-327,330,335-336,339
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.2.5",
+  "base_commit_sha": "111f0f53fa9384e85b8ec266220413ca222e67c0",
+  "prompts": {
+    "cea153fbef8dc345": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "b50d95fe-7695-4c01-9e2e-dda748289338",
+        "model": "claude-opus-4-6"
+      },
+      "human_author": "Om Gupta",
+      "messages": [],
+      "total_additions": 32,
+      "total_deletions": 21,
+      "accepted_lines": 32,
+      "overriden_lines": 0
+    }
+  }
+}
