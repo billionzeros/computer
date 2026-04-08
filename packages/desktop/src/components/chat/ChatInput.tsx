@@ -1,5 +1,5 @@
 import type { AskUserQuestion } from '@anton/protocol'
-import { Plus, Send, Square, X } from 'lucide-react'
+import { Image as ImageIcon, Plus, Send, Square, X } from 'lucide-react'
 import type React from 'react'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { Skill } from '../../lib/skills.js'
@@ -138,13 +138,11 @@ export function ChatInput({
     const text = input.trim()
     if (!text && attachments.length === 0) return
 
-    // If agent is working, steer instead of sending a new message
-    if (isCurrentSessionWorking) {
-      if ((text || attachments.length > 0) && onSteer) {
-        onSteer(text, attachments)
+    // If agent is working and no attachments, steer with text only
+    if (isCurrentSessionWorking && attachments.length === 0) {
+      if (text && onSteer) {
+        onSteer(text)
         setInput('')
-        setAttachments([])
-        setAttachmentError(null)
         setShowSlashMenu(false)
         textareaRef.current?.focus()
       }
@@ -231,25 +229,32 @@ export function ChatInput({
               {attachments.map((attachment) => {
                 const previewSrc = attachmentPreviewSrc(attachment)
                 return (
-                  <div key={attachment.id} className="composer__attachment">
-                    {previewSrc ? (
-                      <img
-                        src={previewSrc}
-                        alt={attachment.name}
-                        className="composer__attachment-image"
-                      />
-                    ) : (
-                      <div className="composer__attachment-fallback">{attachment.name}</div>
+                  <div key={attachment.id} className="composer__chip-wrapper">
+                    <div className="composer__chip">
+                      <button
+                        type="button"
+                        className="composer__chip-remove"
+                        aria-label={`Remove ${attachment.name}`}
+                        onClick={() => handleRemoveAttachment(attachment.id)}
+                      >
+                        <X size={12} strokeWidth={1.5} />
+                      </button>
+                      {previewSrc ? (
+                        <img
+                          src={previewSrc}
+                          alt={attachment.name}
+                          className="composer__chip-thumb"
+                        />
+                      ) : (
+                        <ImageIcon size={14} strokeWidth={1.5} className="composer__chip-icon" />
+                      )}
+                      <span className="composer__chip-name">{attachment.name}</span>
+                    </div>
+                    {previewSrc && (
+                      <div className="composer__chip-preview">
+                        <img src={previewSrc} alt={attachment.name} />
+                      </div>
                     )}
-                    <button
-                      type="button"
-                      className="composer__attachment-remove"
-                      aria-label={`Remove ${attachment.name}`}
-                      onClick={() => handleRemoveAttachment(attachment.id)}
-                    >
-                      <X size={14} strokeWidth={1.5} />
-                    </button>
-                    <div className="composer__attachment-name">{attachment.name}</div>
                   </div>
                 )
               })}
@@ -286,16 +291,28 @@ export function ChatInput({
               <ModelSelector />
               {isCurrentSessionWorking ? (
                 <>
-                  {input.trim() && (
+                  {attachments.length > 0 ? (
                     <button
                       type="button"
                       onClick={handleSend}
-                      className="composer__btn composer__btn--steer"
-                      aria-label="Send while working"
-                      data-tooltip="Steer"
+                      className="composer__btn composer__btn--send"
+                      aria-label="Send"
+                      data-tooltip="Send"
                     >
-                      <Send size={16} strokeWidth={1.5} />
+                      <Send size={18} strokeWidth={1.5} />
                     </button>
+                  ) : (
+                    input.trim() && (
+                      <button
+                        type="button"
+                        onClick={handleSend}
+                        className="composer__btn composer__btn--steer"
+                        aria-label="Send while working"
+                        data-tooltip="Steer"
+                      >
+                        <Send size={16} strokeWidth={1.5} />
+                      </button>
+                    )
                   )}
                   <button
                     type="button"
