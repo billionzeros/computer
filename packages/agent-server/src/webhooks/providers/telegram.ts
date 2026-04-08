@@ -6,10 +6,12 @@
  * just: verify, parse, reply.
  */
 
+import { listCommands } from '@anton/agent-core'
 import { createLogger } from '@anton/logger'
 import { toTelegramMd } from '../format/telegram-md.js'
 import type {
   CanonicalEvent,
+  CanonicalImageAttachment,
   OutboundImage,
   SurfaceInfo,
   WebhookProvider,
@@ -62,7 +64,7 @@ export class TelegramWebhookProvider implements WebhookProvider {
     return ok
   }
 
-  parse(req: WebhookRequest): CanonicalEvent[] {
+  async parse(req: WebhookRequest): Promise<CanonicalEvent[]> {
     let update: TelegramUpdate
     try {
       update = JSON.parse(req.rawBody.toString('utf8')) as TelegramUpdate
@@ -78,15 +80,43 @@ export class TelegramWebhookProvider implements WebhookProvider {
     }
 
     const msg = update.message
-    if (!msg?.text) {
-      log.info({ updateId: update.update_id }, 'parse: update has no text message, dropping')
+    if (!msg) {
+      log.info({ updateId: update.update_id }, 'parse: update has no message, dropping')
+      return []
+    }
+
+    // Handle photo messages — download the image and attach it.
+    const hasPhoto = msg.photo && msg.photo.length > 0
+    const text = (msg.text ?? msg.caption ?? '').trim()
+
+    if (!text && !hasPhoto) {
+      log.info({ updateId: update.update_id }, 'parse: update has no text or photo, dropping')
       return []
     }
 
     const chatId = msg.chat.id
-    const text = msg.text.trim()
-    if (!text) {
-      log.info({ chatId }, 'parse: empty text after trim, dropping')
+    let attachments: CanonicalImageAttachment[] | undefined
+
+    if (hasPhoto) {
+      // Telegram sends multiple sizes; the last element is the largest.
+      const largest = msg.photo![msg.photo!.length - 1]
+      try {
+        const attachment = await this.downloadPhoto(largest.file_id)
+        if (attachment) {
+          attachments = [attachment]
+          log.info(
+            { chatId, fileId: largest.file_id, sizeBytes: attachment.sizeBytes },
+            'parse: downloaded photo attachment',
+          )
+        }
+      } catch (err) {
+        log.warn({ err, chatId, fileId: largest.file_id }, 'parse: failed to download photo')
+      }
+    }
+
+    // If we still have no text and the photo download failed, drop.
+    if (!text && !attachments?.length) {
+      log.info({ chatId }, 'parse: no text and photo download failed, dropping')
       return []
     }
 
@@ -95,20 +125,19 @@ export class TelegramWebhookProvider implements WebhookProvider {
         chatId,
         updateId: update.update_id,
         textBytes: text.length,
+        hasPhoto,
         fromUsername: msg.from?.username,
       },
       'parse: canonical event',
     )
-
-    // Typing indicator is now kicked off in onTurnStart() for symmetry
-    // with onTurnEnd(). The router calls onTurnStart after parse returns.
 
     return [
       {
         provider: this.slug,
         sessionId: `telegram-${chatId}`,
         deliveryId: `telegram-${update.update_id}`,
-        text,
+        text: text || '[image]',
+        attachments,
         surface: buildTelegramSurface(msg),
         context: {
           chatId,
@@ -117,6 +146,52 @@ export class TelegramWebhookProvider implements WebhookProvider {
         },
       },
     ]
+  }
+
+  /**
+   * Download a photo from Telegram using the getFile API.
+   * Returns a CanonicalImageAttachment with base64-encoded bytes, or
+   * undefined if the download fails.
+   */
+  private async downloadPhoto(fileId: string): Promise<CanonicalImageAttachment | undefined> {
+    // Step 1: get the file path from Telegram.
+    const fileRes = await fetch(`${TELEGRAM_API}/bot${this.token}/getFile`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ file_id: fileId }),
+    })
+    if (!fileRes.ok) {
+      log.warn({ status: fileRes.status }, 'getFile request failed')
+      return undefined
+    }
+    const fileData = (await fileRes.json()) as {
+      ok: boolean
+      result?: { file_id: string; file_path?: string; file_size?: number }
+    }
+    if (!fileData.ok || !fileData.result?.file_path) {
+      log.warn({ fileData }, 'getFile returned no file_path')
+      return undefined
+    }
+
+    // Step 2: download the actual file bytes.
+    const downloadUrl = `${TELEGRAM_API}/file/bot${this.token}/${fileData.result.file_path}`
+    const dlRes = await fetch(downloadUrl)
+    if (!dlRes.ok) {
+      log.warn({ status: dlRes.status }, 'photo download failed')
+      return undefined
+    }
+    const bytes = Buffer.from(await dlRes.arrayBuffer())
+    const filePath = fileData.result.file_path
+    const ext = filePath.split('.').pop()?.toLowerCase() ?? 'jpg'
+    const mimeType = ext === 'png' ? 'image/png' : 'image/jpeg'
+
+    return {
+      id: fileId,
+      name: filePath.split('/').pop() ?? `photo.${ext}`,
+      mimeType,
+      data: bytes.toString('base64'),
+      sizeBytes: bytes.byteLength,
+    }
   }
 
   // ── Lifecycle hooks ───────────────────────────────────────────────
@@ -144,14 +219,9 @@ export class TelegramWebhookProvider implements WebhookProvider {
   async sendMessage(event: CanonicalEvent, text: string): Promise<string | undefined> {
     const chatId = event.context.chatId as number
     const formatted = toTelegramMd(text)
-    const res = await fetch(`${TELEGRAM_API}/bot${this.token}/sendMessage`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        chat_id: chatId,
-        text: formatted || text,
-        parse_mode: 'Markdown',
-      }),
+    const res = await this.telegramPostWithMdFallback('sendMessage', {
+      chat_id: chatId,
+      text: formatted || text,
     })
     if (!res.ok) {
       const body = await res.text().catch(() => '<unreadable>')
@@ -169,15 +239,10 @@ export class TelegramWebhookProvider implements WebhookProvider {
   async editMessage(event: CanonicalEvent, messageId: string, text: string): Promise<void> {
     const chatId = event.context.chatId as number
     const formatted = toTelegramMd(text)
-    const res = await fetch(`${TELEGRAM_API}/bot${this.token}/editMessageText`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        chat_id: chatId,
-        message_id: Number.parseInt(messageId, 10),
-        text: formatted || text,
-        parse_mode: 'Markdown',
-      }),
+    const res = await this.telegramPostWithMdFallback('editMessageText', {
+      chat_id: chatId,
+      message_id: Number.parseInt(messageId, 10),
+      text: formatted || text,
     })
     if (!res.ok) {
       const body = await res.text().catch(() => '<unreadable>')
@@ -198,22 +263,17 @@ export class TelegramWebhookProvider implements WebhookProvider {
   ): Promise<void> {
     const chatId = event.context.chatId as number
     const text = `⚠️ *Confirmation required*\n\`\`\`\n${command}\n\`\`\`\n${reason}`
-    await fetch(`${TELEGRAM_API}/bot${this.token}/sendMessage`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        chat_id: chatId,
-        text,
-        parse_mode: 'Markdown',
-        reply_markup: {
-          inline_keyboard: [
-            [
-              { text: '✅ Allow', callback_data: `confirm_approve:${interactionId}` },
-              { text: '❌ Deny', callback_data: `confirm_deny:${interactionId}` },
-            ],
+    await this.telegramPostWithMdFallback('sendMessage', {
+      chat_id: chatId,
+      text,
+      reply_markup: {
+        inline_keyboard: [
+          [
+            { text: '✅ Allow', callback_data: `confirm_approve:${interactionId}` },
+            { text: '❌ Deny', callback_data: `confirm_deny:${interactionId}` },
           ],
-        },
-      }),
+        ],
+      },
     })
   }
 
@@ -231,22 +291,17 @@ export class TelegramWebhookProvider implements WebhookProvider {
     const truncated =
       content.length > 3500 ? `${content.slice(0, 3500)}…\n\n_(plan truncated)_` : content
     const text = `📋 *Plan: ${title}*\n\n${toTelegramMd(truncated)}\n\nReply *approve* or use the buttons below.`
-    await fetch(`${TELEGRAM_API}/bot${this.token}/sendMessage`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        chat_id: chatId,
-        text,
-        parse_mode: 'Markdown',
-        reply_markup: {
-          inline_keyboard: [
-            [
-              { text: '✅ Approve', callback_data: `plan_approve:${interactionId}` },
-              { text: '❌ Reject', callback_data: `plan_reject:${interactionId}` },
-            ],
+    await this.telegramPostWithMdFallback('sendMessage', {
+      chat_id: chatId,
+      text,
+      reply_markup: {
+        inline_keyboard: [
+          [
+            { text: '✅ Approve', callback_data: `plan_approve:${interactionId}` },
+            { text: '❌ Reject', callback_data: `plan_reject:${interactionId}` },
           ],
-        },
-      }),
+        ],
+      },
     })
   }
 
@@ -348,6 +403,41 @@ export class TelegramWebhookProvider implements WebhookProvider {
     })
   }
 
+  /**
+   * POST to a Telegram method with `parse_mode: 'Markdown'`. If the API
+   * returns a 400 mentioning "can't parse entities", retry the same
+   * payload without `parse_mode` so the message still arrives as plain
+   * text rather than being silently lost.
+   */
+  private async telegramPostWithMdFallback(
+    method: string,
+    payload: Record<string, unknown>,
+  ): Promise<Response> {
+    const url = `${TELEGRAM_API}/bot${this.token}/${method}`
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ...payload, parse_mode: 'Markdown' }),
+    })
+    if (res.status === 400) {
+      const body = await res.text().catch(() => '')
+      if (body.includes("can't parse entities")) {
+        log.warn(
+          { method, chatId: payload.chat_id },
+          'Markdown parse failed, retrying without parse_mode',
+        )
+        return fetch(url, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        })
+      }
+      // Body already consumed — re-wrap so callers can still read it.
+      return new Response(body, { status: 400, statusText: res.statusText })
+    }
+    return res
+  }
+
   // ── Reply ─────────────────────────────────────────────────────────
 
   async reply(event: CanonicalEvent, text: string, images: OutboundImage[]): Promise<void> {
@@ -368,14 +458,9 @@ export class TelegramWebhookProvider implements WebhookProvider {
         'reply: sending text',
       )
       for (const [i, chunk] of chunks.entries()) {
-        const res = await fetch(`${TELEGRAM_API}/bot${this.token}/sendMessage`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            chat_id: chatId,
-            text: chunk,
-            parse_mode: 'Markdown',
-          }),
+        const res = await this.telegramPostWithMdFallback('sendMessage', {
+          chat_id: chatId,
+          text: chunk,
         })
         if (!res.ok) {
           const body = await res.text().catch(() => '<unreadable>')
@@ -485,6 +570,33 @@ export class TelegramWebhookProvider implements WebhookProvider {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ chat_id: chatId, action: 'typing' }),
     })
+  }
+
+  /**
+   * Register slash commands with the Telegram Bot Commands menu.
+   * Call once on startup — Telegram stores them server-side. Users see
+   * autocomplete when typing `/` in the chat.
+   */
+  async registerCommands(): Promise<void> {
+    const cmds = listCommands().map((c) => ({
+      command: c.name,
+      description: c.description,
+    }))
+    try {
+      const res = await fetch(`${TELEGRAM_API}/bot${this.token}/setMyCommands`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ commands: cmds }),
+      })
+      const data = (await res.json()) as { ok: boolean; description?: string }
+      if (data.ok) {
+        log.info({ count: cmds.length }, 'Telegram bot commands registered')
+      } else {
+        log.warn({ description: data.description }, 'setMyCommands failed')
+      }
+    } catch (err) {
+      log.warn({ err }, 'setMyCommands threw (non-fatal)')
+    }
   }
 
   /** Register the webhook URL with Telegram. */
@@ -645,6 +757,8 @@ interface TelegramUpdate {
     from?: { id: number; first_name: string; username?: string }
     chat: { id: number; type: string; first_name?: string; username?: string }
     text?: string
+    caption?: string
+    photo?: { file_id: string; file_unique_id: string; width: number; height: number; file_size?: number }[]
     date: number
   }
   callback_query?: {

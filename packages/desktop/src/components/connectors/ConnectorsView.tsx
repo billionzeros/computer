@@ -260,12 +260,12 @@ export function ConnectorsView() {
       {/* ── Connect popup (small centered dialog like AppSetup) ── */}
       {connectPopupId && (() => {
         const popupEntry = registry.find((r) => r.id === connectPopupId)
-        const popupExisting = connectors.find((c) => c.id === connectPopupId)
+        const popupInstances = connectors.filter((c) => (c.registryId ?? c.id) === connectPopupId)
         if (!popupEntry) return null
         return (
           <AppSetup
             entry={popupEntry}
-            existing={popupExisting}
+            instances={popupInstances}
             onBack={() => setConnectPopupId(null)}
             onConnected={() => {
               setConnectPopupId(null)
@@ -353,7 +353,7 @@ function ConnectorDetail({
 
   // Group tools by read/write classification
   const readOnly = tools.filter(isReadOnlyTool)
-  const writeDelete = tools.filter((t) => !isReadOnlyTool(t))
+  const writeDelete = tools.filter((t: string) => !isReadOnlyTool(t))
 
   return (
     <div className="connectors-view__detail-inner">
@@ -496,7 +496,7 @@ function SlackBotIdentityCard({ status }: { status?: ConnectorStatusInfo }) {
       const existing = status?.metadata ?? {}
       const merged: Record<string, string> = {}
       for (const [k, v] of Object.entries(existing)) {
-        if (k !== 'displayName' && k !== 'iconUrl') merged[k] = v
+        if (k !== 'displayName' && k !== 'iconUrl') merged[k] = v as string
       }
       if (displayName.trim()) merged.displayName = displayName.trim()
       if (iconUrl.trim()) merged.iconUrl = iconUrl.trim()

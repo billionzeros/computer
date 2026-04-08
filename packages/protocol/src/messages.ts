@@ -616,6 +616,47 @@ export interface SchedulerRunResponse {
   error?: string
 }
 
+// Skill list messages
+export interface SkillListMessage {
+  type: 'skill_list'
+}
+
+export interface SkillListResponseSkill {
+  name: string
+  description: string
+  icon?: string
+  category?: string
+  featured?: boolean
+  prompt: string
+  whenToUse?: string
+  context?: 'inline' | 'fork'
+  allowedTools?: string[]
+  tools?: string[]
+  schedule?: string
+  model?: string
+  source: 'builtin' | 'user' | 'project'
+  skillDir?: string
+  assets?: {
+    agents?: string[]
+    scripts?: string[]
+    references?: string[]
+    other?: string[]
+  }
+  parameters?: {
+    name: string
+    label: string
+    type: 'text' | 'select' | 'boolean'
+    placeholder?: string
+    options?: string[]
+    required?: boolean
+  }[]
+}
+
+export interface SkillListResponse {
+  type: 'skill_list_response'
+  skills: SkillListResponseSkill[]
+}
+
 // Project management
 export interface ProjectCreateMessage {
   type: 'project_create'
@@ -960,6 +1001,9 @@ export interface ConnectorConfigPayload {
   enabled: boolean
   oauthProvider?: string
   toolPermissions?: Record<string, ConnectorToolPermission>
+  registryId?: string
+  accountEmail?: string
+  accountLabel?: string
 }
 
 export interface ConnectorStatusPayload {
@@ -981,6 +1025,9 @@ export interface ConnectorStatusPayload {
    */
   metadata?: Record<string, string>
   error?: string
+  registryId?: string
+  accountEmail?: string
+  accountLabel?: string
 }
 
 export interface ConnectorRegistryEntryPayload {
@@ -1001,7 +1048,9 @@ export interface ConnectorRegistryEntryPayload {
     steps: string[]
     url: string
     urlLabel?: string
+    reauthorizeHint?: string
   }
+  multiAccount?: boolean
 }
 
 // Client → Server
@@ -1093,6 +1142,7 @@ export interface ConnectorRegistryListResponse {
 export interface ConnectorOAuthStartMessage {
   type: 'connector_oauth_start'
   provider: string
+  registryId?: string // for multi-account: the registry entry ID when provider is a UUID instance
 }
 
 export interface ConnectorOAuthUrlMessage {
@@ -1232,6 +1282,9 @@ export type AiMessage =
   | SchedulerListResponse
   | SchedulerRunMessage
   | SchedulerRunResponse
+  // Skills
+  | SkillListMessage
+  | SkillListResponse
   // Projects
   | ProjectCreateMessage
   | ProjectCreatedMessage

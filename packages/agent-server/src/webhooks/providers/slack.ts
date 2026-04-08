@@ -42,6 +42,13 @@ const SLACK_API = 'https://slack.com/api'
 const MAX_TS_SKEW_PAST_SECONDS = 60 * 5
 const MAX_TS_SKEW_FUTURE_SECONDS = 30
 
+/**
+ * Maximum number of thread messages to fetch for context when the bot is
+ * first mentioned in an existing thread. Keeps the context window manageable
+ * while giving the agent enough history to understand what's being discussed.
+ */
+const THREAD_CONTEXT_LIMIT = 15
+
 export interface SlackBotIdentity {
   /** Display name shown next to the message in Slack (chat:write.customize). */
   displayName?: string
@@ -114,6 +121,67 @@ export class SlackWebhookProvider implements WebhookProvider {
 
   private isThreadActive(channel: string, threadTs: string): boolean {
     return this.activeThreads.has(`${channel}:${threadTs}`)
+  }
+
+  /**
+   * Fetch thread history when the bot first joins an existing thread.
+   * Returns a formatted block of prior messages so the agent understands
+   * what's being discussed. Best-effort — returns empty on failure.
+   */
+  private async fetchThreadContext(
+    channel: string,
+    threadTs: string,
+    currentTs: string,
+  ): Promise<string> {
+    const token = await this.opts.getBotToken()
+    if (!token) return ''
+
+    try {
+      const res = await fetch(`${SLACK_API}/conversations.replies`, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json; charset=utf-8',
+        },
+        body: JSON.stringify({
+          channel,
+          ts: threadTs,
+          limit: THREAD_CONTEXT_LIMIT,
+        }),
+      })
+      const data = (await res.json()) as {
+        ok: boolean
+        messages?: Array<{ user?: string; bot_id?: string; text?: string; ts: string }>
+        error?: string
+      }
+      if (!data.ok || !data.messages || data.messages.length === 0) {
+        log.warn({ channel, threadTs, error: data.error }, 'fetchThreadContext: API call failed')
+        return ''
+      }
+
+      const prior = data.messages.filter((m) => m.ts !== currentTs)
+      if (prior.length === 0) return ''
+
+      const lines: string[] = []
+      for (const msg of prior) {
+        const who = msg.bot_id
+          ? '(bot)'
+          : msg.user
+            ? await this.identity.getUserLabel(msg.user).catch(() => msg.user!)
+            : 'unknown'
+        const body = (msg.text ?? '').slice(0, 500)
+        lines.push(`${who}: ${body}`)
+      }
+
+      return (
+        '[Thread context — messages in this thread before you were mentioned]\n' +
+        lines.join('\n') +
+        '\n[End of thread context]\n\n'
+      )
+    } catch (err) {
+      log.warn({ err, channel, threadTs }, 'fetchThreadContext: failed to fetch thread')
+      return ''
+    }
   }
 
   /** Slack's url_verification challenge — only seen if the proxy forwards it. */
@@ -297,6 +365,21 @@ export class SlackWebhookProvider implements WebhookProvider {
       }
     }
 
+    // When a user @mentions the bot in an active thread, Slack delivers
+    // both a `message` event and an `app_mention` event with different
+    // event_ids.  The `message` event is already accepted above, so drop
+    // the redundant `app_mention` to avoid double-processing.
+    if (ev.type === 'app_mention' && !isDirectChat) {
+      const threadTs = ev.thread_ts
+      if (threadTs && this.isThreadActive(ev.channel, threadTs)) {
+        log.info(
+          { channel: ev.channel, threadTs },
+          'parse: app_mention in active thread, dropping (message event will handle)',
+        )
+        return []
+      }
+    }
+
     const text = await this.stripMention(ev.text ?? '')
     const imageFiles = (ev.files ?? []).filter(isSupportedImage)
     if (!text && imageFiles.length === 0) {
@@ -338,6 +421,21 @@ export class SlackWebhookProvider implements WebhookProvider {
 
     const threadRoot = ev.thread_ts ?? ev.ts
 
+    // For thread replies, fetch the prior messages so the agent has context
+    // about what's being discussed. Stored in event.context — the runner
+    // decides when to inject it (only on new sessions, into the system prompt).
+    let threadContext: string | undefined
+    const isThreadReply = ev.thread_ts && ev.thread_ts !== ev.ts
+    if (isThreadReply) {
+      threadContext = await this.fetchThreadContext(ev.channel, ev.thread_ts, ev.ts)
+      if (threadContext) {
+        log.info(
+          { channel: ev.channel, threadTs: ev.thread_ts, contextBytes: threadContext.length },
+          'parse: fetched thread context',
+        )
+      }
+    }
+
     const teamId = body.team_id
     if (!teamId) {
       log.warn(
@@ -377,6 +475,7 @@ export class SlackWebhookProvider implements WebhookProvider {
           channelType: ev.channel_type,
           teamId: body.team_id,
           userId: ev.user,
+          ...(threadContext ? { threadContext } : {}),
         },
       },
     ]

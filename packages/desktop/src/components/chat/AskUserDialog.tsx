@@ -145,7 +145,7 @@ export function AskUserDialog({ questions, onSubmit }: Props) {
           {/* Options list */}
           {hasOptions && (
             <div className="ask-dialog__options">
-              {options.map((opt, i) => {
+              {options.map((opt: NormalizedOption, i: number) => {
                 const selected =
                   ans.customText.trim().length === 0 && ans.selectedOption === opt.label
                 return (

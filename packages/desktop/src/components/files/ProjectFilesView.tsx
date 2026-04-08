@@ -66,9 +66,30 @@ function getCategory(name: string): string {
 
 function isPreviewable(name: string): boolean {
   const ext = name.split('.').pop()?.toLowerCase() || ''
-  return (
-    CODE_EXTS.has(ext) || DATA_EXTS.has(ext) || TEXT_EXTS.has(ext) || IMAGE_EXTS.has(ext)
-  )
+  return CODE_EXTS.has(ext) || DATA_EXTS.has(ext) || TEXT_EXTS.has(ext) || IMAGE_EXTS.has(ext)
+}
+
+function isImageFile(name: string): boolean {
+  const ext = name.split('.').pop()?.toLowerCase() || ''
+  return IMAGE_EXTS.has(ext)
+}
+
+function getMimeType(name: string): string {
+  const ext = name.split('.').pop()?.toLowerCase() || ''
+  const mimes: Record<string, string> = {
+    png: 'image/png',
+    jpg: 'image/jpeg',
+    jpeg: 'image/jpeg',
+    gif: 'image/gif',
+    svg: 'image/svg+xml',
+    ico: 'image/x-icon',
+    webp: 'image/webp',
+    avif: 'image/avif',
+    bmp: 'image/bmp',
+    heic: 'image/heic',
+    heif: 'image/heif',
+  }
+  return mimes[ext] || 'application/octet-stream'
 }
 
 function getFileIcon(entry: FileEntry) {
@@ -110,10 +131,9 @@ export function ProjectFilesView() {
   // File viewer (right panel)
   const [viewingFile, setViewingFile] = useState<{ name: string; path: string } | null>(null)
   const [viewContent, setViewContent] = useState<string | null>(null)
-  const [viewEncoding, setViewEncoding] = useState<string | undefined>(undefined)
-  const [viewMimeType, setViewMimeType] = useState<string | undefined>(undefined)
-  const [viewLoading, setViewLoading] = useState(false)
+const [viewLoading, setViewLoading] = useState(false)
   const [viewError, setViewError] = useState<string | null>(null)
+  const [viewIsImage, setViewIsImage] = useState(false)
 
   // Context menu
   const [contextMenu, setContextMenu] = useState<{
@@ -195,14 +215,12 @@ export function ProjectFilesView() {
   // Listen for fs_read (file viewer)
   useEffect(() => {
     const unsub = connection.onFilesystemReadResponse(
-      (_path, content, _trunc, err, encoding, mimeType) => {
+      (_path, content, _trunc, err) => {
         if (err) {
           setViewError(err)
           setViewLoading(false)
         } else {
           setViewContent(content)
-          setViewEncoding(encoding)
-          setViewMimeType(mimeType)
           setViewLoading(false)
           setViewError(null)
         }
@@ -351,13 +369,13 @@ export function ProjectFilesView() {
   const openFileViewer = (entry: FileEntry) => {
     const path = resolvePath(entry.name)
     if (isPreviewable(entry.name)) {
+      const image = isImageFile(entry.name)
       setViewingFile({ name: entry.name, path })
       setViewContent(null)
-      setViewEncoding(undefined)
-      setViewMimeType(undefined)
       setViewLoading(true)
       setViewError(null)
-      connection.sendFilesystemRead(path)
+      setViewIsImage(image)
+      connection.sendFilesystemRead(path, image ? 'base64' : undefined)
     }
   }
 
@@ -440,7 +458,8 @@ export function ProjectFilesView() {
         className="fv-left"
         style={{
           width: hasFileOpen ? leftWidth : '100%',
-          maxWidth: hasFileOpen ? leftWidth : undefined,
+          maxWidth: hasFileOpen ? leftWidth : 720,
+          margin: hasFileOpen ? undefined : '0 auto',
           flexShrink: hasFileOpen ? 0 : 1,
         }}
       >
@@ -650,10 +669,10 @@ export function ProjectFilesView() {
                 <div className="fv-viewer__status fv-viewer__status--error">{viewError}</div>
               )}
               {!viewLoading && !viewError && viewContent !== null && (
-                viewEncoding === 'base64' && viewMimeType ? (
+                viewIsImage ? (
                   <div className="fv-viewer__image-wrap">
                     <img
-                      src={`data:${viewMimeType};base64,${viewContent}`}
+                      src={`data:${getMimeType(viewingFile.name)};base64,${viewContent}`}
                       alt={viewingFile.name}
                       className="fv-viewer__image"
                     />

@@ -138,6 +138,7 @@ function saveSelectedModel(provider: string, model: string) {
 }
 
 // Per-session stuck-state timeouts
+const STUCK_STATE_TIMEOUT_MS = 90_000
 const _stuckTimeouts = new Map<string, ReturnType<typeof setTimeout>>()
 
 interface SessionStoreState {
@@ -287,32 +288,34 @@ export const sessionStore = create<SessionStoreState>((set, get) => {
         _stuckTimeouts.delete(sessionId)
       }
 
-      if (status === 'working' && prev.status !== 'working') {
+      if (status === 'working') {
+        const isNewTurn = prev.status !== 'working'
         get().updateSessionState(sessionId, {
           status,
           statusDetail: statusDetail ?? null,
-          workingStartedAt: Date.now(),
-          lastTurnDurationMs: null,
-          turnUsage: null,
-          tasks: [],
+          // Only reset turn state on the initial idle → working transition
+          ...(isNewTurn && {
+            workingStartedAt: Date.now(),
+            lastTurnDurationMs: null,
+            turnUsage: null,
+            tasks: [],
+          }),
         })
 
-        // Safety net: if stuck in "working" for 5 min, auto-recover
-        const timeout = setTimeout(
-          () => {
-            const current = get().getSessionState(sessionId)
-            if (current.status === 'working') {
-              console.error(`[sessionStore] Stuck-state timeout for ${sessionId}: auto-recovering.`)
-              get().updateSessionState(sessionId, {
-                status: 'idle',
-                statusDetail: null,
-                agentSteps: [],
-              })
-            }
-            _stuckTimeouts.delete(sessionId)
-          },
-          5 * 60 * 1000,
-        )
+        // (Re-)start stuck-state timeout on every working event so long-running
+        // turns stay alive as long as the server keeps sending status updates
+        const timeout = setTimeout(() => {
+          const current = get().getSessionState(sessionId)
+          if (current.status === 'working') {
+            console.error(`[sessionStore] Stuck-state timeout for ${sessionId}: auto-recovering.`)
+            get().updateSessionState(sessionId, {
+              status: 'idle',
+              statusDetail: null,
+              agentSteps: [],
+            })
+          }
+          _stuckTimeouts.delete(sessionId)
+        }, STUCK_STATE_TIMEOUT_MS)
         _stuckTimeouts.set(sessionId, timeout)
       } else if (status === 'idle' && prev.status === 'working') {
         const duration = prev.workingStartedAt ? Date.now() - prev.workingStartedAt : null
@@ -399,9 +402,21 @@ export const sessionStore = create<SessionStoreState>((set, get) => {
     sendProviderSetKey: (provider, apiKey) => connection.sendProviderSetKey(provider, apiKey),
     sendProviderSetModels: (provider, models) => connection.sendProviderSetModels(provider, models),
     sendProviderSetDefault: (provider, model) => connection.sendProviderSetDefault(provider, model),
-    sendAiMessage: (text, attachments) => connection.sendAiMessage(text, attachments),
-    sendAiMessageToSession: (text, sessionId, attachments) =>
-      connection.sendAiMessageToSession(text, sessionId, attachments),
+    sendAiMessage: (text, attachments) => {
+      connection.sendAiMessage(text, attachments)
+      // Optimistic: show working state immediately instead of waiting for server event.
+      // Centralized here so every call site gets it automatically.
+      const sid = get().currentSessionId
+      if (sid && get().connectionStatus === 'connected') {
+        get().setSessionStatus(sid, 'working')
+      }
+    },
+    sendAiMessageToSession: (text, sessionId, attachments) => {
+      connection.sendAiMessageToSession(text, sessionId, attachments)
+      if (get().connectionStatus === 'connected') {
+        get().setSessionStatus(sessionId, 'working')
+      }
+    },
     sendSteerMessage: (text, sessionId, attachments) =>
       connection.sendSteerMessage(text, sessionId, attachments),
     sendConfigQuery: (key, sessionId, projectId) =>

@@ -32,7 +32,7 @@ function sanitizeConnector(c: ConnectorStatusInfo): ConnectorStatusInfo {
       dirty = true
       continue
     }
-    out[k] = v
+    out[k] = v as string
   }
   if (!dirty) return c
   // eslint-disable-next-line no-console
@@ -66,13 +66,17 @@ interface ConnectorState {
     apiKey?: string
     baseUrl?: string
     enabled: boolean
+    registryId?: string
+    accountEmail?: string
+    accountLabel?: string
+    metadata?: Record<string, string>
   }) => void
   removeConnectorRemote: (id: string) => void
   toggleConnectorRemote: (id: string, enabled: boolean) => void
   testConnectorRemote: (id: string) => void
   updateConnectorRemote: (id: string, updates: Record<string, unknown>) => void
   setToolPermission: (id: string, toolName: string, permission: 'auto' | 'ask' | 'never') => void
-  startOAuth: (id: string) => void
+  startOAuth: (id: string, registryId?: string) => void
   disconnectOAuth: (id: string) => void
 
   // Reset
@@ -114,7 +118,7 @@ export const connectorStore = create<ConnectorState>((set) => ({
   updateConnectorRemote: (id, updates) => connection.sendConnectorUpdate(id, updates),
   setToolPermission: (id, toolName, permission) =>
     connection.sendConnectorSetToolPermission(id, toolName, permission),
-  startOAuth: (id) => connection.sendConnectorOAuthStart(id),
+  startOAuth: (id, registryId) => connection.sendConnectorOAuthStart(id, registryId),
   disconnectOAuth: (id) => connection.sendConnectorOAuthDisconnect(id),
 
   reset: () => set({ connectors: [], connectorRegistry: [] }),

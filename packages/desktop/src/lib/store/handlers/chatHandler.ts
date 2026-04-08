@@ -16,7 +16,7 @@ export function handleChatMessage(msg: AiMessage, ctx: MessageContext): boolean 
         content: msg.content,
         timestamp: Date.now(),
         isSteering: true,
-        attachments: msg.attachments?.map((a) => ({
+        attachments: msg.attachments?.map((a: { id: string; name: string; mimeType: string; sizeBytes: number; data?: string }) => ({
           id: a.id,
           name: a.name,
           mimeType: a.mimeType,

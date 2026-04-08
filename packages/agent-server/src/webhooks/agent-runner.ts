@@ -202,11 +202,21 @@ export class WebhookAgentRunner {
       'runOne: start',
     )
     try {
-      const session = this.getOrCreateSession(sessionId, event.surface)
+      const { session, isNew } = this.getOrCreateSession(sessionId, event.surface)
       // Refresh the surface every turn — the same sessionId can span
       // multiple threads/users in a channel, and we want the model to see
       // the up-to-date label. No-op when surface is undefined (desktop).
       if (event.surface) {
+        // For brand-new sessions joining a thread, inject prior thread
+        // messages into the surface so the model sees them in the system
+        // prompt (not baked into user message history). Subsequent turns
+        // rebuild the surface from their own event data, so this naturally
+        // drops off after turn 1.
+        const threadContext = event.context.threadContext as string | undefined
+        if (isNew && threadContext) {
+          event.surface.details = event.surface.details ?? {}
+          event.surface.details['thread context'] = threadContext
+        }
         session.setSurface(event.surface)
       }
 
@@ -486,15 +496,19 @@ export class WebhookAgentRunner {
     }
   }
 
-  private getOrCreateSession(sessionId: string, surface?: SurfaceInfo): Session {
-    let session = this.sessions.get(sessionId)
-    if (session) return session
+  private getOrCreateSession(
+    sessionId: string,
+    surface?: SurfaceInfo,
+  ): { session: Session; isNew: boolean } {
+    const existing = this.sessions.get(sessionId)
+    if (existing) return { session: existing, isNew: false }
 
     // resumeSession is a "try to rehydrate" helper — it can throw on
     // corrupted state, version skew, or filesystem errors. Historically we
     // let that propagate into runOne() and the webhook silently failed.
     // Treat any throw the same as "no saved session" and fall through to a
     // fresh createSession so the conversation keeps flowing.
+    let session: Session | undefined
     try {
       session =
         resumeSession(sessionId, this.config, {
@@ -507,6 +521,10 @@ export class WebhookAgentRunner {
       session = undefined
     }
 
+    // A resumed session has prior history — treat it as not-new so we
+    // don't re-inject thread context the model already saw.
+    const isNew = !session
+
     if (!session) {
       session = createSession(sessionId, this.config, {
         mcpManager: this.mcpManager,
@@ -516,7 +534,7 @@ export class WebhookAgentRunner {
     }
 
     this.sessions.set(sessionId, session)
-    return session
+    return { session, isNew }
   }
 }
 

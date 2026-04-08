@@ -35,16 +35,23 @@ export function toSlackMrkdwn(input: string): string {
   // Split on fenced code blocks, keeping the fences themselves in the
   // array so we can rejoin without altering them. Even indices are
   // prose, odd indices are code-block bodies (including the fences).
-  const segments = splitOnFences(input)
+  const segments = splitOnCodeBlocks(input)
   for (let i = 0; i < segments.length; i += 2) {
     segments[i] = transformProse(segments[i])
   }
   return segments.join('')
 }
 
-function splitOnFences(input: string): string[] {
+/**
+ * Split `input` on code blocks (fenced ``` … ```) AND inline code (` … `),
+ * keeping the delimiters in the array. Even indices are prose, odd indices
+ * are code. This ensures asterisks/underscores inside code survive
+ * unmodified when we only transform even-indexed segments.
+ */
+function splitOnCodeBlocks(input: string): string[] {
   const out: string[] = []
-  const re = /```[\s\S]*?```/g
+  // Match fenced code blocks first (greedy), then inline code spans.
+  const re = /```[\s\S]*?```|`[^`\n]+`/g
   let lastIndex = 0
   let m: RegExpExecArray | null
   m = re.exec(input)
@@ -82,6 +89,11 @@ function transformProse(prose: string): string {
   // `![alt](url)` — Slack won't render an inline image in a text
   // message anyway, so we collapse them to the same `<url|alt>` form.
   out = replaceMarkdownLinks(out)
+
+  // Escape bare `*` followed by `/` — common in cron expressions and
+  // glob patterns (e.g. `*/10 * * * *`). Without escaping, Slack
+  // interprets the first `*` as a bold opener and mangles the text.
+  out = out.replace(/\*(?=\/)/g, '\\*')
 
   return out
 }

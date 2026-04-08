@@ -488,7 +488,7 @@ export function WorkflowDetailPage({
               Services this workflow connects to.
             </p>
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', marginTop: '10px' }}>
-              {workflow.connectors.map((c) => (
+              {workflow.connectors.map((c: string) => (
                 <Chip key={c} label={c} />
               ))}
             </div>
