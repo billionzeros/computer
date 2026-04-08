@@ -11,7 +11,7 @@
 
 import { create } from 'zustand'
 import { connection } from '../connection.js'
-import { loadSessionCache } from '../conversationCache.js'
+import { SESSION_CACHE_VERSION, loadSessionCache } from '../conversationCache.js'
 import { projectStore } from './projectStore.js'
 import { sessionStore } from './sessionStore.js'
 
@@ -61,7 +61,9 @@ export const connectionStore = create<ConnectionStoreState>((set, get) => ({
     // Use incremental sync protocol — send lastSyncVersion from cache
     // Falls back to full bootstrap if server can't serve deltas
     const cache = loadSessionCache()
-    const lastVersion = cache?.syncVersion ?? 0
+    // Force full bootstrap if cache version is stale (e.g. first run after sync protocol upgrade).
+    // This cleans up stale localStorage sessions that predate the sync protocol.
+    const lastVersion = cache?.cacheVersion === SESSION_CACHE_VERSION ? (cache.syncVersion ?? 0) : 0
     console.log(
       `[SessionSync] Requesting sync, lastSyncVersion=${lastVersion} (${cache ? `${cache.entries.length} cached` : 'no cache'})`,
     )

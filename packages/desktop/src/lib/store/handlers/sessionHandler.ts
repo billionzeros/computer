@@ -8,6 +8,7 @@ import type { AiMessage, SessionHistoryEntry, SyncDelta } from '@anton/protocol'
 import type { ArtifactRenderType } from '../../artifacts.js'
 import { extractArtifact } from '../../artifacts.js'
 import {
+  SESSION_CACHE_VERSION,
   type SessionCacheMeta,
   cacheMetaFromServerSession,
   loadSessionCache,
@@ -301,7 +302,11 @@ export function handleSessionMessage(msg: AiMessage): boolean {
           messageCount: serverSessions.find((s) => s.id === c.sessionId)?.messageCount ?? 0,
           agentSessionId: c.agentSessionId,
         }))
-        saveSessionCache({ syncVersion, entries: cacheEntries })
+        saveSessionCache({
+          syncVersion,
+          cacheVersion: SESSION_CACHE_VERSION,
+          entries: cacheEntries,
+        })
       } else {
         // Incremental sync — apply deltas only
         const deltas = (msg.deltas || []) as SyncDelta[]

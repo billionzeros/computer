@@ -14,19 +14,10 @@
  * Falls back to the main conversation model if the preferred model is unavailable.
  */
 
-import {
-  existsSync,
-  mkdirSync,
-  readdirSync,
-  readFileSync,
-  writeFileSync,
-} from 'node:fs'
+import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
+import { getGlobalMemoryDir, getProjectDir } from '@anton/agent-config'
 import { createLogger } from '@anton/logger'
-import {
-  getGlobalMemoryDir,
-  getProjectDir,
-} from '@anton/agent-config'
 import type { AgentMessage } from '@mariozechner/pi-agent-core'
 import { completeSimple, getModel as piGetModel } from '@mariozechner/pi-ai'
 import type { Api, Model, TextContent } from '@mariozechner/pi-ai'
@@ -219,7 +210,9 @@ function listExistingMemoryKeys(memDir: string): string[] {
           // Fall back to # heading
           const headingMatch = content.match(/^#\s+(.+)$/m)
           if (headingMatch) return headingMatch[1].trim()
-        } catch { /* ignore read errors */ }
+        } catch {
+          /* ignore read errors */
+        }
         return f.replace('.md', '')
       })
   } catch {
@@ -245,10 +238,7 @@ function sanitizeForYaml(value: string): string {
 /**
  * Write a memory file with frontmatter format.
  */
-function writeMemoryFile(
-  memDir: string,
-  memory: ExtractedMemory,
-): string {
+function writeMemoryFile(memDir: string, memory: ExtractedMemory): string {
   ensureDir(memDir)
   const filename = `${keyToFile(memory.key)}.md`
   const filePath = join(memDir, filename)
@@ -319,9 +309,14 @@ function resolveExtractionModel(
 
       // pi-ai built-in registry (cast to bypass KnownProvider constraint)
       try {
-        const m = (piGetModel as (p: string, m: string) => Model<Api> | undefined)(provider, modelId)
+        const m = (piGetModel as (p: string, m: string) => Model<Api> | undefined)(
+          provider,
+          modelId,
+        )
         if (m) return { model: m, provider }
-      } catch { /* not in registry, try next */ }
+      } catch {
+        /* not in registry, try next */
+      }
     }
   }
 
@@ -366,9 +361,10 @@ export async function extractMemories(opts: {
     return { memories: [], skipped: true, reason: 'project directory does not exist' }
   }
   const existingKeys = listExistingMemoryKeys(memDir)
-  const existingSection = existingKeys.length > 0
-    ? `\n\nExisting memories (do not duplicate):\n${existingKeys.map((k) => `- ${k}`).join('\n')}`
-    : ''
+  const existingSection =
+    existingKeys.length > 0
+      ? `\n\nExisting memories (do not duplicate):\n${existingKeys.map((k) => `- ${k}`).join('\n')}`
+      : ''
 
   // Build user prompt
   const userPrompt = `${serialized}${existingSection}`
@@ -403,9 +399,7 @@ export async function extractMemories(opts: {
       .trim()
 
     // Strip any <think>...</think> tags
-    responseText = responseText
-      .replace(/<think>[\s\S]*?<\/think>/g, '')
-      .trim()
+    responseText = responseText.replace(/<think>[\s\S]*?<\/think>/g, '').trim()
 
     if (!responseText) {
       return { memories: [], skipped: false }
@@ -428,9 +422,7 @@ export async function extractMemories(opts: {
 
       // Skip if key already exists on disk (fuzzy match on normalized filename)
       const normalizedKey = keyToFile(mem.key)
-      const isDuplicate = existingKeys.some(
-        (k) => keyToFile(k) === normalizedKey,
-      )
+      const isDuplicate = existingKeys.some((k) => keyToFile(k) === normalizedKey)
       if (isDuplicate) {
         log.info({ key: mem.key }, 'skipping duplicate memory')
         continue
@@ -506,10 +498,7 @@ export function shouldExtract(state: ExtractionState): boolean {
 /**
  * Reset state after a successful extraction.
  */
-export function advanceExtractionCursor(
-  state: ExtractionState,
-  newIndex: number,
-): void {
+export function advanceExtractionCursor(state: ExtractionState, newIndex: number): void {
   state.lastProcessedIndex = newIndex
   state.userMessagesSinceLastExtraction = 0
   state.agentUsedMemoryTool = false

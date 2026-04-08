@@ -1339,7 +1339,9 @@ export function getSyncVersion(): number {
 /** Get deltas since a given sync version. Returns null if the version is too old (requires full bootstrap). */
 export function getDeltasSince(sinceVersion: number): SyncDelta[] | null {
   const index = loadIndex()
-  if (sinceVersion >= index.syncVersion) return []
+  // Client is ahead of server — index was likely rebuilt; force full bootstrap
+  if (sinceVersion > index.syncVersion) return null
+  if (sinceVersion === index.syncVersion) return []
   if (sinceVersion === 0) return null // force full bootstrap
 
   const deltas = index.deltas.filter((d) => d.syncVersion > sinceVersion)

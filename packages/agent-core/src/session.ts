@@ -35,13 +35,13 @@ import { completeSimple, getModel as piGetModel } from '@mariozechner/pi-ai'
 import type { Api, ImageContent, Model, TextContent, ThinkingContent } from '@mariozechner/pi-ai'
 import { getAntonModel } from './anton-models.js'
 import {
+  type ExtractionResult,
+  advanceExtractionCursor,
   createExtractionState,
   createResumedExtractionState,
   extractMemories,
   shouldExtract,
   trackUserMessage,
-  advanceExtractionCursor,
-  type ExtractionResult,
 } from './memory-extraction.js'
 
 const OPENROUTER_BASE_URL = 'https://openrouter.ai/api/v1'
@@ -580,9 +580,10 @@ export class Session {
     // Initialize extraction state — for resumed sessions, set cursor to current
     // message count so we don't re-scan historical messages
     const existingMessageCount = (opts.existingMessages || []).length
-    this._extractionState = existingMessageCount > 0
-      ? createResumedExtractionState(existingMessageCount)
-      : createExtractionState()
+    this._extractionState =
+      existingMessageCount > 0
+        ? createResumedExtractionState(existingMessageCount)
+        : createExtractionState()
   }
 
   setConfirmHandler(handler: ConfirmHandler) {
@@ -1040,9 +1041,10 @@ export class Session {
     const messages = this.piAgent.state.messages
     // Clamp cursor — compaction can shrink the message array, making the old
     // index point past the end. In that case, reset to 0 (scan everything).
-    const sinceIndex = this._extractionState.lastProcessedIndex <= messages.length
-      ? this._extractionState.lastProcessedIndex
-      : 0
+    const sinceIndex =
+      this._extractionState.lastProcessedIndex <= messages.length
+        ? this._extractionState.lastProcessedIndex
+        : 0
 
     this.log.info(
       { sinceIndex, messageCount: messages.length - sinceIndex },

@@ -19,8 +19,13 @@ export interface SessionCacheMeta {
   agentSessionId?: string
 }
 
+// Bump to force all clients to do a full bootstrap on next connect.
+// This cleans up stale localStorage sessions that predate the sync protocol.
+export const SESSION_CACHE_VERSION = 2
+
 export interface SessionCache {
   syncVersion: number // matches server's syncVersion at last sync
+  cacheVersion?: number // client-side cache format version
   entries: SessionCacheMeta[]
 }
 
