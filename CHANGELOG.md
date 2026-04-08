@@ -10,6 +10,14 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versioning: [S
 
 ---
 
+## [1.0.44] - 2026-04-08
+
+### Fixes
+- remove changelog from update modal so update button is visible
+- stop dropping Slack app_mention events in active threads
+- show connected email for Google OAuth connectors
+---
+
 ## [1.0.43] - 2026-04-08
 
 ### Features
@@ -428,7 +436,8 @@ Maintenance release.
 
 ---
 
-[Unreleased]: https://github.com/OmGuptaIND/computer/compare/v1.0.43...HEAD
+[Unreleased]: https://github.com/OmGuptaIND/computer/compare/v1.0.44...HEAD
+[1.0.44]: https://github.com/OmGuptaIND/computer/compare/v$(changelog.match(/## [(d+.d+.d+)]/g)[1].match(/d+.d+.d+/)[0])...v1.0.44
 [1.0.43]: https://github.com/OmGuptaIND/computer/compare/v$(changelog.match(/## [(d+.d+.d+)]/g)[1].match(/d+.d+.d+/)[0])...v1.0.43
 [1.0.42]: https://github.com/OmGuptaIND/computer/compare/v$(changelog.match(/## [(d+.d+.d+)]/g)[1].match(/d+.d+.d+/)[0])...v1.0.42
 [1.0.41]: https://github.com/OmGuptaIND/computer/compare/v$(changelog.match(/## [(d+.d+.d+)]/g)[1].match(/d+.d+.d+/)[0])...v1.0.41
