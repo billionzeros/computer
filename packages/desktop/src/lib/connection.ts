@@ -477,8 +477,8 @@ export class Connection {
     this.send(Channel.FILESYNC, { type: 'fs_list', path, showHidden })
   }
 
-  sendFilesystemRead(path: string) {
-    this.send(Channel.FILESYNC, { type: 'fs_read', path })
+  sendFilesystemRead(path: string, encoding?: 'base64') {
+    this.send(Channel.FILESYNC, { type: 'fs_read', path, ...(encoding && { encoding }) })
   }
 
   sendFilesystemMkdir(path: string) {
