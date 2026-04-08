@@ -10,6 +10,69 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versioning: [S
 
 ---
 
+## [1.0.43] - 2026-04-08
+
+### Features
+- wire projectId and agent tool into webhook sessions
+- unify file storage, image preview, and agent file guidance
+- auto-inject thread context when Anton first joins a Slack thread
+- redesign skills UI with tree view, file viewer, and actions menu
+- add image preview in file sidecar and center file list
+- multi-account connector support
+- interactive messaging flow for Slack & Telegram webhooks
+- add fs_write, fs_mkdir, fs_delete to FILESYNC channel
+- agent activity detection — optimistic UI, ping/pong, reconnect recovery
+- project-aware webhook sessions + slash command system
+- redesign skills as directory-based packages with Connectors-style UI
+- split-panel file viewer — file tree left, content right
+- add working file interactions (new folder, delete, view, context menu)
+- simplify file explorer to match reference design
+- split-panel file viewer — file tree left, content right
+- add working file interactions (new folder, delete, view, context menu)
+- simplify file explorer to match reference design
+- redesign file explorer with Apple Finder quality
+- replace flat file list with Finder-like file explorer
+- working slack experience
+
+### Fixes
+- redesign image attachments as inline chips, prevent steering with images
+- improve Skills page spacing, font sizes, and padding for professional look
+- skip web_search stub when exa_search MCP connector is available
+- remove raw cron expression from agent create dialog
+- backfill account email for existing OAuth connectors on startup
+- render ask-user Q&A as structured cards instead of raw markdown
+- narrow thread_ts type to fix tsc build error
+- lazy-init dir constants to break circular dependency TDZ crash
+- rebuild connectors UI with multi-account support and inline OAuth
+- escape cron/glob asterisks in Slack and Telegram message formatting
+- fallback to plain text when Telegram rejects Markdown entities
+- drop duplicate app_mention in active Slack threads
+- handle Telegram photo messages instead of dropping them
+- skills not loading + two-pane skills UI
+- resolve merge type errors — duplicate variable and missing sendSkillList
+- missing closing brace in connection.ts and implicit any types across desktop package
+- add missing sendFilesystemWrite and onFilesystemWriteResponse to Connection
+- types issue
+- update GLM model IDs to match supported models
+- add convertEol to prevent terminal staircase effect
+- make node-pty optional with child_process fallback
+- replace child_process.spawn with node-pty for real terminal support
+- include session status in sessions_list_response so task list shows correct status on load
+- only send final agent response to Slack, not intermediate steps
+- UI issue
+- make sidebar the only connector flow, remove settings modal connector page
+- auto-merge new default models into saved provider config
+- group Anton models by provider (OpenAI, Anthropic, Google, etc.)
+- add missing provider icons for OpenAI, Groq, and Anton
+- openrouter model resolution, add GLM models, redesign AI models UI
+
+### Other
+- docs: add skills and slash commands spec
+- improve: collapse API key input when already configured
+- improve: polished provider detail view with model cards and grouping
+- Add: slack
+---
+
 ## [1.0.42] - 2026-04-07
 
 ### Fixes
@@ -365,7 +428,8 @@ Maintenance release.
 
 ---
 
-[Unreleased]: https://github.com/OmGuptaIND/computer/compare/v1.0.42...HEAD
+[Unreleased]: https://github.com/OmGuptaIND/computer/compare/v1.0.43...HEAD
+[1.0.43]: https://github.com/OmGuptaIND/computer/compare/v$(changelog.match(/## [(d+.d+.d+)]/g)[1].match(/d+.d+.d+/)[0])...v1.0.43
 [1.0.42]: https://github.com/OmGuptaIND/computer/compare/v$(changelog.match(/## [(d+.d+.d+)]/g)[1].match(/d+.d+.d+/)[0])...v1.0.42
 [1.0.41]: https://github.com/OmGuptaIND/computer/compare/v$(changelog.match(/## [(d+.d+.d+)]/g)[1].match(/d+.d+.d+/)[0])...v1.0.41
 [1.0.40]: https://github.com/OmGuptaIND/computer/compare/v$(changelog.match(/## [(d+.d+.d+)]/g)[1].match(/d+.d+.d+/)[0])...v1.0.40
