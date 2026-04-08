@@ -1,0 +1,27 @@
+packages/desktop/src/components/projects/ProjectView.tsx
+  42ca21457b9b6983 150,152-154
+packages/desktop/src/lib/store.ts
+  42ca21457b9b6983 327-328
+packages/desktop/src/components/Sidebar.tsx
+  42ca21457b9b6983 381,405,432
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.2.5",
+  "base_commit_sha": "0936b3c2323472fc995e48179a3a04e3a9bfe5e9",
+  "prompts": {
+    "42ca21457b9b6983": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "5c139881-a78a-4164-a4bc-7ea803413b2c",
+        "model": "claude-opus-4-6"
+      },
+      "human_author": "Om Gupta",
+      "messages": [],
+      "total_additions": 19,
+      "total_deletions": 14,
+      "accepted_lines": 9,
+      "overriden_lines": 0
+    }
+  }
+}
