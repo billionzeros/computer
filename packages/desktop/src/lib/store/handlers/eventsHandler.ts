@@ -38,13 +38,22 @@ export function handleEventsMessage(msg: EventMessage): void {
         )
 
       const sid: string | undefined = msg.sessionId
-      if (!sid) return
-
-      const ss = sessionStore.getState()
-      ss.setSessionStatus(sid, msg.status, msg.detail || null)
-
-      if (msg.status === 'idle') {
-        ss.updateSessionState(sid, { agentSteps: [] })
+      if (sid) {
+        const ss = sessionStore.getState()
+        ss.setSessionStatus(sid, msg.status, msg.detail || null)
+        if (msg.status === 'idle') {
+          ss.updateSessionState(sid, { agentSteps: [] })
+        }
+      } else if (msg.status === 'idle') {
+        // Global idle (e.g. on reconnect when no turns are active) —
+        // reset any client sessions stuck in 'working'
+        const ss = sessionStore.getState()
+        for (const [sessionId, state] of ss.sessionStates) {
+          if (state.status === 'working') {
+            ss.setSessionStatus(sessionId, 'idle')
+            ss.updateSessionState(sessionId, { agentSteps: [] })
+          }
+        }
       }
       return
     }

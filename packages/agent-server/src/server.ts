@@ -524,10 +524,22 @@ export class AgentServer {
               this.sendToClient(Channel.CONTROL, authOk)
               log.info('Client authenticated')
 
-              this.sendToClient(Channel.EVENTS, {
-                type: 'agent_status',
-                status: this.pendingPrompts.size > 0 ? 'working' : 'idle',
-              })
+              // Send per-session status for active turns so the client
+              // knows exactly which sessions are still working after reconnect
+              for (const sessionId of this.activeTurns) {
+                this.sendToClient(Channel.EVENTS, {
+                  type: 'agent_status',
+                  status: 'working',
+                  sessionId,
+                })
+              }
+              // If nothing is active, send a global idle to clear any stale client state
+              if (this.activeTurns.size === 0) {
+                this.sendToClient(Channel.EVENTS, {
+                  type: 'agent_status',
+                  status: 'idle',
+                })
+              }
 
               // Re-send any pending interactive prompts (ask_user, confirm, etc.)
               for (const [, prompt] of this.pendingPrompts) {
