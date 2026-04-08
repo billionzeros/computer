@@ -79,10 +79,23 @@ export interface SlackWebhookOpts {
 /** Bounded LRU of (channel, thread_ts) pairs the bot has already joined. */
 const ACTIVE_THREAD_MAX = 2048
 
+/**
+ * When a user @mentions the bot in a thread, Slack MAY deliver both a
+ * `message` event and an `app_mention` event sharing the same `ev.ts`.
+ * This bounded set deduplicates so we only process the first one that
+ * arrives.  Entries are evicted after a short TTL — Slack dispatches
+ * both events within seconds of each other.
+ */
+const DEDUP_TTL_MS = 30_000
+const DEDUP_MAX = 512
+
 export class SlackWebhookProvider implements WebhookProvider {
   readonly slug = 'slack-bot'
 
   private activeThreads = new Map<string, number>()
+
+  /** Tracks recently-seen message timestamps to deduplicate message + app_mention pairs. */
+  private recentMessageTs = new Map<string, number>()
 
   private identity: SlackIdentityResolver
 
@@ -121,6 +134,18 @@ export class SlackWebhookProvider implements WebhookProvider {
 
   private isThreadActive(channel: string, threadTs: string): boolean {
     return this.activeThreads.has(`${channel}:${threadTs}`)
+  }
+
+  /** Record a message timestamp for deduplication and evict stale entries. */
+  private trackMessageTs(key: string): void {
+    const now = Date.now()
+    this.recentMessageTs.set(key, now)
+    // Evict expired entries when the map grows large
+    if (this.recentMessageTs.size > DEDUP_MAX) {
+      for (const [k, t] of this.recentMessageTs) {
+        if (now - t > DEDUP_TTL_MS) this.recentMessageTs.delete(k)
+      }
+    }
   }
 
   /**
@@ -365,19 +390,20 @@ export class SlackWebhookProvider implements WebhookProvider {
       }
     }
 
-    // When a user @mentions the bot in an active thread, Slack delivers
-    // both a `message` event and an `app_mention` event with different
-    // event_ids.  The `message` event is already accepted above, so drop
-    // the redundant `app_mention` to avoid double-processing.
-    if (ev.type === 'app_mention' && !isDirectChat) {
-      const threadTs = ev.thread_ts
-      if (threadTs && this.isThreadActive(ev.channel, threadTs)) {
+    // When a user @mentions the bot in a thread, Slack MAY deliver both
+    // a `message` event and an `app_mention` event for the same underlying
+    // message.  They share the same `ev.ts`.  Deduplicate so we only
+    // process whichever arrives first.
+    if ((ev.type === 'app_mention' || ev.type === 'message') && ev.ts) {
+      const dedupKey = `${ev.channel}:${ev.ts}`
+      if (this.recentMessageTs.has(dedupKey)) {
         log.info(
-          { channel: ev.channel, threadTs },
-          'parse: app_mention in active thread, dropping (message event will handle)',
+          { channel: ev.channel, ts: ev.ts, type: ev.type },
+          'parse: duplicate event for same message ts, dropping',
         )
         return []
       }
+      this.trackMessageTs(dedupKey)
     }
 
     const text = await this.stripMention(ev.text ?? '')
