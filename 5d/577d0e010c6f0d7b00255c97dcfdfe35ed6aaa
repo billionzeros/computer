@@ -1,0 +1,45 @@
+packages/agent-core/src/tools/filesystem.ts
+  696e9ee0ca2913bf 11,14-25,90-96
+packages/desktop/src/index.css
+  696e9ee0ca2913bf 16626-16641
+packages/desktop/src/components/files/ProjectFilesView.tsx
+  696e9ee0ca2913bf 56,69-71,113-114,197-210,356-357,653-663
+packages/agent-core/src/session.ts
+  696e9ee0ca2913bf 1810-1826
+packages/desktop/src/lib/connection.ts
+  696e9ee0ca2913bf 484-491,500-501
+packages/desktop/src/components/projects/ProjectConfigPanel.tsx
+  696e9ee0ca2913bf 11,13,167,169-176,178-180,258
+packages/desktop/src/lib/store/handlers/projectHandler.ts
+  696e9ee0ca2913bf 40
+packages/agent-server/src/server.ts
+  696e9ee0ca2913bf 13,16,238,987-1029,1035-1036,1081-1115,1119-1148,1150,1154,1156,1165-1174,1196-1205,1551-1553,2848-2853
+packages/agent-config/src/projects.ts
+  696e9ee0ca2913bf 461,463,465-468
+packages/agent-config/src/image-storage.ts
+  696e9ee0ca2913bf 1-84
+packages/agent-config/src/config.ts
+  696e9ee0ca2913bf 15,56,61-62,774-775,778-783,789
+packages/agent-config/src/index.ts
+  696e9ee0ca2913bf 2
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.2.5",
+  "base_commit_sha": "5d577d0e010c6f0d7b00255c97dcfdfe35ed6aaa",
+  "prompts": {
+    "696e9ee0ca2913bf": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "cf3ec9ff-af5f-4fd2-97fe-fba739c9be23",
+        "model": "claude-opus-4-6"
+      },
+      "human_author": "Om Gupta",
+      "messages": [],
+      "total_additions": 462,
+      "total_deletions": 491,
+      "accepted_lines": 369,
+      "overriden_lines": 0
+    }
+  }
+}
