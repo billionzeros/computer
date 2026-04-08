@@ -638,11 +638,13 @@ export function getProvidersList(config: AgentConfig) {
     const configEntry = config.providers[name]
     const defaults = DEFAULT_PROVIDERS[name]
 
-    // Models: prefer config if non-empty, else defaults
-    const models =
-      configEntry?.models && configEntry.models.length > 0
-        ? configEntry.models
-        : defaults?.models || []
+    // Models: merge saved config with defaults so new default models are included
+    const defaultModels = defaults?.models || []
+    const savedModels =
+      configEntry?.models && configEntry.models.length > 0 ? configEntry.models : []
+    const savedSet = new Set(savedModels)
+    const newDefaults = defaultModels.filter((m) => !savedSet.has(m))
+    const models = savedModels.length > 0 ? [...savedModels, ...newDefaults] : defaultModels
 
     return {
       name,
