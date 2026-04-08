@@ -1,0 +1,29 @@
+packages/desktop/src/components/home/TaskListView.tsx
+  e7297c79aa9f55a9 33,38-47,340,354-360,565,677
+packages/agent-server/src/server.ts
+  e7297c79aa9f55a9 1343-1344,1360,2470,2486
+specs/architecture/API.md
+  e7297c79aa9f55a9 276-277
+packages/protocol/src/messages.ts
+  e7297c79aa9f55a9 192-193
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.2.5",
+  "base_commit_sha": "7122a7c21da71a5f81f0076126af4bcd53498f1c",
+  "prompts": {
+    "e7297c79aa9f55a9": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "1600831d-3bae-40cb-be8e-cae023001310",
+        "model": "claude-opus-4-6"
+      },
+      "human_author": "Om Gupta",
+      "messages": [],
+      "total_additions": 30,
+      "total_deletions": 7,
+      "accepted_lines": 30,
+      "overriden_lines": 0
+    }
+  }
+}
