@@ -1,0 +1,25 @@
+packages/desktop/src/components/Terminal.tsx
+  951ccf7d0b3a633b 13-30,92,98-100,114
+packages/agent-server/src/server.ts
+  951ccf7d0b3a633b 12,81,171,207,209,837-853,857-861,864,866-868,878,885-888
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.2.5",
+  "base_commit_sha": "3fcbcb5faa92f6f38b4d307d392ccb6b20d469e2",
+  "prompts": {
+    "951ccf7d0b3a633b": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "6c293d26-601a-4854-83cf-9a792878dd04",
+        "model": "claude-opus-4-6"
+      },
+      "human_author": "Om Gupta",
+      "messages": [],
+      "total_additions": 72,
+      "total_deletions": 41,
+      "accepted_lines": 59,
+      "overriden_lines": 0
+    }
+  }
+}
