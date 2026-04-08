@@ -65,7 +65,7 @@ interface UIState {
   sendTerminalSpawn: (id: string, cols: number, rows: number, cwd?: string) => void
   sendTerminalData: (id: string, data: string) => void
   sendTerminalResize: (id: string, cols: number, rows: number) => void
-  sendFilesystemList: (path: string) => void
+  sendFilesystemList: (path: string, showHidden?: boolean) => void
 
   // Reset
   reset: () => void
@@ -176,7 +176,7 @@ export const uiStore = create<UIState>((set, get) => ({
   sendTerminalSpawn: (id, cols, rows, cwd) => connection.sendTerminalSpawn(id, cols, rows, cwd),
   sendTerminalData: (id, data) => connection.sendTerminalData(id, data),
   sendTerminalResize: (id, cols, rows) => connection.sendTerminalResize(id, cols, rows),
-  sendFilesystemList: (path) => connection.sendFilesystemList(path),
+  sendFilesystemList: (path, showHidden) => connection.sendFilesystemList(path, showHidden),
 
   // Reset — preserves theme, devMode, and sidebar preferences
   reset: () =>

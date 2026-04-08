@@ -465,12 +465,20 @@ export class Connection {
 
   // ── Filesystem ─────────────────────────────────────────────────
 
-  sendFilesystemList(path: string) {
-    this.send(Channel.FILESYNC, { type: 'fs_list', path })
+  sendFilesystemList(path: string, showHidden?: boolean) {
+    this.send(Channel.FILESYNC, { type: 'fs_list', path, showHidden })
   }
 
   sendFilesystemRead(path: string) {
     this.send(Channel.FILESYNC, { type: 'fs_read', path })
+  }
+
+  sendFilesystemMkdir(path: string) {
+    this.send(Channel.FILESYNC, { type: 'fs_mkdir', path })
+  }
+
+  sendFilesystemDelete(path: string) {
+    this.send(Channel.FILESYNC, { type: 'fs_delete', path })
   }
 
   onFilesystemResponse(
@@ -508,6 +516,22 @@ export class Connection {
           !!payload.truncated,
           payload.error as string | undefined,
         )
+      }
+    })
+  }
+
+  onFilesystemMkdirResponse(handler: (path: string, success: boolean, error?: string) => void) {
+    return this.onRawMessage((channel, payload) => {
+      if (channel === Channel.FILESYNC && payload.type === 'fs_mkdir_response') {
+        handler(payload.path as string, !!payload.success, payload.error as string | undefined)
+      }
+    })
+  }
+
+  onFilesystemDeleteResponse(handler: (path: string, success: boolean, error?: string) => void) {
+    return this.onRawMessage((channel, payload) => {
+      if (channel === Channel.FILESYNC && payload.type === 'fs_delete_response') {
+        handler(payload.path as string, !!payload.success, payload.error as string | undefined)
       }
     })
   }
