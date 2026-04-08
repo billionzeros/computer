@@ -1,6 +1,6 @@
 {
   "version": "1.0.45",
-  "gitHash": "",
+  "gitHash": "f27cf2d",
   "releaseUrl": "https://github.com/OmGuptaIND/computer/releases",
   "changelog": "Features:\n- model cleanup, thinking toggle, plan mode, timezone support\n\nFixes:\n- readme\n- delete task session from backend when conversation is removed",
   "publishedAt": "2026-04-08T18:34:11.019Z",
