@@ -53,7 +53,7 @@ const CODE_EXTS = new Set([
 ])
 const DATA_EXTS = new Set(['json', 'yaml', 'yml', 'csv', 'xml', 'toml', 'sql'])
 const TEXT_EXTS = new Set(['md', 'txt', 'log', 'pdf', 'doc', 'docx'])
-const IMAGE_EXTS = new Set(['png', 'jpg', 'jpeg', 'gif', 'svg', 'ico', 'webp'])
+const IMAGE_EXTS = new Set(['png', 'jpg', 'jpeg', 'gif', 'svg', 'ico', 'webp', 'avif'])
 
 function getCategory(name: string): string {
   const ext = name.split('.').pop()?.toLowerCase() || ''
@@ -66,7 +66,27 @@ function getCategory(name: string): string {
 
 function isPreviewable(name: string): boolean {
   const ext = name.split('.').pop()?.toLowerCase() || ''
-  return CODE_EXTS.has(ext) || DATA_EXTS.has(ext) || TEXT_EXTS.has(ext) || ext === 'svg'
+  return CODE_EXTS.has(ext) || DATA_EXTS.has(ext) || TEXT_EXTS.has(ext) || IMAGE_EXTS.has(ext)
+}
+
+function isImageFile(name: string): boolean {
+  const ext = name.split('.').pop()?.toLowerCase() || ''
+  return IMAGE_EXTS.has(ext)
+}
+
+function getMimeType(name: string): string {
+  const ext = name.split('.').pop()?.toLowerCase() || ''
+  const mimes: Record<string, string> = {
+    png: 'image/png',
+    jpg: 'image/jpeg',
+    jpeg: 'image/jpeg',
+    gif: 'image/gif',
+    svg: 'image/svg+xml',
+    ico: 'image/x-icon',
+    webp: 'image/webp',
+    avif: 'image/avif',
+  }
+  return mimes[ext] || 'application/octet-stream'
 }
 
 function getFileIcon(entry: FileEntry) {
@@ -110,6 +130,7 @@ export function ProjectFilesView() {
   const [viewContent, setViewContent] = useState<string | null>(null)
   const [viewLoading, setViewLoading] = useState(false)
   const [viewError, setViewError] = useState<string | null>(null)
+  const [viewIsImage, setViewIsImage] = useState(false)
 
   // Context menu
   const [contextMenu, setContextMenu] = useState<{
@@ -343,11 +364,13 @@ export function ProjectFilesView() {
   const openFileViewer = (entry: FileEntry) => {
     const path = resolvePath(entry.name)
     if (isPreviewable(entry.name)) {
+      const image = isImageFile(entry.name)
       setViewingFile({ name: entry.name, path })
       setViewContent(null)
       setViewLoading(true)
       setViewError(null)
-      connection.sendFilesystemRead(path)
+      setViewIsImage(image)
+      connection.sendFilesystemRead(path, image ? 'base64' : undefined)
     }
   }
 
@@ -430,7 +453,8 @@ export function ProjectFilesView() {
         className="fv-left"
         style={{
           width: hasFileOpen ? leftWidth : '100%',
-          maxWidth: hasFileOpen ? leftWidth : undefined,
+          maxWidth: hasFileOpen ? leftWidth : 720,
+          margin: hasFileOpen ? undefined : '0 auto',
           flexShrink: hasFileOpen ? 0 : 1,
         }}
       >
@@ -640,7 +664,17 @@ export function ProjectFilesView() {
                 <div className="fv-viewer__status fv-viewer__status--error">{viewError}</div>
               )}
               {!viewLoading && !viewError && viewContent !== null && (
-                <pre className="fv-viewer__code">{viewContent}</pre>
+                viewIsImage ? (
+                  <div className="fv-viewer__image-wrap">
+                    <img
+                      src={`data:${getMimeType(viewingFile.name)};base64,${viewContent}`}
+                      alt={viewingFile.name}
+                      className="fv-viewer__image"
+                    />
+                  </div>
+                ) : (
+                  <pre className="fv-viewer__code">{viewContent}</pre>
+                )
               )}
             </div>
           </div>
