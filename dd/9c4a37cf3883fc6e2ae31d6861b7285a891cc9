@@ -1,0 +1,35 @@
+packages/agent-server/src/webhooks/provider.ts
+  d5f439af5eaf245c 141-196
+packages/agent-server/src/webhooks/index.ts
+  d5f439af5eaf245c 9,13
+packages/agent-server/src/webhooks/router.ts
+  d5f439af5eaf245c 66-68,132,152,200-221,287,290-302
+specs/features/slack-telegram-messaging-flow.md
+  d5f439af5eaf245c 1-275
+packages/agent-server/src/webhooks/providers/slack.ts
+  d5f439af5eaf245c 478-536,601-823,847-867
+packages/agent-server/src/webhooks/providers/telegram.ts
+  d5f439af5eaf245c 73-79,103-104,122-352,498,650-658
+packages/agent-server/src/webhooks/agent-runner.ts
+  d5f439af5eaf245c 11-12,20-21,33-40,46-66,69-82,93-101,109-130,137-140,148-156,170-171,188-191,212-215,217,239-253,256-264,287,304-474,477-478,521-522,530-549
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.2.5",
+  "base_commit_sha": "dd9c4a37cf3883fc6e2ae31d6861b7285a891cc9",
+  "prompts": {
+    "d5f439af5eaf245c": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "97c1fc14-3e1d-4be2-8b57-16acbf28447d",
+        "model": "claude-opus-4-6"
+      },
+      "human_author": "Om Gupta",
+      "messages": [],
+      "total_additions": 1705,
+      "total_deletions": 461,
+      "accepted_lines": 1258,
+      "overriden_lines": 0
+    }
+  }
+}
