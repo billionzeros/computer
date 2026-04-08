@@ -1,0 +1,23 @@
+packages/agent-server/src/webhooks/providers/slack.ts
+  e6cc6c8b4d96dae4 82-91,97-98,139-150,393-399,401-402,406
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.2.5",
+  "base_commit_sha": "1105a3f929d5c55f49aaafde1dd3fce995fc5571",
+  "prompts": {
+    "e6cc6c8b4d96dae4": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "a355b5d1-e0eb-49b9-aa0f-66752992c5eb",
+        "model": "claude-opus-4-6"
+      },
+      "human_author": "Om Gupta",
+      "messages": [],
+      "total_additions": 35,
+      "total_deletions": 9,
+      "accepted_lines": 35,
+      "overriden_lines": 0
+    }
+  }
+}
