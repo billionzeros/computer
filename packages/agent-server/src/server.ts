@@ -1097,6 +1097,35 @@ export class AgentServer {
         break
       }
 
+      case 'fs_write': {
+        const writePath = msg.path || ''
+        const writeContent = (msg as { content?: string }).content || ''
+        const writeEncoding = (msg as { encoding?: string }).encoding || 'base64'
+        try {
+          const { writeFileSync, mkdirSync } = await import('node:fs')
+          const { dirname } = await import('node:path')
+          mkdirSync(dirname(writePath), { recursive: true })
+          const buf =
+            writeEncoding === 'base64'
+              ? Buffer.from(writeContent, 'base64')
+              : Buffer.from(writeContent, 'utf-8')
+          writeFileSync(writePath, buf)
+          this.sendToClient(Channel.FILESYNC, {
+            type: 'fs_write_response',
+            path: writePath,
+            success: true,
+          })
+        } catch (err: unknown) {
+          this.sendToClient(Channel.FILESYNC, {
+            type: 'fs_write_response',
+            path: writePath,
+            success: false,
+            error: (err as Error).message,
+          })
+        }
+        break
+      }
+
       default:
         log.warn({ msgType: msg.type }, 'Unknown filesync message type')
     }

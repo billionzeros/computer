@@ -481,6 +481,18 @@ export class Connection {
     this.send(Channel.FILESYNC, { type: 'fs_delete', path })
   }
 
+  sendFilesystemWrite(path: string, content: string, encoding: 'base64' | 'utf-8' = 'base64') {
+    this.send(Channel.FILESYNC, { type: 'fs_write', path, content, encoding })
+  }
+
+  onFilesystemWriteResponse(handler: (path: string, success: boolean, error?: string) => void) {
+    return this.onRawMessage((channel, payload) => {
+      if (channel === Channel.FILESYNC && payload.type === 'fs_write_response') {
+        handler(payload.path as string, !!payload.success, payload.error as string | undefined)
+      }
+    })
+  }
+
   onFilesystemResponse(
     handler: (
       entries: { name: string; type: 'file' | 'dir' | 'link'; size: string }[],
