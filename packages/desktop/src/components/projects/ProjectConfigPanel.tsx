@@ -1,13 +1,5 @@
 import type { Project } from '@anton/protocol'
-import {
-  Brain,
-  ChevronRight,
-  FileText,
-  FolderOpen,
-  Pencil,
-  Plus,
-  X,
-} from 'lucide-react'
+import { Brain, ChevronRight, FileText, FolderOpen, Pencil, Plus } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { projectStore } from '../../lib/store/projectStore.js'
 import { uiStore } from '../../lib/store/uiStore.js'
@@ -166,10 +158,7 @@ function MemoryEditModal({
 
 function FilesSection() {
   return (
-    <ConfigSection
-      icon={<FolderOpen size={14} strokeWidth={1.5} />}
-      title="Files"
-    >
+    <ConfigSection icon={<FolderOpen size={14} strokeWidth={1.5} />} title="Files">
       <button
         type="button"
         className="config-section__link"

@@ -23,8 +23,7 @@ export async function fetchAccountIdentity(
       default:
         return null
     }
-  } catch (err) {
-    console.warn(`[account-identity] Failed to fetch identity for ${registryId}:`, err)
+  } catch (_err) {
     return null
   }
 }
@@ -105,7 +104,7 @@ async function fetchSlackIdentity(token: string): Promise<string | null> {
   if (!res.ok) return null
   const data = (await res.json()) as { ok?: boolean; user?: string; team?: string }
   if (!data.ok) return null
-  return data.team ? `${data.user}@${data.team}` : data.user ?? null
+  return data.team ? `${data.user}@${data.team}` : (data.user ?? null)
 }
 
 async function fetchLinearIdentity(token: string): Promise<string | null> {

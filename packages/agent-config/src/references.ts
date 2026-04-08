@@ -27,7 +27,8 @@ export interface ReferencePack {
 
 let _referencesDir: string | undefined
 function referencesDir(): string {
-  return (_referencesDir ??= join(getAntonDir(), 'references'))
+  _referencesDir ??= join(getAntonDir(), 'references')
+  return _referencesDir
 }
 
 // ── Pack loading ─────────────────────────────────────────────────────

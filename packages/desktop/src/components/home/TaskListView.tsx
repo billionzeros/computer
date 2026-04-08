@@ -36,7 +36,9 @@ function getTaskStatus(
   const state = sessionStates.get(sessionId)
   if (state?.status === 'working') return 'working'
   if (messages.length > 0) {
-    const lastMsg = [...messages].reverse().find((m) => m.role === 'assistant' || m.role === 'system')
+    const lastMsg = [...messages]
+      .reverse()
+      .find((m) => m.role === 'assistant' || m.role === 'system')
     if (lastMsg?.isError) return 'error'
     return 'completed'
   }
@@ -562,7 +564,12 @@ export function TaskListView({ mode }: Props) {
             ) : (
               <div className="task-table__body">
                 {tasks.map((conv) => {
-                  const status = getTaskStatus(conv.sessionId, sessionStates, conv.messages, conv.sessionId ? sessionsById.get(conv.sessionId) : undefined)
+                  const status = getTaskStatus(
+                    conv.sessionId,
+                    sessionStates,
+                    conv.messages,
+                    conv.sessionId ? sessionsById.get(conv.sessionId) : undefined,
+                  )
                   const isSelected = selectedIds.has(conv.id)
                   return (
                     // biome-ignore lint/a11y/useKeyWithClickEvents: table row selection
@@ -674,7 +681,12 @@ export function TaskListView({ mode }: Props) {
         ) : (
           <>
             {tasks.map((conv) => {
-              const status = getTaskStatus(conv.sessionId, sessionStates, conv.messages, conv.sessionId ? sessionsById.get(conv.sessionId) : undefined)
+              const status = getTaskStatus(
+                conv.sessionId,
+                sessionStates,
+                conv.messages,
+                conv.sessionId ? sessionsById.get(conv.sessionId) : undefined,
+              )
               const detail = getStatusDetail(conv.sessionId, sessionStates, status)
               const isActive = conv.id === activeConversationId
               const isSelected = selectedIds.has(conv.id)

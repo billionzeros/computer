@@ -53,7 +53,19 @@ const CODE_EXTS = new Set([
 ])
 const DATA_EXTS = new Set(['json', 'yaml', 'yml', 'csv', 'xml', 'toml', 'sql'])
 const TEXT_EXTS = new Set(['md', 'txt', 'log', 'pdf', 'doc', 'docx'])
-const IMAGE_EXTS = new Set(['png', 'jpg', 'jpeg', 'gif', 'svg', 'ico', 'webp', 'avif', 'bmp', 'heic', 'heif'])
+const IMAGE_EXTS = new Set([
+  'png',
+  'jpg',
+  'jpeg',
+  'gif',
+  'svg',
+  'ico',
+  'webp',
+  'avif',
+  'bmp',
+  'heic',
+  'heif',
+])
 
 function getCategory(name: string): string {
   const ext = name.split('.').pop()?.toLowerCase() || ''
@@ -131,7 +143,7 @@ export function ProjectFilesView() {
   // File viewer (right panel)
   const [viewingFile, setViewingFile] = useState<{ name: string; path: string } | null>(null)
   const [viewContent, setViewContent] = useState<string | null>(null)
-const [viewLoading, setViewLoading] = useState(false)
+  const [viewLoading, setViewLoading] = useState(false)
   const [viewError, setViewError] = useState<string | null>(null)
   const [viewIsImage, setViewIsImage] = useState(false)
 
@@ -214,18 +226,16 @@ const [viewLoading, setViewLoading] = useState(false)
 
   // Listen for fs_read (file viewer)
   useEffect(() => {
-    const unsub = connection.onFilesystemReadResponse(
-      (_path, content, _trunc, err) => {
-        if (err) {
-          setViewError(err)
-          setViewLoading(false)
-        } else {
-          setViewContent(content)
-          setViewLoading(false)
-          setViewError(null)
-        }
-      },
-    )
+    const unsub = connection.onFilesystemReadResponse((_path, content, _trunc, err) => {
+      if (err) {
+        setViewError(err)
+        setViewLoading(false)
+      } else {
+        setViewContent(content)
+        setViewLoading(false)
+        setViewError(null)
+      }
+    })
     return unsub
   }, [])
 
@@ -668,8 +678,10 @@ const [viewLoading, setViewLoading] = useState(false)
               {viewError && (
                 <div className="fv-viewer__status fv-viewer__status--error">{viewError}</div>
               )}
-              {!viewLoading && !viewError && viewContent !== null && (
-                viewIsImage ? (
+              {!viewLoading &&
+                !viewError &&
+                viewContent !== null &&
+                (viewIsImage ? (
                   <div className="fv-viewer__image-wrap">
                     <img
                       src={`data:${getMimeType(viewingFile.name)};base64,${viewContent}`}
@@ -679,8 +691,7 @@ const [viewLoading, setViewLoading] = useState(false)
                   </div>
                 ) : (
                   <pre className="fv-viewer__code">{viewContent}</pre>
-                )
-              )}
+                ))}
             </div>
           </div>
         </div>

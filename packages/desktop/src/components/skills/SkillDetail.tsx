@@ -1,4 +1,4 @@
-import { Bot, FileCode, FileText, FolderOpen, Play, X } from 'lucide-react'
+import { FolderOpen, Play, X } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 import { type Skill, executeSkill, getSkillCommand } from '../../lib/skills.js'
 import { skillIconMap } from './SkillCard.js'
@@ -14,7 +14,7 @@ export function SkillDetail({ skill, onClose }: Props) {
   // Reset params when skill changes
   useEffect(() => {
     setParams({})
-  }, [skill?.name])
+  }, [])
 
   if (!skill) return null
 
@@ -40,9 +40,7 @@ export function SkillDetail({ skill, onClose }: Props) {
       )
     }
     if (skill.assets.other?.length) {
-      parts.push(
-        `${skill.assets.other.length} asset${skill.assets.other.length > 1 ? 's' : ''}`,
-      )
+      parts.push(`${skill.assets.other.length} asset${skill.assets.other.length > 1 ? 's' : ''}`)
     }
     return parts.length > 0 ? parts : null
   }, [skill.assets])
@@ -58,7 +56,13 @@ export function SkillDetail({ skill, onClose }: Props) {
   }
 
   return (
-    <div className="skill-detail-overlay" onClick={handleOverlayClick}>
+    <div
+      className="skill-detail-overlay"
+      onClick={handleOverlayClick}
+      onKeyDown={(e) => {
+        if (e.key === 'Escape') onClose()
+      }}
+    >
       <div className="skill-detail">
         {/* Close button */}
         <button type="button" className="skill-detail__close" onClick={onClose}>
@@ -97,12 +101,13 @@ export function SkillDetail({ skill, onClose }: Props) {
           <div className="skill-detail__params">
             {skill.parameters!.map((param) => (
               <div key={param.name} className="skill-detail__param">
-                <label className="skill-detail__param-label">
+                <label className="skill-detail__param-label" htmlFor={`skill-param-${param.name}`}>
                   {param.label}
                   {param.required && <span className="skill-detail__param-required">*</span>}
                 </label>
                 {param.type === 'select' ? (
                   <select
+                    id={`skill-param-${param.name}`}
                     value={params[param.name] || ''}
                     onChange={(e) => setParams((p) => ({ ...p, [param.name]: e.target.value }))}
                     className="skill-detail__select"
@@ -116,6 +121,7 @@ export function SkillDetail({ skill, onClose }: Props) {
                   </select>
                 ) : (
                   <input
+                    id={`skill-param-${param.name}`}
                     type="text"
                     value={params[param.name] || ''}
                     onChange={(e) => setParams((p) => ({ ...p, [param.name]: e.target.value }))}

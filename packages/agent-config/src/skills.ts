@@ -21,7 +21,8 @@ import { getAntonDir } from './config.js'
 
 let _skillsDir: string | undefined
 function skillsDir(): string {
-  return (_skillsDir ??= join(getAntonDir(), 'skills'))
+  _skillsDir ??= join(getAntonDir(), 'skills')
+  return _skillsDir
 }
 let _exampleSkillsSeeded = false
 
@@ -200,7 +201,7 @@ If reviewing a file, read it with the filesystem tool.
 
 Use the review checklist at \${CLAUDE_SKILL_DIR}/references/checklist.md for a structured approach.`,
 
-    'refactor': `---
+    refactor: `---
 name: Refactor Code
 description: Refactor code for readability, DRY, and SOLID principles
 icon: wand

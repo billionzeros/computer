@@ -68,9 +68,10 @@ const COMMON_TIMEZONES = [
 function tzLabel(tz: string): string {
   try {
     const now = new Date()
-    const offset = new Intl.DateTimeFormat('en', { timeZone: tz, timeZoneName: 'shortOffset' })
-      .formatToParts(now)
-      .find((p) => p.type === 'timeZoneName')?.value ?? ''
+    const offset =
+      new Intl.DateTimeFormat('en', { timeZone: tz, timeZoneName: 'shortOffset' })
+        .formatToParts(now)
+        .find((p) => p.type === 'timeZoneName')?.value ?? ''
     const city = tz.split('/').pop()?.replace(/_/g, ' ') ?? tz
     return `${city} (${offset})`
   } catch {
@@ -108,9 +109,7 @@ function GeneralPage() {
       {/* Timezone */}
       <section className="settings-section">
         <div className="settings-section__title">Timezone</div>
-        <div className="settings-section__desc">
-          Used for agent schedules and displaying times.
-        </div>
+        <div className="settings-section__desc">Used for agent schedules and displaying times.</div>
         <div className="settings-select-wrap">
           <select
             className="settings-select"
@@ -122,7 +121,9 @@ function GeneralPage() {
               <option value={timezone}>{tzLabel(timezone)}</option>
             )}
             {COMMON_TIMEZONES.map((tz) => (
-              <option key={tz} value={tz}>{tzLabel(tz)}</option>
+              <option key={tz} value={tz}>
+                {tzLabel(tz)}
+              </option>
             ))}
           </select>
         </div>
@@ -891,11 +892,7 @@ function UsagePage() {
 
 // ── Main Settings Modal ──
 
-export function SettingsModal({
-  open,
-  onClose,
-  initialPage = 'general',
-}: Props) {
+export function SettingsModal({ open, onClose, initialPage = 'general' }: Props) {
   const [activePage, setActivePage] = useState<SettingsPage>(initialPage)
 
   // Reset to initial page when modal opens

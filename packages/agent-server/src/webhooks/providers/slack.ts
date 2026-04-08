@@ -198,11 +198,7 @@ export class SlackWebhookProvider implements WebhookProvider {
         lines.push(`${who}: ${body}`)
       }
 
-      return (
-        '[Thread context — messages in this thread before you were mentioned]\n' +
-        lines.join('\n') +
-        '\n[End of thread context]\n\n'
-      )
+      return `[Thread context — messages in this thread before you were mentioned]\n${lines.join('\n')}\n[End of thread context]\n\n`
     } catch (err) {
       log.warn({ err, channel, threadTs }, 'fetchThreadContext: failed to fetch thread')
       return ''
@@ -796,7 +792,8 @@ export class SlackWebhookProvider implements WebhookProvider {
     const channel = event.context.channel as string
     const threadTs = event.context.threadTs as string | undefined
     // Slack section text has a 3000 char limit. Truncate plan content if needed.
-    const planText = content.length > 2800 ? `${content.slice(0, 2800)}…\n\n_(plan truncated)_` : content
+    const planText =
+      content.length > 2800 ? `${content.slice(0, 2800)}…\n\n_(plan truncated)_` : content
     await fetch(`${SLACK_API}/chat.postMessage`, {
       method: 'POST',
       headers: {
@@ -916,9 +913,7 @@ export class SlackWebhookProvider implements WebhookProvider {
           .concat([
             {
               type: 'context',
-              elements: [
-                { type: 'mrkdwn', text: `${statusText} by ${userName}` },
-              ],
+              elements: [{ type: 'mrkdwn', text: `${statusText} by ${userName}` }],
             },
           ])
         await fetch(`${SLACK_API}/chat.update`, {

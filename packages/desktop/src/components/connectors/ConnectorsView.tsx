@@ -269,22 +269,23 @@ export function ConnectorsView() {
       </section>
 
       {/* ── Connect popup (small centered dialog like AppSetup) ── */}
-      {connectPopupId && (() => {
-        const popupEntry = registry.find((r) => r.id === connectPopupId)
-        const popupInstances = connectors.filter((c) => (c.registryId ?? c.id) === connectPopupId)
-        if (!popupEntry) return null
-        return (
-          <AppSetup
-            entry={popupEntry}
-            instances={popupInstances}
-            onBack={() => setConnectPopupId(null)}
-            onConnected={() => {
-              setConnectPopupId(null)
-              setSelectedId(connectPopupId)
-            }}
-          />
-        )
-      })()}
+      {connectPopupId &&
+        (() => {
+          const popupEntry = registry.find((r) => r.id === connectPopupId)
+          const popupInstances = connectors.filter((c) => (c.registryId ?? c.id) === connectPopupId)
+          if (!popupEntry) return null
+          return (
+            <AppSetup
+              entry={popupEntry}
+              instances={popupInstances}
+              onBack={() => setConnectPopupId(null)}
+              onConnected={() => {
+                setConnectPopupId(null)
+                setSelectedId(connectPopupId)
+              }}
+            />
+          )
+        })()}
     </div>
   )
 }
@@ -349,7 +350,9 @@ function ConnectorDetail({
 
   // Clean up any in-flight OAuth on unmount
   useEffect(() => {
-    return () => { oauthCleanupRef.current?.() }
+    return () => {
+      oauthCleanupRef.current?.()
+    }
   }, [])
 
   const { id, name, entry, instances, connected: isConnected } = item
@@ -397,9 +400,11 @@ function ConnectorDetail({
     setOauthError(null)
     connectorStore.getState().startOAuth(instanceId, registryId)
 
-    let timeoutId: ReturnType<typeof setTimeout>
     const unsub = connection.onMessage((_channel, msg) => {
-      if (msg.type === 'connector_oauth_url' && (msg as unknown as { provider: string }).provider === instanceId) {
+      if (
+        msg.type === 'connector_oauth_url' &&
+        (msg as unknown as { provider: string }).provider === instanceId
+      ) {
         const url = (msg as unknown as { url: string }).url
         if ((window as unknown as { __TAURI__?: unknown }).__TAURI__) {
           import('@tauri-apps/plugin-shell').then(({ open }) => open(url))
@@ -407,7 +412,10 @@ function ConnectorDetail({
           window.open(url, '_blank')
         }
       }
-      if (msg.type === 'connector_oauth_complete' && (msg as unknown as { provider: string }).provider === instanceId) {
+      if (
+        msg.type === 'connector_oauth_complete' &&
+        (msg as unknown as { provider: string }).provider === instanceId
+      ) {
         const complete = msg as unknown as { success: boolean; error?: string }
         cleanup()
         if (complete.success) {
@@ -435,7 +443,7 @@ function ConnectorDetail({
       }
     }
 
-    timeoutId = setTimeout(() => {
+    const timeoutId = setTimeout(() => {
       setOauthError('Authorization timed out')
       cleanup()
       if (registryId) {
@@ -497,7 +505,9 @@ function ConnectorDetail({
             disabled={oauthWaiting}
           >
             {oauthWaiting ? (
-              <><Loader2 size={14} className="animate-spin" /> Waiting...</>
+              <>
+                <Loader2 size={14} className="animate-spin" /> Waiting...
+              </>
             ) : (
               'Connect'
             )}
@@ -568,9 +578,7 @@ function ConnectorDetail({
           )}
 
           {oauthError && (
-            <div style={{ fontSize: 12, color: '#ef4444', marginTop: 6 }}>
-              {oauthError}
-            </div>
+            <div style={{ fontSize: 12, color: '#ef4444', marginTop: 6 }}>{oauthError}</div>
           )}
         </div>
       )}
@@ -589,9 +597,7 @@ function ConnectorDetail({
       )}
 
       {!isConnected && oauthError && (
-        <div style={{ fontSize: 12, color: '#ef4444', marginTop: 8 }}>
-          {oauthError}
-        </div>
+        <div style={{ fontSize: 12, color: '#ef4444', marginTop: 8 }}>{oauthError}</div>
       )}
 
       {isConnected && allTools.length === 0 && (
@@ -600,7 +606,9 @@ function ConnectorDetail({
         </div>
       )}
 
-      {isConnected && id === 'slack-bot' && <SlackBotIdentityCard status={instances.find((i) => i.id === 'slack-bot')} />}
+      {isConnected && id === 'slack-bot' && (
+        <SlackBotIdentityCard status={instances.find((i) => i.id === 'slack-bot')} />
+      )}
 
       {isConnected && allTools.length > 0 && (
         <div className="connectors-view__perms">

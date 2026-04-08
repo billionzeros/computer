@@ -36,11 +36,13 @@ let _projectsDir: string | undefined
 let _indexPath: string | undefined
 
 function projectsDir(): string {
-  return (_projectsDir ??= join(getAntonDir(), 'projects'))
+  _projectsDir ??= join(getAntonDir(), 'projects')
+  return _projectsDir
 }
 
 function indexPath(): string {
-  return (_indexPath ??= join(projectsDir(), 'index.json'))
+  _indexPath ??= join(projectsDir(), 'index.json')
+  return _indexPath
 }
 
 export function getProjectsDir(): string {
@@ -467,12 +469,8 @@ export function buildProjectContext(project: Project, projectId: string): string
   if (project.type) lines.push(`- Type: ${project.type}`)
   if (project.workspacePath) {
     lines.push(`- Project files: ${project.workspacePath}/`)
-    lines.push(
-      `  Use for ALL user-facing files: code, images, documents, generated artifacts.`,
-    )
-    lines.push(
-      `  This is your primary working directory for shell commands and file operations.`,
-    )
+    lines.push('  Use for ALL user-facing files: code, images, documents, generated artifacts.')
+    lines.push('  This is your primary working directory for shell commands and file operations.')
     lines.push(`  User-uploaded images are in ${project.workspacePath}/.uploads/`)
   }
 

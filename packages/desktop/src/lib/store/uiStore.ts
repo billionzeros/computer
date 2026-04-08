@@ -98,7 +98,8 @@ export const uiStore = create<UIState>((set, get) => ({
   },
 
   // Timezone — auto-detect from browser, allow override
-  timezone: localStorage.getItem('anton-timezone') || Intl.DateTimeFormat().resolvedOptions().timeZone,
+  timezone:
+    localStorage.getItem('anton-timezone') || Intl.DateTimeFormat().resolvedOptions().timeZone,
   setTimezone: (tz) => {
     localStorage.setItem('anton-timezone', tz)
     set({ timezone: tz })

@@ -12387,7 +12387,6 @@ button {
   color: var(--text);
 }
 
-
 .connectors-view__search {
   display: flex;
   align-items: center;
@@ -12718,7 +12717,6 @@ button {
   color: #ef4444;
   border-color: rgba(239, 68, 68, 0.4);
 }
-
 
 /* ═══════════════════════════════════════════════════════════════════
    CONTEXT INDICATOR
@@ -16821,7 +16819,7 @@ button {
 }
 
 .fv-divider::after {
-  content: '';
+  content: "";
   position: absolute;
   top: 0;
   bottom: 0;

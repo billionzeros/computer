@@ -54,12 +54,15 @@ function formatNextRun(cron: string | null): string | null {
     const mon = candidate.getMonth() + 1
     const dow = candidate.getDay()
 
-    const matchField = (spec: string, val: number, min: number, max: number): boolean => {
+    const matchField = (spec: string, val: number, _min: number, _max: number): boolean => {
       for (const part of spec.split(',')) {
         if (part === '*') return true
-        if (part.startsWith('*/')) { if (val % Number.parseInt(part.slice(2)) === 0) return true }
-        else if (part.includes('-')) { const [a, b] = part.split('-').map(Number); if (val >= a && val <= b) return true }
-        else if (Number.parseInt(part) === val) return true
+        if (part.startsWith('*/')) {
+          if (val % Number.parseInt(part.slice(2)) === 0) return true
+        } else if (part.includes('-')) {
+          const [a, b] = part.split('-').map(Number)
+          if (val >= a && val <= b) return true
+        } else if (Number.parseInt(part) === val) return true
       }
       return false
     }

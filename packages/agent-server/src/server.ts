@@ -81,13 +81,13 @@ import { WebSocket, WebSocketServer } from 'ws'
 import { OAuthFlow, TokenStore, fetchAccountIdentity, oauthCallbackHandler } from './oauth/index.js'
 import type { Scheduler } from './scheduler.js'
 import { Updater } from './updater.js'
+import { extractBindingKey, getBinding } from './webhooks/bindings.js'
 import {
   SlackWebhookProvider,
   TelegramWebhookProvider,
   WebhookAgentRunner,
   WebhookRouter,
 } from './webhooks/index.js'
-import { extractBindingKey, getBinding } from './webhooks/bindings.js'
 import {
   getBuiltinWorkflowPath,
   listBuiltinWorkflows,
@@ -1039,7 +1039,7 @@ export class AgentServer {
       workspace = resolve(this.activeWorkspacePath)
     }
     const resolved = resolve(targetPath)
-    return resolved === workspace || resolved.startsWith(workspace + '/')
+    return resolved === workspace || resolved.startsWith(`${workspace}/`)
   }
 
   private async handleFilesync(payload: Uint8Array) {
@@ -1115,7 +1115,9 @@ export class AgentServer {
               path: filePath,
               content: buf.toString('base64'),
               encoding: 'base64',
-              mimeType: AgentServer.IMAGE_EXTS.has(ext) ? (AgentServer.IMAGE_MIME[ext] || 'application/octet-stream') : undefined,
+              mimeType: AgentServer.IMAGE_EXTS.has(ext)
+                ? AgentServer.IMAGE_MIME[ext] || 'application/octet-stream'
+                : undefined,
               size: stat.size,
               truncated: false,
             })
@@ -1232,35 +1234,6 @@ export class AgentServer {
           this.sendToClient(Channel.FILESYNC, {
             type: 'fs_delete_response',
             path: filePath,
-            success: false,
-            error: (err as Error).message,
-          })
-        }
-        break
-      }
-
-      case 'fs_write': {
-        const writePath = msg.path || ''
-        const writeContent = (msg as { content?: string }).content || ''
-        const writeEncoding = (msg as { encoding?: string }).encoding || 'base64'
-        try {
-          const { writeFileSync, mkdirSync } = await import('node:fs')
-          const { dirname } = await import('node:path')
-          mkdirSync(dirname(writePath), { recursive: true })
-          const buf =
-            writeEncoding === 'base64'
-              ? Buffer.from(writeContent, 'base64')
-              : Buffer.from(writeContent, 'utf-8')
-          writeFileSync(writePath, buf)
-          this.sendToClient(Channel.FILESYNC, {
-            type: 'fs_write_response',
-            path: writePath,
-            success: true,
-          })
-        } catch (err: unknown) {
-          this.sendToClient(Channel.FILESYNC, {
-            type: 'fs_write_response',
-            path: writePath,
             success: false,
             error: (err as Error).message,
           })
@@ -1651,7 +1624,11 @@ export class AgentServer {
       lastActiveAt: m.lastActiveAt,
       usage: m.usage,
       // Persisted sessions not in memory: completed if they have messages, idle otherwise
-      status: (this.activeTurns.has(m.id) ? 'working' : m.messageCount > 0 ? 'completed' : 'idle') as 'working' | 'completed' | 'idle',
+      status: (this.activeTurns.has(m.id)
+        ? 'working'
+        : m.messageCount > 0
+          ? 'completed'
+          : 'idle') as 'working' | 'completed' | 'idle',
     }))
 
     // Add in-memory sessions that aren't persisted yet (exclude project sessions)
@@ -1667,7 +1644,11 @@ export class AgentServer {
           createdAt: info.createdAt,
           lastActiveAt: info.lastActiveAt,
           usage: info.usage,
-          status: (this.activeTurns.has(id) ? 'working' : info.messageCount > 0 ? 'completed' : 'idle') as 'working' | 'completed' | 'idle',
+          status: (this.activeTurns.has(id)
+            ? 'working'
+            : info.messageCount > 0
+              ? 'completed'
+              : 'idle') as 'working' | 'completed' | 'idle',
         })
       }
     }
@@ -2059,8 +2040,7 @@ export class AgentServer {
         type: 'skill_list_response',
         skills,
       })
-    } catch (err) {
-      console.error('Failed to load skills:', err)
+    } catch (_err) {
       this.sendToClient(Channel.AI, {
         type: 'skill_list_response',
         skills: [],
@@ -2795,7 +2775,11 @@ export class AgentServer {
       messageCount: s.messageCount,
       createdAt: s.createdAt,
       lastActiveAt: s.lastActiveAt,
-      status: (this.activeTurns.has(s.id) ? 'working' : s.messageCount > 0 ? 'completed' : 'idle') as 'working' | 'completed' | 'idle',
+      status: (this.activeTurns.has(s.id)
+        ? 'working'
+        : s.messageCount > 0
+          ? 'completed'
+          : 'idle') as 'working' | 'completed' | 'idle',
     }))
 
     // Add in-memory project sessions that aren't persisted yet
@@ -2811,7 +2795,11 @@ export class AgentServer {
           messageCount: info.messageCount,
           createdAt: info.createdAt,
           lastActiveAt: info.lastActiveAt,
-          status: (this.activeTurns.has(id) ? 'working' : info.messageCount > 0 ? 'completed' : 'idle') as 'working' | 'completed' | 'idle',
+          status: (this.activeTurns.has(id)
+            ? 'working'
+            : info.messageCount > 0
+              ? 'completed'
+              : 'idle') as 'working' | 'completed' | 'idle',
         })
       }
     }
@@ -3603,16 +3591,15 @@ export class AgentServer {
   /** Activate direct connectors that have a stored apiKey in config or a matching env var. */
   private startApiConnectors(): void {
     const apiConnectors = getConnectors(this.config).filter(
-      (c) => c.type === 'api' && c.enabled && this.connectorManager.hasFactory(c.registryId ?? c.id),
+      (c) =>
+        c.type === 'api' && c.enabled && this.connectorManager.hasFactory(c.registryId ?? c.id),
     )
 
     for (const c of apiConnectors) {
       // Prefer stored apiKey from config, fall back to env var
       const envKey = (c.registryId ?? c.id).toUpperCase()
       const token =
-        c.apiKey ??
-        process.env[`${envKey}_BOT_TOKEN`] ??
-        process.env[`${envKey}_API_KEY`]
+        c.apiKey ?? process.env[`${envKey}_BOT_TOKEN`] ?? process.env[`${envKey}_API_KEY`]
       if (token) {
         this.connectorManager.activateWithToken(c.id, token, {
           registryId: c.registryId,

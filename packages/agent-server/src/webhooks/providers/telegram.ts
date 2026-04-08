@@ -246,7 +246,10 @@ export class TelegramWebhookProvider implements WebhookProvider {
     })
     if (!res.ok) {
       const body = await res.text().catch(() => '<unreadable>')
-      log.warn({ chatId, messageId, status: res.status, body: body.slice(0, 200) }, 'editMessageText failed')
+      log.warn(
+        { chatId, messageId, status: res.status, body: body.slice(0, 200) },
+        'editMessageText failed',
+      )
     }
   }
 
@@ -352,10 +355,7 @@ export class TelegramWebhookProvider implements WebhookProvider {
       })
     }
 
-    log.info(
-      { chatId, action, interactionId, approved },
-      'parseCallbackQuery: resolved',
-    )
+    log.info({ chatId, action, interactionId, approved }, 'parseCallbackQuery: resolved')
 
     // Return a synthetic event. The text carries the approval keyword so
     // the runner's parseApprovalText picks it up. The context includes
@@ -758,7 +758,13 @@ interface TelegramUpdate {
     chat: { id: number; type: string; first_name?: string; username?: string }
     text?: string
     caption?: string
-    photo?: { file_id: string; file_unique_id: string; width: number; height: number; file_size?: number }[]
+    photo?: {
+      file_id: string
+      file_unique_id: string
+      width: number
+      height: number
+      file_size?: number
+    }[]
     date: number
   }
   callback_query?: {

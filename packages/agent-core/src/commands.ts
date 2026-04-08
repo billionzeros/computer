@@ -6,11 +6,7 @@
  * surface (Slack, Telegram, future) gets the same commands for free.
  */
 
-import {
-  findProjectsByName,
-  listProjectIndex,
-  loadProject,
-} from '@anton/agent-config'
+import { findProjectsByName, listProjectIndex, loadProject } from '@anton/agent-config'
 import type { Session } from './session.js'
 
 // ── Types ────────────────────────────────────────────────────────────
@@ -138,7 +134,9 @@ function handleProject(args: string, ctx: CommandContext): CommandResult {
     }
     const project = loadProject(projectId)
     if (!project) {
-      return ok(`Bound to project \`${projectId}\` but it no longer exists. Use \`/project <name>\` to switch.`)
+      return ok(
+        `Bound to project \`${projectId}\` but it no longer exists. Use \`/project <name>\` to switch.`,
+      )
     }
     const lines = [
       `**${project.icon} ${project.name}**`,
@@ -164,7 +162,9 @@ function handleProject(args: string, ctx: CommandContext): CommandResult {
   const project = matches[0]
   ctx.saveProjectBinding(project.id)
   ctx.evictSession()
-  return ok(`Switched to **${project.icon} ${project.name}**. Next message starts a fresh session with this project's context.`)
+  return ok(
+    `Switched to **${project.icon} ${project.name}**. Next message starts a fresh session with this project's context.`,
+  )
 }
 
 function handleProjects(_args: string, ctx: CommandContext): CommandResult {

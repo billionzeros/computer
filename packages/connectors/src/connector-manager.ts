@@ -1,6 +1,6 @@
 import { createLogger } from '@anton/logger'
-import type { TSchema } from '@sinclair/typebox'
 import type { AgentTool } from '@mariozechner/pi-agent-core'
+import type { TSchema } from '@sinclair/typebox'
 import type { ConnectorFactory, DirectConnector, TokenGetter } from './types.js'
 
 const log = createLogger('connector-manager')
@@ -218,7 +218,8 @@ export class ConnectorManager {
         // ALL instances have it set to 'never'.
         const allPerms = instances.map(({ instanceId }) => this.toolPermissions.get(instanceId))
         for (const baseTool of baseInstance.connector.getTools()) {
-          const allNever = allPerms.length > 0 && allPerms.every((p) => p?.[baseTool.name] === 'never')
+          const allNever =
+            allPerms.length > 0 && allPerms.every((p) => p?.[baseTool.name] === 'never')
           if (allNever) continue
           // Filter account enum to only instances that haven't disabled this tool
           const activeInstances = instances.filter(({ instanceId }) => {
@@ -235,12 +236,18 @@ export class ConnectorManager {
             execute: (id: string, params: unknown, signal?: AbortSignal) => {
               const p = params as Record<string, unknown>
               const accountParam = p.account as string | undefined
-              const target = resolveInstance(capturedInstances, accountParam, this.accountDisplayNames)
+              const target = resolveInstance(
+                capturedInstances,
+                accountParam,
+                this.accountDisplayNames,
+              )
               const { account: _, ...rest } = p
               // Get the tool from the target instance and execute
               const targetTool = target.connector.getTools().find((t) => t.name === baseTool.name)
               if (!targetTool) {
-                return Promise.reject(new Error(`Tool ${baseTool.name} not found on target account`))
+                return Promise.reject(
+                  new Error(`Tool ${baseTool.name} not found on target account`),
+                )
               }
               return targetTool.execute(id, rest, signal)
             },
@@ -333,10 +340,7 @@ export class ConnectorManager {
  * JSON Schema object — we cast to TSchema since TypeBox schemas are just
  * plain JSON Schema objects at runtime.
  */
-function injectAccountParam(
-  parameters: TSchema,
-  accountEnum: string[],
-): TSchema {
+function injectAccountParam(parameters: TSchema, accountEnum: string[]): TSchema {
   // Clone the schema and inject the account property
   const cloned = JSON.parse(JSON.stringify(parameters)) as Record<string, unknown>
   const props = (cloned.properties ?? {}) as Record<string, unknown>

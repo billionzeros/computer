@@ -302,7 +302,9 @@ export function ChatInput({
                 onClick={() => sessionStore.getState().setThinkingEnabled(!thinkingEnabled)}
               >
                 <Brain size={14} strokeWidth={1.5} />
-                <span className="composer__thinking-label"><span>Thinking</span></span>
+                <span className="composer__thinking-label">
+                  <span>Thinking</span>
+                </span>
               </button>
               <button
                 type="button"

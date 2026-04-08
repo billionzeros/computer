@@ -429,7 +429,11 @@ export class Connection {
   }
 
   sendConnectorOAuthStart(provider: string, registryId?: string) {
-    this.send(Channel.AI, { type: 'connector_oauth_start', provider, ...(registryId ? { registryId } : {}) })
+    this.send(Channel.AI, {
+      type: 'connector_oauth_start',
+      provider,
+      ...(registryId ? { registryId } : {}),
+    })
   }
 
   sendConnectorOAuthDisconnect(provider: string) {

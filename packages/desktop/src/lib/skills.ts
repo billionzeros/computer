@@ -1,6 +1,6 @@
 import { connection } from './connection.js'
-import { type Skill, skillStore } from './store/skillStore.js'
 import { useStore } from './store.js'
+import { type Skill, skillStore } from './store/skillStore.js'
 
 export type { Skill, SkillParameter } from './store/skillStore.js'
 

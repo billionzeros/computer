@@ -44,7 +44,7 @@ function ensureGitignoreEntry(workspacePath: string): void {
     if (existsSync(gitignorePath)) {
       const content = readFileSync(gitignorePath, 'utf-8')
       if (content.includes('.uploads')) return
-      writeFileSync(gitignorePath, content.trimEnd() + '\n.uploads/\n', 'utf-8')
+      writeFileSync(gitignorePath, `${content.trimEnd()}\n.uploads/\n`, 'utf-8')
     } else {
       writeFileSync(gitignorePath, '.uploads/\n', 'utf-8')
     }

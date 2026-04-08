@@ -30,9 +30,7 @@ export function MessageBubble({ message, isLastThinking }: Props) {
       className={getContainerClass(message)}
     >
       {message.role === 'user' && (
-        <div
-          className="message__surface message__surface--user"
-        >
+        <div className="message__surface message__surface--user">
           {message.attachments && message.attachments.length > 0 && (
             <div className="message__attachments">
               {message.attachments.map((attachment, index) => {

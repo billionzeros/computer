@@ -18,7 +18,12 @@ import { createSession, resumeSession } from '@anton/agent-core'
 import type { ConnectorManager } from '@anton/connectors'
 import { createLogger } from '@anton/logger'
 import type { TaskItem } from '@anton/protocol'
-import type { CanonicalEvent, OutboundImage, WebhookProvider, WebhookRunResult } from './provider.js'
+import type {
+  CanonicalEvent,
+  OutboundImage,
+  WebhookProvider,
+  WebhookRunResult,
+} from './provider.js'
 
 /**
  * Extra session options resolved per-session by the host (e.g. project-scoped
@@ -88,7 +93,16 @@ interface ProgressState {
 
 // ── Approval text parsing ────────────────────────────────────────────
 
-const APPROVE_KEYWORDS = new Set(['yes', 'y', 'approve', 'approved', 'ok', 'go', 'allow', 'confirm'])
+const APPROVE_KEYWORDS = new Set([
+  'yes',
+  'y',
+  'approve',
+  'approved',
+  'ok',
+  'go',
+  'allow',
+  'confirm',
+])
 const REJECT_KEYWORDS = new Set(['no', 'n', 'reject', 'rejected', 'deny', 'denied', 'cancel'])
 
 export function parseApprovalText(text: string): InteractionResponse {
@@ -142,10 +156,7 @@ export class WebhookAgentRunner {
     if (!pending) return false
     clearTimeout(pending.timeout)
     this.pendingInteractions.delete(sessionId)
-    log.info(
-      { sessionId, type: pending.type, approved: response.approved },
-      'interaction resolved',
-    )
+    log.info({ sessionId, type: pending.type, approved: response.approved }, 'interaction resolved')
     pending.resolve(response)
     return true
   }
@@ -356,8 +367,7 @@ export class WebhookAgentRunner {
         return response.approved
       }
       // Phase 1 fallback: text-based approval
-      const prompt =
-        `:warning: *Confirmation required*\n\`\`\`\n${command}\n\`\`\`\n${reason}\n\nReply *yes* to approve or *no* to deny.`
+      const prompt = `:warning: *Confirmation required*\n\`\`\`\n${command}\n\`\`\`\n${reason}\n\nReply *yes* to approve or *no* to deny.`
       await provider.reply(event, prompt, [])
       const response = await this.waitForInteraction(sessionId, 'confirm', CONFIRM_TIMEOUT_MS)
       return response.approved
@@ -372,8 +382,7 @@ export class WebhookAgentRunner {
         return { approved: response.approved, feedback: response.feedback }
       }
       // Phase 1 fallback: text-based approval
-      const prompt =
-        `:memo: *Plan: ${title}*\n\n${content}\n\nReply *approve* to proceed, or reply with feedback to revise.`
+      const prompt = `:memo: *Plan: ${title}*\n\n${content}\n\nReply *approve* to proceed, or reply with feedback to revise.`
       await provider.reply(event, prompt, [])
       const response = await this.waitForInteraction(sessionId, 'plan_confirm', PLAN_TIMEOUT_MS)
       return { approved: response.approved, feedback: response.feedback }
@@ -458,8 +467,8 @@ export class WebhookAgentRunner {
           const s = this.progressStates.get(sessionId)
           if (s?.pendingUpdate) {
             const e = Math.round((Date.now() - turnStarted) / 1000)
-            await this.sendProgressMessage(s, event, provider, s.pendingUpdate, e).catch(
-              (err) => log.warn({ err, sessionId }, 'trailing progress update failed'),
+            await this.sendProgressMessage(s, event, provider, s.pendingUpdate, e).catch((err) =>
+              log.warn({ err, sessionId }, 'trailing progress update failed'),
             )
             s.pendingUpdate = null
           }

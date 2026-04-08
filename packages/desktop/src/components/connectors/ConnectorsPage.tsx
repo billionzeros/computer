@@ -125,9 +125,7 @@ function AppsTab({
     const entry = registry.find((r) => r.id === setupId)
     if (entry) {
       // Find all instances that belong to this registry entry (multi-account support)
-      const instances = connectors.filter(
-        (c) => (c.registryId ?? c.id) === entry.id,
-      )
+      const instances = connectors.filter((c) => (c.registryId ?? c.id) === entry.id)
       return (
         <AppSetup
           entry={entry}
@@ -237,9 +235,11 @@ export function AppSetup({
     // Send OAuth start with registryId for multi-account UUID instances
     connectorStore.getState().startOAuth(instanceId, registryId)
 
-    let timeoutId: ReturnType<typeof setTimeout>
     const unsub = connection.onMessage((_channel, msg) => {
-      if (msg.type === 'connector_oauth_url' && (msg as unknown as { provider: string }).provider === instanceId) {
+      if (
+        msg.type === 'connector_oauth_url' &&
+        (msg as unknown as { provider: string }).provider === instanceId
+      ) {
         const url = (msg as unknown as { url: string }).url
         if ((window as unknown as { __TAURI__?: unknown }).__TAURI__) {
           import('@tauri-apps/plugin-shell').then(({ open }) => open(url))
@@ -247,7 +247,10 @@ export function AppSetup({
           window.open(url, '_blank')
         }
       }
-      if (msg.type === 'connector_oauth_complete' && (msg as unknown as { provider: string }).provider === instanceId) {
+      if (
+        msg.type === 'connector_oauth_complete' &&
+        (msg as unknown as { provider: string }).provider === instanceId
+      ) {
         const complete = msg as unknown as { success: boolean; error?: string }
         clearTimeout(timeoutId)
         setOauthWaiting(false)
@@ -270,7 +273,7 @@ export function AppSetup({
       }
     })
 
-    timeoutId = setTimeout(() => {
+    const timeoutId = setTimeout(() => {
       setOauthWaiting(false)
       unsub()
       // Clean up pre-created config on timeout (for multi-account UUID instances)
@@ -369,9 +372,11 @@ export function AppSetup({
       connectorStore.getState().removeConnectorRemote(instanceId)
     }
 
-    let timeoutId: ReturnType<typeof setTimeout>
     const unsub = connection.onMessage((_channel, msg) => {
-      if (msg.type === 'connector_removed' && (msg as unknown as { id: string }).id === instanceId) {
+      if (
+        msg.type === 'connector_removed' &&
+        (msg as unknown as { id: string }).id === instanceId
+      ) {
         clearTimeout(timeoutId)
         unsub()
         connectorStore.getState().listConnectors()
@@ -379,12 +384,12 @@ export function AppSetup({
       }
     })
 
-    timeoutId = setTimeout(() => {
+    const timeoutId = setTimeout(() => {
       unsub()
       // Check fresh store state on timeout
-      const remaining = connectorStore.getState().connectors.filter(
-        (c) => (c.registryId ?? c.id) === entry.id,
-      )
+      const remaining = connectorStore
+        .getState()
+        .connectors.filter((c) => (c.registryId ?? c.id) === entry.id)
       if (remaining.length === 0) onBack()
     }, 5_000)
   }
@@ -448,14 +453,14 @@ export function AppSetup({
             {instances.map((inst) => (
               <div key={inst.id} className="app-detail__account-row">
                 <div className="app-detail__account-info">
-                  <span className={`app-detail__account-dot${inst.connected ? ' app-detail__account-dot--connected' : ''}`} />
+                  <span
+                    className={`app-detail__account-dot${inst.connected ? ' app-detail__account-dot--connected' : ''}`}
+                  />
                   <span className="app-detail__account-name">
                     {inst.accountLabel ?? inst.accountEmail ?? inst.name}
                   </span>
                   {inst.connected && (
-                    <span className="app-detail__account-tools">
-                      {inst.toolCount} tools
-                    </span>
+                    <span className="app-detail__account-tools">{inst.toolCount} tools</span>
                   )}
                 </div>
                 <div className="app-detail__account-actions">
@@ -568,23 +573,25 @@ export function AppSetup({
                 />
               </div>
             ))}
-            {(entry.optionalFields ?? []).map((field: { key: string; label: string; hint?: string }) => (
-              <div key={field.key} className="app-detail__field">
-                <label htmlFor={`opt-${field.key}`}>
-                  {field.label} <span className="app-detail__field-optional">(optional)</span>
-                </label>
-                {field.hint && <p className="app-detail__field-hint">{field.hint}</p>}
-                <input
-                  id={`opt-${field.key}`}
-                  type="text"
-                  placeholder={field.label}
-                  value={optionalValues[field.key] || ''}
-                  onChange={(e) =>
-                    setOptionalValues((prev) => ({ ...prev, [field.key]: e.target.value }))
-                  }
-                />
-              </div>
-            ))}
+            {(entry.optionalFields ?? []).map(
+              (field: { key: string; label: string; hint?: string }) => (
+                <div key={field.key} className="app-detail__field">
+                  <label htmlFor={`opt-${field.key}`}>
+                    {field.label} <span className="app-detail__field-optional">(optional)</span>
+                  </label>
+                  {field.hint && <p className="app-detail__field-hint">{field.hint}</p>}
+                  <input
+                    id={`opt-${field.key}`}
+                    type="text"
+                    placeholder={field.label}
+                    value={optionalValues[field.key] || ''}
+                    onChange={(e) =>
+                      setOptionalValues((prev) => ({ ...prev, [field.key]: e.target.value }))
+                    }
+                  />
+                </div>
+              ),
+            )}
             <button
               type="button"
               className="app-detail__connect"
