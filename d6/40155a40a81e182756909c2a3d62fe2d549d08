@@ -1,0 +1,25 @@
+packages/agent-server/src/webhooks/format/slack-mrkdwn.ts
+  ed6b22bce12a4690 38,45-51,53-54,93-97
+packages/agent-server/src/webhooks/format/telegram-md.ts
+  ed6b22bce12a4690 31,38-42,44,75-79
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.2.5",
+  "base_commit_sha": "d640155a40a81e182756909c2a3d62fe2d549d08",
+  "prompts": {
+    "ed6b22bce12a4690": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "bd05d8c8-bee5-48b6-a1be-2cfb71669245",
+        "model": "claude-opus-4-6"
+      },
+      "human_author": "Om Gupta",
+      "messages": [],
+      "total_additions": 27,
+      "total_deletions": 6,
+      "accepted_lines": 27,
+      "overriden_lines": 0
+    }
+  }
+}
