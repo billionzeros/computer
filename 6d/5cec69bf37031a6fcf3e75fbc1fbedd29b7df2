@@ -1,0 +1,25 @@
+packages/desktop/src/components/connectors/ConnectorsView.tsx
+  39267b2ed0be3489 15-16,22,56-68,87-89,94-100,102-103,106,115,117-119,121-144,148,151-158,161-169,182-188,192-194,223,239,259-260,297,303,317-321,329,332,335-339,350-373,375,377-379,381,386-391,395-463,467-469,473-474,484,488,492,497,499-503,505,510-576,578,585-593,597,603,605,745
+packages/desktop/src/index.css
+  39267b2ed0be3489 11861-12046,12385-12387
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.2.5",
+  "base_commit_sha": "6d5cec69bf37031a6fcf3e75fbc1fbedd29b7df2",
+  "prompts": {
+    "39267b2ed0be3489": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "394ff8d9-9c41-4ea7-98e7-c853eead621c",
+        "model": "claude-opus-4-6"
+      },
+      "human_author": "Om Gupta",
+      "messages": [],
+      "total_additions": 511,
+      "total_deletions": 198,
+      "accepted_lines": 501,
+      "overriden_lines": 0
+    }
+  }
+}
