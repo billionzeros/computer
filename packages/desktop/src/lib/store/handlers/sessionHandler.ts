@@ -16,6 +16,16 @@ import type { ChatImageAttachment, ChatMessage, SessionMeta } from '../types.js'
 import { usageStore } from '../usageStore.js'
 import { parseCitationSources } from './citationParser.js'
 
+function unwrapUserSteering(content: string): { content: string; isSteering: boolean } {
+  const match = content.match(
+    /^<user_steering>[\s\S]*?User message:\s*"([\s\S]*)"\s*<\/user_steering>\s*$/,
+  )
+  if (match) {
+    return { content: match[1], isSteering: true }
+  }
+  return { content, isSteering: false }
+}
+
 export function handleSessionMessage(msg: AiMessage): boolean {
   switch (msg.type) {
     case 'session_created': {
@@ -122,23 +132,34 @@ export function handleSessionMessage(msg: AiMessage): boolean {
           } else {
             id = `hist_${entry.seq}_${Date.now()}`
           }
+          const role =
+            entry.role === 'user'
+              ? 'user'
+              : entry.role === 'assistant'
+                ? 'assistant'
+                : entry.role === 'tool_call' || entry.role === 'tool_result'
+                  ? 'tool'
+                  : 'system'
+
+          let content = entry.content
+          let isSteering = false
+          if (role === 'user') {
+            const unwrapped = unwrapUserSteering(content)
+            content = unwrapped.content
+            isSteering = unwrapped.isSteering
+          }
+
           return {
             id,
-            role:
-              entry.role === 'user'
-                ? 'user'
-                : entry.role === 'assistant'
-                  ? 'assistant'
-                  : entry.role === 'tool_call' || entry.role === 'tool_result'
-                    ? 'tool'
-                    : 'system',
-            content: entry.content,
+            role,
+            content,
             timestamp: entry.ts,
             attachments: entry.attachments,
             toolName: entry.toolName,
             toolInput: entry.toolInput,
             isError: entry.isError,
             isThinking: entry.isThinking,
+            isSteering,
           } as ChatMessage
         })
 

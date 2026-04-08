@@ -26,12 +26,23 @@ export type GroupedItem =
     }
 
 /**
+ * Strip <think>…</think> blocks emitted inline by some models.
+ * Handles both closed blocks and an unclosed trailing block from streaming.
+ */
+function stripThinkTags(text: string): string {
+  return text
+    .replace(/<think>[\s\S]*?<\/think>/g, '')
+    .replace(/<think>[\s\S]*$/g, '')
+    .trim()
+}
+
+/**
  * Detect if a message looks like a step narration (short, action-oriented).
  * These get merged with their following tool actions into task_section items.
  */
 function isStepNarration(msg: ChatMessage): boolean {
   if (msg.role !== 'assistant' || msg.isThinking) return false
-  const text = msg.content.trim()
+  const text = stripThinkTags(msg.content)
   // Must be short (step title, not a full response)
   if (text.length > 120 || text.length < 3) return false
   // Must not contain multiple sentences or paragraphs (that's a full response)
@@ -89,6 +100,9 @@ export function groupMessages(messages: ChatMessage[]): GroupedItem[] {
 
   for (const msg of messages) {
     if (msg.role !== 'tool') {
+      if (msg.role === 'assistant' && !msg.isThinking && stripThinkTags(msg.content).length === 0) {
+        continue
+      }
       flushActions()
       raw.push({ type: 'message', message: msg })
       continue
@@ -274,7 +288,7 @@ export function groupMessages(messages: ChatMessage[]): GroupedItem[] {
       (raw[i + 1].type === 'actions' || raw[i + 1].type === 'sub_agent')
     ) {
       const next = raw[i + 1]
-      const title = item.message.content.trim()
+      const title = stripThinkTags(item.message.content)
 
       if (next.type === 'actions') {
         const allDone = next.actions.every((a) => a.result !== null)
