@@ -189,6 +189,14 @@ export interface ConnectorConfig {
   // For OAuth connectors (type: 'oauth') — tokens stored separately in TokenStore
   oauthProvider?: string
 
+  // Multi-account support: which registry entry this belongs to (e.g. "gmail").
+  // Absent = defaults to id (backward compat for single-account connectors).
+  registryId?: string
+  // Auto-fetched account identity after OAuth (e.g. "user@gmail.com")
+  accountEmail?: string
+  // Optional user-provided label override
+  accountLabel?: string
+
   // Extra per-connector key-value data (e.g. ownerChatId for Telegram)
   metadata?: Record<string, string>
 
@@ -1452,7 +1460,9 @@ export interface ConnectorRegistryEntry {
     steps: string[]
     url: string
     urlLabel?: string
+    reauthorizeHint?: string // e.g. "Re-authorize to grant access to additional GitHub organizations"
   }
+  multiAccount?: boolean // true = UI shows "Add another account"
 }
 
 export const CONNECTOR_REGISTRY: ConnectorRegistryEntry[] = [
@@ -1504,6 +1514,7 @@ export const CONNECTOR_REGISTRY: ConnectorRegistryEntry[] = [
     category: 'productivity',
     type: 'oauth',
     oauthProvider: 'gmail',
+    multiAccount: true,
     oauthScopes: [
       'https://www.googleapis.com/auth/gmail.modify',
       'https://www.googleapis.com/auth/gmail.send',
@@ -1524,6 +1535,7 @@ export const CONNECTOR_REGISTRY: ConnectorRegistryEntry[] = [
     category: 'productivity',
     type: 'oauth',
     oauthProvider: 'notion',
+    multiAccount: true,
     oauthScopes: [],
     requiredEnv: [],
     featured: true,
@@ -1531,6 +1543,7 @@ export const CONNECTOR_REGISTRY: ConnectorRegistryEntry[] = [
       steps: ['Click Connect to authorize with your Notion account'],
       url: 'https://www.notion.so/profile/integrations',
       urlLabel: 'Notion Integrations',
+      reauthorizeHint: 'Re-authorize to grant access to additional Notion workspaces',
     },
   },
   {
@@ -1541,6 +1554,7 @@ export const CONNECTOR_REGISTRY: ConnectorRegistryEntry[] = [
     category: 'development',
     type: 'oauth',
     oauthProvider: 'github',
+    multiAccount: true,
     oauthScopes: ['repo', 'read:org', 'read:user'],
     requiredEnv: [],
     featured: true,
@@ -1548,6 +1562,7 @@ export const CONNECTOR_REGISTRY: ConnectorRegistryEntry[] = [
       steps: ['Click Connect to authorize with your GitHub account'],
       url: 'https://github.com/settings/connections/applications',
       urlLabel: 'GitHub Apps',
+      reauthorizeHint: 'Re-authorize to grant access to additional GitHub organizations',
     },
   },
   {
@@ -1558,6 +1573,7 @@ export const CONNECTOR_REGISTRY: ConnectorRegistryEntry[] = [
     category: 'messaging',
     type: 'oauth',
     oauthProvider: 'slack',
+    multiAccount: true,
     // Personal user-token connector. Installed per Anton user. No bot, no
     // webhooks, no proxy fan-out — just tools acting as you. Search and
     // history require a user token (bot tokens cannot call search.messages).
@@ -1582,6 +1598,7 @@ export const CONNECTOR_REGISTRY: ConnectorRegistryEntry[] = [
       steps: ['Click Connect to authorize Anton with your Slack account'],
       url: 'https://api.slack.com/apps',
       urlLabel: 'Slack Apps',
+      reauthorizeHint: 'Re-authorize to update Slack permissions',
     },
   },
   {
@@ -1633,6 +1650,7 @@ export const CONNECTOR_REGISTRY: ConnectorRegistryEntry[] = [
     category: 'development',
     type: 'oauth',
     oauthProvider: 'linear',
+    multiAccount: true,
     oauthScopes: ['read', 'write', 'issues:create'],
     requiredEnv: [],
     featured: true,
@@ -1650,6 +1668,7 @@ export const CONNECTOR_REGISTRY: ConnectorRegistryEntry[] = [
     category: 'productivity',
     type: 'oauth',
     oauthProvider: 'google',
+    multiAccount: true,
     oauthScopes: [
       'https://www.googleapis.com/auth/drive.readonly',
       'https://www.googleapis.com/auth/drive.file',
@@ -1670,6 +1689,7 @@ export const CONNECTOR_REGISTRY: ConnectorRegistryEntry[] = [
     category: 'productivity',
     type: 'oauth',
     oauthProvider: 'google',
+    multiAccount: true,
     oauthScopes: [
       'https://www.googleapis.com/auth/calendar',
       'https://www.googleapis.com/auth/calendar.events',
@@ -1711,6 +1731,7 @@ export const CONNECTOR_REGISTRY: ConnectorRegistryEntry[] = [
     category: 'productivity',
     type: 'oauth',
     oauthProvider: 'google',
+    multiAccount: true,
     oauthScopes: [
       'https://www.googleapis.com/auth/documents',
       'https://www.googleapis.com/auth/drive.readonly',
@@ -1734,6 +1755,7 @@ export const CONNECTOR_REGISTRY: ConnectorRegistryEntry[] = [
     category: 'productivity',
     type: 'oauth',
     oauthProvider: 'google',
+    multiAccount: true,
     oauthScopes: [
       'https://www.googleapis.com/auth/spreadsheets',
       'https://www.googleapis.com/auth/drive.readonly',
@@ -1778,6 +1800,7 @@ export const CONNECTOR_REGISTRY: ConnectorRegistryEntry[] = [
     category: 'productivity',
     type: 'oauth',
     oauthProvider: 'airtable',
+    multiAccount: true,
     oauthScopes: ['data.records:read', 'data.records:write', 'schema.bases:read'],
     requiredEnv: [],
     featured: true,

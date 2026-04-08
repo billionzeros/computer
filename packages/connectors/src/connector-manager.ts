@@ -1,4 +1,5 @@
 import { createLogger } from '@anton/logger'
+import type { TSchema } from '@sinclair/typebox'
 import type { AgentTool } from '@mariozechner/pi-agent-core'
 import type { ConnectorFactory, DirectConnector, TokenGetter } from './types.js'
 
@@ -19,6 +20,16 @@ export class ConnectorManager {
   private connectors = new Map<string, DirectConnector>()
   private factories: Record<string, ConnectorFactory>
   private getToken: TokenGetter
+  /**
+   * Maps instance ID → registryId for multi-account grouping.
+   * For single-account connectors, registryId === instanceId.
+   */
+  private registryMap = new Map<string, string>()
+  /**
+   * Maps instance ID → display name (accountEmail/accountLabel) for the
+   * account selector param injected into merged tools.
+   */
+  private accountDisplayNames = new Map<string, string>()
   /**
    * Per-connector tool permission overrides keyed by connector id. Stored
    * here (not on the connector instances) so that permissions survive
@@ -45,10 +56,14 @@ export class ConnectorManager {
    * connector is now usable should check the return value — the previous
    * void signature silently swallowed every failure.
    */
-  async activate(providerId: string): Promise<boolean> {
-    const factory = this.factories[providerId]
+  async activate(
+    providerId: string,
+    opts?: { registryId?: string; accountDisplayName?: string },
+  ): Promise<boolean> {
+    const factoryId = opts?.registryId ?? providerId
+    const factory = this.factories[factoryId]
     if (!factory) {
-      log.debug({ providerId }, 'no direct connector factory')
+      log.debug({ providerId, factoryId }, 'no direct connector factory')
       return false
     }
 
@@ -61,6 +76,10 @@ export class ConnectorManager {
         connector.setTokenProvider(() => this.getToken(providerId))
       }
       this.connectors.set(providerId, connector)
+      this.registryMap.set(providerId, factoryId)
+      if (opts?.accountDisplayName) {
+        this.accountDisplayNames.set(providerId, opts.accountDisplayName)
+      }
       this.toolIndex = null
       log.info({ connector: connector.name, toolCount: connector.getTools().length }, 'activated')
       return true
@@ -76,6 +95,8 @@ export class ConnectorManager {
     if (connector) {
       log.info({ connector: connector.name }, 'deactivated')
       this.connectors.delete(providerId)
+      this.registryMap.delete(providerId)
+      this.accountDisplayNames.delete(providerId)
       this.toolIndex = null
     }
   }
@@ -159,11 +180,10 @@ export class ConnectorManager {
    * the desktop default and what every existing call site expects.
    */
   getAllTools(surface?: string): AgentTool[] {
-    const tools: AgentTool[] = []
-    for (const [connectorId, connector] of this.connectors) {
-      // Surface gate: skip the whole connector if it declared a
-      // surface allowlist and the current surface isn't on it.
-      // Connectors without a `surfaces` field pass through unchanged.
+    // Group active connectors by registryId for multi-account merging
+    const grouped = new Map<string, Array<{ instanceId: string; connector: DirectConnector }>>()
+    for (const [instanceId, connector] of this.connectors) {
+      // Surface gate
       if (
         surface &&
         connector.surfaces &&
@@ -172,16 +192,67 @@ export class ConnectorManager {
       ) {
         continue
       }
-      const perms = this.toolPermissions.get(connectorId)
-      for (const tool of connector.getTools()) {
-        if (perms?.[tool.name] === 'never') continue
-        tools.push(tool)
+      const regId = this.registryMap.get(instanceId) ?? instanceId
+      let group = grouped.get(regId)
+      if (!group) {
+        group = []
+        grouped.set(regId, group)
+      }
+      group.push({ instanceId, connector })
+    }
+
+    const tools: AgentTool[] = []
+    for (const [, instances] of grouped) {
+      if (instances.length === 1) {
+        // Single account — tools unchanged (backward compat)
+        const { instanceId, connector } = instances[0]
+        const perms = this.toolPermissions.get(instanceId)
+        for (const tool of connector.getTools()) {
+          if (perms?.[tool.name] === 'never') continue
+          tools.push(tool)
+        }
+      } else {
+        // Multiple accounts — merge into one toolset with account param
+        const baseInstance = instances[0]
+        // Collect permissions across all instances — only hide a tool if
+        // ALL instances have it set to 'never'.
+        const allPerms = instances.map(({ instanceId }) => this.toolPermissions.get(instanceId))
+        for (const baseTool of baseInstance.connector.getTools()) {
+          const allNever = allPerms.length > 0 && allPerms.every((p) => p?.[baseTool.name] === 'never')
+          if (allNever) continue
+          // Filter account enum to only instances that haven't disabled this tool
+          const activeInstances = instances.filter(({ instanceId }) => {
+            const p = this.toolPermissions.get(instanceId)
+            return p?.[baseTool.name] !== 'never'
+          })
+          const activeAccountEnum = activeInstances.map(
+            ({ instanceId }) => this.accountDisplayNames.get(instanceId) ?? instanceId,
+          )
+          const capturedInstances = activeInstances
+          tools.push({
+            ...baseTool,
+            parameters: injectAccountParam(baseTool.parameters, activeAccountEnum),
+            execute: (id: string, params: unknown, signal?: AbortSignal) => {
+              const p = params as Record<string, unknown>
+              const accountParam = p.account as string | undefined
+              const target = resolveInstance(capturedInstances, accountParam, this.accountDisplayNames)
+              const { account: _, ...rest } = p
+              // Get the tool from the target instance and execute
+              const targetTool = target.connector.getTools().find((t) => t.name === baseTool.name)
+              if (!targetTool) {
+                return Promise.reject(new Error(`Tool ${baseTool.name} not found on target account`))
+              }
+              return targetTool.execute(id, rest, signal)
+            },
+          })
+        }
       }
     }
     return tools
   }
 
-  /** Get status of all active connectors. */
+  /** Get status of all active connectors. Uses the Map key (instanceId) as id,
+   *  not connector.id, so multi-account UUID instances are correctly matched. */
   getStatus(): Array<{
     id: string
     name: string
@@ -189,8 +260,8 @@ export class ConnectorManager {
     toolCount: number
     tools: string[]
   }> {
-    return Array.from(this.connectors.values()).map((c) => ({
-      id: c.id,
+    return Array.from(this.connectors.entries()).map(([instanceId, c]) => ({
+      id: instanceId,
       name: c.name,
       connected: true,
       toolCount: c.getTools().length,
@@ -199,14 +270,33 @@ export class ConnectorManager {
   }
 
   /** Activate a connector with an explicit token (for non-OAuth connectors). */
-  activateWithToken(providerId: string, token: string): void {
-    const factory = this.factories[providerId]
+  activateWithToken(
+    providerId: string,
+    token: string,
+    opts?: { registryId?: string; accountDisplayName?: string },
+  ): void {
+    const factoryId = opts?.registryId ?? providerId
+    const factory = this.factories[factoryId]
     if (!factory) return
     const connector = factory()
     connector.setToken(token)
     this.connectors.set(providerId, connector)
+    this.registryMap.set(providerId, factoryId)
+    if (opts?.accountDisplayName) {
+      this.accountDisplayNames.set(providerId, opts.accountDisplayName)
+    }
     this.toolIndex = null
     log.info({ connector: connector.name, toolCount: connector.getTools().length }, 'activated')
+  }
+
+  /** Update the display name for an active connector instance. */
+  setAccountDisplayName(instanceId: string, displayName: string): void {
+    this.accountDisplayNames.set(instanceId, displayName)
+  }
+
+  /** Get the registryId for an active connector instance. */
+  getRegistryId(instanceId: string): string | undefined {
+    return this.registryMap.get(instanceId)
   }
 
   /** Refresh a connector's token. */
@@ -231,4 +321,48 @@ export class ConnectorManager {
     }
     return connector.testConnection()
   }
+}
+
+// ── Multi-account helpers ─────────────────────────────────────────────
+
+/**
+ * Inject an `account` enum parameter into a tool's JSON Schema parameters.
+ * The account param defaults to the first enum value (primary account).
+ *
+ * We deep-clone the schema and mutate the copy. The result is still a valid
+ * JSON Schema object — we cast to TSchema since TypeBox schemas are just
+ * plain JSON Schema objects at runtime.
+ */
+function injectAccountParam(
+  parameters: TSchema,
+  accountEnum: string[],
+): TSchema {
+  // Clone the schema and inject the account property
+  const cloned = JSON.parse(JSON.stringify(parameters)) as Record<string, unknown>
+  const props = (cloned.properties ?? {}) as Record<string, unknown>
+  props.account = {
+    type: 'string',
+    enum: accountEnum,
+    default: accountEnum[0],
+    description: `Which account to use. Defaults to "${accountEnum[0]}" if omitted.`,
+  }
+  cloned.properties = props
+  if (!cloned.type) cloned.type = 'object'
+  return cloned as unknown as TSchema
+}
+
+/**
+ * Resolve which connector instance to use based on the `account` param value.
+ * Falls back to the first instance if account is not specified or not found.
+ */
+function resolveInstance(
+  instances: Array<{ instanceId: string; connector: DirectConnector }>,
+  accountParam: string | undefined,
+  displayNames: Map<string, string>,
+): { instanceId: string; connector: DirectConnector } {
+  if (!accountParam) return instances[0]
+  const match = instances.find(
+    ({ instanceId }) => (displayNames.get(instanceId) ?? instanceId) === accountParam,
+  )
+  return match ?? instances[0]
 }
