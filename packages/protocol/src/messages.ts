@@ -189,6 +189,8 @@ export interface SessionMeta {
   messageCount: number
   createdAt: number
   lastActiveAt: number
+  /** Derived status so the task list can render without fetching full history */
+  status?: 'working' | 'completed' | 'error' | 'idle'
 }
 
 export interface SessionsListResponse {

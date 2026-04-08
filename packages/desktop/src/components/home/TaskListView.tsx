@@ -30,14 +30,21 @@ function getTaskStatus(
   sessionId: string | undefined,
   sessionStates: Map<string, { status: string; statusDetail?: string | null }>,
   messages: { role: string; isError?: boolean }[],
+  sessionMeta?: { status?: string },
 ): TaskStatus {
   if (!sessionId) return 'idle'
   const state = sessionStates.get(sessionId)
   if (state?.status === 'working') return 'working'
-  if (messages.length === 0) return 'idle'
-  const lastMsg = [...messages].reverse().find((m) => m.role === 'assistant' || m.role === 'system')
-  if (lastMsg?.isError) return 'error'
-  return 'completed'
+  if (messages.length > 0) {
+    const lastMsg = [...messages].reverse().find((m) => m.role === 'assistant' || m.role === 'system')
+    if (lastMsg?.isError) return 'error'
+    return 'completed'
+  }
+  // Messages not loaded yet — use status from sessions_list_response
+  if (sessionMeta?.status === 'working') return 'working'
+  if (sessionMeta?.status === 'completed') return 'completed'
+  if (sessionMeta?.status === 'error') return 'error'
+  return 'idle'
 }
 
 const STATUS_LABELS: Record<TaskStatus, string> = {
@@ -330,6 +337,7 @@ interface Props {
 export function TaskListView({ mode }: Props) {
   const allConversations = useStore((s) => s.conversations)
   const sessionStates = sessionStore((s) => s.sessionStates)
+  const sessions = sessionStore((s) => s.sessions)
   const activeConversationId = useStore((s) => s.activeConversationId)
   const activeProjectId = projectStore((s) => s.activeProjectId)
   const projects = projectStore((s) => s.projects)
@@ -342,6 +350,13 @@ export function TaskListView({ mode }: Props) {
   const [searchOpen, setSearchOpen] = useState(false)
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
   const inputRef = useRef<HTMLInputElement>(null)
+
+  // Build a lookup map for session metadata (includes status from server)
+  const sessionsById = useMemo(() => {
+    const map = new Map<string, (typeof sessions)[number]>()
+    for (const s of sessions) map.set(s.id, s)
+    return map
+  }, [sessions])
 
   // Check if this project has an unbootstrapped workflow
   const pendingWorkflow = projectWorkflows.find(
@@ -547,7 +562,7 @@ export function TaskListView({ mode }: Props) {
             ) : (
               <div className="task-table__body">
                 {tasks.map((conv) => {
-                  const status = getTaskStatus(conv.sessionId, sessionStates, conv.messages)
+                  const status = getTaskStatus(conv.sessionId, sessionStates, conv.messages, conv.sessionId ? sessionsById.get(conv.sessionId) : undefined)
                   const isSelected = selectedIds.has(conv.id)
                   return (
                     // biome-ignore lint/a11y/useKeyWithClickEvents: table row selection
@@ -659,7 +674,7 @@ export function TaskListView({ mode }: Props) {
         ) : (
           <>
             {tasks.map((conv) => {
-              const status = getTaskStatus(conv.sessionId, sessionStates, conv.messages)
+              const status = getTaskStatus(conv.sessionId, sessionStates, conv.messages, conv.sessionId ? sessionsById.get(conv.sessionId) : undefined)
               const detail = getStatusDetail(conv.sessionId, sessionStates, status)
               const isActive = conv.id === activeConversationId
               const isSelected = selectedIds.has(conv.id)
