@@ -1340,6 +1340,8 @@ export class AgentServer {
       createdAt: m.createdAt,
       lastActiveAt: m.lastActiveAt,
       usage: m.usage,
+      // Persisted sessions not in memory: completed if they have messages, idle otherwise
+      status: (this.activeTurns.has(m.id) ? 'working' : m.messageCount > 0 ? 'completed' : 'idle') as 'working' | 'completed' | 'idle',
     }))
 
     // Add in-memory sessions that aren't persisted yet (exclude project sessions)
@@ -1355,6 +1357,7 @@ export class AgentServer {
           createdAt: info.createdAt,
           lastActiveAt: info.lastActiveAt,
           usage: info.usage,
+          status: (this.activeTurns.has(id) ? 'working' : info.messageCount > 0 ? 'completed' : 'idle') as 'working' | 'completed' | 'idle',
         })
       }
     }
@@ -2464,6 +2467,7 @@ export class AgentServer {
       messageCount: s.messageCount,
       createdAt: s.createdAt,
       lastActiveAt: s.lastActiveAt,
+      status: (this.activeTurns.has(s.id) ? 'working' : s.messageCount > 0 ? 'completed' : 'idle') as 'working' | 'completed' | 'idle',
     }))
 
     // Add in-memory project sessions that aren't persisted yet
@@ -2479,6 +2483,7 @@ export class AgentServer {
           messageCount: info.messageCount,
           createdAt: info.createdAt,
           lastActiveAt: info.lastActiveAt,
+          status: (this.activeTurns.has(id) ? 'working' : info.messageCount > 0 ? 'completed' : 'idle') as 'working' | 'completed' | 'idle',
         })
       }
     }

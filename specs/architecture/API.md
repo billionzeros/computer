@@ -273,7 +273,8 @@ Agent returns session metadata. Sorted by `lastActiveAt` descending.
     model: string,
     messageCount: number,
     createdAt: number,      // unix ms
-    lastActiveAt: number    // unix ms
+    lastActiveAt: number,   // unix ms
+    status?: "working" | "completed" | "error" | "idle"  // derived status for task list display
   }]
 }
 ```
