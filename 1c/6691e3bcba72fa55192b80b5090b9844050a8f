@@ -1,0 +1,37 @@
+packages/desktop/src/components/connectors/ConnectorsView.tsx
+  e64ea7b9d5c01747 356,499
+packages/desktop/src/lib/store/handlers/chatHandler.ts
+  e64ea7b9d5c01747 19
+packages/desktop/src/components/chat/AskUserDialog.tsx
+  e64ea7b9d5c01747 148
+packages/desktop/src/components/chat/AskUserInline.tsx
+  e64ea7b9d5c01747 271
+packages/desktop/src/lib/connection.ts
+  e64ea7b9d5c01747 562
+packages/desktop/src/components/workflows/WorkflowDetailPage.tsx
+  e64ea7b9d5c01747 491
+packages/desktop/src/components/connectors/ConnectorsPage.tsx
+  e64ea7b9d5c01747 221,448,463,475
+packages/desktop/src/lib/store/connectorStore.ts
+  e64ea7b9d5c01747 35
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.2.5",
+  "base_commit_sha": "1c6691e3bcba72fa55192b80b5090b9844050a8f",
+  "prompts": {
+    "e64ea7b9d5c01747": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "691aadeb-2cb5-4214-9725-7b53876e6cbc",
+        "model": "claude-opus-4-6"
+      },
+      "human_author": "Om Gupta",
+      "messages": [],
+      "total_additions": 12,
+      "total_deletions": 11,
+      "accepted_lines": 12,
+      "overriden_lines": 0
+    }
+  }
+}
