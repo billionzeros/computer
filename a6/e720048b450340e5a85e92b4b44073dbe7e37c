@@ -1,0 +1,25 @@
+packages/agent-server/package.json
+  951ccf7d0b3a633b 25-26
+packages/agent-server/src/server.ts
+  951ccf7d0b3a633b 12,147-216,240,888,905,907,909-930
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.2.5",
+  "base_commit_sha": "a6e720048b450340e5a85e92b4b44073dbe7e37c",
+  "prompts": {
+    "951ccf7d0b3a633b": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "6c293d26-601a-4854-83cf-9a792878dd04",
+        "model": "claude-opus-4-6"
+      },
+      "human_author": "Om Gupta",
+      "messages": [],
+      "total_additions": 107,
+      "total_deletions": 23,
+      "accepted_lines": 100,
+      "overriden_lines": 0
+    }
+  }
+}
