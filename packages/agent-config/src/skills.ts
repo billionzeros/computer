@@ -20,6 +20,7 @@ import type { SkillAssets, SkillConfig, SkillParameter } from './config.js'
 import { getAntonDir } from './config.js'
 
 const SKILLS_DIR = join(getAntonDir(), 'skills')
+let _exampleSkillsSeeded = false
 
 /**
  * Parse YAML frontmatter from a SKILL.md file.
@@ -122,8 +123,9 @@ function loadSkillDir(dirPath: string, source: 'builtin' | 'user' | 'project'): 
 export function loadSkills(): SkillConfig[] {
   if (!existsSync(SKILLS_DIR)) {
     mkdirSync(SKILLS_DIR, { recursive: true })
-    createExampleSkills()
   }
+  // Always ensure built-in skills exist (idempotent — won't overwrite existing)
+  createExampleSkills()
 
   const entries = readdirSync(SKILLS_DIR)
   const skills: SkillConfig[] = []
@@ -164,6 +166,8 @@ export function loadSkills(): SkillConfig[] {
  * Create example skill directories on first run.
  */
 function createExampleSkills() {
+  if (_exampleSkillsSeeded) return
+  _exampleSkillsSeeded = true
   const skills: Record<string, string> = {
     'code-review': `---
 name: Code Review
