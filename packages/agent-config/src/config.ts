@@ -1031,6 +1031,9 @@ export function appendMessageToSession(
       meta.messageCount = (meta.messageCount ?? 0) + 1
       meta.lastActiveAt = Date.now()
       writeFileSync(mPath, JSON.stringify(meta, null, 2), 'utf-8')
+      // Only global conversations participate in the shared session sync index.
+      // Project-scoped conversations are refreshed through the project handlers.
+      if (!basePath) updateIndex(meta)
     } catch {
       /* skip meta update on error */
     }

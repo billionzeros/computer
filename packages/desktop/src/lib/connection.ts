@@ -197,10 +197,6 @@ export class Connection {
     this.send(Channel.AI, { type: 'session_create', id, ...opts })
   }
 
-  sendSessionsList() {
-    this.send(Channel.AI, { type: 'sessions_list' })
-  }
-
   sendSessionsSync(lastSyncVersion: number) {
     this.send(Channel.AI, { type: 'sessions_sync', lastSyncVersion })
   }

@@ -42,7 +42,7 @@ function getTaskStatus(
     if (lastMsg?.isError) return 'error'
     return 'completed'
   }
-  // Messages not loaded yet — use status from sessions_list_response
+  // Messages not loaded yet — use status from synced session metadata
   if (sessionMeta?.status === 'working') return 'working'
   if (sessionMeta?.status === 'completed') return 'completed'
   if (sessionMeta?.status === 'error') return 'error'

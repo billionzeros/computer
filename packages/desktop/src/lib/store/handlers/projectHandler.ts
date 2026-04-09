@@ -97,6 +97,22 @@ export function handleProjectMessage(msg: AiMessage): boolean {
       return true
     }
 
+    case 'agent_result_delivered': {
+      // Agent delivered results to a project conversation — refresh that conversation's history
+      const store = useStore.getState()
+      const conv = store.conversations.find(
+        (c) => c.sessionId === msg.originConversationId || c.id === msg.originConversationId,
+      )
+      if (conv?.sessionId) {
+        store.requestSessionHistory(conv.sessionId)
+      }
+      // Refresh project sessions list so the UI reflects updated metadata
+      if (msg.projectId) {
+        connection.sendProjectSessionsList(msg.projectId)
+      }
+      return true
+    }
+
     case 'agent_run_logs_response': {
       projectStore.getState().setAgentRunLogs(msg.logs)
       return true

@@ -7,6 +7,7 @@ import {
   autoTitle,
   createConversation,
   loadConversations,
+  reconcileActiveConversationId,
   saveConversations,
 } from './conversations.js'
 import { artifactStore } from './store/artifactStore.js'
@@ -148,7 +149,6 @@ interface AppState {
     projectId?: string,
     agentSessionId?: string,
   ) => string
-  appendConversation: (title?: string, sessionId?: string, projectId?: string) => string
   switchConversation: (id: string) => void
   deleteConversation: (id: string) => void
   addMessage: (msg: ChatMessage) => void
@@ -220,23 +220,24 @@ export const useStore = create<AppState>((set, get) => {
     },
     setActiveView: (view) => {
       if (view === 'chat') {
-        // If the current active conversation belongs to a project, clear it
-        // so AgentChat picks or creates a proper chat conversation.
         const state = get()
         const activeConv = state.conversations.find((c) => c.id === state.activeConversationId)
         if (activeConv?.projectId) {
-          // Try to find an existing chat conversation (default project or legacy)
+          // Active conversation belongs to a project — switch to a chat conversation
           const defaultProject = projectStore.getState().projects.find((p) => p.isDefault)
           const chatConv = state.conversations.find(
             (c) => !c.projectId || c.projectId === defaultProject?.id,
           )
           if (chatConv) {
-            localStorage.setItem(ACTIVE_CONV_KEY, chatConv.id)
-            set({ activeConversationId: chatConv.id })
+            state.switchConversation(chatConv.id)
           } else {
             localStorage.removeItem(ACTIVE_CONV_KEY)
             set({ activeConversationId: null })
           }
+        } else if (activeConv && !sessionStore.getState().currentSessionId) {
+          // Active conversation exists but sessionStore was never initialized
+          // (e.g. init skipped switchConversation in Home view) — sync it now
+          state.switchConversation(activeConv.id)
         }
       }
       uiStore.setState({ activeView: view })
@@ -283,25 +284,6 @@ export const useStore = create<AppState>((set, get) => {
       return conv.id
     },
 
-    appendConversation: (title, sessionId, projectId) => {
-      const ss = sessionStore.getState()
-      const conv = createConversation(
-        title,
-        sessionId,
-        projectId,
-        ss.currentProvider,
-        ss.currentModel,
-      )
-      set((state) => {
-        // Append at end instead of prepending — used for syncing server sessions
-        // so they don't displace the user's current conversation
-        const conversations = [...state.conversations, conv]
-        saveConversations(conversations)
-        return { conversations }
-      })
-      return conv.id
-    },
-
     switchConversation: (id) => {
       localStorage.setItem(ACTIVE_CONV_KEY, id)
       // Restore per-conversation model and set currentSessionId
@@ -326,9 +308,8 @@ export const useStore = create<AppState>((set, get) => {
       if (conv?.sessionId && ss.getSessionState(conv.sessionId).needsHistoryRefresh) {
         ss.updateSessionState(conv.sessionId, {
           needsHistoryRefresh: false,
-          isSyncing: true,
         })
-        connection.sendSessionHistory(conv.sessionId)
+        get().requestSessionHistory(conv.sessionId)
       }
 
       set(updates)
@@ -341,8 +322,7 @@ export const useStore = create<AppState>((set, get) => {
         // Destroy session on the backend so it's fully removed from disk
         sessionStore.getState().destroySession(conv.sessionId)
         const ss = sessionStore.getState()
-        const states = new Map(ss.sessionStates)
-        states.delete(conv.sessionId)
+        ss.removeSessionState(conv.sessionId)
         // Also clean up message tracking maps
         get()._sessionAssistantMsgIds.delete(conv.sessionId)
         get()._sessionThinkingMsgIds.delete(conv.sessionId)
@@ -351,14 +331,19 @@ export const useStore = create<AppState>((set, get) => {
       set((state) => {
         const conversations = state.conversations.filter((c) => c.id !== id)
         saveConversations(conversations)
-        const activeConversationId =
-          state.activeConversationId === id
-            ? conversations[0]?.id || null
-            : state.activeConversationId
-        if (activeConversationId) {
-          localStorage.setItem(ACTIVE_CONV_KEY, activeConversationId)
+        const activeConversationId = reconcileActiveConversationId(
+          conversations,
+          state.activeConversationId === id ? null : state.activeConversationId,
+        )
+        const nextActiveConv = conversations.find((c) => c.id === activeConversationId)
+        if (nextActiveConv?.sessionId) {
+          ss.setCurrentSession(
+            nextActiveConv.sessionId,
+            nextActiveConv.provider || ss.currentProvider,
+            nextActiveConv.model || ss.currentModel,
+          )
         } else {
-          localStorage.removeItem(ACTIVE_CONV_KEY)
+          sessionStore.setState({ currentSessionId: null })
         }
         return { conversations, activeConversationId }
       })

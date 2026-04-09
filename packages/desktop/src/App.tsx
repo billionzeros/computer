@@ -29,7 +29,7 @@ import { useConnectionStatus, useStore } from './lib/store.js'
 import { artifactStore } from './lib/store/artifactStore.js'
 import { connectionStore } from './lib/store/connectionStore.js'
 import { projectStore } from './lib/store/projectStore.js'
-import { sessionStore, useActiveSessionState } from './lib/store/sessionStore.js'
+import { useActiveSessionState } from './lib/store/sessionStore.js'
 import { uiStore } from './lib/store/uiStore.js'
 import { updateStore } from './lib/store/updateStore.js'
 
@@ -127,52 +127,31 @@ export function App() {
     const unsub = connectionStore.subscribe((state, prev) => {
       // When init transitions to 'ready', do post-sync session/conversation setup
       if (state.initPhase === 'ready' && prev.initPhase !== 'ready') {
-        const store = useStore.getState()
-        const ss = sessionStore.getState()
-
-        // Sync server sessions to local conversations
-        for (const session of ss.sessions) {
-          const existing = store.findConversationBySession(session.id)
-          if (!existing) {
-            let projectId: string | undefined
-            const projMatch = session.id.match(/^proj_([^_]+(?:_[^_]+)?)_sess_/)
-            if (projMatch) {
-              projectId = projMatch[1]
-            }
-            store.appendConversation(session.title || 'New conversation', session.id, projectId)
-          } else if (
-            session.title &&
-            session.title !== 'New conversation' &&
-            existing.title === 'New conversation'
-          ) {
-            store.updateConversationTitle(session.id, session.title)
-          }
-        }
-
         // In computer mode (home view), don't auto-navigate to a conversation
         const currentUI = uiStore.getState()
         if (currentUI.activeMode === 'computer' && currentUI.activeView === 'home') {
           return
         }
 
-        // In chat mode, land on a fresh empty conversation
+        // Restore the previously active conversation, or fall back to an empty one
         const currentStore = useStore.getState()
-        const defaultProject = projectStore.getState().projects.find((p) => p.isDefault)
-        const chatConvs = currentStore.conversations.filter(
-          (c) => !c.projectId || c.projectId === defaultProject?.id,
-        )
-        const emptyConv = chatConvs.find((c) => c.messages.length === 0)
+        const restoredId = currentStore.activeConversationId
 
-        if (emptyConv) {
-          currentStore.switchConversation(emptyConv.id)
-        } else if (!currentStore.activeConversationId) {
-          const chatSession = ss.sessions.find((s) => !s.id.match(/^proj_/))
-          const latest = chatSession || ss.sessions[0]
-          if (latest) {
-            const latestConv = currentStore.findConversationBySession(latest.id)
-            if (latestConv) {
-              currentStore.switchConversation(latestConv.id)
-            }
+        if (restoredId) {
+          // User had an active conversation before — resume it
+          currentStore.switchConversation(restoredId)
+        } else {
+          // No saved active conversation — pick an empty chat or the most recent one
+          const defaultProject = projectStore.getState().projects.find((p) => p.isDefault)
+          const chatConvs = currentStore.conversations
+            .filter((c) => !c.projectId || c.projectId === defaultProject?.id)
+            .sort((a, b) => b.updatedAt - a.updatedAt)
+          const emptyConv = chatConvs.find((c) => c.messages.length === 0)
+
+          if (emptyConv) {
+            currentStore.switchConversation(emptyConv.id)
+          } else if (chatConvs[0]) {
+            currentStore.switchConversation(chatConvs[0].id)
           }
         }
 

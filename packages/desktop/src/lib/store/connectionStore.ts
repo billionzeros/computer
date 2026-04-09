@@ -68,8 +68,6 @@ export const connectionStore = create<ConnectionStoreState>((set, get) => ({
       `[SessionSync] Requesting sync, lastSyncVersion=${lastVersion} (${cache ? `${cache.entries.length} cached` : 'no cache'})`,
     )
     connection.sendSessionsSync(lastVersion)
-    // Also send legacy sessions_list for backward compatibility (server may not support sync yet)
-    connection.sendSessionsList()
     projectStore.getState().listProjects()
     connection.sendConnectorsList()
     connection.sendConnectorRegistryList()

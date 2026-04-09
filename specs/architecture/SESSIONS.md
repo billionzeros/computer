@@ -350,16 +350,16 @@ Active turns are **not** continued in the background. When the client disconnect
 ```
 1. Client auto-reconnects (3-second retry)
 2. Auth handshake completes
-3. Client clears stale transient state (_activeStreamingSessions, _syncingSessionIds)
-4. Client fetches sessions_list → syncs with local conversation cache
-5. Client marks active session as syncing → shows loading skeleton
+3. Client clears stale transient state (per-session syncing flags, pending messages)
+4. Client sends `sessions_sync` → receives deltas or full session list
+5. Client restores `activeConversationId` and calls `switchConversation()` → initializes sessionStore
 6. Client fetches session_history → server responds with full history + lastSeq
 7. Client replaces local messages with server state (server is always authoritative)
 8. Client replays any streaming messages that arrived during sync
 9. UI renders the full conversation history, then continues with live updates
 ```
 
-The client preserves conversations and UI state across disconnects. All transient state (streaming indicators, agent steps, pending confirmations, sync flags) is cleared on disconnect to prevent stale flags from blocking sync on reconnect.
+The client preserves conversations and UI state across disconnects. All transient state (streaming indicators, agent steps, pending confirmations, per-session sync flags) is cleared on disconnect to prevent stale flags from blocking sync on reconnect.
 
 ## Client Architecture
 
@@ -368,9 +368,10 @@ The client preserves conversations and UI state across disconnects. All transien
 Sessions are the source of truth on the agent VM. Clients behave as follows:
 
 **On connect:**
-1. Fetch `sessions_list` → populate sidebar with session titles/metadata
+1. Send `sessions_sync` with cached `syncVersion` → receive deltas or full session list
 2. Fetch `providers_list` → populate model selector
-3. Fetch `session_history` for the active conversation → render past messages
+3. Restore `activeConversationId` from localStorage and call `switchConversation()` → initializes sessionStore
+4. Fetch `session_history` for the active conversation → render past messages
 
 **On new conversation:**
 1. Generate session ID client-side: `sess_<Date.now().toString(36)>`
@@ -408,22 +409,26 @@ Sessions are the source of truth on the agent VM. Clients behave as follows:
 The desktop app uses Zustand for state management:
 
 ```
-AppState:
+AppState (useStore — zustand):
   connectionStatus            ← from connection.onStatusChange()
-  agentStatus                 ← from events channel (agent_status)
-  currentSessionId            ← set on session_created
+  conversations[]             ← local cache linked to server sessions via sessionId
+  activeConversationId        ← restored from localStorage, set by switchConversation()
+  _sessionAssistantMsgIds     ← Map<sessionId, msgId> for streaming accumulation
+  _sessionThinkingMsgIds      ← Map<sessionId, msgId> for thinking accumulation
+  _subAgentProgressMsgIds     ← Map<toolCallId, msgId> for sub-agent progress
+  citations                   ← Map<msgId, CitationSource[]>
+
+SessionStore (sessionStore — zustand):
+  currentSessionId            ← set by switchConversation() or setCurrentSession()
   currentProvider             ← set on session_created/providers_list_response
   currentModel                ← set on session_created/providers_list_response
-  sessions[]                  ← from sessions_list_response
-  providers[]                 ← from providers_list_response
-  conversations[]             ← local cache linked to server sessions via sessionId
+  sessions[]                  ← from sessions_sync_response
+  sessionStates               ← Map<sessionId, SessionState> (per-session transient state)
+
+ProjectStore (projectStore — zustand):
+  projects[]                  ← from projects_list_response
   projectAgents[]             ← from agents_list_response (AgentSession objects)
-  pendingConfirm              ← from confirm messages
-  _syncingSessionIds          ← sessions currently loading history (show spinner)
-  _pendingSyncMessages        ← streaming messages queued during sync
-  _activeStreamingSessions    ← cleared on disconnect to prevent stale sync blocks
-  _sessionHasMore             ← Map<sessionId, boolean> for scroll-up pagination
-  _loadingOlderSessions       ← sessions currently fetching older messages
+  projectSessions[]           ← from project_sessions_list_response
 ```
 
 Derived selectors:

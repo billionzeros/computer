@@ -180,6 +180,7 @@ interface SessionStoreState {
   // Per-session state (the ONLY way to read/write session-specific data)
   getSessionState: (sessionId: string) => SessionState
   updateSessionState: (sessionId: string, updates: Partial<SessionState>) => void
+  removeSessionState: (sessionId: string) => void
 
   // Convenience helpers for common per-session operations
   setSessionStatus: (sessionId: string, status: AgentStatus, statusDetail?: string | null) => void
@@ -288,6 +289,28 @@ export const sessionStore = create<SessionStoreState>((set, get) => {
         const current = states.get(sessionId) ?? createSessionState()
         states.set(sessionId, { ...current, ...updates })
         return { sessionStates: states }
+      })
+    },
+
+    removeSessionState: (sessionId) => {
+      const existingTimeout = _stuckTimeouts.get(sessionId)
+      if (existingTimeout) {
+        clearTimeout(existingTimeout)
+        _stuckTimeouts.delete(sessionId)
+      }
+
+      set((s) => {
+        if (!s.sessionStates.has(sessionId) && s.currentSessionId !== sessionId) {
+          return s
+        }
+
+        const states = new Map(s.sessionStates)
+        states.delete(sessionId)
+
+        return {
+          sessionStates: states,
+          currentSessionId: s.currentSessionId === sessionId ? null : s.currentSessionId,
+        }
       })
     },
 

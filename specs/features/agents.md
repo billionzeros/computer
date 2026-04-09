@@ -96,7 +96,15 @@ The memory is injected into the system prompt via the "## Run History" section i
 
 ### Result Delivery
 
-The agent has a `deliver_result` tool. When it has meaningful results, it calls this tool with the content. The server appends the result as a message to the `originConversationId` conversation. The user sees it next time they open that chat.
+The agent has a `deliver_result` tool. When it has meaningful results, it calls this tool with the content. The server:
+
+1. Appends the result as a message to the `originConversationId` conversation via `appendMessageToSession()`
+2. Updates the session index (`updateIndex()`) so the metadata change is synced to clients via the delta protocol
+3. Sends an `agent_result_delivered` message to the client on the AI channel
+
+The desktop client handles `agent_result_delivered` in `projectHandler.ts`:
+- Refreshes the origin conversation's message history (so the user sees the new message if that conversation is open)
+- Re-fetches the project sessions list (so metadata like message count updates in the UI)
 
 External delivery (Telegram, email, Slack) is just part of the agent's instructions + MCP access. No special infrastructure needed.
 
@@ -153,6 +161,7 @@ Clicking an agent opens **the agent's own conversation** (its `agent--` session)
 | `packages/desktop/src/lib/conversations.ts` | `Conversation.agentSessionId` field |
 | `packages/desktop/src/lib/store.ts` | `projectAgents: AgentSession[]`, `getActiveAgentSession()` selector |
 | `packages/desktop/src/lib/agent-utils.ts` | `cronToHuman()`, `formatRelativeTime()`, `formatDuration()`, `formatAbsoluteTime()` shared helpers |
+| `packages/desktop/src/lib/store/handlers/projectHandler.ts` | `agent_result_delivered` handler, agent CRUD handlers |
 | `packages/desktop/src/lib/connection.ts` | `sendAgentCreate()`, `sendAgentsList()`, `sendAgentAction()` |
 | `packages/agent/prompts/system.md` | Agent execution rules, tool-building instructions |
 

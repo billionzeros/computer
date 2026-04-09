@@ -82,8 +82,9 @@ interface SessionCache {
 ```
 1. Run migration (first time only — converts old conv_xxx IDs to sessionId format)
 2. Load conversations from localStorage cache
-3. Render sidebar immediately from cache (no skeletons if cache exists)
-4. Connect WebSocket
+3. Restore activeConversationId from localStorage (if the conversation still exists)
+4. Render sidebar immediately from cache (no skeletons if cache exists)
+5. Connect WebSocket
 ```
 
 ### 2. WebSocket Connects
@@ -101,6 +102,24 @@ Server checks:
 - Client's version is 0 (first boot, no cache)
 - Client's version is too old (fell off the 200-entry ring buffer)
 - Server restarted and syncVersion reset to 0
+
+### 2b. Init-Ready Conversation Restoration
+
+When `initPhase` transitions to `ready`, the app restores the user's active conversation:
+
+```
+1. If in Home view (computer mode) → skip (no auto-navigation)
+2. If activeConversationId was restored from localStorage:
+   → switchConversation(restoredId) — restores sessionStore, provider, model
+3. Otherwise (no saved active conversation):
+   → find an empty chat conversation, or the most recent one
+   → switchConversation(found.id)
+4. Fetch history for the active conversation
+```
+
+**Why this order matters:** All persisted conversations have `messages: []` (messages are fetched from server on demand). If the init handler searched for "empty" conversations first, every restored conversation would match, and the app would jump to the wrong one. By checking `activeConversationId` first, we preserve the user's last position.
+
+**Home→Chat transition:** When the user switches from Home view to Chat, `setActiveView('chat')` checks if `sessionStore.currentSessionId` is null. If so, it calls `switchConversation()` to initialize the session state that was skipped during the Home view early-return. This prevents stale provider/model state and broken `useActiveSessionState` consumers.
 
 ### 3. Client Applies a Full Bootstrap
 
@@ -177,7 +196,7 @@ Three new message types on the AI channel:
 | Server -> Client | `sessions_sync_response` | Full session list OR deltas only |
 | Server -> Client | `session_sync` | Real-time push when a session changes |
 
-The old `sessions_list` / `sessions_list_response` messages still work for backward compatibility.
+The legacy `sessions_list` / `sessions_list_response` messages have been removed. The sync protocol is the sole mechanism for session list management.
 
 ## Conversation Identity
 

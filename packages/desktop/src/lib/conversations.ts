@@ -40,6 +40,7 @@ export interface Conversation {
 }
 
 const STORAGE_KEY = 'anton.conversations'
+const ACTIVE_CONV_KEY = 'anton.activeConversationId'
 
 export function loadConversations(): Conversation[] {
   try {
@@ -58,6 +59,27 @@ export function saveConversations(conversations: Conversation[]) {
     messages: [], // always empty in storage
   }))
   localStorage.setItem(STORAGE_KEY, JSON.stringify(metadataOnly))
+}
+
+export function persistActiveConversationId(id: string | null): void {
+  if (id) {
+    localStorage.setItem(ACTIVE_CONV_KEY, id)
+  } else {
+    localStorage.removeItem(ACTIVE_CONV_KEY)
+  }
+}
+
+export function reconcileActiveConversationId(
+  conversations: Conversation[],
+  activeConversationId: string | null,
+): string | null {
+  const nextActiveId =
+    activeConversationId && conversations.some((c) => c.id === activeConversationId)
+      ? activeConversationId
+      : (conversations[0]?.id ?? null)
+
+  persistActiveConversationId(nextActiveId)
+  return nextActiveId
 }
 
 export function createConversation(
