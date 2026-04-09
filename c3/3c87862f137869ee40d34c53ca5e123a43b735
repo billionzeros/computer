@@ -1,0 +1,56 @@
+packages/agent-server/src/scheduler.ts
+  659c327aa6065cff 164-167,169,171
+packages/agent-core/src/session.ts
+  496107f380b2fac0 12-17,274,304,332,1205,1209,1218,1222,1393-1396,1400,1410-1487,1489-1491,1642,2327-2330,2334,2432-2435,2439,2471
+  659c327aa6065cff 413,415-416,1014,1023-1060
+  de1119ab1c77b859 273,1791-1810
+packages/desktop/src/components/chat/groupMessages.ts
+  de1119ab1c77b859 149,170-174,181,196-214,291-293
+  496107f380b2fac0 69-79,147-148,150-169,239,241-246,248-262,289-290
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.2.6",
+  "base_commit_sha": "c33c87862f137869ee40d34c53ca5e123a43b735",
+  "prompts": {
+    "496107f380b2fac0": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019d6f21-fe07-7d61-8741-ffc031a03d18",
+        "model": "gpt-5.4"
+      },
+      "human_author": "Om Gupta",
+      "messages": [],
+      "total_additions": 352,
+      "total_deletions": 190,
+      "accepted_lines": 209,
+      "overriden_lines": 0
+    },
+    "659c327aa6065cff": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "16c761f0-a435-4723-a4b7-ca7b571eaeb6",
+        "model": "claude-opus-4-6"
+      },
+      "human_author": "Om Gupta",
+      "messages": [],
+      "total_additions": 48,
+      "total_deletions": 3,
+      "accepted_lines": 48,
+      "overriden_lines": 0
+    },
+    "de1119ab1c77b859": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "a26ffb45-09b2-4e91-a4c8-e004c8678cdd",
+        "model": "claude-opus-4-6"
+      },
+      "human_author": "Om Gupta",
+      "messages": [],
+      "total_additions": 135,
+      "total_deletions": 117,
+      "accepted_lines": 55,
+      "overriden_lines": 3
+    }
+  }
+}
