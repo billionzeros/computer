@@ -1,6 +1,6 @@
 {
   "version": "1.0.48",
-  "gitHash": "",
+  "gitHash": "33cdbf3",
   "releaseUrl": "https://github.com/OmGuptaIND/computer/releases",
   "changelog": "Features:\n- add fork sub-agent mechanism with context inheritance and turn-based limits (#43)\n- split filesystem mega-tool into dedicated tools with steering directives (#38)\n- add background memory extraction system (#35)\n- add specialized sub-agent types and remove embed-prompts indirection (#34)\n\nFixes:\n- narrow params.type to SubAgentType in typed sub-agent branch (#45)\n- wire ProjectView, reconcile project sessions, and fix session loading (#44)\n- restore active conversation on cold start, sync deliver_result metadata, and fix Home→Chat session state (#41)\n- prune orphaned sub-agent history on compaction and wire recorder for scheduled sessions (#40)\n- force full bootstrap to clear stale sessions from client cache (#39)\n- sub-agent UI rendering and spawning discipline (#37)\n- implement session sync protocol to fix conversation loss on updates (#36)\n\nOther:\n- Fix desktop store build regression (#42)",
   "publishedAt": "2026-04-09T13:52:22.490Z",
