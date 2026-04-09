@@ -1235,8 +1235,10 @@ export function buildTools(
               )
 
               // Filter tools based on sub-agent type specialization
-              if (SUB_AGENT_DISALLOWED_TOOLS[params.type]) {
-                const disallowed = SUB_AGENT_DISALLOWED_TOOLS[params.type]
+              // params.type is guaranteed non-undefined in this else branch (isFork is false)
+              const agentType = params.type as SubAgentType
+              if (SUB_AGENT_DISALLOWED_TOOLS[agentType]) {
+                const disallowed = SUB_AGENT_DISALLOWED_TOOLS[agentType]
                 subTools = subTools.filter((t) => !disallowed.has(t.name))
               }
 
@@ -1261,7 +1263,7 @@ export function buildTools(
                 subSession.setConfirmHandler(confirmHandler)
               }
 
-              const subAgentMessage = `${SUB_AGENT_TYPE_PREFIXES[params.type]}${params.task}`
+              const subAgentMessage = `${SUB_AGENT_TYPE_PREFIXES[agentType]}${params.task}`
 
               for await (const event of subSession.processMessage(subAgentMessage)) {
                 if (onEvent && event.type !== 'done' && event.type !== 'title_update') {
