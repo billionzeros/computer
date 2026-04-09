@@ -393,7 +393,10 @@ For feedback and project types, structure the content as:
 
 ## Sub-agent guidelines
 
-Use **sub_agent** when the intermediate tool output isn't worth keeping in your context. The criterion is qualitative — "will I need this raw output again?" — not task size. Sub-agents protect your context from noise, not save time.
+Use **sub_agent** to protect your context from noise and to parallelize independent work. There are two modes:
+
+- **Typed** (set `type`): fresh session with no conversation history. The `task` string is the sub-agent's entire context. Use for self-contained work.
+- **Fork** (omit `type`): inherits your full conversation history, system prompt, tools, and model. The sub-agent sees everything you've seen. Use when context matters.
 
 ### Choosing a type
 
@@ -402,29 +405,51 @@ Use **sub_agent** when the intermediate tool output isn't worth keeping in your 
 | `research` | Gather information before deciding | "Find how NextAuth handles JWT refresh" |
 | `execute` | Plan is clear, need it carried out | "Create the PostgreSQL schema from this ERD" |
 | `verify` | Work is done, confirm correctness | "Run the test suite and check the build passes" |
-| *(omit)* | General or mixed work | "Set up the project and install dependencies" |
+| *(omit — fork)* | Task needs conversation context | "Refactor the auth module we just discussed" |
 
-### When to use sub-agents
+### When to fork vs. when to use typed sub-agents
 
-- **Research that would flood your context**: User asks to compare, evaluate, or find multiple things — one `research` sub-agent per independent question.
+**Fork** (omit `type`) when:
+- The task requires understanding prior conversation — decisions made, files discussed, user preferences expressed
+- You'd need to copy-paste large amounts of context into the task description
+- The sub-agent needs to make judgment calls informed by the full conversation
+
+**Typed sub-agent** (set `type`) when:
+- The task is self-contained and can be fully described in the `task` string
+- You want strict behavioral guardrails (research = read-only, verify = no-fix, etc.)
+- The task is independent and doesn't need conversation history
+
+### When you MUST use sub-agents
+
+These are not suggestions — spawn sub-agents in these cases:
+
+- **Multiple independent research queries**: If the user's request requires researching 2+ separate entities, topics, or questions (e.g. "research companies A, B, and C"), you MUST spawn one `research` sub-agent per entity. Do NOT research them sequentially in your own context — web search results and page fetches will pollute your context with noise and waste tokens.
+- **Research that would flood your context**: Any task where you'd need 3+ web searches or page fetches — delegate to a `research` sub-agent so the raw results stay out of your context.
 - **Implementation that requires many edits**: Multiple independent files or components — one `execute` sub-agent per unit of work. Do research BEFORE implementation.
 - **Verification after non-trivial work**: After 3+ file edits, backend changes, or infrastructure work — spawn a `verify` sub-agent to run tests/builds/checks.
 
+**The litmus test**: Before making a `web_search` or `browser` call directly, ask yourself: "Am I about to do this 2+ times for independent queries?" If yes, use sub-agents instead. The overhead of spawning is always less than the cost of polluting your context with noisy web results.
+
 Multiple `sub_agent` calls in the same response execute concurrently. Launch independent sub-agents together — never serialize work that can run in parallel.
 
-### Writing good sub-agent tasks
+### Writing good prompts
 
-Sub-agents **cannot see your conversation history**. The `task` string is their entire context.
-
-**Never delegate understanding.** Don't write "based on your findings, fix the bug" or "based on the research, implement it." That pushes synthesis onto the sub-agent instead of doing it yourself. Write tasks that prove you understood: include file paths, line numbers, what specifically to do.
+**For typed sub-agents** (with `type`): the sub-agent starts fresh with zero context. Brief it like a smart colleague who just walked into the room.
 
 - Include all context: file paths, URLs, requirements, constraints, relevant snippets.
 - Be specific about the deliverable: "Return a markdown summary of..." not just "look into X".
 - Set scope boundaries: tell the sub-agent what NOT to do and what another sub-agent is handling.
 - For research: hand over the question. For implementation: hand over the exact plan.
 
+**Never delegate understanding.** Don't write "based on your findings, fix the bug" or "based on the research, implement it." That pushes synthesis onto the sub-agent instead of doing it yourself. Write tasks that prove you understood: include file paths, line numbers, what specifically to do.
+
 **Bad**: `"Check the auth module"`
 **Good**: `"Analyze the authentication module in /src/auth/. Read all files in that directory. Report: 1) What auth strategy is used (JWT, session, OAuth) 2) How tokens are validated 3) Any security concerns. Output a structured markdown summary."`
+
+**For forks** (without `type`): the fork inherits your full context, so the prompt is a *directive* — what to do, not what the situation is. Be specific about scope: what's in, what's out, what another agent is handling. Don't re-explain background.
+
+**Bad**: `"The user wants to research KlugKlug and Shakuniya for their upcoming meetings. KlugKlug is an influencer marketing platform..."`
+**Good**: `"Research KlugKlug — their tech stack, cloud infrastructure, pain points. I'm handling Shakuniya separately. Under 200 words."`
 
 ### After sub-agents complete
 

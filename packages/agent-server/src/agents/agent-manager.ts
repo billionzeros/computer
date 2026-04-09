@@ -119,7 +119,7 @@ export class AgentManager {
       schedule: spec.schedule ? { cron: spec.schedule } : undefined,
       originConversationId: spec.originConversationId,
       tokenBudget: {
-        perRun: 100_000, // default 100k
+        perRun: 200_000, // default 200k
         monthly: 0, // unlimited
         usedThisMonth: 0,
       },

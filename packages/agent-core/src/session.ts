@@ -257,6 +257,7 @@ export class Session {
   private firstMessage?: string
   public contextInfo?: ContextInfo
   private surface?: SurfaceInfo
+  private systemPromptOverride?: string // fork children: use parent's rendered prompt
 
   // Braintrust tracing
   private parentTraceSpan?: Span // when this is a sub-agent, inherit parent's span
@@ -311,6 +312,8 @@ export class Session {
     workflowMetadata?: { workflowId: string; agentKey: string; promptVersion: string }
     /** Where this session is talking — Slack/Telegram/desktop. Injected into system prompt. */
     surface?: SurfaceInfo
+    /** Override the computed system prompt (used by fork children to inherit parent's prompt). */
+    systemPromptOverride?: string
   }) {
     this.id = opts.id
     this.log = withContext(baseLog, { sessionId: opts.id })
@@ -338,6 +341,7 @@ export class Session {
     this.parentTraceSpan = opts.parentTraceSpan
     this.workflowMetadata = opts.workflowMetadata
     this.surface = opts.surface
+    this.systemPromptOverride = opts.systemPromptOverride
 
     // Set up conversation workspace (skip for ephemeral sub-agents)
     if (!this.ephemeral) {
@@ -2051,7 +2055,25 @@ export class Session {
     return this.getSystemPrompt()
   }
 
+  /** Get a deep clone of the current conversation messages. Used by fork sub-agents. */
+  getMessages(): unknown[] {
+    return structuredClone(this.piAgent.state.messages)
+  }
+
+  /** Get the current tools array. Used by fork sub-agents. */
+  getTools(): import('@mariozechner/pi-agent-core').AgentTool[] {
+    return [...this.piAgent.state.tools]
+  }
+
+  /** Get the current thinking level. Used by fork sub-agents. */
+  getThinkingLevel(): 'off' | 'minimal' | 'low' | 'medium' | 'high' | undefined {
+    return this.piAgent.state.thinkingLevel as 'off' | 'minimal' | 'low' | 'medium' | 'high' | undefined
+  }
+
   private getSystemPrompt(): string {
+    // Fork children inherit the parent's fully-rendered system prompt
+    if (this.systemPromptOverride) return this.systemPromptOverride
+
     // Layer 0: Core system prompt — self-contained behavioral instructions.
     // Identical for all deployments. Works perfectly even if all other layers are empty.
     let prompt = CORE_SYSTEM_PROMPT
@@ -2350,6 +2372,18 @@ export function createSession(
     onJobAction: opts?.onJobAction,
     onDeliverResult: opts?.onDeliverResult,
     domain: opts?.domain,
+    getParentForkContext: () => {
+      const s = sessionRef.session
+      if (!s) return undefined
+      return {
+        messages: s.getMessages(),
+        systemPrompt: s.getComposedSystemPrompt(),
+        tools: s.getTools(),
+        provider: s.provider,
+        model: s.model,
+        thinkingLevel: s.getThinkingLevel(),
+      }
+    },
   }
 
   const session = new Session({
@@ -2453,6 +2487,18 @@ export function resumeSession(
     projectId: opts?.projectId,
     onJobAction: opts?.onJobAction,
     onDeliverResult: opts?.onDeliverResult,
+    getParentForkContext: () => {
+      const s = sessionRef.session
+      if (!s) return undefined
+      return {
+        messages: s.getMessages(),
+        systemPrompt: s.getComposedSystemPrompt(),
+        tools: s.getTools(),
+        provider: s.provider,
+        model: s.model,
+        thinkingLevel: s.getThinkingLevel(),
+      }
+    },
   }
 
   const session = new Session({

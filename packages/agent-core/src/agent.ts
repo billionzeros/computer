@@ -90,6 +90,7 @@ RULES (non-negotiable):
 8. If you find conflicting information, note the discrepancy rather than silently picking one.
 9. Stay strictly within the task scope. If you discover related topics outside scope, mention them in one sentence at most.
 10. Keep your report under 500 words unless the task specifies otherwise.
+11. Be TOKEN-EFFICIENT. Prefer web_search over browser — search first, then only fetch specific pages that look relevant from the search results. Do NOT crawl or fetch pages speculatively. Limit browser calls to at most 5 per task. Each fetch/extract costs tokens — be surgical.
 
 Output format (plain text labels, not markdown headers):
   Scope: <echo back your assigned scope in one sentence>
@@ -145,6 +146,76 @@ End with exactly one of:
 
 Task:
 `,
+}
+
+// ── Fork sub-agent mechanism ──────────────────────────────────
+// When sub_agent is called without a type, we create a "fork" that inherits
+// the parent's full conversation context, system prompt, tools, and model.
+
+const FORK_BOILERPLATE_TAG = 'fork_context'
+const FORK_DIRECTIVE_PREFIX = 'Directive:\n'
+
+/** Max turns for fork children (primary limit — no token budget). */
+const FORK_MAX_TURNS = 200
+
+/**
+ * Build the child directive message that gets appended to the forked conversation.
+ * Wrapped in a detectable tag so we can prevent recursive forking.
+ */
+function buildForkChildMessage(directive: string): string {
+  return `<${FORK_BOILERPLATE_TAG}>
+STOP. READ THIS FIRST.
+
+You are a forked worker process. You are NOT the main agent.
+
+RULES (non-negotiable):
+1. You ARE the fork. Do NOT spawn sub-agents or further forks — execute directly using your tools.
+2. Do NOT converse, ask questions, or suggest next steps.
+3. Do NOT editorialize or add meta-commentary.
+4. USE your tools directly: shell, read, write, edit, browser, web_search, etc.
+5. Do NOT emit text between tool calls. Use tools silently, then report once at the end.
+6. Stay strictly within your directive's scope. If you discover related topics outside scope, mention them in one sentence at most.
+7. Keep your report under 500 words unless the directive specifies otherwise.
+8. Your response MUST begin with "Scope:". No preamble, no thinking-out-loud.
+
+Output format (plain text labels, not markdown headers):
+  Scope: <echo back your assigned scope in one sentence>
+  Result: <the answer or key findings, limited to the scope above>
+  Key files: <relevant file paths — include for code research tasks>
+  Files changed: <list with details — include only if files were modified>
+  Issues: <list — include only if there are issues to flag>
+</${FORK_BOILERPLATE_TAG}>
+
+${FORK_DIRECTIVE_PREFIX}${directive}`
+}
+
+/**
+ * Detect whether we're inside a fork child by scanning messages for the
+ * fork boilerplate tag. Used to prevent recursive forking.
+ */
+function isInForkChild(messages: unknown[]): boolean {
+  return (messages as { role?: string; content?: unknown }[]).some((m) => {
+    if (m.role !== 'user') return false
+    const content = m.content
+    if (typeof content === 'string') return content.includes(`<${FORK_BOILERPLATE_TAG}>`)
+    if (Array.isArray(content)) {
+      return content.some(
+        (block: { type?: string; text?: string }) =>
+          block.type === 'text' && block.text?.includes(`<${FORK_BOILERPLATE_TAG}>`),
+      )
+    }
+    return false
+  })
+}
+
+/** Context needed to create a fork child session. */
+export interface ParentForkContext {
+  messages: unknown[]
+  systemPrompt: string
+  tools: AgentTool[]
+  provider: string
+  model: string
+  thinkingLevel?: 'off' | 'minimal' | 'low' | 'medium' | 'high'
 }
 
 /** Turn a 5-field cron expression into a short human-readable string. */
@@ -270,6 +341,8 @@ export interface ToolCallbacks {
   onBrowserClose?: () => void
   /** Get current trace span for sub-agent nesting in Braintrust. */
   getParentTraceSpan?: () => import('./tracing.js').Span | undefined
+  /** Get parent session's full context for fork sub-agents. */
+  getParentForkContext?: () => ParentForkContext | undefined
 }
 
 export function buildTools(
@@ -999,22 +1072,23 @@ export function buildTools(
         name: 'sub_agent',
         label: 'Sub Agent',
         description:
-          'Spawn a sub-agent that runs autonomously with its own context. Use when intermediate tool output would pollute your context — not for every task. ' +
-          'Set `type` to specialize: "research" (information gathering, no file changes), "execute" (carry out a specific plan), "verify" (run tests/checks, report verdict). Omit for general-purpose. ' +
+          'Spawn a sub-agent that runs autonomously. ' +
+          'Set `type` to specialize: "research" (information gathering, no file changes), "execute" (carry out a specific plan), "verify" (run tests/checks, report verdict). ' +
+          'Omit `type` to create a **fork** that inherits your full conversation context — use when the task needs prior discussion history or would be tedious to restate as a self-contained prompt. ' +
           'Multiple sub_agent calls in the same response run in parallel. ' +
-          'Never delegate understanding: don\'t write "based on your findings, fix X" — include file paths, line numbers, and exactly what to do. ' +
-          'The sub-agent cannot see your conversation. The task string is its entire context — make it self-contained.',
+          'With a type: the sub-agent starts fresh — the task string is its entire context, make it self-contained. ' +
+          'Without a type (fork): the sub-agent sees everything you\'ve seen — write a short directive, not a full briefing.',
         parameters: Type.Object({
           task: Type.String({
             description:
-              'Detailed, self-contained description of the task. Include all file paths, context, constraints, and expected output format.',
+              'For typed sub-agents: detailed, self-contained description with all context. For forks (no type): a short directive — the fork already has your conversation context.',
           }),
           type: Type.Optional(
             Type.Union(
               [Type.Literal('research'), Type.Literal('execute'), Type.Literal('verify')],
               {
                 description:
-                  'Sub-agent specialization. ' +
+                  'Sub-agent specialization. Omit to fork (inherits conversation context). ' +
                   'research: deep information gathering from web/files/APIs — does not modify files. ' +
                   'execute: carry out a specific build/change task to completion and verify the result. ' +
                   'verify: run tests/builds/checks and report PASS/FAIL/PARTIAL verdict without fixing issues.',
@@ -1024,13 +1098,14 @@ export function buildTools(
         }),
         async execute(toolCallId, params) {
           const onEvent = callbacks?.onSubAgentEvent
+          const isFork = !params.type
 
           // Emit sub_agent_start
           onEvent?.({
             type: 'sub_agent_start',
             toolCallId,
             task: params.task,
-            agentType: params.type,
+            agentType: isFork ? undefined : params.type,
             parentToolCallId: toolCallId,
           })
 
@@ -1041,89 +1116,175 @@ export function buildTools(
             // Lazy import to avoid circular dependency (agent.ts <-> session.ts)
             const { Session } = await import('./session.js')
 
-            // Build tools for sub-agent with depth incremented, then filter by type
-            let subTools = buildTools(
-              config,
-              {
-                getAskUserHandler: callbacks?.getAskUserHandler,
-                getConfirmHandler: callbacks?.getConfirmHandler,
-                onSubAgentEvent: callbacks?.onSubAgentEvent,
-                subAgentDepth: currentDepth + 1,
-                clientApiKey: callbacks?.clientApiKey,
-                defaultWorkingDirectory: callbacks?.defaultWorkingDirectory,
-                projectId: callbacks?.projectId,
-                onJobAction: callbacks?.onJobAction,
-                onDeliverResult: callbacks?.onDeliverResult,
-                // Shared project-scoped memory so parallel sub-agents can coordinate
-                conversationId: callbacks?.projectId
-                  ? `project-${callbacks.projectId}`
-                  : callbacks?.conversationId,
-              },
-              mcpManager,
-            )
-
-            // Filter tools based on sub-agent type specialization
-            if (params.type && SUB_AGENT_DISALLOWED_TOOLS[params.type]) {
-              const disallowed = SUB_AGENT_DISALLOWED_TOOLS[params.type]
-              subTools = subTools.filter((t) => !disallowed.has(t.name))
-            }
-
-            const subSession = new Session({
-              id: `sub_${toolCallId}`,
-              provider: config.defaults.provider,
-              model: config.defaults.model,
-              config,
-              tools: subTools,
-              apiKey: callbacks?.clientApiKey,
-              ephemeral: true,
-              // Safety limits for sub-agents
-              maxTokenBudget: 100_000,
-              maxDurationMs: 600_000, // 10 minutes
-              maxTurns: 50,
-              // Thread Braintrust trace span so sub-agent appears nested under parent
-              parentTraceSpan: callbacks?.getParentTraceSpan?.(),
-            })
-
-            // Wire confirm handler from parent so sub-agent shell commands can be approved
-            const confirmHandler = callbacks?.getConfirmHandler?.()
-            if (confirmHandler) {
-              subSession.setConfirmHandler(confirmHandler)
-            }
-
-            const typePrefix = params.type ? SUB_AGENT_TYPE_PREFIXES[params.type] : ''
-            const antiRecursionNote = !typePrefix
-              ? 'You are a sub-agent. You are NOT the main agent.\n\nRULES (non-negotiable):\n1. Do NOT spawn sub-agents. Execute directly using your tools.\n2. Do NOT emit text between tool calls. Use tools silently, then report once at the end.\n3. Do NOT converse, ask questions, or suggest next steps.\n4. Stay strictly within the task scope.\n5. Keep your report under 500 words unless the task specifies otherwise.\n\nTask:\n'
-              : ''
-            const subAgentMessage = typePrefix
-              ? `${typePrefix}${params.task}`
-              : `${antiRecursionNote}${params.task}`
-
-            for await (const event of subSession.processMessage(subAgentMessage)) {
-              // Forward intermediate events to client, tagged with parentToolCallId
-              if (onEvent && event.type !== 'done' && event.type !== 'title_update') {
-                onEvent({
-                  ...event,
-                  parentToolCallId: toolCallId,
-                } as import('./session.js').SessionEvent & { parentToolCallId: string })
+            if (isFork) {
+              // ── Fork path: inherit parent's full context ──
+              const forkContext = callbacks?.getParentForkContext?.()
+              if (!forkContext) {
+                throw new Error('Fork sub-agent requires parent context but none is available.')
               }
 
-              // Stream progress: emit text events as live progress updates
-              if (event.type === 'text' && event.content) {
-                onEvent?.({
-                  type: 'sub_agent_progress',
-                  toolCallId,
-                  content: event.content,
-                  parentToolCallId: toolCallId,
-                } as import('./session.js').SessionEvent & { parentToolCallId: string })
+              // Prevent recursive forking
+              if (isInForkChild(forkContext.messages)) {
+                throw new Error(
+                  'Cannot fork inside a forked worker. You ARE the fork — execute directly using your tools.',
+                )
               }
 
-              // Collect text output for the final tool result
-              if (event.type === 'text') {
-                finalText += event.content
+              // Clone parent messages and append fork directive
+              const forkedMessages = structuredClone(forkContext.messages)
+              // Append user message with fork directive + task
+              forkedMessages.push({
+                role: 'user',
+                content: [{ type: 'text', text: buildForkChildMessage(params.task) }],
+                timestamp: Date.now(),
+              })
+
+              // Build tools for fork child (depth incremented, no type filtering)
+              const forkTools = buildTools(
+                config,
+                {
+                  getAskUserHandler: callbacks?.getAskUserHandler,
+                  getConfirmHandler: callbacks?.getConfirmHandler,
+                  onSubAgentEvent: callbacks?.onSubAgentEvent,
+                  subAgentDepth: currentDepth + 1,
+                  clientApiKey: callbacks?.clientApiKey,
+                  defaultWorkingDirectory: callbacks?.defaultWorkingDirectory,
+                  projectId: callbacks?.projectId,
+                  onJobAction: callbacks?.onJobAction,
+                  onDeliverResult: callbacks?.onDeliverResult,
+                  conversationId: callbacks?.projectId
+                    ? `project-${callbacks.projectId}`
+                    : callbacks?.conversationId,
+                },
+                mcpManager,
+              )
+
+              const forkSession = new Session({
+                id: `fork_${toolCallId}`,
+                provider: forkContext.provider,
+                model: forkContext.model,
+                config,
+                tools: forkTools,
+                apiKey: callbacks?.clientApiKey,
+                existingMessages: forkedMessages,
+                ephemeral: true,
+                // Fork children use the parent's rendered system prompt
+                systemPromptOverride: forkContext.systemPrompt,
+                thinkingLevel: forkContext.thinkingLevel,
+                // Turn-based limits (primary) — no token budget for forks
+                maxTurns: FORK_MAX_TURNS,
+                maxDurationMs: 600_000, // 10 minutes safety net
+                maxTokenBudget: 0, // disabled — turns are the primary limit
+                parentTraceSpan: callbacks?.getParentTraceSpan?.(),
+              })
+
+              // Wire confirm handler
+              const confirmHandler = callbacks?.getConfirmHandler?.()
+              if (confirmHandler) {
+                forkSession.setConfirmHandler(confirmHandler)
               }
-              if (event.type === 'error') {
-                hadError = true
-                finalText += `\nError: ${event.message}`
+
+              // Trigger the fork — the existing messages already contain the directive,
+              // so we send a minimal follow-up to kick off processing
+              for await (const event of forkSession.processMessage(
+                '[Execute the directive above. Begin immediately with tool calls.]',
+              )) {
+                if (onEvent && event.type !== 'done' && event.type !== 'title_update') {
+                  onEvent({
+                    ...event,
+                    parentToolCallId: toolCallId,
+                  } as import('./session.js').SessionEvent & { parentToolCallId: string })
+                }
+                if (event.type === 'text' && event.content) {
+                  onEvent?.({
+                    type: 'sub_agent_progress',
+                    toolCallId,
+                    content: event.content,
+                    parentToolCallId: toolCallId,
+                  } as import('./session.js').SessionEvent & { parentToolCallId: string })
+                }
+                if (event.type === 'text') {
+                  finalText += event.content
+                }
+                if (event.type === 'error') {
+                  hadError = true
+                  finalText += `\nError: ${event.message}`
+                }
+              }
+            } else {
+              // ── Typed sub-agent path: fresh session with type prefix ──
+
+              // Build tools for sub-agent with depth incremented, then filter by type
+              let subTools = buildTools(
+                config,
+                {
+                  getAskUserHandler: callbacks?.getAskUserHandler,
+                  getConfirmHandler: callbacks?.getConfirmHandler,
+                  onSubAgentEvent: callbacks?.onSubAgentEvent,
+                  subAgentDepth: currentDepth + 1,
+                  clientApiKey: callbacks?.clientApiKey,
+                  defaultWorkingDirectory: callbacks?.defaultWorkingDirectory,
+                  projectId: callbacks?.projectId,
+                  onJobAction: callbacks?.onJobAction,
+                  onDeliverResult: callbacks?.onDeliverResult,
+                  conversationId: callbacks?.projectId
+                    ? `project-${callbacks.projectId}`
+                    : callbacks?.conversationId,
+                },
+                mcpManager,
+              )
+
+              // Filter tools based on sub-agent type specialization
+              if (SUB_AGENT_DISALLOWED_TOOLS[params.type]) {
+                const disallowed = SUB_AGENT_DISALLOWED_TOOLS[params.type]
+                subTools = subTools.filter((t) => !disallowed.has(t.name))
+              }
+
+              const subSession = new Session({
+                id: `sub_${toolCallId}`,
+                provider: config.defaults.provider,
+                model: config.defaults.model,
+                config,
+                tools: subTools,
+                apiKey: callbacks?.clientApiKey,
+                ephemeral: true,
+                // Safety limits for typed sub-agents
+                maxTokenBudget: 200_000,
+                maxDurationMs: 600_000, // 10 minutes
+                maxTurns: 50,
+                parentTraceSpan: callbacks?.getParentTraceSpan?.(),
+              })
+
+              // Wire confirm handler
+              const confirmHandler = callbacks?.getConfirmHandler?.()
+              if (confirmHandler) {
+                subSession.setConfirmHandler(confirmHandler)
+              }
+
+              const subAgentMessage = `${SUB_AGENT_TYPE_PREFIXES[params.type]}${params.task}`
+
+              for await (const event of subSession.processMessage(subAgentMessage)) {
+                if (onEvent && event.type !== 'done' && event.type !== 'title_update') {
+                  onEvent({
+                    ...event,
+                    parentToolCallId: toolCallId,
+                  } as import('./session.js').SessionEvent & { parentToolCallId: string })
+                }
+                if (event.type === 'text' && event.content) {
+                  onEvent?.({
+                    type: 'sub_agent_progress',
+                    toolCallId,
+                    content: event.content,
+                    parentToolCallId: toolCallId,
+                  } as import('./session.js').SessionEvent & { parentToolCallId: string })
+                }
+                if (event.type === 'text') {
+                  finalText += event.content
+                }
+                if (event.type === 'error') {
+                  hadError = true
+                  finalText += `\nError: ${event.message}`
+                }
               }
             }
           } catch (err) {
