@@ -11,7 +11,6 @@ export function ProjectList() {
 
   const handleOpenProject = (id: string) => {
     setActiveProject(id)
-    projectStore.getState().listProjectSessions(id)
     uiStore.getState().setActiveView('home')
   }
 

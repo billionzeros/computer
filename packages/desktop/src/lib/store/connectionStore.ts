@@ -72,11 +72,16 @@ export const connectionStore = create<ConnectionStoreState>((set, get) => ({
     connection.sendConnectorsList()
     connection.sendConnectorRegistryList()
 
-    // If there's an active project, also fetch its sessions
+    // If there's an active project, refresh its sessions.
+    // setActiveProject already calls sendProjectSessionsList, but on reconnect
+    // the project is already selected — just trigger the fetch directly.
     const activeProjectId = projectStore.getState().activeProjectId
     if (activeProjectId) {
+      console.log(
+        `[ProjectSync] Reconnect: requesting sessions for active project ${activeProjectId}`,
+      )
       projectStore.setState({ projectSessionsLoading: true })
-      projectStore.getState().listProjectSessions(activeProjectId)
+      connection.sendProjectSessionsList(activeProjectId)
     }
   },
 

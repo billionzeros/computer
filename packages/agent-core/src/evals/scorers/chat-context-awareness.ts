@@ -51,7 +51,11 @@ export function scoreGroundedness(evalCase: EvalCase, result: EvalResult): numbe
   }
 
   // Should have read a file before answering
-  const readFile = toolNames.includes('read') || toolNames.includes('grep') || toolNames.includes('filesystem') || toolNames.includes('code_search')
+  const readFile =
+    toolNames.includes('read') ||
+    toolNames.includes('grep') ||
+    toolNames.includes('filesystem') ||
+    toolNames.includes('code_search')
   return readFile ? 1.0 : 0.0
 }
 

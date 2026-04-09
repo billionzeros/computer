@@ -4,9 +4,11 @@
 
 import type { AiMessage } from '@anton/protocol'
 import { connection } from '../../connection.js'
+import { type Conversation, saveConversations } from '../../conversations.js'
 import { useStore } from '../../store.js'
 import { connectionStore } from '../connectionStore.js'
 import { projectStore } from '../projectStore.js'
+import { sessionStore } from '../sessionStore.js'
 import { uiStore } from '../uiStore.js'
 
 export function handleProjectMessage(msg: AiMessage): boolean {
@@ -16,7 +18,6 @@ export function handleProjectMessage(msg: AiMessage): boolean {
       const ps = projectStore.getState()
       ps.addProject(msg.project)
       ps.setActiveProject(msg.project.id)
-      connection.sendProjectSessionsList(msg.project.id)
       return true
     }
 
@@ -42,9 +43,101 @@ export function handleProjectMessage(msg: AiMessage): boolean {
     }
 
     case 'project_sessions_list_response': {
-      if (msg.projectId === projectStore.getState().activeProjectId) {
-        projectStore.getState().setProjectSessions(msg.sessions)
+      const activeId = projectStore.getState().activeProjectId
+      const sessions = (msg.sessions || []) as import('../../store.js').SessionMeta[]
+      const projectId = msg.projectId as string
+      console.log(
+        `[ProjectSync] Sessions response: projectId=${projectId}, count=${sessions.length}, activeProjectId=${activeId}, match=${projectId === activeId}`,
+      )
+      if (projectId === activeId) {
+        projectStore.getState().setProjectSessions(sessions)
       }
+
+      // Bidirectional reconciliation: the session sync protocol only handles
+      // global sess_* sessions. Project sessions (proj_*) must be reconciled
+      // here so TaskListView (which reads from useStore.conversations) can
+      // render them. Server is authoritative — add missing, update stale,
+      // remove deleted.
+      const store = useStore.getState()
+      const serverSessionIds = new Set(sessions.filter((s) => s.messageCount > 0).map((s) => s.id))
+      const localBySessionId = new Map(
+        store.conversations.filter((c) => c.projectId === projectId).map((c) => [c.sessionId, c]),
+      )
+
+      let changed = false
+      let conversations = store.conversations
+
+      // 1. Add missing sessions & update stale metadata
+      const newConvs: Conversation[] = []
+      for (const s of sessions) {
+        if (s.messageCount === 0) continue
+        const existing = localBySessionId.get(s.id)
+        if (!existing) {
+          newConvs.push({
+            id: s.id,
+            sessionId: s.id,
+            title: s.title || 'New conversation',
+            messages: [],
+            createdAt: s.createdAt,
+            updatedAt: s.lastActiveAt,
+            projectId,
+            provider: s.provider,
+            model: s.model,
+          })
+        } else if (existing.title !== s.title || existing.updatedAt !== s.lastActiveAt) {
+          // Update stale metadata (title from server title-gen, timestamps from agent runs)
+          conversations = conversations.map((c) =>
+            c.sessionId === s.id
+              ? { ...c, title: s.title || c.title, updatedAt: s.lastActiveAt }
+              : c,
+          )
+          changed = true
+        }
+      }
+
+      // 2. Remove local conversations whose session no longer exists on server
+      const staleIds = [...localBySessionId.keys()].filter(
+        (id) => !serverSessionIds.has(id) && !localBySessionId.get(id)?.pendingCreation,
+      )
+      if (staleIds.length > 0) {
+        const staleSet = new Set(staleIds)
+        conversations = conversations.filter((c) => !staleSet.has(c.sessionId))
+        changed = true
+      }
+
+      if (newConvs.length > 0) {
+        conversations = [...conversations, ...newConvs]
+        changed = true
+      }
+
+      if (changed) {
+        // Count how many existing conversations got metadata updates
+        const updatedCount = sessions.filter((s) => {
+          const existing = localBySessionId.get(s.id)
+          return existing && (existing.title !== s.title || existing.updatedAt !== s.lastActiveAt)
+        }).length
+        console.log(
+          `[ProjectSync] Reconciled project ${projectId}: +${newConvs.length} added, ~${updatedCount} updated, -${staleIds.length} removed, ${conversations.length} total`,
+        )
+        saveConversations(conversations)
+        useStore.setState({ conversations })
+      } else {
+        console.log(
+          `[ProjectSync] Project ${projectId} in sync: ${localBySessionId.size} local, ${serverSessionIds.size} server`,
+        )
+      }
+
+      // Merge project session metadata into sessionStore.sessions so
+      // TaskListView's sessionsById has status for all sessions, not just
+      // the currently active project's. Without this, project sessions
+      // show "idle" instead of "completed" when viewing a different project.
+      const ss = sessionStore.getState()
+      const existingIds = new Set(ss.sessions.map((s) => s.id))
+      const toAdd = sessions.filter((s) => s.messageCount > 0 && !existingIds.has(s.id))
+      if (toAdd.length > 0) {
+        ss.setSessions([...ss.sessions, ...toAdd])
+      }
+
       return true
     }
 

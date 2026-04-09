@@ -68,7 +68,6 @@ export function EmptyState({ onSend, onSkillSelect }: Props) {
         if (ps.projects.some((p) => p.id === projectId)) {
           setActiveProject(projectId)
           setActiveView('home')
-          ps.listProjectSessions(projectId)
           return
         }
       }

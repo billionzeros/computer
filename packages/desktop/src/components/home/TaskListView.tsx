@@ -353,12 +353,18 @@ export function TaskListView({ mode }: Props) {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
   const inputRef = useRef<HTMLInputElement>(null)
 
-  // Build a lookup map for session metadata (includes status from server)
+  // Build a lookup map for session metadata (includes status from server).
+  // Merge global sessions (from session sync) with project sessions so
+  // proj_* conversations also get correct status indicators.
+  const projectSessions = projectStore((s) => s.projectSessions)
   const sessionsById = useMemo(() => {
     const map = new Map<string, (typeof sessions)[number]>()
     for (const s of sessions) map.set(s.id, s)
+    for (const s of projectSessions) {
+      if (!map.has(s.id)) map.set(s.id, s)
+    }
     return map
-  }, [sessions])
+  }, [sessions, projectSessions])
 
   // Check if this project has an unbootstrapped workflow
   const pendingWorkflow = projectWorkflows.find(

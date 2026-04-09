@@ -168,12 +168,19 @@ export function ProjectView() {
   }
 
   const handleBackToProjects = () => {
-    setActiveProject(null)
+    // Switch back to the default project so HomeView shows the task list
+    const defaultProject = projectStore.getState().projects.find((p) => p.isDefault)
+    if (defaultProject) {
+      setActiveProject(defaultProject.id)
+    } else {
+      setActiveProject(null)
+    }
   }
 
   const handleDelete = () => {
     projectStore.getState().deleteProject(project.id)
-    setActiveProject(null)
+    const defaultProject = projectStore.getState().projects.find((p) => p.isDefault)
+    setActiveProject(defaultProject?.id ?? null)
   }
 
   // ── State 1: Landing (no active session) ──

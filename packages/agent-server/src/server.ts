@@ -1927,13 +1927,19 @@ export class AgentServer {
     log.info({ sessionId: msg.id }, 'Session destroyed')
   }
 
-  private handleSessionHistory(msg: { id: string; before?: number; limit?: number }) {
+  private handleSessionHistory(msg: {
+    id: string
+    before?: number
+    limit?: number
+    projectId?: string
+  }) {
     try {
       // Check if already in memory
       let session = this.sessions.get(msg.id)
 
       if (!session) {
-        const projectId = this.extractProjectId(msg.id)
+        // Use client-provided projectId as primary hint, fall back to parsing the session ID
+        const projectId = msg.projectId || this.extractProjectId(msg.id)
 
         // Try loading from disk (project dir first, then global fallback)
         session =
@@ -1947,6 +1953,10 @@ export class AgentServer {
         }
 
         if (!session) {
+          log.warn(
+            { sessionId: msg.id, projectId, extracted: this.extractProjectId(msg.id) },
+            'Session not found on disk',
+          )
           this.sendToClient(Channel.AI, {
             type: 'error',
             code: 'session_not_found',
@@ -1955,6 +1965,7 @@ export class AgentServer {
           })
           return
         }
+        log.info({ sessionId: msg.id, projectId }, 'Resumed session from disk for history')
         this.wireSessionConfirmHandler(session)
         this.wirePlanConfirmHandler(session)
         this.wireAskUserHandler(session)
@@ -2829,8 +2840,9 @@ export class AgentServer {
   }
 
   private handleProjectSessionsList(msg: { projectId: string }) {
+    const allPersisted = listProjectSessions(msg.projectId)
     // Filter out agent sessions — they appear in the agents list, not here
-    const persisted = listProjectSessions(msg.projectId).filter(
+    const persisted = allPersisted.filter(
       (s) => !s.id.startsWith('agent-job-') && !s.id.startsWith('agent--'),
     )
     const sessions = persisted.map((s) => ({
@@ -2850,6 +2862,7 @@ export class AgentServer {
 
     // Add in-memory project sessions that aren't persisted yet
     const prefix = `proj_${msg.projectId}_sess_`
+    let inMemoryCount = 0
     for (const [id, session] of this.sessions) {
       if (id.startsWith(prefix) && !persisted.some((s) => s.id === id)) {
         const info = session.getInfo()
@@ -2867,10 +2880,22 @@ export class AgentServer {
               ? 'completed'
               : 'idle') as 'working' | 'completed' | 'idle',
         })
+        inMemoryCount++
       }
     }
 
     sessions.sort((a, b) => b.lastActiveAt - a.lastActiveAt)
+
+    log.info(
+      {
+        projectId: msg.projectId,
+        persistedTotal: allPersisted.length,
+        persistedFiltered: persisted.length,
+        inMemory: inMemoryCount,
+        sent: sessions.length,
+      },
+      'Project sessions list',
+    )
 
     this.sendToClient(Channel.AI, {
       type: 'project_sessions_list_response',

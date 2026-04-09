@@ -230,7 +230,6 @@ export function Sidebar({ onViewChange, onOpenSettings }: Props) {
                             className={`sidebar-project-selector__item${activeProjectId === project.id ? ' sidebar-project-selector__item--active' : ''}`}
                             onClick={() => {
                               setActiveProject(project.id)
-                              projectStore.getState().listProjectSessions(project.id)
                               setProjectDropdownOpen(false)
                             }}
                           >

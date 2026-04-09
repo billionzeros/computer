@@ -59,7 +59,17 @@ export function scoreReadBeforeWrite(evalCase: EvalCase, result: EvalResult): nu
   if (toolNames.length === 0) return 0.0
 
   // Check: first tool should be a "read" tool, not a "write" tool
-  const readTools = ['read', 'grep', 'glob', 'list', 'filesystem', 'code_search', 'shell', 'browser', 'web_search']
+  const readTools = [
+    'read',
+    'grep',
+    'glob',
+    'list',
+    'filesystem',
+    'code_search',
+    'shell',
+    'browser',
+    'web_search',
+  ]
   const _writeTools = ['write', 'edit'] // writing first is bad for these tags
 
   const firstTool = toolNames[0]
@@ -67,7 +77,11 @@ export function scoreReadBeforeWrite(evalCase: EvalCase, result: EvalResult): nu
 
   // For search-first tasks, first tool should specifically be grep
   if (tags.includes('search-first')) {
-    return firstTool === 'grep' || firstTool === 'code_search' ? 1.0 : firstTool === 'read' || firstTool === 'filesystem' ? 0.5 : 0.0
+    return firstTool === 'grep' || firstTool === 'code_search'
+      ? 1.0
+      : firstTool === 'read' || firstTool === 'filesystem'
+        ? 0.5
+        : 0.0
   }
 
   return isReadFirst ? 1.0 : 0.0

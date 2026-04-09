@@ -20,6 +20,7 @@ import { HomeView } from './components/home/HomeView.js'
 import { MemoryView } from './components/memory/MemoryView.js'
 import { CreateProjectModal } from './components/projects/CreateProjectModal.js'
 import { ProjectList } from './components/projects/ProjectList.js'
+import { ProjectView } from './components/projects/ProjectView.js'
 import { SettingsModal } from './components/settings/SettingsModal.js'
 import { SkillsPanel } from './components/skills/SkillsPanel.js'
 import { WorkflowsPage } from './components/workflows/WorkflowsPage.js'
@@ -52,7 +53,7 @@ export function App() {
   uiStore((s) => s.toggleSidebar)
   const updateStage = updateStore((s) => s.updateStage)
   const sidePanelOpen = artifactPanelOpen
-  projectStore((s) => s.activeProjectId)
+  const activeProjectId = projectStore((s) => s.activeProjectId)
   const projects = projectStore((s) => s.projects)
   const theme = uiStore((s) => s.theme)
   const devMode = uiStore((s) => s.devMode)
@@ -92,6 +93,10 @@ export function App() {
   const activeConvProject = activeConvProjectId
     ? projects.find((p) => p.id === activeConvProjectId)
     : null
+
+  // Show ProjectView when viewing a non-default project on the home screen
+  const defaultProjectId = projects.find((p) => p.isDefault)?.id
+  const showProjectView = activeProjectId && activeProjectId !== defaultProjectId
 
   // Global listener for "New project" from sidebar (works on any view)
   useEffect(() => {
@@ -345,7 +350,7 @@ export function App() {
           )}
 
           <div className="workspace-body">
-            {activeView === 'home' && <HomeView />}
+            {activeView === 'home' && (showProjectView ? <ProjectView /> : <HomeView />)}
             {activeView === 'chat' && <AgentChat />}
             {activeView === 'memory' && <MemoryView />}
             {activeView === 'agents' && <AgentsView />}
@@ -363,7 +368,8 @@ export function App() {
             {activeView === 'projects' && <ProjectList />}
 
             <AnimatePresence>
-              {(activeView === 'chat' || activeView === 'home') && sidePanelOpen && <SidePanel />}
+              {(activeView === 'chat' || (activeView === 'home' && !showProjectView)) &&
+                sidePanelOpen && <SidePanel />}
             </AnimatePresence>
           </div>
         </div>

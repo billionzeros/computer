@@ -719,7 +719,10 @@ export const useStore = create<AppState>((set, get) => {
       const ss = sessionStore.getState()
       // Mark session as syncing and send the request.
       ss.updateSessionState(sessionId, { isSyncing: true })
-      connection.sendSessionHistory(sessionId)
+      // Include projectId so the server knows where to find project-scoped
+      // sessions whose ID doesn't encode the project (e.g. sess_* in a project dir).
+      const conv = get().conversations.find((c) => c.sessionId === sessionId)
+      connection.sendSessionHistory(sessionId, { projectId: conv?.projectId })
 
       // Safety timeout: clear syncing flag if server never responds
       setTimeout(() => {
@@ -780,7 +783,11 @@ export const useStore = create<AppState>((set, get) => {
       if (minSeq === Number.MAX_SAFE_INTEGER) return
 
       ss.updateSessionState(sessionId, { isLoadingOlder: true })
-      connection.sendSessionHistory(sessionId, { before: minSeq, limit: 200 })
+      connection.sendSessionHistory(sessionId, {
+        before: minSeq,
+        limit: 200,
+        projectId: conv.projectId,
+      })
     },
 
     updateConversationTitle: (sessionId, title) => {

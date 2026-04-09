@@ -323,6 +323,34 @@ export function handleSessionMessage(msg: AiMessage): boolean {
           `[SessionSync] Incremental sync: ${deltas.length} delta(s), syncVersion=${syncVersion}`,
         )
         applySyncDeltas(deltas, syncVersion)
+
+        // After reconnect, sessionStore.reset() clears both sessionsLoaded
+        // and sessions[]. Full bootstrap repopulates both via setSessions(),
+        // but incremental sync (especially 0 deltas) skips that path.
+        // Rebuild sessions from the cache so TaskListView has status metadata,
+        // and mark as loaded so skeletons resolve.
+        const ss = sessionStore.getState()
+        if (!ss.sessionsLoaded || ss.sessions.length === 0) {
+          const cache = loadSessionCache()
+          if (cache?.entries.length) {
+            const rebuilt: SessionMeta[] = cache.entries.map((e) => ({
+              id: e.sessionId,
+              title: e.title,
+              provider: e.provider || '',
+              model: e.model || '',
+              messageCount: e.messageCount,
+              createdAt: e.createdAt,
+              lastActiveAt: e.updatedAt,
+            }))
+            console.log(
+              `[SessionSync] Rebuilt ${rebuilt.length} session(s) from cache (sessionsLoaded was ${ss.sessionsLoaded}, sessions was ${ss.sessions.length})`,
+            )
+            sessionStore.getState().setSessions(rebuilt)
+          } else {
+            console.log('[SessionSync] No cache entries to rebuild, marking sessionsLoaded=true')
+            sessionStore.setState({ sessionsLoaded: true })
+          }
+        }
       }
 
       connectionStore.getState().markSynced('sessions')

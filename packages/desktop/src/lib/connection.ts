@@ -205,7 +205,7 @@ export class Connection {
     this.send(Channel.AI, { type: 'session_destroy', id })
   }
 
-  sendSessionHistory(id: string, opts?: { before?: number; limit?: number }) {
+  sendSessionHistory(id: string, opts?: { before?: number; limit?: number; projectId?: string }) {
     this.send(Channel.AI, { type: 'session_history', id, ...opts })
   }
 

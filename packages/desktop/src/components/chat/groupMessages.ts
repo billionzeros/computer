@@ -194,7 +194,11 @@ export function groupMessages(messages: ChatMessage[]): GroupedItem[] {
     }
 
     // Sub-agent end: close the group and emit it inline (NOT as a child event)
-    if (msg.id.startsWith('sa_end_') && msg.parentToolCallId && subAgentGroups.has(msg.parentToolCallId)) {
+    if (
+      msg.id.startsWith('sa_end_') &&
+      msg.parentToolCallId &&
+      subAgentGroups.has(msg.parentToolCallId)
+    ) {
       const tcId = msg.parentToolCallId
       const group = subAgentGroups.get(tcId)!
       if (group.pendingCall) {

@@ -164,12 +164,14 @@ export const projectStore = create<ProjectState>((set, get) => ({
     if (!activeProjectId) {
       const defaultProject = projects.find((p) => p.isDefault)
       if (defaultProject) {
+        console.log(`[ProjectSync] Auto-selecting default project: ${defaultProject.id}`)
         get().setActiveProject(defaultProject.id)
       }
     }
   },
 
   setActiveProject: (id) => {
+    console.log(`[ProjectSync] setActiveProject: ${id ?? 'null'}`)
     saveActiveProjectId(id)
     set({
       activeProjectId: id,
@@ -191,6 +193,14 @@ export const projectStore = create<ProjectState>((set, get) => ({
       memories: [],
       memoriesLoading: !!id,
     })
+    // Always fetch project sessions when selecting a project.
+    // Previously callers had to remember to also call listProjectSessions —
+    // several paths (setProjects auto-select, workflow_installed) didn't,
+    // leaving projectSessionsLoading stuck at true or sessions permanently empty.
+    if (id) {
+      console.log(`[ProjectSync] Requesting sessions for project ${id}`)
+      connection.sendProjectSessionsList(id)
+    }
   },
 
   addProject: (project) => {
@@ -221,8 +231,10 @@ export const projectStore = create<ProjectState>((set, get) => ({
     })
   },
 
-  setProjectSessions: (sessions) =>
-    set({ projectSessions: sessions, projectSessionsLoading: false }),
+  setProjectSessions: (sessions) => {
+    console.log(`[ProjectSync] setProjectSessions: ${sessions.length} session(s), loading=false`)
+    set({ projectSessions: sessions, projectSessionsLoading: false })
+  },
   setProjectAgents: (agents) => set({ projectAgents: agents, projectAgentsLoading: false }),
   setSelectedAgent: (id) => set({ selectedAgentId: id }),
   setActiveProjectSession: (sessionId) => set({ activeProjectSessionId: sessionId }),
