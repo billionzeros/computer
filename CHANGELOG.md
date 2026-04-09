@@ -10,6 +10,27 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versioning: [S
 
 ---
 
+## [1.0.48] - 2026-04-09
+
+### Features
+- add fork sub-agent mechanism with context inheritance and turn-based limits (#43)
+- split filesystem mega-tool into dedicated tools with steering directives (#38)
+- add background memory extraction system (#35)
+- add specialized sub-agent types and remove embed-prompts indirection (#34)
+
+### Fixes
+- narrow params.type to SubAgentType in typed sub-agent branch (#45)
+- wire ProjectView, reconcile project sessions, and fix session loading (#44)
+- restore active conversation on cold start, sync deliver_result metadata, and fix Home→Chat session state (#41)
+- prune orphaned sub-agent history on compaction and wire recorder for scheduled sessions (#40)
+- force full bootstrap to clear stale sessions from client cache (#39)
+- sub-agent UI rendering and spawning discipline (#37)
+- implement session sync protocol to fix conversation loss on updates (#36)
+
+### Other
+- Fix desktop store build regression (#42)
+---
+
 ## [1.0.47] - 2026-04-09
 
 Maintenance release.
@@ -457,7 +478,8 @@ Maintenance release.
 
 ---
 
-[Unreleased]: https://github.com/OmGuptaIND/computer/compare/v1.0.47...HEAD
+[Unreleased]: https://github.com/OmGuptaIND/computer/compare/v1.0.48...HEAD
+[1.0.48]: https://github.com/OmGuptaIND/computer/compare/v$(changelog.match(/## [(d+.d+.d+)]/g)[1].match(/d+.d+.d+/)[0])...v1.0.48
 [1.0.47]: https://github.com/OmGuptaIND/computer/compare/v$(changelog.match(/## [(d+.d+.d+)]/g)[1].match(/d+.d+.d+/)[0])...v1.0.47
 [1.0.46]: https://github.com/OmGuptaIND/computer/compare/v$(changelog.match(/## [(d+.d+.d+)]/g)[1].match(/d+.d+.d+/)[0])...v1.0.46
 [1.0.45]: https://github.com/OmGuptaIND/computer/compare/v$(changelog.match(/## [(d+.d+.d+)]/g)[1].match(/d+.d+.d+/)[0])...v1.0.45

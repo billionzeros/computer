@@ -1,10 +1,13 @@
 {
   "name": "@anton/agent-config",
-  "version": "1.0.47",
+  "version": "1.0.48",
   "type": "module",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
-  "files": ["dist", "prompts"],
+  "files": [
+    "dist",
+    "prompts"
+  ],
   "scripts": {
     "dev": "tsc --watch",
     "build": "tsc"
