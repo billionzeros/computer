@@ -108,64 +108,105 @@ jobs:
             anton-sidecar-linux-arm64
             anton-sidecar-linux-amd64
 
-  # ── Desktop app (macOS, Windows, Linux) ──────────────────────────
-  # NOTE: Desktop build temporarily disabled — uncomment when ready to ship desktop installers.
-  # desktop:
-  #   strategy:
-  #     matrix:
-  #       include:
-  #         - os: macos-latest
-  #           target: macos
-  #
-  #   runs-on: ${{ matrix.os }}
-  #
-  #   steps:
-  #     - uses: actions/checkout@v4
-  #
-  #     - uses: actions/setup-node@v4
-  #       with:
-  #         node-version: '22'
-  #
-  #     - uses: pnpm/action-setup@v4
-  #       with:
-  #         version: 9
-  #
-  #     - name: Install Rust
-  #       uses: dtolnay/rust-toolchain@stable
-  #
-  #     - name: Install dependencies
-  #       run: pnpm install
-  #
-  #     - name: Build protocol (desktop dependency)
-  #       run: pnpm --filter @anton/protocol build
-  #
-  #     - name: Build desktop app
-  #       uses: tauri-apps/tauri-action@v0
-  #       env:
-  #         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-  #         TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
-  #         TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
-  #       with:
-  #         projectPath: packages/desktop
-  #         tauriScript: pnpm tauri
-  #
-  #     - name: Upload desktop artifacts
-  #       uses: actions/upload-artifact@v4
-  #       with:
-  #         name: desktop-${{ matrix.target }}
-  #         path: |
-  #           packages/desktop/src-tauri/target/release/bundle/**/*.dmg
-  #           packages/desktop/src-tauri/target/release/bundle/**/*.app.tar.gz
-  #           packages/desktop/src-tauri/target/release/bundle/**/*.app.tar.gz.sig
-  #           packages/desktop/src-tauri/target/release/bundle/**/*.msi
-  #           packages/desktop/src-tauri/target/release/bundle/**/*.msi.sig
-  #           packages/desktop/src-tauri/target/release/bundle/**/*.AppImage
-  #           packages/desktop/src-tauri/target/release/bundle/**/*.AppImage.sig
-  #           packages/desktop/src-tauri/target/release/bundle/**/*.deb
+  # ── Detect desktop changes (tag events don't support path filters) ─
+  desktop-changes:
+    runs-on: ubuntu-latest
+    outputs:
+      changed: ${{ steps.check.outputs.changed }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Check if desktop-related files changed since last tag
+        id: check
+        run: |
+          # Find the previous tag (the one before the current push)
+          PREV_TAG=$(git tag --sort=-v:refname | grep '^v' | sed -n '2p')
+
+          if [ -z "$PREV_TAG" ]; then
+            echo "No previous tag found — building desktop"
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          echo "Comparing $PREV_TAG..HEAD"
+
+          # Paths that should trigger a desktop rebuild
+          DESKTOP_PATHS="packages/desktop/ packages/protocol/"
+
+          CHANGED=$(git diff --name-only "$PREV_TAG"..HEAD -- $DESKTOP_PATHS)
+
+          if [ -n "$CHANGED" ]; then
+            echo "Desktop-related files changed:"
+            echo "$CHANGED"
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "No desktop-related files changed — skipping build"
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+          fi
+
+  # ── Desktop app (macOS) ─────────────────────────────────────────
+  desktop:
+    needs: [desktop-changes]
+    if: needs.desktop-changes.outputs.changed == 'true'
+
+    strategy:
+      matrix:
+        include:
+          - os: macos-latest
+            target: macos
+
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Install dependencies
+        run: pnpm install
+
+      - name: Build protocol (desktop dependency)
+        run: pnpm --filter @anton/protocol build
+
+      - name: Build desktop app
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        with:
+          projectPath: packages/desktop
+          tauriScript: pnpm tauri
+
+      - name: Upload desktop artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: desktop-${{ matrix.target }}
+          path: |
+            packages/desktop/src-tauri/target/release/bundle/**/*.dmg
+            packages/desktop/src-tauri/target/release/bundle/**/*.app.tar.gz
+            packages/desktop/src-tauri/target/release/bundle/**/*.app.tar.gz.sig
+            packages/desktop/src-tauri/target/release/bundle/**/*.msi
+            packages/desktop/src-tauri/target/release/bundle/**/*.msi.sig
+            packages/desktop/src-tauri/target/release/bundle/**/*.AppImage
+            packages/desktop/src-tauri/target/release/bundle/**/*.AppImage.sig
+            packages/desktop/src-tauri/target/release/bundle/**/*.deb
 
   # ── Create GitHub Release ────────────────────────────────────────
   release:
-    needs: [cli, sidecar]
+    needs: [cli, sidecar, desktop]
+    if: always() && needs.cli.result == 'success' && needs.sidecar.result == 'success'
     runs-on: ubuntu-latest
 
     steps:
@@ -199,13 +240,15 @@ jobs:
           cp artifacts/anton-cli/anton-cli.mjs release-assets/ 2>/dev/null || true
           # Sidecar binaries
           cp artifacts/sidecar-binaries/anton-sidecar-linux-* release-assets/ 2>/dev/null || true
-          # Desktop installers (disabled for now)
-          # find artifacts/desktop-* -type f \( \
-          #   -name "*.dmg" -o -name "*.msi" -o -name "*.AppImage" -o -name "*.deb" \
-          #   -o -name "*.app.tar.gz" -o -name "*.app.tar.gz.sig" \
-          #   -o -name "*.msi.sig" -o -name "*.AppImage.sig" \
-          # \) -exec cp {} release-assets/ \;
-          # find artifacts/desktop-* -name "latest.json" -exec cp {} release-assets/ \; 2>/dev/null || true
+          # Desktop installers (only present when desktop files changed)
+          if ls artifacts/desktop-* 1>/dev/null 2>&1; then
+            find artifacts/desktop-* -type f \( \
+              -name "*.dmg" -o -name "*.msi" -o -name "*.AppImage" -o -name "*.deb" \
+              -o -name "*.app.tar.gz" -o -name "*.app.tar.gz.sig" \
+              -o -name "*.msi.sig" -o -name "*.AppImage.sig" \
+            \) -exec cp {} release-assets/ \;
+            find artifacts/desktop-* -name "latest.json" -exec cp {} release-assets/ \; 2>/dev/null || true
+          fi
           echo "Release assets:"
           ls -lh release-assets/
 
