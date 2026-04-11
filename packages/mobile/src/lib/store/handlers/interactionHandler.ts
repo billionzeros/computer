@@ -59,6 +59,7 @@ export function handleInteractionMessage(msg: AiMessage, ctx: MessageContext): b
     case 'error': {
       const ss = sessionStore.getState()
       const sid = ctx.msgSessionId
+      console.error('[Handler] Error from server:', msg.message, 'session:', sid)
 
       if (sid && ss.getSessionState(sid).isSyncing) {
         ss.updateSessionState(sid, { isSyncing: false, pendingSyncMessages: [] })

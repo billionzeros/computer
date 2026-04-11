@@ -17,6 +17,11 @@ export interface SavedMachine {
 
 const MACHINES_META_KEY = 'anton_machines_meta'
 const MACHINE_TOKEN_PREFIX = 'anton_machine_token_'
+
+/** SecureStore keys only allow alphanumeric, ".", "-", and "_". Replace invalid chars. */
+function tokenKey(machineId: string): string {
+  return `${MACHINE_TOKEN_PREFIX}${machineId.replace(/:/g, '_')}`
+}
 const LAST_MACHINE_KEY = 'anton_last_machine'
 const MODEL_KEY = 'anton_selected_model'
 const _CONVERSATIONS_KEY = 'anton_conversations'
@@ -33,7 +38,8 @@ async function getSecureItem(key: string): Promise<string | null> {
   if (Platform.OS === 'web') return null
   try {
     return await SecureStore.getItemAsync(key)
-  } catch {
+  } catch (err) {
+    console.warn(`[SecureStore] Failed to read key "${key}":`, err)
     return null
   }
 }
@@ -63,7 +69,7 @@ export async function loadMachines(): Promise<SavedMachine[]> {
     const metas: MachineMetadata[] = JSON.parse(raw)
     const machines = await Promise.all(
       metas.map(async (meta) => {
-        const token = (await getSecureItem(`${MACHINE_TOKEN_PREFIX}${meta.id}`)) ?? ''
+        const token = (await getSecureItem(tokenKey(meta.id))) ?? ''
         return { ...meta, token }
       }),
     )
@@ -76,11 +82,11 @@ export async function loadMachines(): Promise<SavedMachine[]> {
 export async function saveMachines(machines: SavedMachine[]): Promise<void> {
   const metas: MachineMetadata[] = machines.map(({ token: _, ...meta }) => meta)
   await setSecureItem(MACHINES_META_KEY, JSON.stringify(metas))
-  await Promise.all(machines.map((m) => setSecureItem(`${MACHINE_TOKEN_PREFIX}${m.id}`, m.token)))
+  await Promise.all(machines.map((m) => setSecureItem(tokenKey(m.id), m.token)))
 }
 
 export async function removeMachineToken(machineId: string): Promise<void> {
-  await removeSecureItem(`${MACHINE_TOKEN_PREFIX}${machineId}`)
+  await removeSecureItem(tokenKey(machineId))
 }
 
 export async function loadLastMachineId(): Promise<string | null> {

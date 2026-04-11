@@ -56,12 +56,17 @@ export class Connection {
   private rawHandlers: RawMessageHandler[] = []
   private statusListeners: ((status: ConnectionStatus, detail?: string) => void)[] = []
   private _status: ConnectionStatus = 'disconnected'
+  private _statusDetail = ''
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null
   private agentId = ''
   private agentVersion = ''
 
   get status() {
     return this._status
+  }
+
+  get statusDetail() {
+    return this._statusDetail
   }
 
   get currentConfig() {
@@ -98,6 +103,19 @@ export class Connection {
   }
 
   connect(config: ConnectionConfig) {
+    // Clean up any existing connection / pending reconnect first
+    if (this.reconnectTimer) {
+      clearTimeout(this.reconnectTimer)
+      this.reconnectTimer = null
+    }
+    if (this.ws) {
+      this.ws.onopen = null
+      this.ws.onmessage = null
+      this.ws.onclose = null
+      this.ws.onerror = null
+      this.ws.close(1000, 'New connection')
+      this.ws = null
+    }
     this.config = config
     this.doConnect()
   }
@@ -116,9 +134,11 @@ export class Connection {
 
   send(channel: number, message: object) {
     if (!this.ws || this.ws.readyState !== WebSocket.OPEN) {
-      console.warn(`[WS SEND] Dropped (not connected): ch=${channel}`, message)
+      console.warn(`[WS →] DROPPED (not connected): ch=${channel}`, message)
       return
     }
+    const msgType = (message as { type?: string }).type ?? 'unknown'
+    console.log(`[WS →] ${msgType}`, (message as Record<string, unknown>).sessionId ?? (message as Record<string, unknown>).id ?? '')
     this.ws.send(encodeFrame(channel, message))
   }
 
@@ -317,7 +337,9 @@ export class Connection {
   }
 
   private setStatus(status: ConnectionStatus, detail?: string) {
+    console.log(`[WS] Status: ${this._status} → ${status}`, detail ?? '')
     this._status = status
+    this._statusDetail = detail ?? ''
     for (const listener of this.statusListeners) {
       listener(status, detail)
     }

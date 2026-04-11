@@ -5,7 +5,7 @@ import type { SessionMeta } from '@/lib/store/types'
 import { colors, fontSize, radius, spacing } from '@/theme/colors'
 import type { AgentSession, Project } from '@anton/protocol'
 import { router } from 'expo-router'
-import { Bot, ChevronRight, FolderOpen, MessageSquare, Pause, Play } from 'lucide-react-native'
+import { ArrowLeft, Bot, ChevronRight, FolderOpen, MessageSquare, Pause, Play } from 'lucide-react-native'
 import { useCallback, useState } from 'react'
 import { FlatList, Pressable, StyleSheet, Text, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
@@ -38,7 +38,7 @@ export default function ProjectsScreen() {
     } else {
       store.switchConversation(conv.id)
     }
-    router.navigate('/(tabs)')
+    router.navigate('/')
   }, [])
 
   const handleAgentAction = useCallback(
@@ -152,7 +152,11 @@ export default function ProjectsScreen() {
   return (
     <View style={[styles.container, { paddingTop: insets.top }]}>
       <View style={styles.header}>
+        <Pressable style={styles.backBtn} onPress={() => router.back()} hitSlop={8}>
+          <ArrowLeft size={20} strokeWidth={1.5} color={colors.text} />
+        </Pressable>
         <Text style={styles.headerTitle}>Projects</Text>
+        <View style={styles.backBtn} />
       </View>
 
       <FlatList
@@ -180,14 +184,22 @@ const styles = StyleSheet.create({
     backgroundColor: colors.bg,
   },
   header: {
-    paddingHorizontal: spacing.xl,
-    paddingVertical: spacing.lg,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: colors.border,
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.sm,
+  },
+  backBtn: {
+    width: 36,
+    height: 36,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   headerTitle: {
+    flex: 1,
     color: colors.text,
-    fontSize: fontSize.xl,
+    textAlign: 'center',
+    fontSize: fontSize.md,
     fontWeight: '700',
   },
   list: {

@@ -27,9 +27,13 @@ export const connectionStore = create<ConnectionStoreState>((set, get) => ({
     connectors: false,
   },
 
-  setInitPhase: (phase) => set({ initPhase: phase }),
+  setInitPhase: (phase) => {
+    console.log(`[Init] Phase: ${get().initPhase} → ${phase}`)
+    set({ initPhase: phase })
+  },
 
   startSyncing: () => {
+    console.log('[Init] Starting sync...')
     set({
       initPhase: 'syncing',
       syncProgress: { providers: false, sessions: false, projects: false, connectors: false },
@@ -40,6 +44,7 @@ export const connectionStore = create<ConnectionStoreState>((set, get) => ({
     const progress = { ...get().syncProgress, [key]: true }
     const allDone =
       progress.providers && progress.sessions && progress.projects && progress.connectors
+    console.log(`[Init] Synced: ${key}`, allDone ? '→ READY' : '')
     set({
       syncProgress: progress,
       ...(allDone ? { initPhase: 'ready' } : {}),

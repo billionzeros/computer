@@ -9,10 +9,11 @@ import {
 import { useConnectionStatus } from '@/lib/store'
 import { colors, fontSize, radius, spacing } from '@/theme/colors'
 import { router } from 'expo-router'
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import {
   ActivityIndicator,
   Alert,
+  Animated,
   Keyboard,
   KeyboardAvoidingView,
   Platform,
@@ -25,31 +26,44 @@ import {
 } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 
+type PageView = 'list' | 'login'
+
 export default function ConnectScreen() {
   const status = useConnectionStatus()
   const insets = useSafeAreaInsets()
 
   const [machines, setMachines] = useState<SavedMachine[]>([])
+  const [loaded, setLoaded] = useState(false)
+  const [view, setView] = useState<PageView>('login')
   const [mode, setMode] = useState<'username' | 'ip'>('username')
   const [username, setUsername] = useState('')
   const [host, setHost] = useState('')
   const [port, setPort] = useState('9876')
   const [token, setToken] = useState('')
   const [connecting, setConnecting] = useState(false)
+  const [connectingId, setConnectingId] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [openMenuId, setOpenMenuId] = useState<string | null>(null)
 
   useEffect(() => {
-    loadMachines().then(setMachines)
+    loadMachines().then((m) => {
+      setMachines(m)
+      setView(m.length > 0 ? 'list' : 'login')
+      setLoaded(true)
+    })
   }, [])
 
   useEffect(() => {
     if (status === 'connected') {
       setConnecting(false)
+      setConnectingId(null)
       setError(null)
       router.replace('/(tabs)')
     } else if (status === 'error') {
       setConnecting(false)
-      setError('Connection failed. Check your credentials.')
+      setConnectingId(null)
+      const detail = connection.statusDetail
+      setError(detail || 'Connection failed. Check your credentials.')
     }
   }, [status])
 
@@ -79,7 +93,6 @@ export default function ConnectScreen() {
       return
     }
 
-    // Save machine
     const machineId = `${config.host}:${config.port}`
     const machine: SavedMachine = {
       id: machineId,
@@ -98,7 +111,12 @@ export default function ConnectScreen() {
   }, [mode, username, host, port, token, machines])
 
   const handleQuickConnect = useCallback(async (machine: SavedMachine) => {
+    if (!machine.token) {
+      setError('Token missing. Please add this machine again.')
+      return
+    }
     setConnecting(true)
+    setConnectingId(machine.id)
     setError(null)
     await saveLastMachineId(machine.id)
     connection.connect({
@@ -111,6 +129,7 @@ export default function ConnectScreen() {
 
   const handleDeleteMachine = useCallback(
     (id: string) => {
+      setOpenMenuId(null)
       Alert.alert('Remove Machine', 'Remove this saved connection?', [
         { text: 'Cancel', style: 'cancel' },
         {
@@ -121,6 +140,9 @@ export default function ConnectScreen() {
             setMachines(updated)
             await saveMachines(updated)
             await removeMachineToken(id)
+            if (updated.length === 0) {
+              setView('login')
+            }
           },
         },
       ])
@@ -128,134 +150,197 @@ export default function ConnectScreen() {
     [machines],
   )
 
+  const goToLogin = useCallback(() => {
+    setError(null)
+    setUsername('')
+    setHost('')
+    setPort('9876')
+    setToken('')
+    setView('login')
+  }, [])
+
+  const goToList = useCallback(() => {
+    setError(null)
+    Keyboard.dismiss()
+    setView('list')
+  }, [])
+
+  if (!loaded) {
+    return (
+      <View style={[styles.container, { paddingTop: insets.top }, styles.centered]}>
+        <ActivityIndicator color={colors.textTertiary} size="small" />
+      </View>
+    )
+  }
+
+  // ── Machine List View ──
+  if (view === 'list') {
+    return (
+      <View style={[styles.container, { paddingTop: insets.top }]}>
+        <ScrollView contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled">
+          <View style={styles.header}>
+            <Text style={styles.logo}>Anton</Text>
+            <Text style={styles.subtitle}>Your machines</Text>
+          </View>
+
+          {error && <Text style={styles.error}>{error}</Text>}
+
+          <View style={styles.machineList}>
+            {machines.map((m) => (
+              <View key={m.id} style={styles.machineCard}>
+                <Pressable
+                  style={styles.machineCardBody}
+                  onPress={() => handleQuickConnect(m)}
+                  disabled={connecting}
+                >
+                  <View style={[styles.machineDot, connecting && connectingId === m.id && styles.machineDotConnecting]} />
+                  <View style={styles.machineInfo}>
+                    <Text style={styles.machineName} numberOfLines={1}>{m.name}</Text>
+                    <Text style={styles.machineHost} numberOfLines={1}>
+                      {m.host}:{m.port}
+                    </Text>
+                  </View>
+                  {connecting && connectingId === m.id && (
+                    <ActivityIndicator color={colors.textTertiary} size="small" style={{ marginRight: spacing.sm }} />
+                  )}
+                </Pressable>
+
+                {/* Three-dot menu */}
+                <Pressable
+                  style={styles.menuBtn}
+                  onPress={() => setOpenMenuId(openMenuId === m.id ? null : m.id)}
+                  hitSlop={8}
+                >
+                  <Text style={styles.menuDots}>•••</Text>
+                </Pressable>
+
+                {/* Dropdown */}
+                {openMenuId === m.id && (
+                  <View style={styles.dropdown}>
+                    <Pressable
+                      style={styles.dropdownItem}
+                      onPress={() => handleDeleteMachine(m.id)}
+                    >
+                      <Text style={styles.dropdownItemTextDestructive}>Remove</Text>
+                    </Pressable>
+                  </View>
+                )}
+              </View>
+            ))}
+          </View>
+
+          <Pressable style={styles.addBtn} onPress={goToLogin}>
+            <Text style={styles.addBtnText}>+ Add Machine</Text>
+          </Pressable>
+        </ScrollView>
+
+        {/* Dismiss menu on background tap */}
+        {openMenuId && (
+          <Pressable style={StyleSheet.absoluteFill} onPress={() => setOpenMenuId(null)} />
+        )}
+      </View>
+    )
+  }
+
+  // ── Login / Add Machine View ──
   return (
     <KeyboardAvoidingView
       style={[styles.container, { paddingTop: insets.top }]}
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
     >
       <ScrollView contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled">
-        <View style={styles.header}>
+        {/* Back button if machines exist */}
+        {machines.length > 0 && (
+          <Pressable style={styles.backBtn} onPress={goToList} hitSlop={12}>
+            <Text style={styles.backBtnText}>← Machines</Text>
+          </Pressable>
+        )}
+
+        <View style={[styles.header, machines.length === 0 && { paddingTop: 80 }]}>
           <Text style={styles.logo}>Anton</Text>
           <Text style={styles.subtitle}>Connect to your agent</Text>
         </View>
 
-        {/* Saved machines */}
-        {machines.length > 0 && (
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Saved Machines</Text>
-            {machines.map((m) => (
-              <Pressable
-                key={m.id}
-                style={styles.machineCard}
-                onPress={() => handleQuickConnect(m)}
-                onLongPress={() => handleDeleteMachine(m.id)}
-              >
-                <View style={styles.machineDot} />
-                <View style={styles.machineInfo}>
-                  <Text style={styles.machineName}>{m.name}</Text>
-                  <Text style={styles.machineHost}>
-                    {m.host}:{m.port}
-                  </Text>
-                </View>
-              </Pressable>
-            ))}
-          </View>
-        )}
+        {/* Mode toggle */}
+        <View style={styles.modeToggle}>
+          <Pressable
+            style={[styles.modeBtn, mode === 'username' && styles.modeBtnActive]}
+            onPress={() => setMode('username')}
+          >
+            <Text style={[styles.modeBtnText, mode === 'username' && styles.modeBtnTextActive]}>
+              Username
+            </Text>
+          </Pressable>
+          <Pressable
+            style={[styles.modeBtn, mode === 'ip' && styles.modeBtnActive]}
+            onPress={() => setMode('ip')}
+          >
+            <Text style={[styles.modeBtnText, mode === 'ip' && styles.modeBtnTextActive]}>
+              IP Address
+            </Text>
+          </Pressable>
+        </View>
 
-        {/* Connection form */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>New Connection</Text>
-
-          {/* Mode toggle */}
-          <View style={styles.modeToggle}>
-            <Pressable
-              style={[styles.modeBtn, mode === 'username' && styles.modeBtnActive]}
-              onPress={() => setMode('username')}
-            >
-              <Text style={[styles.modeBtnText, mode === 'username' && styles.modeBtnTextActive]}>
-                Username
-              </Text>
-            </Pressable>
-            <Pressable
-              style={[styles.modeBtn, mode === 'ip' && styles.modeBtnActive]}
-              onPress={() => setMode('ip')}
-            >
-              <Text style={[styles.modeBtnText, mode === 'ip' && styles.modeBtnTextActive]}>
-                IP Address
-              </Text>
-            </Pressable>
-          </View>
-
+        {/* Fields */}
+        <View style={styles.formFields}>
           {mode === 'username' ? (
-            <View style={styles.inputGroup}>
-              <Text style={styles.label}>Username</Text>
-              <TextInput
-                style={styles.input}
-                value={username}
-                onChangeText={setUsername}
-                placeholder="your-username"
-                placeholderTextColor={colors.textTertiary}
-                autoCapitalize="none"
-                autoCorrect={false}
-              />
-            </View>
-          ) : (
-            <>
-              <View style={styles.inputGroup}>
-                <Text style={styles.label}>Host</Text>
-                <TextInput
-                  style={styles.input}
-                  value={host}
-                  onChangeText={setHost}
-                  placeholder="192.168.1.100"
-                  placeholderTextColor={colors.textTertiary}
-                  autoCapitalize="none"
-                  autoCorrect={false}
-                  keyboardType="url"
-                />
-              </View>
-              <View style={styles.inputGroup}>
-                <Text style={styles.label}>Port</Text>
-                <TextInput
-                  style={styles.input}
-                  value={port}
-                  onChangeText={setPort}
-                  placeholder="9876"
-                  placeholderTextColor={colors.textTertiary}
-                  keyboardType="number-pad"
-                />
-              </View>
-            </>
-          )}
-
-          <View style={styles.inputGroup}>
-            <Text style={styles.label}>Token</Text>
             <TextInput
               style={styles.input}
-              value={token}
-              onChangeText={setToken}
-              placeholder="Your auth token"
+              value={username}
+              onChangeText={setUsername}
+              placeholder="Username"
               placeholderTextColor={colors.textTertiary}
               autoCapitalize="none"
               autoCorrect={false}
-              secureTextEntry
             />
-          </View>
+          ) : (
+            <>
+              <TextInput
+                style={styles.input}
+                value={host}
+                onChangeText={setHost}
+                placeholder="Host (e.g. 192.168.1.100)"
+                placeholderTextColor={colors.textTertiary}
+                autoCapitalize="none"
+                autoCorrect={false}
+                keyboardType="url"
+              />
+              <TextInput
+                style={styles.input}
+                value={port}
+                onChangeText={setPort}
+                placeholder="Port (default 9876)"
+                placeholderTextColor={colors.textTertiary}
+                keyboardType="number-pad"
+              />
+            </>
+          )}
 
-          {error && <Text style={styles.error}>{error}</Text>}
-
-          <Pressable
-            style={[styles.connectBtn, connecting && styles.connectBtnDisabled]}
-            onPress={handleConnect}
-            disabled={connecting}
-          >
-            {connecting ? (
-              <ActivityIndicator color="#fff" size="small" />
-            ) : (
-              <Text style={styles.connectBtnText}>Connect</Text>
-            )}
-          </Pressable>
+          <TextInput
+            style={styles.input}
+            value={token}
+            onChangeText={setToken}
+            placeholder="Auth token"
+            placeholderTextColor={colors.textTertiary}
+            autoCapitalize="none"
+            autoCorrect={false}
+            secureTextEntry
+          />
         </View>
+
+        {error && <Text style={styles.error}>{error}</Text>}
+
+        <Pressable
+          style={[styles.connectBtn, connecting && styles.connectBtnDisabled]}
+          onPress={handleConnect}
+          disabled={connecting}
+        >
+          {connecting ? (
+            <ActivityIndicator color="#fff" size="small" />
+          ) : (
+            <Text style={styles.connectBtnText}>Connect</Text>
+          )}
+        </Pressable>
       </ScrollView>
     </KeyboardAvoidingView>
   )
@@ -266,46 +351,63 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: colors.bg,
   },
+  centered: {
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
   scrollContent: {
     paddingHorizontal: spacing.xxl,
     paddingBottom: 40,
   },
+
+  // ── Header ──
   header: {
     alignItems: 'center',
-    paddingTop: 60,
-    paddingBottom: spacing.xxxl,
+    paddingTop: 48,
+    paddingBottom: 40,
   },
   logo: {
     color: colors.text,
-    fontSize: 36,
-    fontWeight: '800',
-    letterSpacing: -1,
+    fontSize: 32,
+    fontWeight: '700',
+    letterSpacing: -0.5,
   },
   subtitle: {
     color: colors.textTertiary,
     fontSize: fontSize.md,
-    marginTop: spacing.sm,
+    marginTop: spacing.xs,
   },
-  section: {
-    marginBottom: spacing.xxl,
+
+  // ── Back button ──
+  backBtn: {
+    paddingTop: spacing.lg,
+    paddingBottom: spacing.xs,
+    alignSelf: 'flex-start',
   },
-  sectionTitle: {
-    color: colors.textSecondary,
-    fontSize: fontSize.xs,
-    fontWeight: '600',
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-    marginBottom: spacing.md,
+  backBtnText: {
+    color: colors.accent,
+    fontSize: fontSize.md,
+    fontWeight: '500',
+  },
+
+  // ── Machine List ──
+  machineList: {
+    gap: spacing.sm,
   },
   machineCard: {
+    position: 'relative',
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: colors.bgTertiary,
     borderRadius: radius.md,
-    padding: spacing.lg,
-    marginBottom: spacing.sm,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.border,
+  },
+  machineCardBody: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: spacing.lg,
   },
   machineDot: {
     width: 8,
@@ -314,8 +416,12 @@ const styles = StyleSheet.create({
     backgroundColor: colors.success,
     marginRight: spacing.md,
   },
+  machineDotConnecting: {
+    backgroundColor: colors.working,
+  },
   machineInfo: {
     flex: 1,
+    marginRight: spacing.sm,
   },
   machineName: {
     color: colors.text,
@@ -327,12 +433,69 @@ const styles = StyleSheet.create({
     fontSize: fontSize.sm,
     marginTop: 2,
   },
+
+  // ── Three-dot menu ──
+  menuBtn: {
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.lg,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  menuDots: {
+    color: colors.textTertiary,
+    fontSize: 14,
+    letterSpacing: 1,
+  },
+  dropdown: {
+    position: 'absolute',
+    top: '100%',
+    right: spacing.sm,
+    backgroundColor: colors.bgElevated,
+    borderRadius: radius.sm,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.borderLight,
+    marginTop: 4,
+    zIndex: 100,
+    minWidth: 120,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 8,
+  },
+  dropdownItem: {
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.md,
+  },
+  dropdownItemTextDestructive: {
+    color: colors.error,
+    fontSize: fontSize.sm,
+    fontWeight: '500',
+  },
+
+  // ── Add button ──
+  addBtn: {
+    marginTop: spacing.xl,
+    paddingVertical: spacing.lg,
+    alignItems: 'center',
+    borderRadius: radius.md,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.border,
+    borderStyle: 'dashed',
+  },
+  addBtnText: {
+    color: colors.textSecondary,
+    fontSize: fontSize.md,
+    fontWeight: '500',
+  },
+
+  // ── Mode Toggle ──
   modeToggle: {
     flexDirection: 'row',
     backgroundColor: colors.bgTertiary,
     borderRadius: radius.md,
     padding: 3,
-    marginBottom: spacing.lg,
+    marginBottom: spacing.xl,
   },
   modeBtn: {
     flex: 1,
@@ -351,14 +514,11 @@ const styles = StyleSheet.create({
   modeBtnTextActive: {
     color: colors.text,
   },
-  inputGroup: {
+
+  // ── Form ──
+  formFields: {
+    gap: spacing.md,
     marginBottom: spacing.lg,
-  },
-  label: {
-    color: colors.textSecondary,
-    fontSize: fontSize.sm,
-    marginBottom: spacing.xs,
-    fontWeight: '500',
   },
   input: {
     backgroundColor: colors.bgTertiary,
@@ -380,16 +540,15 @@ const styles = StyleSheet.create({
   connectBtn: {
     backgroundColor: colors.accent,
     borderRadius: radius.md,
-    paddingVertical: spacing.lg,
+    paddingVertical: 14,
     alignItems: 'center',
-    marginTop: spacing.sm,
   },
   connectBtnDisabled: {
     opacity: 0.6,
   },
   connectBtnText: {
     color: '#fff',
-    fontSize: fontSize.lg,
+    fontSize: fontSize.md,
     fontWeight: '600',
   },
 })

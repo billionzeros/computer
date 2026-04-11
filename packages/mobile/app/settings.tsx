@@ -3,7 +3,7 @@ import { useStore } from '@/lib/store'
 import { sessionStore } from '@/lib/store/sessionStore'
 import { colors, fontSize, radius, spacing } from '@/theme/colors'
 import { router } from 'expo-router'
-import { Brain, ChevronRight, Cpu, LogOut, Server, Zap } from 'lucide-react-native'
+import { ArrowLeft, Brain, ChevronRight, Cpu, LogOut, Server, Zap } from 'lucide-react-native'
 import { useCallback } from 'react'
 import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
@@ -66,7 +66,11 @@ export default function SettingsScreen() {
   return (
     <View style={[styles.container, { paddingTop: insets.top }]}>
       <View style={styles.header}>
+        <Pressable style={styles.backBtn} onPress={() => router.back()} hitSlop={8}>
+          <ArrowLeft size={20} strokeWidth={1.5} color={colors.text} />
+        </Pressable>
         <Text style={styles.headerTitle}>Settings</Text>
+        <View style={styles.backBtn} />
       </View>
 
       <ScrollView contentContainerStyle={styles.content}>
@@ -148,15 +152,23 @@ const styles = StyleSheet.create({
     backgroundColor: colors.bg,
   },
   header: {
-    paddingHorizontal: spacing.xl,
-    paddingVertical: spacing.lg,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: colors.border,
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.sm,
+  },
+  backBtn: {
+    width: 36,
+    height: 36,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   headerTitle: {
+    flex: 1,
     color: colors.text,
-    fontSize: fontSize.xl,
-    fontWeight: '700',
+    fontSize: fontSize.md,
+    fontWeight: '600',
+    textAlign: 'center',
   },
   content: {
     padding: spacing.lg,

@@ -1,11 +1,24 @@
 import type { ChatMessage } from '@/lib/store/types'
 import { colors, fontSize, radius, spacing } from '@/theme/colors'
-import { memo } from 'react'
-import { StyleSheet, Text, View } from 'react-native'
+import { ChevronDown, FileText, Loader, Zap } from 'lucide-react-native'
+import { memo, useState } from 'react'
+import { Pressable, StyleSheet, Text, View } from 'react-native'
+import { Markdown } from './Markdown'
 
 interface Props {
   message: ChatMessage
   isLastInGroup?: boolean
+}
+
+// Parse <think>...</think> blocks from assistant text
+function parseThinkBlocks(content: string): { text: string; thinking: string[] } {
+  const thinking: string[] = []
+  const text = content.replace(/<think>([\s\S]*?)<\/think>/g, (_match, block) => {
+    const trimmed = block.trim()
+    if (trimmed) thinking.push(trimmed)
+    return ''
+  }).trim()
+  return { text, thinking }
 }
 
 function formatToolName(name: string): string {
@@ -23,20 +36,13 @@ export const MessageBubble = memo(function MessageBubble({ message, isLastInGrou
   }
 
   if (message.isThinking) {
-    return (
-      <View style={[styles.bubble, styles.thinkingBubble]}>
-        <Text style={styles.thinkingLabel}>Thinking</Text>
-        <Text style={styles.thinkingText} numberOfLines={3}>
-          {truncate(message.content, 200)}
-        </Text>
-      </View>
-    )
+    return <ThinkingMessage message={message} />
   }
 
   if (message.role === 'system') {
     if (message.askUserAnswers) {
       return (
-        <View style={[styles.bubble, styles.systemBubble]}>
+        <View style={styles.systemRow}>
           {Object.entries(message.askUserAnswers).map(([q, a]) => (
             <View key={q} style={styles.askUserEntry}>
               <Text style={styles.askUserQuestion}>{q}</Text>
@@ -47,8 +53,8 @@ export const MessageBubble = memo(function MessageBubble({ message, isLastInGrou
       )
     }
     return (
-      <View style={[styles.bubble, styles.systemBubble]}>
-        <Text style={[styles.messageText, message.isError && styles.errorText]}>
+      <View style={styles.systemRow}>
+        <Text style={[styles.systemText, message.isError && styles.errorText]}>
           {message.content}
         </Text>
       </View>
@@ -57,23 +63,80 @@ export const MessageBubble = memo(function MessageBubble({ message, isLastInGrou
 
   const isUser = message.role === 'user'
 
-  return (
-    <View style={[styles.bubbleRow, isUser && styles.bubbleRowUser]}>
-      <View
-        style={[
-          styles.bubble,
-          isUser ? styles.userBubble : styles.assistantBubble,
-          isLastInGroup && styles.lastInGroup,
-        ]}
-      >
-        {message.isSteering && <Text style={styles.steeringLabel}>Sent while working</Text>}
-        <Text style={[styles.messageText, isUser && styles.userText]} selectable>
-          {message.content}
-        </Text>
+  if (isUser) {
+    return (
+      <View style={[styles.userRow, isLastInGroup && styles.lastInGroup]}>
+        <View style={styles.userBubble}>
+          {message.isSteering && <Text style={styles.steeringLabel}>Sent while working</Text>}
+          <Markdown variant="user">{message.content}</Markdown>
+        </View>
       </View>
+    )
+  }
+
+  // Assistant - parse out any <think> blocks, render plain text
+  const { text: cleanText, thinking } = parseThinkBlocks(message.content)
+
+  return (
+    <View style={[styles.assistantRow, isLastInGroup && styles.lastInGroup]}>
+      {thinking.length > 0 && (
+        <InlineThinking blocks={thinking} />
+      )}
+      {cleanText ? (
+        <Markdown variant="assistant">{cleanText}</Markdown>
+      ) : null}
     </View>
   )
 })
+
+function ThinkingMessage({ message }: { message: ChatMessage }) {
+  const [expanded, setExpanded] = useState(false)
+
+  return (
+    <Pressable style={styles.thinkingRow} onPress={() => setExpanded(!expanded)}>
+      <View style={styles.thinkingHeader}>
+        <Loader size={12} strokeWidth={1.5} color={colors.textTertiary} />
+        <Text style={styles.thinkingLabel}>Thinking</Text>
+        <ChevronDown
+          size={12}
+          strokeWidth={1.5}
+          color={colors.textTertiary}
+          style={expanded ? { transform: [{ rotate: '180deg' }] } : undefined}
+        />
+      </View>
+      {expanded && (
+        <Text style={styles.thinkingText} numberOfLines={8}>
+          {truncate(message.content, 500)}
+        </Text>
+      )}
+    </Pressable>
+  )
+}
+
+function InlineThinking({ blocks }: { blocks: string[] }) {
+  const [expanded, setExpanded] = useState(false)
+  const combined = blocks.join('\n\n')
+
+  return (
+    <Pressable style={styles.inlineThinkingRow} onPress={() => setExpanded(!expanded)}>
+      <View style={styles.thinkingHeader}>
+        <Loader size={12} strokeWidth={1.5} color={colors.textTertiary} />
+        <Text style={styles.thinkingLabel}>Thought process</Text>
+        <ChevronDown
+          size={12}
+          strokeWidth={1.5}
+          color={colors.textTertiary}
+          style={expanded ? { transform: [{ rotate: '180deg' }] } : undefined}
+        />
+      </View>
+      {expanded && (
+        <Text style={styles.thinkingText} numberOfLines={12}>
+          {truncate(combined, 800)}
+        </Text>
+      )}
+    </Pressable>
+  )
+}
 
 function ToolMessage({ message }: { message: ChatMessage }) {
   const isResult = message.id.startsWith('tr_')
@@ -83,37 +146,50 @@ function ToolMessage({ message }: { message: ChatMessage }) {
     if (!message.content && !message.isError) return null
 
     return (
-      <View style={[styles.toolRow]}>
-        <View
-          style={[styles.toolIndicator, message.isError ? styles.toolError : styles.toolSuccess]}
-        />
+      <View style={styles.toolRow}>
+        <View style={styles.toolIconWrap}>
+          <Zap
+            size={12}
+            strokeWidth={1.5}
+            color={message.isError ? colors.error : colors.success}
+          />
+        </View>
         <Text
           style={[styles.toolResultText, message.isError && styles.errorText]}
-          numberOfLines={4}
+          numberOfLines={3}
         >
-          {truncate(message.content, 300)}
+          {truncate(message.content, 200)}
         </Text>
       </View>
     )
   }
 
+  // Tool call - show as compact indented line
+  const toolLabel = isSubAgent ? 'Sub-agent' : formatToolName(message.toolName || 'Tool')
+  let detail = ''
+  if (isSubAgent && (message.toolInput as Record<string, unknown>)?.task) {
+    detail = String((message.toolInput as Record<string, unknown>).task)
+  } else if (message.toolInput && !isSubAgent) {
+    const input = message.toolInput as Record<string, unknown>
+    // Show file path or command for common tools
+    const path = input.file_path || input.path || input.command || input.pattern
+    if (path) {
+      detail = String(path)
+    }
+  }
+
   return (
     <View style={styles.toolRow}>
-      <View style={[styles.toolIndicator, styles.toolActive]} />
+      <View style={styles.toolIconWrap}>
+        <FileText size={12} strokeWidth={1.5} color={colors.textTertiary} />
+      </View>
       <View style={styles.toolContent}>
-        <Text style={styles.toolName}>
-          {isSubAgent ? 'Sub-agent' : formatToolName(message.toolName || 'Tool')}
+        <Text style={styles.toolName} numberOfLines={1}>
+          {toolLabel}
         </Text>
-        {message.toolInput && !isSubAgent && (
-          <Text style={styles.toolInput} numberOfLines={2}>
-            {typeof message.toolInput === 'object'
-              ? truncate(JSON.stringify(message.toolInput), 120)
-              : String(message.toolInput)}
-          </Text>
-        )}
-        {isSubAgent && (message.toolInput as Record<string, unknown>)?.task ? (
-          <Text style={styles.toolInput} numberOfLines={2}>
-            {String((message.toolInput as Record<string, unknown>).task)}
+        {detail ? (
+          <Text style={styles.toolDetail} numberOfLines={1}>
+            {truncate(detail, 80)}
           </Text>
         ) : null}
       </View>
@@ -122,71 +198,20 @@ function ToolMessage({ message }: { message: ChatMessage }) {
 }
 
 const styles = StyleSheet.create({
-  bubbleRow: {
+  // User messages - bubbles
+  userRow: {
     flexDirection: 'row',
-    marginBottom: spacing.xs,
-    paddingHorizontal: spacing.lg,
-  },
-  bubbleRowUser: {
     justifyContent: 'flex-end',
-  },
-  bubble: {
-    maxWidth: '85%',
     paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.md,
-    borderRadius: radius.lg,
-  },
-  lastInGroup: {
-    marginBottom: spacing.md,
+    marginBottom: spacing.xs,
   },
   userBubble: {
+    maxWidth: '82%',
     backgroundColor: colors.userBubble,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.md,
+    borderRadius: radius.xl,
     borderBottomRightRadius: radius.sm,
-  },
-  assistantBubble: {
-    backgroundColor: colors.assistantBubble,
-    borderBottomLeftRadius: radius.sm,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.border,
-  },
-  systemBubble: {
-    backgroundColor: colors.systemBubble,
-    marginHorizontal: spacing.lg,
-    marginBottom: spacing.sm,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.border,
-  },
-  thinkingBubble: {
-    backgroundColor: colors.thinkingBubble,
-    marginHorizontal: spacing.lg,
-    marginBottom: spacing.xs,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.border,
-    opacity: 0.8,
-  },
-  thinkingLabel: {
-    color: colors.textTertiary,
-    fontSize: fontSize.xs,
-    fontWeight: '600',
-    marginBottom: spacing.xs,
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-  },
-  thinkingText: {
-    color: colors.textTertiary,
-    fontSize: fontSize.sm,
-    lineHeight: 18,
-  },
-  messageText: {
-    color: colors.text,
-    fontSize: fontSize.md,
-    lineHeight: 22,
-  },
-  userText: {
-    color: '#e0e7ff',
-  },
-  errorText: {
-    color: colors.error,
   },
   steeringLabel: {
     color: colors.textTertiary,
@@ -194,50 +219,32 @@ const styles = StyleSheet.create({
     marginBottom: spacing.xs,
     fontStyle: 'italic',
   },
-  toolRow: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    marginHorizontal: spacing.lg,
+
+  // Assistant messages - plain text, no bubble
+  assistantRow: {
+    paddingHorizontal: spacing.xl,
     marginBottom: spacing.xs,
-    paddingVertical: spacing.xs,
   },
-  toolIndicator: {
-    width: 3,
-    minHeight: 16,
-    borderRadius: 2,
-    marginRight: spacing.sm,
-    marginTop: 2,
-    alignSelf: 'stretch',
+
+  lastInGroup: {
+    marginBottom: spacing.lg,
   },
-  toolActive: {
-    backgroundColor: colors.working,
+
+  // System messages
+  systemRow: {
+    paddingHorizontal: spacing.xl,
+    marginBottom: spacing.sm,
   },
-  toolSuccess: {
-    backgroundColor: colors.success,
-  },
-  toolError: {
-    backgroundColor: colors.error,
-  },
-  toolContent: {
-    flex: 1,
-  },
-  toolName: {
+  systemText: {
     color: colors.textSecondary,
     fontSize: fontSize.sm,
-    fontWeight: '500',
+    lineHeight: 20,
   },
-  toolInput: {
-    color: colors.textTertiary,
-    fontSize: fontSize.xs,
-    marginTop: 2,
-    fontFamily: 'Courier',
+  errorText: {
+    color: colors.error,
   },
-  toolResultText: {
-    color: colors.textTertiary,
-    fontSize: fontSize.xs,
-    flex: 1,
-    fontFamily: 'Courier',
-  },
+
+  // Ask user
   askUserEntry: {
     marginBottom: spacing.sm,
   },
@@ -250,5 +257,66 @@ const styles = StyleSheet.create({
     color: colors.text,
     fontSize: fontSize.md,
     marginTop: 2,
+  },
+
+  // Thinking - collapsible compact
+  inlineThinkingRow: {
+    marginBottom: spacing.sm,
+  },
+  thinkingRow: {
+    paddingHorizontal: spacing.xl,
+    marginBottom: spacing.sm,
+  },
+  thinkingHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+  },
+  thinkingLabel: {
+    color: colors.textTertiary,
+    fontSize: fontSize.sm,
+    fontWeight: '500',
+  },
+  thinkingText: {
+    color: colors.textTertiary,
+    fontSize: fontSize.sm,
+    lineHeight: 18,
+    marginTop: spacing.xs,
+    paddingLeft: spacing.xl,
+  },
+
+  // Tool calls - compact indented lines
+  toolRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    paddingHorizontal: spacing.xl,
+    paddingLeft: spacing.xxl,
+    marginBottom: 3,
+    gap: spacing.sm,
+  },
+  toolIconWrap: {
+    width: 18,
+    height: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 1,
+  },
+  toolContent: {
+    flex: 1,
+  },
+  toolName: {
+    color: colors.textSecondary,
+    fontSize: fontSize.sm,
+  },
+  toolDetail: {
+    color: colors.textTertiary,
+    fontSize: fontSize.xs,
+    marginTop: 1,
+  },
+  toolResultText: {
+    color: colors.textTertiary,
+    fontSize: fontSize.xs,
+    flex: 1,
+    lineHeight: 16,
   },
 })

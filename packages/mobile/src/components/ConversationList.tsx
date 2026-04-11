@@ -1,8 +1,8 @@
 import type { Conversation } from '@/lib/store/types'
 import { colors, fontSize, radius, spacing } from '@/theme/colors'
-import { MessageSquare, Trash2 } from 'lucide-react-native'
-import { useCallback } from 'react'
-import { FlatList, Pressable, StyleSheet, Text, View } from 'react-native'
+import { ArrowLeft, MessageSquare, MoreHorizontal, Search } from 'lucide-react-native'
+import { useCallback, useState } from 'react'
+import { FlatList, Pressable, StyleSheet, Text, TextInput, View } from 'react-native'
 
 interface Props {
   conversations: Conversation[]
@@ -25,7 +25,10 @@ function timeAgo(ts: number): string {
 }
 
 export function ConversationList({ conversations, activeId, onSelect, onDelete, onClose }: Props) {
-  const sorted = [...conversations].sort((a, b) => b.updatedAt - a.updatedAt)
+  const [search, setSearch] = useState('')
+  const sorted = [...conversations]
+    .sort((a, b) => b.updatedAt - a.updatedAt)
+    .filter((c) => !search || c.title.toLowerCase().includes(search.toLowerCase()))
 
   const renderItem = useCallback(
     ({ item }: { item: Conversation }) => {
@@ -42,21 +45,25 @@ export function ConversationList({ conversations, activeId, onSelect, onDelete, 
           }}
         >
           <View style={styles.itemContent}>
-            <View style={styles.itemHeader}>
-              <Text
-                style={[styles.itemTitle, isActive && styles.itemTitleActive]}
-                numberOfLines={1}
-              >
-                {item.title}
-              </Text>
-              <Text style={styles.itemTime}>{timeAgo(item.updatedAt)}</Text>
-            </View>
+            <Text
+              style={[styles.itemTitle, isActive && styles.itemTitleActive]}
+              numberOfLines={2}
+            >
+              {item.title}
+            </Text>
             <Text style={styles.itemPreview} numberOfLines={1}>
               {preview}
             </Text>
+            <View style={styles.itemMeta}>
+              <Text style={styles.itemTime}>{timeAgo(item.updatedAt)}</Text>
+            </View>
           </View>
-          <Pressable style={styles.deleteBtn} onPress={() => onDelete(item.id)} hitSlop={8}>
-            <Trash2 size={14} strokeWidth={1.5} color={colors.textTertiary} />
+          <Pressable
+            style={styles.moreBtn}
+            onPress={() => onDelete(item.id)}
+            hitSlop={8}
+          >
+            <MoreHorizontal size={16} strokeWidth={1.5} color={colors.textTertiary} />
           </Pressable>
         </Pressable>
       )
@@ -66,21 +73,44 @@ export function ConversationList({ conversations, activeId, onSelect, onDelete, 
 
   return (
     <View style={styles.container}>
+      {/* Header */}
       <View style={styles.header}>
-        <Text style={styles.headerTitle}>Conversations</Text>
-        <Pressable onPress={onClose}>
-          <Text style={styles.doneText}>Done</Text>
+        <Pressable style={styles.backBtn} onPress={onClose} hitSlop={8}>
+          <ArrowLeft size={20} strokeWidth={1.5} color={colors.text} />
         </Pressable>
+        <Text style={styles.headerTitle}>Threads</Text>
+        <View style={styles.backBtn} />
       </View>
+
+      {/* Search */}
+      <View style={styles.searchContainer}>
+        <View style={styles.searchBar}>
+          <Search size={16} strokeWidth={1.5} color={colors.textTertiary} />
+          <TextInput
+            style={styles.searchInput}
+            placeholder="Search threads"
+            placeholderTextColor={colors.textTertiary}
+            value={search}
+            onChangeText={setSearch}
+            returnKeyType="search"
+          />
+        </View>
+      </View>
+
+      {/* List */}
       <FlatList
         data={sorted}
         renderItem={renderItem}
         keyExtractor={(item) => item.id}
         contentContainerStyle={styles.list}
+        keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="on-drag"
         ListEmptyComponent={
           <View style={styles.empty}>
             <MessageSquare size={32} strokeWidth={1.5} color={colors.textTertiary} />
-            <Text style={styles.emptyText}>No conversations yet</Text>
+            <Text style={styles.emptyText}>
+              {search ? 'No matching threads' : 'No threads yet'}
+            </Text>
           </View>
         }
       />
@@ -96,32 +126,49 @@ const styles = StyleSheet.create({
   header: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: spacing.xl,
-    paddingVertical: spacing.lg,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: colors.border,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.sm,
+  },
+  backBtn: {
+    width: 36,
+    height: 36,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   headerTitle: {
+    flex: 1,
     color: colors.text,
-    fontSize: fontSize.xl,
-    fontWeight: '700',
-  },
-  doneText: {
-    color: colors.accent,
     fontSize: fontSize.md,
-    fontWeight: '500',
+    fontWeight: '600',
+    textAlign: 'center',
+  },
+  searchContainer: {
+    paddingHorizontal: spacing.lg,
+    paddingBottom: spacing.md,
+  },
+  searchBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.bgTertiary,
+    borderRadius: radius.md,
+    paddingHorizontal: spacing.md,
+    height: 38,
+    gap: spacing.sm,
+  },
+  searchInput: {
+    flex: 1,
+    color: colors.text,
+    fontSize: fontSize.sm,
+    paddingVertical: 0,
   },
   list: {
-    paddingVertical: spacing.sm,
+    paddingVertical: spacing.xs,
   },
   item: {
     flexDirection: 'row',
-    alignItems: 'center',
+    alignItems: 'flex-start',
     paddingHorizontal: spacing.xl,
     paddingVertical: spacing.md,
-    marginHorizontal: spacing.sm,
-    borderRadius: radius.md,
   },
   itemActive: {
     backgroundColor: colors.surfaceActive,
@@ -129,37 +176,36 @@ const styles = StyleSheet.create({
   itemContent: {
     flex: 1,
   },
-  itemHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: 2,
-  },
   itemTitle: {
     color: colors.text,
     fontSize: fontSize.md,
     fontWeight: '500',
-    flex: 1,
-    marginRight: spacing.sm,
+    marginBottom: 2,
   },
   itemTitleActive: {
     color: colors.accentText,
+  },
+  itemPreview: {
+    color: colors.textTertiary,
+    fontSize: fontSize.sm,
+    marginBottom: spacing.xs,
+  },
+  itemMeta: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
   },
   itemTime: {
     color: colors.textTertiary,
     fontSize: fontSize.xs,
   },
-  itemPreview: {
-    color: colors.textTertiary,
-    fontSize: fontSize.sm,
-  },
-  deleteBtn: {
+  moreBtn: {
     padding: spacing.sm,
-    marginLeft: spacing.sm,
+    marginTop: 2,
   },
   empty: {
     alignItems: 'center',
-    paddingTop: 60,
+    paddingTop: 80,
     gap: spacing.md,
   },
   emptyText: {

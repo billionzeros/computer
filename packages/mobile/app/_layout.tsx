@@ -1,9 +1,10 @@
 import { useConnectionStatus } from '@/lib/store'
-import { Stack } from 'expo-router'
+import { colors } from '@/theme/colors'
+import { Redirect, Stack } from 'expo-router'
 import { StatusBar } from 'expo-status-bar'
 
 export default function RootLayout() {
-  const _status = useConnectionStatus()
+  const status = useConnectionStatus()
 
   return (
     <>
@@ -11,13 +12,28 @@ export default function RootLayout() {
       <Stack
         screenOptions={{
           headerShown: false,
-          contentStyle: { backgroundColor: '#0a0a0a' },
+          contentStyle: { backgroundColor: colors.bg },
           animation: 'fade',
         }}
       >
         <Stack.Screen name="connect" />
-        <Stack.Screen name="(tabs)" />
+        <Stack.Screen name="index" />
+        <Stack.Screen
+          name="settings"
+          options={{
+            presentation: 'modal',
+            animation: 'slide_from_bottom',
+          }}
+        />
+        <Stack.Screen
+          name="projects"
+          options={{
+            presentation: 'modal',
+            animation: 'slide_from_bottom',
+          }}
+        />
       </Stack>
+      {status !== 'connected' && <Redirect href="/connect" />}
     </>
   )
 }

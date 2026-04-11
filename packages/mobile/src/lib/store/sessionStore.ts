@@ -207,6 +207,7 @@ export const sessionStore = create<SessionStoreState>((set, get) => ({
   resolvePendingSession: (id) => {
     const state = get().sessionStates.get(id)
     if (state?.resolver) {
+      console.log('[Session] Resolved pending session:', id)
       state.resolver()
       get().updateSessionState(id, { resolver: undefined })
     }
@@ -214,6 +215,7 @@ export const sessionStore = create<SessionStoreState>((set, get) => ({
 
   createSession: (sessionId, opts) => {
     const thinkingLevel = opts.thinkingLevel ?? (get().thinkingEnabled ? 'medium' : 'off')
+    console.log('[Session] Creating:', sessionId, opts.provider, opts.model)
     connection.sendSessionCreate(sessionId, { ...opts, thinkingLevel })
   },
 
@@ -235,6 +237,7 @@ export const sessionStore = create<SessionStoreState>((set, get) => ({
   },
 
   sendAiMessageToSession: (text, sessionId, attachments) => {
+    console.log('[Session] Sending message to session:', sessionId)
     connection.sendAiMessageToSession(text, sessionId, attachments)
     if (get().connectionStatus === 'connected') {
       get().setSessionStatus(sessionId, 'working')
