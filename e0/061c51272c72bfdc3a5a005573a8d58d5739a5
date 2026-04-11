@@ -1,0 +1,27 @@
+packages/mobile/metro.config.js
+  0ccef2f7893f2407 21-47
+packages/mobile/src/components/MessageBubble.tsx
+  0ccef2f7893f2407 114,116,118
+packages/mobile/src/components/AskUserSheet.tsx
+  0ccef2f7893f2407 38
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.2.8",
+  "base_commit_sha": "e0061c51272c72bfdc3a5a005573a8d58d5739a5",
+  "prompts": {
+    "0ccef2f7893f2407": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "0716b1e8-92e5-4efe-a692-8356a4280836",
+        "model": "claude-opus-4-6"
+      },
+      "human_author": "Om Gupta",
+      "messages": [],
+      "total_additions": 181,
+      "total_deletions": 190,
+      "accepted_lines": 84,
+      "overriden_lines": 9
+    }
+  }
+}
