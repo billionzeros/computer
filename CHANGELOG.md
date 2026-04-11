@@ -13,6 +13,15 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versioning: [S
 ## [1.0.51] - 2026-04-11
 
 ### Features
+- inline image input with rich contentEditable composer
+
+### Fixes
+- persist draft input across navigation
+---
+
+## [1.0.51] - 2026-04-11
+
+### Features
 - add React Native mobile app for Anton (#47)
 
 ### Fixes
@@ -499,6 +508,7 @@ Maintenance release.
 ---
 
 [Unreleased]: https://github.com/OmGuptaIND/computer/compare/v1.0.51...HEAD
+[1.0.51]: https://github.com/OmGuptaIND/computer/compare/v$(changelog.match(/## [(d+.d+.d+)]/g)[1].match(/d+.d+.d+/)[0])...v1.0.51
 [1.0.51]: https://github.com/OmGuptaIND/computer/compare/v$(changelog.match(/## [(d+.d+.d+)]/g)[1].match(/d+.d+.d+/)[0])...v1.0.51
 [1.0.50]: https://github.com/OmGuptaIND/computer/compare/v$(changelog.match(/## [(d+.d+.d+)]/g)[1].match(/d+.d+.d+/)[0])...v1.0.50
 [1.0.49]: https://github.com/OmGuptaIND/computer/compare/v$(changelog.match(/## [(d+.d+.d+)]/g)[1].match(/d+.d+.d+/)[0])...v1.0.49

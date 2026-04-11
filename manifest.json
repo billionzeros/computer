@@ -2,8 +2,8 @@
   "version": "1.0.51",
   "gitHash": "",
   "releaseUrl": "https://github.com/OmGuptaIND/computer/releases",
-  "changelog": "Features:\n- add React Native mobile app for Anton (#47)\n\nFixes:\n- upgrade mobile to Expo SDK 55 and fix duplicate React resolution",
-  "publishedAt": "2026-04-11T08:32:45.847Z",
+  "changelog": "Features:\n- inline image input with rich contentEditable composer\n\nFixes:\n- persist draft input across navigation",
+  "publishedAt": "2026-04-11T08:33:11.028Z",
   "cli": "https://github.com/OmGuptaIND/computer/releases/download/v1.0.51/anton-cli.mjs",
   "sidecar": {
     "linux-arm64": "https://github.com/OmGuptaIND/computer/releases/download/v1.0.51/anton-sidecar-linux-arm64",
