@@ -157,7 +157,11 @@ export async function computerSetupCommand(args: ComputerSetupArgs): Promise<voi
     mkdirSync(ANTON_DIR, { recursive: true })
     mkdirSync(`/home/${ANTON_USER}/Anton`, { recursive: true })
     execSync(`chown -R ${ANTON_USER}:${ANTON_USER} /home/${ANTON_USER}`, { stdio: 'pipe' })
-    done('System user created')
+    // Grant passwordless sudo so the agent can install packages, manage services, etc.
+    writeFileSync(`/etc/sudoers.d/${ANTON_USER}`, `${ANTON_USER} ALL=(ALL) NOPASSWD:ALL\n`, {
+      mode: 0o440,
+    })
+    done('System user created (with sudo)')
   } catch (err) {
     fail('System user', (err as Error).message)
     process.exit(1)
