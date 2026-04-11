@@ -769,9 +769,11 @@ export class Session {
 
     // Auto-generate title from first message (skip for ephemeral sub-agent sessions)
     const isFirstMessage = !this.title && !this.ephemeral
+    // Strip image placeholders for title generation so [img:...] doesn't leak into titles
+    const titleText = trimmedMessage.replace(/\[img:[^\]]+\]/g, '').trim()
     if (isFirstMessage) {
       this.title = generateSmartTitle(
-        trimmedMessage ||
+        titleText ||
           (hasAttachments
             ? attachments.length === 1
               ? `Image: ${attachments[0].name}`
@@ -782,9 +784,9 @@ export class Session {
 
     // Fire off AI title generation in parallel (non-blocking)
     let aiTitlePromise: Promise<string | null> | null = null
-    if (isFirstMessage && trimmedMessage) {
+    if (isFirstMessage && titleText) {
       aiTitlePromise = generateAITitle(
-        trimmedMessage,
+        titleText,
         this.resolvedModel,
         this.provider,
         async (provider: string) => this.resolveApiKey(provider, this.clientApiKey, this.config),
@@ -2622,6 +2624,8 @@ export function resumeSession(
  */
 function generateSmartTitle(text: string): string {
   let cleaned = text.trim().replace(/\n/g, ' ').replace(/\s+/g, ' ')
+  // Strip image placeholders [img:...] so they don't leak into titles
+  cleaned = cleaned.replace(/\[img:[^\]]+\]/g, '').trim()
   // Strip <think>...</think> tags
   cleaned = cleaned
     .replace(/<think>[\s\S]*?<\/think>/g, '')

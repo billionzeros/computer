@@ -114,7 +114,10 @@ export function autoTitle(messages: ChatMessage[]): string {
   const firstUser = messages.find((m) => m.role === 'user')
   if (!firstUser) return 'New conversation'
 
-  const text = firstUser.content.trim()
+  // Strip image placeholders [img:...] so they don't leak into titles
+  const text = firstUser.content
+    .replace(/\[img:[^\]]+\]/g, '')
+    .trim()
   if (!text) {
     if (firstUser.attachments?.length) {
       return firstUser.attachments.length === 1
