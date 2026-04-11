@@ -1,0 +1,40 @@
+packages/desktop/src/components/chat/ChatInput.tsx
+  3b6713ff6c9951ed 7,29-30,64,66-67,80-116,206,218,220
+packages/desktop/src/components/home/TaskDetailView.tsx
+  3b6713ff6c9951ed 324
+packages/desktop/src/lib/store.ts
+  3b6713ff6c9951ed 110-115,215,325-344,357,870
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.2.8",
+  "base_commit_sha": "469af0d9f45b797c99a6ce4327eecbfafa4dcaa7",
+  "prompts": {
+    "19f2e8dbb8ff50ce": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "de5f9c39-3576-4751-88d1-0b9254c74235",
+        "model": "claude-opus-4-6"
+      },
+      "human_author": "Om Gupta",
+      "messages": [],
+      "total_additions": 0,
+      "total_deletions": 0,
+      "accepted_lines": 450,
+      "overriden_lines": 0
+    },
+    "3b6713ff6c9951ed": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "3694a47d-82ae-4243-97fd-2ac230ec62a0",
+        "model": "claude-opus-4-6"
+      },
+      "human_author": "Om Gupta",
+      "messages": [],
+      "total_additions": 86,
+      "total_deletions": 11,
+      "accepted_lines": 121,
+      "overriden_lines": 0
+    }
+  }
+}
