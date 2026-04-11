@@ -321,6 +321,7 @@ export function TaskDetailView() {
           pendingAskUser={pendingAskUser}
           onAskUserSubmit={handleAskUserSubmit}
           variant="minimal"
+          conversationId={activeConv?.id}
         />
       </div>
     </div>

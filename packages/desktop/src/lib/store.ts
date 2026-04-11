@@ -107,6 +107,12 @@ interface AppState {
   sidebarTab: SidebarTab
   searchQuery: string
 
+  // Draft input persistence (keyed by conversationId)
+  draftInputs: Map<string, { text: string; attachments: ChatImageAttachment[] }>
+  setDraftInput: (convId: string, text: string, attachments: ChatImageAttachment[]) => void
+  getDraftInput: (convId: string) => { text: string; attachments: ChatImageAttachment[] } | undefined
+  clearDraftInput: (convId: string) => void
+
   // Per-session assistant message tracking (keyed by sessionId for isolation)
   _sessionAssistantMsgIds: Map<string, string>
   // Per-session thinking message tracking (keyed by sessionId for isolation)
@@ -206,6 +212,7 @@ export const useStore = create<AppState>((set, get) => {
     activeConversationId: restoredActiveId,
     sidebarTab: 'history',
     searchQuery: '',
+    draftInputs: new Map(),
     _sessionAssistantMsgIds: new Map(),
     _sessionThinkingMsgIds: new Map(),
     _subAgentProgressMsgIds: new Map(),
@@ -315,6 +322,26 @@ export const useStore = create<AppState>((set, get) => {
       set(updates)
     },
 
+    setDraftInput: (convId, text, attachments) => {
+      const drafts = new Map(get().draftInputs)
+      if (!text && attachments.length === 0) {
+        drafts.delete(convId)
+      } else {
+        drafts.set(convId, { text, attachments })
+      }
+      set({ draftInputs: drafts })
+    },
+
+    getDraftInput: (convId) => {
+      return get().draftInputs.get(convId)
+    },
+
+    clearDraftInput: (convId) => {
+      const drafts = new Map(get().draftInputs)
+      drafts.delete(convId)
+      set({ draftInputs: drafts })
+    },
+
     deleteConversation: (id) => {
       // Clean up per-session state for the deleted conversation
       const conv = get().conversations.find((c) => c.id === id)
@@ -327,6 +354,7 @@ export const useStore = create<AppState>((set, get) => {
         get()._sessionAssistantMsgIds.delete(conv.sessionId)
         get()._sessionThinkingMsgIds.delete(conv.sessionId)
       }
+      get().clearDraftInput(id)
 
       set((state) => {
         const conversations = state.conversations.filter((c) => c.id !== id)
@@ -839,6 +867,7 @@ export const useStore = create<AppState>((set, get) => {
       set({
         conversations: [],
         activeConversationId: null,
+        draftInputs: new Map(),
         _sessionAssistantMsgIds: new Map(),
         _sessionThinkingMsgIds: new Map(),
         _subAgentProgressMsgIds: new Map(),

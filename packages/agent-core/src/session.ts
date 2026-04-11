@@ -30,6 +30,79 @@ import {
 import type { ProjectType } from '@anton/agent-config'
 import { createLogger, withContext } from '@anton/logger'
 import type { ChatImageAttachmentInput, SessionImageAttachment, TokenUsage } from '@anton/protocol'
+
+// ── Inline image marker parsing ───────────────────────────────────────────────
+
+const IMG_MARKER_RE = /\[img:([^\]]+)\]/g
+
+/**
+ * Build an interleaved content array from a message containing `[img:id]` markers.
+ * Falls back to text-first + appended images when no markers are present.
+ */
+function buildInterleavedContent(
+  text: string,
+  attachments: ChatImageAttachmentInput[],
+): (TextContent | ImageContent)[] {
+  if (attachments.length === 0) {
+    return [{ type: 'text', text }]
+  }
+
+  const attachmentMap = new Map(attachments.map((a) => [a.id, a]))
+
+  // Check for markers
+  IMG_MARKER_RE.lastIndex = 0
+  if (!IMG_MARKER_RE.test(text)) {
+    // No markers — fall back to text + all images appended (backward compat)
+    const content: (TextContent | ImageContent)[] = [{ type: 'text', text }]
+    for (const a of attachments) {
+      content.push({ type: 'image', data: a.data, mimeType: a.mimeType })
+    }
+    return content
+  }
+
+  // Parse markers and build interleaved blocks
+  IMG_MARKER_RE.lastIndex = 0
+  const content: (TextContent | ImageContent)[] = []
+  const usedIds = new Set<string>()
+  let lastIndex = 0
+  for (let match = IMG_MARKER_RE.exec(text); match !== null; match = IMG_MARKER_RE.exec(text)) {
+    // Text before the marker
+    if (match.index > lastIndex) {
+      content.push({ type: 'text', text: text.slice(lastIndex, match.index) })
+    }
+
+    // Image block
+    const id = match[1]
+    const attachment = attachmentMap.get(id)
+    if (attachment) {
+      content.push({
+        type: 'image',
+        data: attachment.data,
+        mimeType: attachment.mimeType,
+      })
+      usedIds.add(id)
+    }
+
+    lastIndex = match.index + match[0].length
+  }
+
+  // Trailing text
+  if (lastIndex < text.length) {
+    const trailing = text.slice(lastIndex)
+    if (trailing.trim()) {
+      content.push({ type: 'text', text: trailing })
+    }
+  }
+
+  // Append any attachments that weren't referenced by markers
+  for (const a of attachments) {
+    if (!usedIds.has(a.id)) {
+      content.push({ type: 'image', data: a.data, mimeType: a.mimeType })
+    }
+  }
+
+  return content
+}
 import { Agent as PiAgent } from '@mariozechner/pi-agent-core'
 import type {
   AgentMessage,
@@ -845,16 +918,10 @@ export class Session {
     })
 
     try {
-      const images: ImageContent[] = attachments.map((attachment) => ({
-        type: 'image',
-        data: attachment.data,
-        mimeType: attachment.mimeType,
-        name: attachment.name,
-        sizeBytes: attachment.sizeBytes,
-      }))
+      const content = buildInterleavedContent(userMessage, attachments)
 
       this.piAgent
-        .prompt(userMessage, images)
+        .prompt({ role: 'user', content, timestamp: Date.now() })
         .then(() => {
           done = true
           resolveNext?.()
@@ -1177,14 +1244,10 @@ export class Session {
    */
   steer(message: string, attachments: ChatImageAttachmentInput[] = []) {
     const wrapped = `<user_steering>\nThe user sent this message while you were working. Briefly acknowledge it (1-2 sentences), share your thought on how it affects your current task, then continue your work incorporating this new context.\n\nUser message: "${message}"\n</user_steering>`
-    const images: ImageContent[] = attachments.map((a) => ({
-      type: 'image' as const,
-      data: a.data,
-      mimeType: a.mimeType,
-    }))
+    const content = buildInterleavedContent(wrapped, attachments)
     this.piAgent.steer({
       role: 'user',
-      content: [{ type: 'text', text: wrapped }, ...images],
+      content,
       timestamp: Date.now(),
     })
   }
@@ -2067,7 +2130,13 @@ export class Session {
 
   /** Get the current thinking level. Used by fork sub-agents. */
   getThinkingLevel(): 'off' | 'minimal' | 'low' | 'medium' | 'high' | undefined {
-    return this.piAgent.state.thinkingLevel as 'off' | 'minimal' | 'low' | 'medium' | 'high' | undefined
+    return this.piAgent.state.thinkingLevel as
+      | 'off'
+      | 'minimal'
+      | 'low'
+      | 'medium'
+      | 'high'
+      | undefined
   }
 
   private getSystemPrompt(): string {

@@ -1,14 +1,16 @@
 import type { AskUserQuestion } from '@anton/protocol'
-import { Brain, Image as ImageIcon, ListChecks, Plus, Send, Square, X } from 'lucide-react'
+import { Brain, ListChecks, Plus, Send, Square } from 'lucide-react'
 import type React from 'react'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { Skill } from '../../lib/skills.js'
 import type { ChatImageAttachment } from '../../lib/store.js'
-import { useIsCurrentSessionWorking } from '../../lib/store.js'
+import { useIsCurrentSessionWorking, useStore } from '../../lib/store.js'
 import { sessionStore } from '../../lib/store/sessionStore.js'
 import { AskUserInline } from './AskUserInline.js'
 import { ConnectorBanner, ConnectorPill } from './ConnectorToolbar.js'
 import { ModelSelector } from './ModelSelector.js'
+import type { RichInputHandle } from './RichInput.js'
+import { RichInput } from './RichInput.js'
 import { SlashCommandMenu } from './SlashCommandMenu.js'
 
 interface Props {
@@ -24,6 +26,8 @@ interface Props {
   placeholder?: string
   pendingAskUser?: { id: string; questions: AskUserQuestion[] } | null
   onAskUserSubmit?: (answers: Record<string, string>) => void
+  /** Conversation ID for draft persistence. When set, input content survives unmount/remount. */
+  conversationId?: string
 }
 
 const MAX_IMAGE_ATTACHMENTS = 4
@@ -47,10 +51,6 @@ async function readImageFile(file: File): Promise<ChatImageAttachment> {
   }
 }
 
-function attachmentPreviewSrc(attachment: ChatImageAttachment): string | undefined {
-  return attachment.data ? `data:${attachment.mimeType};base64,${attachment.data}` : undefined
-}
-
 export function ChatInput({
   onSend,
   onSteer,
@@ -61,46 +61,78 @@ export function ChatInput({
   pendingAskUser,
   onAskUserSubmit,
   ignoreWorkingState,
+  conversationId,
 }: Props) {
+  const setDraftInput = useStore((s) => s.setDraftInput)
+  const clearDraftInput = useStore((s) => s.clearDraftInput)
   const [input, setInput] = useState('')
   const [showSlashMenu, setShowSlashMenu] = useState(false)
   const [slashFilter, setSlashFilter] = useState('')
-  const [attachments, setAttachments] = useState<ChatImageAttachment[]>([])
+  const [imageCount, setImageCount] = useState(0)
   const [attachmentError, setAttachmentError] = useState<string | null>(null)
   const [planFirst, setPlanFirst] = useState(false)
   const thinkingEnabled = sessionStore((s) => s.thinkingEnabled)
-  const textareaRef = useRef<HTMLTextAreaElement>(null)
+  const richInputRef = useRef<RichInputHandle>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const _isWorking = useIsCurrentSessionWorking()
   const isCurrentSessionWorking = ignoreWorkingState ? false : _isWorking
 
+  // Restore draft on mount
+  useEffect(() => {
+    if (!conversationId) return
+    const draft = useStore.getState().getDraftInput(conversationId)
+    if (draft) {
+      richInputRef.current?.setPlainText(draft.text)
+      setInput(draft.text)
+      for (const attachment of draft.attachments) {
+        richInputRef.current?.insertImage(attachment)
+      }
+      setImageCount(draft.attachments.length)
+    }
+  }, [conversationId])
+
+  // Save draft on unmount
+  useEffect(() => {
+    const convId = conversationId
+    return () => {
+      if (!convId) return
+      const handle = richInputRef.current
+      if (!handle) return
+      const blocks = handle.getContentBlocks()
+      const text = blocks
+        .filter((b): b is Extract<typeof b, { type: 'text' }> => b.type === 'text')
+        .map((b) => b.text)
+        .join('')
+        .trim()
+      const attachments = blocks
+        .filter((b): b is Extract<typeof b, { type: 'image' }> => b.type === 'image')
+        .map((b) => b.attachment)
+      if (text || attachments.length > 0) {
+        useStore.getState().setDraftInput(convId, text, attachments)
+      } else {
+        useStore.getState().clearDraftInput(convId)
+      }
+    }
+  }, [conversationId])
+
   // Sync external initialValue into input (e.g. from suggestion chips)
   useEffect(() => {
     if (initialValue !== undefined && initialValue !== '') {
+      richInputRef.current?.setPlainText(initialValue)
       setInput(initialValue)
-      // Focus the textarea so user can review/edit before sending
-      setTimeout(() => textareaRef.current?.focus(), 0)
+      setTimeout(() => richInputRef.current?.focus(), 0)
     }
   }, [initialValue])
 
-  // biome-ignore lint/correctness/useExhaustiveDependencies: intentional
-  useEffect(() => {
-    const ta = textareaRef.current
-    if (!ta) return
-    ta.style.height = 'auto'
-    ta.style.height = `${Math.max(64, Math.min(ta.scrollHeight, 220))}px`
-  }, [input])
-
-  const handleChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
-    const val = e.target.value
-    setInput(val)
-    if (val.startsWith('/')) {
+  const handleChange = useCallback((plainText: string) => {
+    setInput(plainText)
+    if (plainText.startsWith('/')) {
       setShowSlashMenu(true)
-      setSlashFilter(val.slice(1))
+      setSlashFilter(plainText.slice(1))
     } else {
       setShowSlashMenu(false)
     }
-  }
+  }, [])
 
   const addFiles = useCallback(
     async (files: File[]) => {
@@ -112,7 +144,7 @@ export function ChatInput({
         return
       }
 
-      const availableSlots = MAX_IMAGE_ATTACHMENTS - attachments.length
+      const availableSlots = MAX_IMAGE_ATTACHMENTS - imageCount
       if (availableSlots <= 0) {
         setAttachmentError(`You can attach up to ${MAX_IMAGE_ATTACHMENTS} images per message.`)
         return
@@ -131,59 +163,91 @@ export function ChatInput({
         setAttachmentError(null)
       }
 
-      const nextAttachments = await Promise.all(acceptedFiles.map((file) => readImageFile(file)))
-      setAttachments((current) => [...current, ...nextAttachments])
+      const newAttachments = await Promise.all(acceptedFiles.map((file) => readImageFile(file)))
+      for (const attachment of newAttachments) {
+        richInputRef.current?.insertImage(attachment)
+      }
+      setImageCount((c) => c + newAttachments.length)
     },
-    [attachments.length],
+    [imageCount],
   )
 
   const handleSend = useCallback(() => {
-    const raw = input.trim()
-    if (!raw && attachments.length === 0) return
-    const text = planFirst && raw ? `[plan first] ${raw}` : raw
+    const handle = richInputRef.current
+    if (!handle) return
+
+    const blocks = handle.getContentBlocks()
+    const hasContent = blocks.some((b) => (b.type === 'text' ? b.text.trim().length > 0 : true))
+    if (!hasContent) return
+
+    // Build text with inline markers preserving image positions
+    const parts: string[] = []
+    const attachments: ChatImageAttachment[] = []
+    for (const block of blocks) {
+      if (block.type === 'text') {
+        parts.push(block.text)
+      } else {
+        attachments.push(block.attachment)
+        parts.push(`[img:${block.attachment.id}]`)
+      }
+    }
+
+    let text = parts.join('').trim()
+    if (planFirst && text) text = `[plan first] ${text}`
 
     // If agent is working and no attachments, steer with text only
     if (isCurrentSessionWorking && attachments.length === 0) {
       if (text && onSteer) {
         onSteer(text)
+        handle.clear()
         setInput('')
+        setImageCount(0)
         setShowSlashMenu(false)
-        textareaRef.current?.focus()
+        if (conversationId) clearDraftInput(conversationId)
+        handle.focus()
       }
       return
     }
 
-    onSend(text, attachments)
+    onSend(text, attachments.length > 0 ? attachments : undefined)
+    handle.clear()
     setInput('')
-    setAttachments([])
+    setImageCount(0)
     setAttachmentError(null)
     setShowSlashMenu(false)
-    textareaRef.current?.focus()
-  }, [input, attachments, isCurrentSessionWorking, onSend, onSteer, planFirst])
+    if (conversationId) clearDraftInput(conversationId)
+    handle.focus()
+  }, [isCurrentSessionWorking, onSend, onSteer, planFirst, conversationId, clearDraftInput])
 
-  const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (showSlashMenu) return
-    if (e.key === 'Tab' && e.shiftKey) {
+  const handleKeyDown = useCallback(
+    (e: React.KeyboardEvent) => {
+      if (showSlashMenu) return
+      if (e.key === 'Tab' && e.shiftKey) {
+        e.preventDefault()
+        setPlanFirst((v) => !v)
+        return
+      }
+      if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault()
+        handleSend()
+      }
+    },
+    [showSlashMenu, handleSend],
+  )
+
+  const handlePaste = useCallback(
+    (e: React.ClipboardEvent<HTMLDivElement>) => {
+      const files = Array.from(e.clipboardData.items)
+        .filter((item) => item.type.startsWith('image/'))
+        .map((item) => item.getAsFile())
+        .filter((file): file is File => file !== null)
+
+      if (files.length === 0) return
       e.preventDefault()
-      setPlanFirst((v) => !v)
-      return
-    }
-    if (e.key === 'Enter' && !e.shiftKey) {
-      e.preventDefault()
-      handleSend()
-    }
-  }
-
-  const handlePaste = (e: React.ClipboardEvent<HTMLTextAreaElement>) => {
-    const files = Array.from(e.clipboardData.items)
-      .filter((item) => item.type.startsWith('image/'))
-      .map((item) => item.getAsFile())
-      .filter((file): file is File => file !== null)
-
-    if (files.length === 0) return
-    e.preventDefault()
-    void addFiles(files)
-  }
+      void addFiles(files)
+    },
+    [addFiles],
+  )
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files || [])
@@ -191,16 +255,19 @@ export function ChatInput({
     e.target.value = ''
   }
 
-  const handleRemoveAttachment = (id: string) => {
-    setAttachments((current) => current.filter((attachment) => attachment.id !== id))
+  const handleImageRemove = useCallback(() => {
+    setImageCount((c) => Math.max(0, c - 1))
     setAttachmentError(null)
-  }
+  }, [])
 
   const handleSkillSelect = (skill: Skill) => {
+    richInputRef.current?.clear()
     setInput('')
     setShowSlashMenu(false)
     onSkillSelect(skill)
   }
+
+  const hasContent = input.trim().length > 0 || imageCount > 0
 
   if (pendingAskUser && onAskUserSubmit) {
     return (
@@ -233,51 +300,14 @@ export function ChatInput({
             className="composer__file-input"
             onChange={handleFileChange}
           />
-          {attachments.length > 0 && (
-            <div className="composer__attachments" aria-label="Attached images">
-              {attachments.map((attachment) => {
-                const previewSrc = attachmentPreviewSrc(attachment)
-                return (
-                  <div key={attachment.id} className="composer__chip-wrapper">
-                    <div className="composer__chip">
-                      <button
-                        type="button"
-                        className="composer__chip-remove"
-                        aria-label={`Remove ${attachment.name}`}
-                        onClick={() => handleRemoveAttachment(attachment.id)}
-                      >
-                        <X size={12} strokeWidth={1.5} />
-                      </button>
-                      {previewSrc ? (
-                        <img
-                          src={previewSrc}
-                          alt={attachment.name}
-                          className="composer__chip-thumb"
-                        />
-                      ) : (
-                        <ImageIcon size={14} strokeWidth={1.5} className="composer__chip-icon" />
-                      )}
-                      <span className="composer__chip-name">{attachment.name}</span>
-                    </div>
-                    {previewSrc && (
-                      <div className="composer__chip-preview">
-                        <img src={previewSrc} alt={attachment.name} />
-                      </div>
-                    )}
-                  </div>
-                )
-              })}
-            </div>
-          )}
-          <textarea
-            ref={textareaRef}
-            value={input}
-            onChange={handleChange}
+          <RichInput
+            ref={richInputRef}
+            placeholder={customPlaceholder || 'What should we work on next?'}
             onKeyDown={handleKeyDown}
             onPaste={handlePaste}
-            placeholder={customPlaceholder || 'What should we work on next?'}
-            rows={1}
-            className="composer__textarea"
+            onChange={handleChange}
+            onImageRemove={handleImageRemove}
+            className="composer__rich-input"
           />
           {attachmentError && (
             <div className="composer__helper composer__helper--error">{attachmentError}</div>
@@ -320,7 +350,7 @@ export function ChatInput({
               <ModelSelector />
               {isCurrentSessionWorking ? (
                 <>
-                  {attachments.length > 0 ? (
+                  {imageCount > 0 ? (
                     <button
                       type="button"
                       onClick={handleSend}
@@ -357,7 +387,7 @@ export function ChatInput({
                 <button
                   type="button"
                   onClick={handleSend}
-                  disabled={!input.trim() && attachments.length === 0}
+                  disabled={!hasContent}
                   className="composer__btn composer__btn--send"
                   aria-label="Send"
                   data-tooltip="Send"
