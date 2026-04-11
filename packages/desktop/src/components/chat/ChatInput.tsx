@@ -4,7 +4,7 @@ import type React from 'react'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { Skill } from '../../lib/skills.js'
 import type { ChatImageAttachment } from '../../lib/store.js'
-import { useIsCurrentSessionWorking } from '../../lib/store.js'
+import { useIsCurrentSessionWorking, useStore } from '../../lib/store.js'
 import { sessionStore } from '../../lib/store/sessionStore.js'
 import { AskUserInline } from './AskUserInline.js'
 import { ConnectorBanner, ConnectorPill } from './ConnectorToolbar.js'
@@ -26,6 +26,8 @@ interface Props {
   placeholder?: string
   pendingAskUser?: { id: string; questions: AskUserQuestion[] } | null
   onAskUserSubmit?: (answers: Record<string, string>) => void
+  /** Conversation ID for draft persistence. When set, input content survives unmount/remount. */
+  conversationId?: string
 }
 
 const MAX_IMAGE_ATTACHMENTS = 4
@@ -59,7 +61,10 @@ export function ChatInput({
   pendingAskUser,
   onAskUserSubmit,
   ignoreWorkingState,
+  conversationId,
 }: Props) {
+  const setDraftInput = useStore((s) => s.setDraftInput)
+  const clearDraftInput = useStore((s) => s.clearDraftInput)
   const [input, setInput] = useState('')
   const [showSlashMenu, setShowSlashMenu] = useState(false)
   const [slashFilter, setSlashFilter] = useState('')
@@ -71,6 +76,44 @@ export function ChatInput({
   const fileInputRef = useRef<HTMLInputElement>(null)
   const _isWorking = useIsCurrentSessionWorking()
   const isCurrentSessionWorking = ignoreWorkingState ? false : _isWorking
+
+  // Restore draft on mount
+  useEffect(() => {
+    if (!conversationId) return
+    const draft = useStore.getState().getDraftInput(conversationId)
+    if (draft) {
+      richInputRef.current?.setPlainText(draft.text)
+      setInput(draft.text)
+      for (const attachment of draft.attachments) {
+        richInputRef.current?.insertImage(attachment)
+      }
+      setImageCount(draft.attachments.length)
+    }
+  }, [conversationId])
+
+  // Save draft on unmount
+  useEffect(() => {
+    const convId = conversationId
+    return () => {
+      if (!convId) return
+      const handle = richInputRef.current
+      if (!handle) return
+      const blocks = handle.getContentBlocks()
+      const text = blocks
+        .filter((b): b is Extract<typeof b, { type: 'text' }> => b.type === 'text')
+        .map((b) => b.text)
+        .join('')
+        .trim()
+      const attachments = blocks
+        .filter((b): b is Extract<typeof b, { type: 'image' }> => b.type === 'image')
+        .map((b) => b.attachment)
+      if (text || attachments.length > 0) {
+        useStore.getState().setDraftInput(convId, text, attachments)
+      } else {
+        useStore.getState().clearDraftInput(convId)
+      }
+    }
+  }, [conversationId])
 
   // Sync external initialValue into input (e.g. from suggestion chips)
   useEffect(() => {
@@ -160,6 +203,7 @@ export function ChatInput({
         setInput('')
         setImageCount(0)
         setShowSlashMenu(false)
+        if (conversationId) clearDraftInput(conversationId)
         handle.focus()
       }
       return
@@ -171,8 +215,9 @@ export function ChatInput({
     setImageCount(0)
     setAttachmentError(null)
     setShowSlashMenu(false)
+    if (conversationId) clearDraftInput(conversationId)
     handle.focus()
-  }, [isCurrentSessionWorking, onSend, onSteer, planFirst])
+  }, [isCurrentSessionWorking, onSend, onSteer, planFirst, conversationId, clearDraftInput])
 
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent) => {
