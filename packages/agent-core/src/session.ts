@@ -28,6 +28,8 @@ import {
   saveSessionTasks,
 } from '@anton/agent-config'
 import type { ProjectType } from '@anton/agent-config'
+import { execSync } from 'node:child_process'
+import { arch, platform, release, type as osType, userInfo } from 'node:os'
 import { createLogger, withContext } from '@anton/logger'
 import type { ChatImageAttachmentInput, SessionImageAttachment, TokenUsage } from '@anton/protocol'
 
@@ -2185,6 +2187,22 @@ export class Session {
       }
     }
     contextLines.push(`- Date: ${new Date().toISOString().split('T')[0]}`)
+
+    // Environment awareness — tell the model what machine it's running on
+    contextLines.push(`- Platform: ${platform()} ${arch()}`)
+    contextLines.push(`- OS: ${osType()} ${release()}`)
+    contextLines.push(`- User: ${userInfo().username}`)
+    contextLines.push(`- Shell: ${process.env.SHELL || '/bin/bash'}`)
+    // Detect sudo capability (passwordless)
+    try {
+      execSync('sudo -n true 2>/dev/null', { timeout: 3000, stdio: 'pipe' })
+      contextLines.push(
+        '- Sudo: available (passwordless). Use `sudo` for privileged operations like installing packages, managing services, and system configuration.',
+      )
+    } catch {
+      contextLines.push('- Sudo: not available')
+    }
+
     prompt += Session.systemReminder('Current Context', contextLines.join('\n'))
 
     if (this.surface && this.surface.kind !== 'desktop') {

@@ -78,11 +78,14 @@ fi
 # 4. Create dedicated agent user
 # ─────────────────────────────────────────────────────────────────
 if ! id anton &>/dev/null; then
-    useradd --system --create-home --shell /usr/sbin/nologin anton
+    useradd --system --create-home --shell /bin/bash anton
 fi
 mkdir -p "${ANTON_DIR}"
 mkdir -p /home/anton/Anton
-log "USER: anton system user ready"
+# Grant passwordless sudo so the agent can install packages, manage services, etc.
+echo "anton ALL=(ALL) NOPASSWD:ALL" > /etc/sudoers.d/anton
+chmod 0440 /etc/sudoers.d/anton
+log "USER: anton system user ready (with sudo)"
 
 # ─────────────────────────────────────────────────────────────────
 # 5. Download latest agent binary from manifest
@@ -169,8 +172,6 @@ Restart=always
 RestartSec=5
 
 # Hardening
-NoNewPrivileges=true
-ProtectSystem=strict
 ProtectHome=false
 ReadWritePaths=${ANTON_DIR}
 PrivateTmp=true

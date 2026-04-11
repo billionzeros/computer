@@ -72,6 +72,15 @@
     create_home: true
     state: present
 
+- name: Grant passwordless sudo to anton user
+  copy:
+    dest: "/etc/sudoers.d/{{ anton_user }}"
+    content: "{{ anton_user }} ALL=(ALL) NOPASSWD:ALL\n"
+    mode: "0440"
+    owner: root
+    group: root
+    validate: "visudo -cf %s"
+
 - name: Ensure home directory is traversable (for Caddy file serving)
   file:
     path: "/home/{{ anton_user }}"
