@@ -111,11 +111,11 @@ function ToolMessage({ message }: { message: ChatMessage }) {
               : String(message.toolInput)}
           </Text>
         )}
-        {isSubAgent && message.toolInput?.task && (
+        {isSubAgent && (message.toolInput as Record<string, unknown>)?.task ? (
           <Text style={styles.toolInput} numberOfLines={2}>
-            {String(message.toolInput.task)}
+            {String((message.toolInput as Record<string, unknown>).task)}
           </Text>
-        )}
+        ) : null}
       </View>
     </View>
   )
