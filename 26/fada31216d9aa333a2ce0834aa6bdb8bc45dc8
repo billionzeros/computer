@@ -1,0 +1,45 @@
+packages/desktop/src/components/chat/ChatInput.tsx
+  19f2e8dbb8ff50ce 2,12-13,66,70,78,80,84-86,88,92,104,123-127,129,133-136,138-153,159,161,163,168-169,171,174-175,177-191,193-198,200-205,213-214,216,219,225,258-260,263-265,308,345
+packages/desktop/src/components/chat/RichInput.tsx
+  3b6713ff6c9951ed 2,205,214,273-308,400,410,460,463
+  19f2e8dbb8ff50ce 1,3-204,206-213,215-272,309-391,393-399,401-409,411-459,461-462,464-469
+packages/agent-core/src/session.ts
+  19f2e8dbb8ff50ce 33-105,921,924,1247,1250
+packages/desktop/src/components/chat/MessageBubble.tsx
+  19f2e8dbb8ff50ce 2-4,7,18-19,22-130,146
+packages/desktop/src/index.css
+  19f2e8dbb8ff50ce 1025,1032,1034-1035,1038,1040,1043-1060,1063-1065,1068-1069,1072-1080,1083-1085,1088-1092,1094-1095,1097,1099-1100,1103,1107-1110,1113,1116-1117,1122,1126,1128-1142,1145-1146,1149-1150,1153-1169,1171-1173,1177-1188,2174-2227
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.2.8",
+  "base_commit_sha": "26fada31216d9aa333a2ce0834aa6bdb8bc45dc8",
+  "prompts": {
+    "19f2e8dbb8ff50ce": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "de5f9c39-3576-4751-88d1-0b9254c74235",
+        "model": "claude-opus-4-6"
+      },
+      "human_author": "Om Gupta",
+      "messages": [],
+      "total_additions": 1868,
+      "total_deletions": 427,
+      "accepted_lines": 1343,
+      "overriden_lines": 2
+    },
+    "3b6713ff6c9951ed": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "3694a47d-82ae-4243-97fd-2ac230ec62a0",
+        "model": "claude-opus-4-6"
+      },
+      "human_author": "Om Gupta",
+      "messages": [],
+      "total_additions": 87,
+      "total_deletions": 45,
+      "accepted_lines": 87,
+      "overriden_lines": 0
+    }
+  }
+}
