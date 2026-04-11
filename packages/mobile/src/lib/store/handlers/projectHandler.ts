@@ -91,8 +91,6 @@ export function handleProjectMessage(msg: AiMessage): boolean {
     case 'connector_removed':
     case 'connector_status':
     case 'connector_test_response':
-    case 'oauth_url':
-    case 'oauth_complete':
       return true
 
     case 'skill_list_response':

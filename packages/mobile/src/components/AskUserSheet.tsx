@@ -35,7 +35,7 @@ export function AskUserSheet({ askUser, onSubmit }: Props) {
                 {q.options && q.options.length > 0 ? (
                   <View style={styles.options}>
                     {q.options.map((opt) => {
-                      const optValue = typeof opt === 'string' ? opt : opt.value
+                      const optValue = typeof opt === 'string' ? opt : opt.label
                       const optLabel = typeof opt === 'string' ? opt : opt.label
                       const isSelected = answers[q.question] === optValue
                       return (
