@@ -273,7 +273,7 @@ setup:
 
 EVAL_CMD := pnpm --filter @anton/agent-core
 
-## eval: Run all eval suites (9 suites, 87 cases)
+## eval: Run all eval suites (12 suites, 128 cases)
 eval:
 	$(EVAL_CMD) eval
 
@@ -281,11 +281,11 @@ eval:
 eval-dry:
 	$(EVAL_CMD) eval -- --dry-run
 
-## eval-tools: Run tool selection evals (35 cases)
+## eval-tools: Run tool selection evals (33 cases)
 eval-tools:
 	$(EVAL_CMD) eval:tools
 
-## eval-safety: Run safety/refusal evals (16 cases)
+## eval-safety: Run safety/refusal evals (15 cases)
 eval-safety:
 	$(EVAL_CMD) eval:safety
 
@@ -304,6 +304,18 @@ eval-planning:
 ## eval-context: Run context awareness evals (8 cases)
 eval-context:
 	$(EVAL_CMD) eval:context
+
+## eval-autonomy: Run autonomous orchestration evals (6 cases)
+eval-autonomy:
+	$(EVAL_CMD) eval:autonomy
+
+## eval-trajectory: Run trajectory efficiency evals (8 cases)
+eval-trajectory:
+	$(EVAL_CMD) eval:trajectory
+
+## eval-planning-enforcement: Run multi-step planning enforcement evals (6 cases)
+eval-planning-enforcement:
+	$(EVAL_CMD) eval:planning-enforcement
 
 ## eval-chat: Run all chat evals — code + planning + context (26 cases)
 eval-chat:
@@ -342,7 +354,7 @@ help:
 	@echo "    make verify                Health check all hosts"
 	@echo ""
 	@echo "  Evals:"
-	@echo "    make eval                  Run all 9 eval suites (87 cases)"
+	@echo "    make eval                  Run all 12 eval suites (128 cases)"
 	@echo "    make eval-dry              Dry run — validate datasets, no LLM calls"
 	@echo "    make eval-chat             Chat quality (code + planning + context)"
 	@echo "    make eval-workflows        Workflow agents (scanner + scorer + writer)"
