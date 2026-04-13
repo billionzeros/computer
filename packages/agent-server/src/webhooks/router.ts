@@ -270,6 +270,21 @@ export class WebhookRouter {
     const slug = provider.slug
     const started = Date.now()
 
+    // Slash command intercept — zero tokens, immediate reply.
+    const cmdResult = this.runner.tryCommand(event.sessionId, event.text)
+    if (cmdResult) {
+      log.info(
+        { slug, sessionId: event.sessionId, cmd: event.text.split(' ')[0] },
+        'command handled',
+      )
+      try {
+        await provider.reply(event, cmdResult.text, [])
+      } catch (err) {
+        log.error({ err, slug, sessionId: event.sessionId }, 'command reply failed')
+      }
+      return
+    }
+
     // Fire-and-forget start hook — never let a decorative side-effect
     // (e.g. a Slack reactions.add round-trip) block the actual turn.
     // Awaiting here only to surface errors into the log, not to gate

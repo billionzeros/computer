@@ -23,6 +23,14 @@ export interface CommandContext {
   saveProjectBinding: (projectId: string) => void
   /** Persist a model override so the next session uses it. */
   saveModelOverride: (model: string) => void
+  /** Get the model override from binding, if set. */
+  getModelOverride?: () => string | undefined
+  /** Get the default provider/model from config. */
+  getDefaultModel?: () => { provider: string; model: string }
+  /** List available AI providers with key status. */
+  listProviders?: () => { name: string; hasKey: boolean; isDefault: boolean }[]
+  /** List scheduled agents/bots. */
+  listAgents?: () => { name: string; description: string; schedule: string; nextRun: number; lastRun: number | null; enabled: boolean }[]
 }
 
 export interface CommandResult {
@@ -66,6 +74,18 @@ const commands: Command[] = [
     description: 'Switch model or show current',
     usage: '/model [name]',
     handler: handleModel,
+  },
+  {
+    name: 'providers',
+    description: 'List AI providers and key status',
+    usage: '/providers',
+    handler: handleProviders,
+  },
+  {
+    name: 'agents',
+    description: 'List scheduled agents',
+    usage: '/agents',
+    handler: handleAgents,
   },
   {
     name: 'help',
@@ -218,17 +238,53 @@ function handleStatus(_args: string, ctx: CommandContext): CommandResult {
     lines.push('**Project:** none')
   }
 
-  // Session
+  // Model & provider — show from session if active, otherwise from binding/default
   const session = ctx.getSession()
   if (session) {
     lines.push(`**Model:** \`${session.model}\``)
     lines.push(`**Provider:** \`${session.provider}\``)
-    lines.push(`**Session:** \`${ctx.sessionId}\``)
+    lines.push(`**Session:** active`)
   } else {
-    lines.push('**Session:** none (next message will create one)')
+    const override = ctx.getModelOverride?.()
+    const defaults = ctx.getDefaultModel?.()
+    if (override) {
+      lines.push(`**Model:** \`${override}\` (override)`)
+    } else if (defaults) {
+      lines.push(`**Model:** \`${defaults.model}\` (default)`)
+    }
+    if (defaults) {
+      lines.push(`**Provider:** \`${defaults.provider}\``)
+    }
+    lines.push('**Session:** idle (next message will create one)')
   }
 
   return ok(lines.join('\n'))
+}
+
+function handleProviders(_args: string, ctx: CommandContext): CommandResult {
+  const providers = ctx.listProviders?.()
+  if (!providers || providers.length === 0) {
+    return ok('No providers configured.')
+  }
+  const lines = providers.map((p) => {
+    const status = p.hasKey ? '✅' : '❌'
+    const marker = p.isDefault ? ' ← active' : ''
+    return `${status} **${p.name}**${marker}`
+  })
+  return ok(`**AI Providers:**\n${lines.join('\n')}`)
+}
+
+function handleAgents(_args: string, ctx: CommandContext): CommandResult {
+  const agents = ctx.listAgents?.()
+  if (!agents || agents.length === 0) {
+    return ok('No scheduled agents.')
+  }
+  const lines = agents.map((a) => {
+    const status = a.enabled ? '🟢' : '⏸️'
+    const next = new Date(a.nextRun).toLocaleString()
+    return `${status} **${a.name}** — ${a.schedule}\n    Next: ${next}`
+  })
+  return ok(`**Scheduled Agents:**\n${lines.join('\n')}`)
 }
 
 function handleReset(_args: string, ctx: CommandContext): CommandResult {

@@ -57,12 +57,17 @@ export function saveBinding(bindingKey: string, projectId: string): void {
   saveBindings(bindings)
 }
 
-/** Save a model override for a binding key. */
+/** Save a model override for a binding key. Creates a binding if none exists. */
 export function saveModelOverride(bindingKey: string, model: string): void {
   const bindings = loadBindings()
   const existing = bindings[bindingKey]
-  if (!existing) return // no binding yet, nothing to attach to
-  existing.model = model
+  if (existing) {
+    existing.model = model
+  } else {
+    // Create a minimal binding — projectId will be resolved to the default
+    // project at session creation time if not explicitly set.
+    bindings[bindingKey] = { projectId: '', model }
+  }
   saveBindings(bindings)
 }
 

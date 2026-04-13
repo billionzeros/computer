@@ -2073,6 +2073,9 @@ export class AgentServer {
         }
       }
 
+      // Also switch all live webhook sessions (Telegram, Slack, etc.)
+      this.webhookRunner?.switchAllSessionModels(msg.provider, msg.model)
+
       this.sendToClient(Channel.AI, {
         type: 'provider_set_default_response',
         success: true,
@@ -3571,6 +3574,10 @@ export class AgentServer {
           }
         },
       )
+      // Wire scheduler access so /agents command works on Telegram/Slack
+      if (this.scheduler) {
+        this.webhookRunner.setSchedulerJobsProvider(() => this.scheduler!.listJobs())
+      }
     }
     if (!this.webhookRouter) {
       this.webhookRouter = new WebhookRouter(this.webhookRunner)

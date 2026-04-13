@@ -13,11 +13,12 @@
  */
 
 import type { AgentConfig } from '@anton/agent-config'
-import type { JobActionHandler, McpManager, Session, SurfaceInfo } from '@anton/agent-core'
-import { createSession, resumeSession } from '@anton/agent-core'
+import type { CommandContext, CommandResult, JobActionHandler, McpManager, Session, SurfaceInfo } from '@anton/agent-core'
+import { createSession, executeCommand, resumeSession } from '@anton/agent-core'
 import type { ConnectorManager } from '@anton/connectors'
 import { createLogger } from '@anton/logger'
 import type { TaskItem } from '@anton/protocol'
+import { extractBindingKey, getBinding, saveBinding, saveModelOverride } from './bindings.js'
 import type {
   CanonicalEvent,
   OutboundImage,
@@ -134,12 +135,52 @@ export class WebhookAgentRunner {
   /** Progress message state per session — tracks message IDs for editing. */
   private progressStates = new Map<string, ProgressState>()
 
+  /** Optional callback to list scheduled jobs (wired by the server). */
+  private getSchedulerJobs?: () => { name: string; description: string; schedule: string; nextRun: number; lastRun: number | null; enabled: boolean }[]
+
   constructor(
     private config: AgentConfig,
     private mcpManager: McpManager,
     private connectorManager: ConnectorManager,
     private sessionOptionsBuilder?: WebhookSessionOptionsBuilder,
   ) {}
+
+  /** Wire access to the scheduler's job list (called by the server after init). */
+  setSchedulerJobsProvider(fn: typeof this.getSchedulerJobs): void {
+    this.getSchedulerJobs = fn
+  }
+
+  /**
+   * Try to execute a slash command from the event text. Returns null if the
+   * text is not a registered command. Zero-token-cost — no LLM involved.
+   */
+  tryCommand(sessionId: string, text: string): CommandResult | null {
+    const bindingKey = extractBindingKey(sessionId)
+    const ctx: CommandContext = {
+      sessionId,
+      evictSession: () => this.sessions.delete(sessionId),
+      getSession: () => this.sessions.get(sessionId),
+      getProjectId: () => getBinding(bindingKey)?.projectId || undefined,
+      saveProjectBinding: (projectId) => saveBinding(bindingKey, projectId),
+      saveModelOverride: (model) => saveModelOverride(bindingKey, model),
+      getModelOverride: () => getBinding(bindingKey)?.model,
+      getDefaultModel: () => ({
+        provider: this.config.defaults.provider,
+        model: this.config.defaults.model,
+      }),
+      listProviders: () => {
+        const defaultProvider = this.config.defaults.provider
+        const knownProviders = ['anthropic', 'openai', 'google', 'groq', 'together', 'openrouter', 'mistral']
+        return knownProviders.map((name) => ({
+          name,
+          hasKey: this.hasApiKey(name),
+          isDefault: name === defaultProvider,
+        }))
+      },
+      listAgents: () => this.getSchedulerJobs?.() ?? [],
+    }
+    return executeCommand(text, ctx)
+  }
 
   /** Check if a session has a pending interaction awaiting user response. */
   hasPendingInteraction(sessionId: string): boolean {
@@ -235,6 +276,16 @@ export class WebhookAgentRunner {
     )
     try {
       const { session, isNew } = this.getOrCreateSession(sessionId, event.surface)
+
+      // Pre-flight: check if the session's provider has a usable API key.
+      // Mirrors the env-var map in Session.resolveApiKey so we can catch this
+      // early with a clear message instead of a cryptic SDK error.
+      if (!this.hasApiKey(session.provider)) {
+        return {
+          text: 'No API key configured for your AI provider. Please set one up in Settings \u2192 Providers on the desktop app.',
+          images: [],
+        }
+      }
       // Refresh the surface every turn — the same sessionId can span
       // multiple threads/users in a channel, and we want the model to see
       // the up-to-date label. No-op when surface is undefined (desktop).
@@ -526,6 +577,36 @@ export class WebhookAgentRunner {
     }
   }
 
+  /** Switch all live webhook sessions to a new default provider/model. */
+  switchAllSessionModels(provider: string, model: string): void {
+    for (const [id, session] of this.sessions) {
+      try {
+        session.switchModel(provider, model)
+      } catch (err) {
+        log.warn({ err, sessionId: id }, 'failed to switch webhook session model')
+      }
+    }
+  }
+
+  /** Check if a provider has an API key in config or environment. */
+  private hasApiKey(provider: string): boolean {
+    const providerConfig = this.config.providers?.[provider]
+    if (providerConfig?.apiKey && providerConfig.apiKey.length > 0) return true
+
+    const envMap: Record<string, string> = {
+      anthropic: 'ANTHROPIC_API_KEY',
+      openai: 'OPENAI_API_KEY',
+      google: 'GOOGLE_API_KEY',
+      groq: 'GROQ_API_KEY',
+      together: 'TOGETHER_API_KEY',
+      openrouter: 'OPENROUTER_API_KEY',
+      mistral: 'MISTRAL_API_KEY',
+      anton: 'ANTON_API_KEY',
+    }
+    const envVar = envMap[provider]
+    return !!(envVar && process.env[envVar])
+  }
+
   private getOrCreateSession(
     sessionId: string,
     surface?: SurfaceInfo,
@@ -558,6 +639,15 @@ export class WebhookAgentRunner {
     } catch (err) {
       log.warn({ sessionId, err }, 'resumeSession threw, starting fresh')
       session = undefined
+    }
+
+    // If the resumed session's provider no longer has a key, switch to the current default
+    if (session && !this.hasApiKey(session.provider)) {
+      try {
+        session.switchModel(this.config.defaults.provider, this.config.defaults.model)
+      } catch {
+        // fall through — createSession will handle it
+      }
     }
 
     // A resumed session has prior history — treat it as not-new so we
