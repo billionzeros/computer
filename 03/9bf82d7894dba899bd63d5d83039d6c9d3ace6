@@ -1,0 +1,79 @@
+packages/connectors/src/polymarket/tools.ts
+  15b889b042a683d9 1-2,4,6-9,11-17,19-20,24-28,31,33,37-39,42-48,51,53,55-57,60-66,71,76-78,82-87,89,93,97,99,105-111,115,120,122,133-139,143,146,148,157-163,167,169,171,174-180,184,186,188,191-196,198,202,208,218-219,221,223,236-242,246,248,250,253-258,260,265,270,272,275-281,284,290-291,293,296-302,306,308,310,313-319
+  8381a8b03ae30669 3,5,10,18,21-23,29-30,32,34-36,40-41,49-50,52,54,58-59,67-70,72-75,79-81,88,90-92,94-96,98,100-104,112-114,116-119,121,123-132,140-142,144-145,147,149-156,164-166,168,170,172-173,181-183,185,187,189-190,197,199-201,203-207,209-217,220,222,224-235,243-245,247,249,251-252,259,261-264,266-269,271,273-274,282-283,285-289,292,294-295,303-305,307,309,311-312,320
+package.json
+  decc96f3b0e2c99f 47-50
+packages/agent-config/src/config.ts
+  8381a8b03ae30669 1665-1712
+packages/agent-server/src/server.ts
+  8381a8b03ae30669 4405-4418,4474-4477
+packages/desktop/src/components/connectors/ConnectorIcons.tsx
+  8381a8b03ae30669 304-316
+packages/connectors/src/polymarket/api.ts
+  8381a8b03ae30669 1-3,5,7,9,11,14-20,23,25,27,31-37,40-42,46-61,63,65-66,69-70,73-74,77-78,81-82,85-88,91-104,106-107,109-111,113-145,147,150-165,168-170,173-174,177-178,181-182,185-189,192-195,198-200,203-204,207-208,211-219,222-223,226-227,230
+  15b889b042a683d9 8,10,12-13,45,62,64,67-68,71-72,75-76,79-80,83-84,89-90,105,108,146,148-149,166-167,171-172,175-176,179-180,183-184,229
+packages/connectors/src/index.ts
+  8381a8b03ae30669 19,34,57
+packages/connectors/src/polymarket/index.ts
+  8381a8b03ae30669 3,11,15,18-20,23-25,34-38,44
+  15b889b042a683d9 1-2,4-10,12-14,16-17,21-22,26-33,39-43
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.2.8",
+  "base_commit_sha": "039bf82d7894dba899bd63d5d83039d6c9d3ace6",
+  "prompts": {
+    "15b889b042a683d9": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "fdbc8b0e-9289-4227-b6d3-7a65bd339378",
+        "model": "default"
+      },
+      "human_author": "Arush Kurundodi",
+      "messages": [],
+      "total_additions": 1410,
+      "total_deletions": 2127,
+      "accepted_lines": 225,
+      "overriden_lines": 30
+    },
+    "8381a8b03ae30669": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "6d51cd6a-4884-47c7-b35f-09eb066f9162",
+        "model": "default"
+      },
+      "human_author": "Arush Kurundodi",
+      "messages": [],
+      "total_additions": 424,
+      "total_deletions": 1073,
+      "accepted_lines": 424,
+      "overriden_lines": 0
+    },
+    "b8b51ca5a0708da4": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "cf5cc5fd-e75d-44f8-9d36-83892f4d68f1",
+        "model": "default"
+      },
+      "human_author": "Arush Kurundodi",
+      "messages": [],
+      "total_additions": 93,
+      "total_deletions": 0,
+      "accepted_lines": 0,
+      "overriden_lines": 0
+    },
+    "decc96f3b0e2c99f": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "cf61d58e-2b6e-439d-8ded-34c657d8b959",
+        "model": "default"
+      },
+      "human_author": "Arush Kurundodi",
+      "messages": [],
+      "total_additions": 4,
+      "total_deletions": 1,
+      "accepted_lines": 4,
+      "overriden_lines": 0
+    }
+  }
+}
