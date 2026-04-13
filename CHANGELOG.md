@@ -10,6 +10,13 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versioning: [S
 
 ---
 
+## [1.0.54] - 2026-04-13
+
+### Features
+- wire Telegram slash commands and add /providers, /agents commands
+- add eval harness gap-closing — efficiency, trajectory, and planning scorers
+---
+
 ## [1.0.53] - 2026-04-11
 
 ### Fixes
@@ -520,7 +527,8 @@ Maintenance release.
 
 ---
 
-[Unreleased]: https://github.com/OmGuptaIND/computer/compare/v1.0.53...HEAD
+[Unreleased]: https://github.com/OmGuptaIND/computer/compare/v1.0.54...HEAD
+[1.0.54]: https://github.com/OmGuptaIND/computer/compare/v$(changelog.match(/## [(d+.d+.d+)]/g)[1].match(/d+.d+.d+/)[0])...v1.0.54
 [1.0.53]: https://github.com/OmGuptaIND/computer/compare/v$(changelog.match(/## [(d+.d+.d+)]/g)[1].match(/d+.d+.d+/)[0])...v1.0.53
 [1.0.52]: https://github.com/OmGuptaIND/computer/compare/v$(changelog.match(/## [(d+.d+.d+)]/g)[1].match(/d+.d+.d+/)[0])...v1.0.52
 [1.0.51]: https://github.com/OmGuptaIND/computer/compare/v$(changelog.match(/## [(d+.d+.d+)]/g)[1].match(/d+.d+.d+/)[0])...v1.0.51

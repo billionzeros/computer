@@ -1,12 +1,12 @@
 {
-  "version": "1.0.53",
-  "gitHash": "389a1f8",
+  "version": "1.0.54",
+  "gitHash": "",
   "releaseUrl": "https://github.com/OmGuptaIND/computer/releases",
-  "changelog": "Fixes:\n- grant anton user sudo access and add environment awareness to system prompt\n- redesign mobile connect page with two-view layout and machine management\n- strip [img:...] placeholders from conversation titles",
-  "publishedAt": "2026-04-11T09:50:43.283Z",
-  "cli": "https://github.com/OmGuptaIND/computer/releases/download/v1.0.53/anton-cli.mjs",
+  "changelog": "Features:\n- wire Telegram slash commands and add /providers, /agents commands\n- add eval harness gap-closing — efficiency, trajectory, and planning scorers",
+  "publishedAt": "2026-04-13T11:10:11.267Z",
+  "cli": "https://github.com/OmGuptaIND/computer/releases/download/v1.0.54/anton-cli.mjs",
   "sidecar": {
-    "linux-arm64": "https://github.com/OmGuptaIND/computer/releases/download/v1.0.53/anton-sidecar-linux-arm64",
-    "linux-amd64": "https://github.com/OmGuptaIND/computer/releases/download/v1.0.53/anton-sidecar-linux-amd64"
+    "linux-arm64": "https://github.com/OmGuptaIND/computer/releases/download/v1.0.54/anton-sidecar-linux-arm64",
+    "linux-amd64": "https://github.com/OmGuptaIND/computer/releases/download/v1.0.54/anton-sidecar-linux-amd64"
   }
 }
