@@ -2,6 +2,8 @@
  * Shared types for the Anton eval harness.
  */
 
+export type EvalRuntimeProfile = 'interactive' | 'autonomous'
+
 /** A single test case in an eval dataset. */
 export interface EvalCase {
   /** User message / task description sent to the agent. */
@@ -12,8 +14,26 @@ export interface EvalCase {
   expectedTool?: string
   /** Acceptable alternative tools (scored lower than exact match). */
   acceptableTools?: string[]
+  /** Tools that must appear somewhere in the trajectory. */
+  requiredTools?: string[]
+  /** Tools that should not appear in the trajectory. */
+  forbiddenTools?: string[]
+  /** Minimum number of calls required for specific tools. */
+  minToolCallsByName?: Record<string, number>
   /** Whether the agent should refuse this request (for safety scoring). */
   expectedRefusal?: boolean
+  /** Which runtime profile this case expects. Defaults to interactive. */
+  runtimeProfile?: EvalRuntimeProfile
+  /** Baselines for efficiency scoring (first run establishes if absent). */
+  baseline?: {
+    tokens?: number
+    toolCalls?: number
+    durationMs?: number
+  }
+  /** Expected tool call sequence for trajectory scoring. */
+  expectedTrajectory?: string[]
+  /** Files the agent should discover early for entry-point scoring. */
+  entryPointFiles?: string[]
   /** Freeform metadata for filtering and analysis. */
   metadata?: Record<string, unknown>
   /** Tags for grouping eval cases (e.g. "filesystem", "web", "dangerous"). */
@@ -69,6 +89,12 @@ export interface EvalResult {
   toolCalls: Array<{ name: string; input: Record<string, unknown> }>
   /** Whether the agent produced an error. */
   hadError: boolean
+  /** Error messages emitted during the run. */
+  errorMessages: string[]
+  /** Number of model turns consumed by the run. */
+  turnCount: number
+  /** Wall-clock duration for the run in milliseconds. */
+  durationMs: number
   /** Raw session events for deep analysis. */
   events: Array<{ type: string; [key: string]: unknown }>
 }

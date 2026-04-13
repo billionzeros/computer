@@ -2,6 +2,10 @@
 
 How we measure and monitor Anton's quality.
 
+The harness supports two runtime profiles:
+- `interactive` for chat-quality behavior where clarification is valid
+- `autonomous` for benchmark-style runs where no user will answer follow-ups
+
 ## Architecture
 
 ```
@@ -86,12 +90,15 @@ packages/agent-core/src/evals/
   types.ts                              — EvalCase, EvalDataset, EvalResult,
                                           WorkflowEvalCase, WorkflowEvalResult
   datasets/
-    tool-selection.ts                   — 35+ cases: task → expected tool
-    safety.ts                           — 16 cases: dangerous + safe-but-scary
+    tool-selection.ts                   — 33 cases: task → expected tool
+    safety.ts                           — 15 cases: dangerous + safe-but-scary
     response-quality.ts                 — 10 cases: input → expected answer
     chat-code-generation.ts             — 10 cases: code writing quality
     chat-task-planning.ts               — 8 cases: orchestration & planning
     chat-context-awareness.ts           — 8 cases: judgment & behavior
+    autonomous-orchestration.ts         — 6 cases: autonomous trajectory quality
+    trajectory-efficiency.ts            — 8 cases: tool trajectory + efficiency
+    multi-step-planning.ts              — 6 cases: planning enforcement (autonomous)
     workflow-lead-scanner.ts            — 9 cases: field extraction
     workflow-lead-scorer.ts             — 9 cases: scoring accuracy
     workflow-outreach-writer.ts         — 6 cases: email quality
@@ -102,9 +109,14 @@ packages/agent-core/src/evals/
     chat-code-generation.ts             — code structure + relevance + LLM quality
     chat-task-planning.ts               — tool choice + read-first + complexity + ambiguity
     chat-context-awareness.ts           — info source + groundedness + memory + conciseness
+    autonomous-orchestration.ts         — autonomous trajectory + tool discipline
+    efficiency.ts                       — token/toolcall/time scoring vs baselines
+    trajectory.ts                       — ordering + redundancy + dead-end + planning
+    per-tool-breakdown.ts               — per-tool success rate reporter
     workflow-lead-scanner.ts            — field extraction + dedup detection
     workflow-lead-scorer.ts             — score accuracy + tier + research
     workflow-outreach-writer.ts         — heuristic checks + LLM-as-judge
+  runtime-profile.ts                    — interactive vs autonomous prompt profiles
   workflow-prompts.ts                   — workflow agent prompt loader for evals
   runner.ts                             — Creates ephemeral sessions, runs cases
   index.ts                              — CLI entry point
@@ -117,12 +129,12 @@ Use `make` from the repo root (preferred) or `pnpm` directly:
 ```bash
 # ── Makefile (repo root) ─────────────────────────────────────────
 
-make eval                    # all 9 suites (87 cases)
+make eval                    # all 12 suites (128 cases)
 make eval-dry                # validate datasets, no LLM calls
 
 # Base
-make eval-tools              # tool selection (35 cases)
-make eval-safety             # safety/refusal (16 cases)
+make eval-tools              # tool selection (33 cases)
+make eval-safety             # safety/refusal (15 cases)
 make eval-quality            # response quality (10 cases)
 
 # Chat (general Anton quality)
@@ -130,6 +142,11 @@ make eval-chat               # all 3 chat suites (26 cases)
 make eval-code               # code generation (10 cases)
 make eval-planning           # task planning (8 cases)
 make eval-context            # context awareness (8 cases)
+make eval-autonomy           # autonomous orchestration (6 cases)
+
+# Trajectory + Efficiency
+make eval-trajectory         # trajectory efficiency (8 cases)
+make eval-planning-enforcement  # multi-step planning (6 cases)
 
 # Workflows (workflow agent quality)
 make eval-workflows          # all 3 workflow suites (24 cases)
@@ -143,6 +160,9 @@ make eval-outreach-writer    # outreach writer (6 cases)
 
 pnpm --filter @anton/agent-core eval              # all suites
 pnpm --filter @anton/agent-core eval:chat         # all chat suites
+pnpm --filter @anton/agent-core eval:autonomy     # autonomous orchestration suite
+pnpm --filter @anton/agent-core eval:trajectory   # trajectory efficiency suite
+pnpm --filter @anton/agent-core eval:planning-enforcement  # planning enforcement suite
 pnpm --filter @anton/agent-core eval:workflows    # all workflow suites
 pnpm --filter @anton/agent-core eval -- --dry-run # dry run
 ```
@@ -249,6 +269,21 @@ Errors are classified into categories for filtering in Braintrust:
 | `tool_error` | tool execution failed |
 | `unknown` | everything else |
 
+## Autonomous Suite
+
+The `autonomous-orchestration` suite is aimed at the failure modes that
+interactive dogfooding hides:
+
+- asking the user questions when no user is present
+- submitting a `plan` that cannot be approved in benchmark mode
+- skipping `task_tracker` on multi-step work
+- failing to use `sub_agent` for independent parallelizable tasks
+
+These cases run with an autonomous runtime profile that appends a
+non-interactive directive to the system prompt and gives the agent a larger
+turn and time budget, so the harness measures trajectory quality rather than
+only first-tool selection.
+
 ---
 
 ## Chat Quality Evaluation
@@ -259,8 +294,8 @@ Tests how good Anton is as a general assistant — not just "does it pick the ri
 
 | Capability | System Prompt Claims | Eval Coverage |
 |---|---|---|
-| Tool selection | 17+ tools, context-dependent | 35 cases (tool-selection) |
-| Safety/refusal | Confirm destructive ops | 16 cases (safety) |
+| Tool selection | 17+ tools, context-dependent | 33 cases (tool-selection) |
+| Safety/refusal | Confirm destructive ops | 15 cases (safety) |
 | Factual knowledge | Accurate explanations | 10 cases (response-quality) |
 | **Code generation** | Write correct, clean code | **10 cases (chat-code-generation)** |
 | **Task planning** | Break down complex tasks, plan first | **8 cases (chat-task-planning)** |

@@ -6,9 +6,11 @@
  * collects events, and extracts the result for scoring.
  */
 
+import { loadCoreSystemPrompt } from '@anton/agent-config'
 import type { AgentConfig } from '@anton/agent-config'
 import type { SessionEvent } from '../session.js'
 import type { EvalCase, EvalResult } from './types.js'
+import { buildEvalSystemPrompt } from './runtime-profile.js'
 
 /**
  * Run a single eval case through the agent and collect the result.
@@ -22,6 +24,8 @@ export async function runEvalCase(evalCase: EvalCase, config: AgentConfig): Prom
   const { buildTools } = await import('../agent.js')
 
   const tools = buildTools(config)
+  const runtimeProfile = evalCase.runtimeProfile ?? 'interactive'
+  const startedAt = Date.now()
 
   const session = new Session({
     id: `eval_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
@@ -30,10 +34,15 @@ export async function runEvalCase(evalCase: EvalCase, config: AgentConfig): Prom
     config,
     tools,
     ephemeral: true,
-    // Tight limits for eval — we just need the first tool call and initial response
-    maxTokenBudget: 20_000,
-    maxDurationMs: 60_000, // 1 minute max
-    maxTurns: 3,
+    // Interactive suites stay cheap and shallow; autonomous evals get enough room
+    // to expose trajectory failures instead of failing on the harness itself.
+    maxTokenBudget: runtimeProfile === 'autonomous' ? 60_000 : 20_000,
+    maxDurationMs: runtimeProfile === 'autonomous' ? 180_000 : 60_000,
+    maxTurns: runtimeProfile === 'autonomous' ? 12 : 3,
+    systemPromptOverride:
+      runtimeProfile === 'autonomous'
+        ? buildEvalSystemPrompt(loadCoreSystemPrompt(), runtimeProfile)
+        : undefined,
   })
 
   const events: SessionEvent[] = []
@@ -41,6 +50,14 @@ export async function runEvalCase(evalCase: EvalCase, config: AgentConfig): Prom
   let firstToolCall: string | undefined
   const toolCalls: Array<{ name: string; input: Record<string, unknown> }> = []
   let hadError = false
+  const errorMessages: string[] = []
+
+  if (runtimeProfile === 'interactive') {
+    session.setPlanConfirmHandler(async () => ({ approved: true }))
+    session.setAskUserHandler(async (questions) =>
+      Object.fromEntries(questions.map((question, index) => [`q${index + 1}`, question.question])),
+    )
+  }
 
   try {
     for await (const event of session.processMessage(evalCase.input)) {
@@ -55,11 +72,13 @@ export async function runEvalCase(evalCase: EvalCase, config: AgentConfig): Prom
       }
       if (event.type === 'error') {
         hadError = true
+        errorMessages.push(event.message)
       }
     }
   } catch (err) {
     hadError = true
     output = `Eval error: ${(err as Error).message}`
+    errorMessages.push((err as Error).message)
   }
 
   return {
@@ -68,6 +87,9 @@ export async function runEvalCase(evalCase: EvalCase, config: AgentConfig): Prom
     firstToolCall,
     toolCalls,
     hadError,
+    errorMessages,
+    turnCount: events.filter((event) => event.type === 'done').length,
+    durationMs: Date.now() - startedAt,
     events: events as Array<{ type: string; [key: string]: unknown }>,
   }
 }

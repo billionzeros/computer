@@ -10,6 +10,7 @@
  *   pnpm eval:code             — run code generation evals
  *   pnpm eval:planning         — run task planning evals
  *   pnpm eval:context          — run context awareness evals
+ *   pnpm eval:autonomy         — run autonomous orchestration evals
  *   pnpm eval:chat             — run all chat evals (code + planning + context)
  *   pnpm eval -- --dry-run     — validate datasets without running
  *
@@ -23,6 +24,9 @@ import { initTracing } from '../tracing.js'
 import { codeGenerationDataset } from './datasets/chat-code-generation.js'
 import { contextAwarenessDataset } from './datasets/chat-context-awareness.js'
 import { taskPlanningDataset } from './datasets/chat-task-planning.js'
+import { autonomousOrchestrationDataset } from './datasets/autonomous-orchestration.js'
+import { trajectoryEfficiencyDataset } from './datasets/trajectory-efficiency.js'
+import { multiStepPlanningDataset } from './datasets/multi-step-planning.js'
 import { responseQualityDataset } from './datasets/response-quality.js'
 import { safetyDataset } from './datasets/safety.js'
 import { toolSelectionDataset } from './datasets/tool-selection.js'
@@ -33,6 +37,10 @@ import { runBraintrustEval } from './runner.js'
 import { scoreCodeGeneration, scoreCodeQuality } from './scorers/chat-code-generation.js'
 import { scoreContextAwareness } from './scorers/chat-context-awareness.js'
 import { scoreTaskPlanning } from './scorers/chat-task-planning.js'
+import { scoreAutonomousTrajectory } from './scorers/autonomous-orchestration.js'
+import { scoreEfficiency } from './scorers/efficiency.js'
+import { scoreTrajectory } from './scorers/trajectory.js'
+import { scorePerToolBreakdown } from './scorers/per-tool-breakdown.js'
 import { scoreFactuality, scoreKeywordOverlap } from './scorers/factuality.js'
 import { scoreSafety } from './scorers/safety.js'
 import { scoreToolSelection } from './scorers/tool-selection.js'
@@ -286,9 +294,93 @@ async function main() {
     })
   }
 
+  // ── Trajectory Efficiency ────────────────────────────────────
+  if (!suite || suite === 'trajectory' || suite === 'trajectory-efficiency') {
+    suites.push({
+      name: 'trajectory-efficiency',
+      run: async () => {
+        console.log(
+          `\n[eval] Running trajectory-efficiency (${trajectoryEfficiencyDataset.cases.length} cases)...`,
+        )
+        await runBraintrustEval({
+          name: `trajectory-efficiency-${timestamp}`,
+          dataset: trajectoryEfficiencyDataset,
+          config,
+          scorers: [
+            {
+              name: 'trajectory',
+              fn: (c: EvalCase, r: EvalResult) => scoreTrajectory(c, r),
+            },
+            {
+              name: 'efficiency',
+              fn: (c: EvalCase, r: EvalResult) => scoreEfficiency(c, r),
+            },
+            {
+              name: 'per_tool_breakdown',
+              fn: (c: EvalCase, r: EvalResult) => scorePerToolBreakdown(c, r),
+            },
+          ],
+          dryRun,
+        })
+      },
+    })
+  }
+
+  // ── Planning Enforcement ───────────────────────────────────────
+  if (!suite || suite === 'planning-enforcement' || suite === 'multi-step-planning') {
+    suites.push({
+      name: 'multi-step-planning',
+      run: async () => {
+        console.log(
+          `\n[eval] Running multi-step-planning (${multiStepPlanningDataset.cases.length} cases)...`,
+        )
+        await runBraintrustEval({
+          name: `multi-step-planning-${timestamp}`,
+          dataset: multiStepPlanningDataset,
+          config,
+          scorers: [
+            {
+              name: 'autonomous_trajectory',
+              fn: (c: EvalCase, r: EvalResult) => scoreAutonomousTrajectory(c, r),
+            },
+            {
+              name: 'trajectory',
+              fn: (c: EvalCase, r: EvalResult) => scoreTrajectory(c, r),
+            },
+          ],
+          dryRun,
+        })
+      },
+    })
+  }
+
+  // ── Autonomous Orchestration ──────────────────────────────────
+  if (!suite || suite === 'autonomy' || suite === 'autonomous-orchestration') {
+    suites.push({
+      name: 'autonomous-orchestration',
+      run: async () => {
+        console.log(
+          `\n[eval] Running autonomous-orchestration (${autonomousOrchestrationDataset.cases.length} cases)...`,
+        )
+        await runBraintrustEval({
+          name: `autonomous-orchestration-${timestamp}`,
+          dataset: autonomousOrchestrationDataset,
+          config,
+          scorers: [
+            {
+              name: 'autonomous_trajectory',
+              fn: (c: EvalCase, r: EvalResult) => scoreAutonomousTrajectory(c, r),
+            },
+          ],
+          dryRun,
+        })
+      },
+    })
+  }
+
   if (suites.length === 0) {
     console.error(
-      `[eval] Unknown suite: "${suite}". Available: tools, safety, quality, code, planning, context, chat, lead-scanner, lead-scorer, outreach-writer, workflows`,
+      `[eval] Unknown suite: "${suite}". Available: tools, safety, quality, code, planning, context, trajectory, planning-enforcement, autonomy, chat, lead-scanner, lead-scorer, outreach-writer, workflows`,
     )
     process.exit(1)
   }
@@ -338,8 +430,15 @@ export { scoreOutreachWriter, scoreOutreachQuality } from './scorers/workflow-ou
 export { codeGenerationDataset } from './datasets/chat-code-generation.js'
 export { taskPlanningDataset } from './datasets/chat-task-planning.js'
 export { contextAwarenessDataset } from './datasets/chat-context-awareness.js'
+export { autonomousOrchestrationDataset } from './datasets/autonomous-orchestration.js'
+export { trajectoryEfficiencyDataset } from './datasets/trajectory-efficiency.js'
+export { multiStepPlanningDataset } from './datasets/multi-step-planning.js'
 export { scoreCodeGeneration, scoreCodeQuality } from './scorers/chat-code-generation.js'
 export { scoreTaskPlanning } from './scorers/chat-task-planning.js'
 export { scoreContextAwareness } from './scorers/chat-context-awareness.js'
+export { scoreAutonomousTrajectory } from './scorers/autonomous-orchestration.js'
+export { scoreEfficiency } from './scorers/efficiency.js'
+export { scoreTrajectory } from './scorers/trajectory.js'
+export { scorePerToolBreakdown, computePerToolBreakdown } from './scorers/per-tool-breakdown.js'
 export { loadWorkflowPrompt } from './workflow-prompts.js'
 export { runEvalCase, runBraintrustEval } from './runner.js'

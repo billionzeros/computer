@@ -18,6 +18,9 @@
     "eval:code": "tsx src/evals/index.ts code",
     "eval:planning": "tsx src/evals/index.ts planning",
     "eval:context": "tsx src/evals/index.ts context",
+    "eval:autonomy": "tsx src/evals/index.ts autonomy",
+    "eval:trajectory": "tsx src/evals/index.ts trajectory",
+    "eval:planning-enforcement": "tsx src/evals/index.ts planning-enforcement",
     "eval:chat": "tsx src/evals/index.ts chat"
   },
   "dependencies": {
