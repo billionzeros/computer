@@ -1,0 +1,23 @@
+specs/features/core/ARTIFACT_PUBLISHING.md
+  6e403219b35648ed 81,83
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.2.8",
+  "base_commit_sha": "c48a84f7804019e635c5a6134bd7a7a19bab2a98",
+  "prompts": {
+    "6e403219b35648ed": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "32825e61-312d-4392-8a12-3ac4b95c150c",
+        "model": "claude-opus-4-6"
+      },
+      "human_author": "Om Gupta",
+      "messages": [],
+      "total_additions": 2,
+      "total_deletions": 2,
+      "accepted_lines": 2,
+      "overriden_lines": 0
+    }
+  }
+}
