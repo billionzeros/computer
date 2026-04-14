@@ -1,0 +1,82 @@
+packages/desktop/src/components/artifacts/ArtifactDetailView.tsx
+  db82f89cce3b2ae7 8,107,206,209,229-230
+infra-providers/huddle/cloud-init.sh
+  a48b6dbd681f4da0 84,86-88
+packages/agent-server/src/server.ts
+  a48b6dbd681f4da0 1537,1592-1593,1610,1612-1613
+  db82f89cce3b2ae7 13-21,44,46,60,96-101,272-273,452-462,1573-1575,1577-1591,1594-1609,1611,3581-3583,3617,3906,3932-3936,3963-3967
+  d8198494f985324e 43,1540-1555,1576
+packages/agent-config/src/projects.ts
+  db82f89cce3b2ae7 21,313
+packages/agent-config/src/published.ts
+  db82f89cce3b2ae7 1-13,15-51,53-56,63-70,73-91
+  d8198494f985324e 14,52,57-62,71-72
+specs/features/core/ARTIFACT_PUBLISHING.md
+  d8198494f985324e 3,9-10,16-19,22-26,51-90,93,104-105,111-113,115-136,138-147,157-174,176-193,210,223,240-251,280-281,318-320,327-332,339-342,365,381-387,393-397,401,403,407-418,421
+packages/agent-core/package.json
+  a48b6dbd681f4da0 37
+packages/desktop/src/lib/store/handlers/toolHandler.ts
+  d8198494f985324e 161-162
+packages/desktop/src/lib/store/artifactStore.ts
+  d8198494f985324e 53,56,82,135-138,163
+  a48b6dbd681f4da0 145,147
+  db82f89cce3b2ae7 50-52,54-55,57,59-64,66,80-81,134,139-140,148,161-162
+packages/desktop/src/index.css
+  db82f89cce3b2ae7 7804-7899,7909-8015
+  d8198494f985324e 7900-7908
+packages/desktop/src/components/artifacts/PublishModal.tsx
+  db82f89cce3b2ae7 1-7,9-15,17-23,25-58,66-69,71,73-146,148-162,167-202,204,206,208-212,214,216,218-241,243,245,247-263
+  d8198494f985324e 24,59-65,70,72,147,163-166
+packages/agent-config/src/index.ts
+  db82f89cce3b2ae7 8
+packages/agent-core/src/tools/publish.ts
+  a48b6dbd681f4da0 2-3,5,7,9-10,17,33-73,80-84,87-88,90,94,123,125-126,128-149,151-159,203,205,207,209-212,214-219,221-222,224-232,234-277,279-290,292,296,303
+  d8198494f985324e 27-28,162-192,194-202,204,206,300-302
+  db82f89cce3b2ae7 85-86,89,95,100-107,110-121,312-317
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.2.8",
+  "base_commit_sha": "af66d6e0401672a77c623ab830a8046a05afb047",
+  "prompts": {
+    "a48b6dbd681f4da0": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "91bc36a1-def4-4e2b-ae45-fedbb4289b72",
+        "model": "claude-opus-4-6"
+      },
+      "human_author": "Om Gupta",
+      "messages": [],
+      "total_additions": 216,
+      "total_deletions": 79,
+      "accepted_lines": 192,
+      "overriden_lines": 0
+    },
+    "d8198494f985324e": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "a32c5f31-1c83-4a3c-9a4d-0603d87e9610",
+        "model": "claude-opus-4-6"
+      },
+      "human_author": "Om Gupta",
+      "messages": [],
+      "total_additions": 304,
+      "total_deletions": 71,
+      "accepted_lines": 296,
+      "overriden_lines": 0
+    },
+    "db82f89cce3b2ae7": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "26cc5574-867d-4b43-9459-f1ba87382cf0",
+        "model": "claude-opus-4-6"
+      },
+      "human_author": "Om Gupta",
+      "messages": [],
+      "total_additions": 1112,
+      "total_deletions": 69,
+      "accepted_lines": 1071,
+      "overriden_lines": 15
+    }
+  }
+}
