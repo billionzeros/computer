@@ -404,13 +404,10 @@ export class Connection {
     command?: string
     args?: string[]
     env?: Record<string, string>
-    apiKey?: string
-    baseUrl?: string
     enabled: boolean
     registryId?: string
     accountEmail?: string
     accountLabel?: string
-    metadata?: Record<string, string>
   }) {
     this.send(Channel.AI, { type: 'connector_add', connector })
   }

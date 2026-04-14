@@ -1,5 +1,5 @@
 import type { AgentTool } from '@mariozechner/pi-agent-core'
-import type { DirectConnector } from '../types.js'
+import type { ConnectorEnv, DirectConnector } from '../types.js'
 import { TelegramBotAPI } from './api.js'
 import { createTelegramTools } from './tools.js'
 
@@ -11,17 +11,10 @@ export class TelegramConnector implements DirectConnector {
   private tools: AgentTool[] = []
   private ownerChatId: number | null = null
 
-  setToken(token: string): void {
-    this.api.setToken(token)
-    this.tools = createTelegramTools(this.api, this.ownerChatId)
-  }
-
-  setTokenProvider(getToken: () => Promise<string>): void {
-    this.api.setTokenProvider(getToken)
-  }
-
-  setOwnerChatId(chatId: number): void {
-    this.ownerChatId = chatId
+  configure(config: ConnectorEnv): void {
+    this.api.setToken(config.env.TELEGRAM_BOT_TOKEN ?? config.env.BOT_TOKEN ?? '')
+    const chatId = Number(config.env.OWNER_CHAT_ID)
+    this.ownerChatId = Number.isNaN(chatId) ? null : chatId
     this.tools = createTelegramTools(this.api, this.ownerChatId)
   }
 

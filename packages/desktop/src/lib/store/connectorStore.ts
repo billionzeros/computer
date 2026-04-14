@@ -63,13 +63,10 @@ interface ConnectorState {
     command?: string
     args?: string[]
     env?: Record<string, string>
-    apiKey?: string
-    baseUrl?: string
     enabled: boolean
     registryId?: string
     accountEmail?: string
     accountLabel?: string
-    metadata?: Record<string, string>
   }) => void
   removeConnectorRemote: (id: string) => void
   toggleConnectorRemote: (id: string, enabled: boolean) => void

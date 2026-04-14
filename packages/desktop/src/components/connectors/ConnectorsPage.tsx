@@ -333,6 +333,7 @@ export function AppSetup({
   }
 
   const handleConnect = () => {
+    // Collect all env values (required + optional) into a single env bag
     const env: Record<string, string> = {}
     for (const key of entry.requiredEnv) {
       if (envValues[key]) env[key] = envValues[key]
@@ -353,6 +354,7 @@ export function AppSetup({
     for (const field of entry.optionalFields ?? []) {
       const v = (optionalValues[field.key] ?? '').trim()
       if (v) metadata[field.key] = v
+      if (optionalValues[field.key]) env[field.key] = optionalValues[field.key]
     }
 
     let outApiKey = apiKey
@@ -784,12 +786,14 @@ function CustomApiTab({
   const handleAdd = () => {
     if (!name) return
     const id = `api-${name.toLowerCase().replace(/\s+/g, '-')}-${Date.now()}`
+    const env: Record<string, string> = {}
+    if (apiKey) env.API_KEY = apiKey
+    if (baseUrl) env.BASE_URL = baseUrl
     connectorStore.getState().addConnectorRemote({
       id,
       name,
       type: 'api',
-      apiKey,
-      baseUrl,
+      env: Object.keys(env).length > 0 ? env : undefined,
       enabled: true,
     })
     setAdding(false)

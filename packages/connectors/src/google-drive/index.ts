@@ -1,5 +1,5 @@
 import type { AgentTool } from '@mariozechner/pi-agent-core'
-import type { DirectConnector } from '../types.js'
+import type { ConnectorEnv, DirectConnector } from '../types.js'
 import { GoogleDriveAPI } from './api.js'
 import { createGoogleDriveTools } from './tools.js'
 
@@ -10,13 +10,12 @@ export class GoogleDriveConnector implements DirectConnector {
   private api = new GoogleDriveAPI()
   private tools: AgentTool[] = []
 
-  setToken(accessToken: string): void {
-    this.api.setToken(accessToken)
+  configure(config: ConnectorEnv): void {
+    if (config.env.ACCESS_TOKEN) this.api.setToken(config.env.ACCESS_TOKEN)
+    if (config.refreshToken) {
+      this.api.setTokenProvider(config.refreshToken)
+    }
     this.tools = createGoogleDriveTools(this.api)
-  }
-
-  setTokenProvider(getToken: () => Promise<string>): void {
-    this.api.setTokenProvider(getToken)
   }
 
   getTools(): AgentTool[] {

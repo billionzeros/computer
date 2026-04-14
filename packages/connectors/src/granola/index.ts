@@ -1,5 +1,5 @@
 import type { AgentTool } from '@mariozechner/pi-agent-core'
-import type { DirectConnector } from '../types.js'
+import type { ConnectorEnv, DirectConnector } from '../types.js'
 import { GranolaAPI } from './api.js'
 import { createGranolaTools } from './tools.js'
 
@@ -10,13 +10,9 @@ export class GranolaConnector implements DirectConnector {
   private api = new GranolaAPI()
   private tools: AgentTool[] = []
 
-  setToken(token: string): void {
-    this.api.setToken(token)
+  configure(config: ConnectorEnv): void {
+    this.api.setToken(config.env.GRANOLA_API_KEY ?? config.env.API_KEY ?? '')
     this.tools = createGranolaTools(this.api)
-  }
-
-  setTokenProvider(getToken: () => Promise<string>): void {
-    this.api.setTokenProvider(getToken)
   }
 
   getTools(): AgentTool[] {

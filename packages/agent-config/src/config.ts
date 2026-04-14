@@ -255,11 +255,7 @@ export interface ConnectorConfig {
   args?: string[]
   env?: Record<string, string>
 
-  // For API key connectors (type: 'api')
-  apiKey?: string
-  baseUrl?: string
-
-  // For OAuth connectors (type: 'oauth') — tokens stored separately in TokenStore
+  // For OAuth connectors (type: 'oauth') — tokens stored separately in CredentialStore
   oauthProvider?: string
 
   // Multi-account support: which registry entry this belongs to (e.g. "gmail").

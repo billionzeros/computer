@@ -1,5 +1,5 @@
-export { ConnectorManager, type DirectToolPermission } from './connector-manager.js'
-export type { DirectConnector, ConnectorFactory, TokenGetter } from './types.js'
+export { ConnectorManager, type DirectToolPermission, type EnvResolver } from './connector-manager.js'
+export type { DirectConnector, ConnectorFactory, ConnectorEnv } from './types.js'
 
 export { SlackUserConnector, SlackBotConnector } from './slack/index.js'
 export { GitHubConnector } from './github/index.js'

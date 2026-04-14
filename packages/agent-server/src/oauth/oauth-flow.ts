@@ -10,7 +10,7 @@
 import { randomBytes } from 'node:crypto'
 import { type AgentConfig, CONNECTOR_REGISTRY } from '@anton/agent-config'
 import { createLogger } from '@anton/logger'
-import type { StoredToken, TokenStore } from './token-store.js'
+import type { StoredCredentials, CredentialStore } from '../credential-store.js'
 
 const log = createLogger('oauth-flow')
 
@@ -29,10 +29,10 @@ interface PendingFlow {
 export class OAuthFlow {
   private pending = new Map<string, PendingFlow>()
   private refreshing = new Map<string, Promise<string>>()
-  private tokenStore: TokenStore
+  private tokenStore: CredentialStore
   private config: AgentConfig
 
-  constructor(config: AgentConfig, tokenStore: TokenStore) {
+  constructor(config: AgentConfig, tokenStore: CredentialStore) {
     this.config = config
     this.tokenStore = tokenStore
   }
@@ -151,7 +151,7 @@ export class OAuthFlow {
     // Single-use nonce
     this.pending.delete(body.nonce)
 
-    const token: StoredToken = {
+    const token: StoredCredentials = {
       provider: pending.connectorId,
       accessToken: body.access_token,
       refreshToken: body.refresh_token,
@@ -201,10 +201,13 @@ export class OAuthFlow {
       }
     }
 
+    if (!stored.accessToken) {
+      throw new Error(`No access token stored for ${provider}`)
+    }
     return stored.accessToken
   }
 
-  private async doRefresh(provider: string, stored: StoredToken): Promise<string> {
+  private async doRefresh(provider: string, stored: StoredCredentials): Promise<string> {
     if (!stored.refreshToken) {
       log.warn({ provider }, 'doRefresh: no refresh token stored, cannot refresh')
       throw new Error(`Token expired and no refresh token available for ${provider}`)

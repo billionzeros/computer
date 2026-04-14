@@ -83,7 +83,7 @@ Each file gets a named logger. These are the standard module names:
 | `updater` | updater.ts |
 | `telegram` | telegram-bot.ts |
 | `agent-manager` | agents/agent-manager.ts |
-| `token-store` | oauth/token-store.ts |
+| `credential-store` | credential-store.ts |
 
 ### connectors
 | Module | File |

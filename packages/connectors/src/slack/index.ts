@@ -1,5 +1,5 @@
 import type { AgentTool } from '@mariozechner/pi-agent-core'
-import type { ConnectorSurface, DirectConnector } from '../types.js'
+import type { ConnectorEnv, ConnectorSurface, DirectConnector } from '../types.js'
 import { SlackAPI } from './api.js'
 import { createSlackTools } from './tools.js'
 
@@ -17,12 +17,11 @@ export class SlackUserConnector implements DirectConnector {
   private api = new SlackAPI()
   private tools: AgentTool[] = createSlackTools(this.api, { mode: 'user' })
 
-  setToken(accessToken: string): void {
-    this.api.setToken(accessToken)
-  }
-
-  setTokenProvider(getToken: () => Promise<string>): void {
-    this.api.setTokenProvider(getToken)
+  configure(config: ConnectorEnv): void {
+    if (config.env.ACCESS_TOKEN) this.api.setToken(config.env.ACCESS_TOKEN)
+    if (config.refreshToken) {
+      this.api.setTokenProvider(config.refreshToken)
+    }
   }
 
   getTools(): AgentTool[] {
@@ -67,12 +66,11 @@ export class SlackBotConnector implements DirectConnector {
   private api = new SlackAPI()
   private tools: AgentTool[] = createSlackTools(this.api, { mode: 'bot' })
 
-  setToken(accessToken: string): void {
-    this.api.setToken(accessToken)
-  }
-
-  setTokenProvider(getToken: () => Promise<string>): void {
-    this.api.setTokenProvider(getToken)
+  configure(config: ConnectorEnv): void {
+    if (config.env.ACCESS_TOKEN) this.api.setToken(config.env.ACCESS_TOKEN)
+    if (config.refreshToken) {
+      this.api.setTokenProvider(config.refreshToken)
+    }
   }
 
   getTools(): AgentTool[] {

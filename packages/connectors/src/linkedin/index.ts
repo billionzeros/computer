@@ -1,5 +1,5 @@
 import type { AgentTool } from '@mariozechner/pi-agent-core'
-import type { DirectConnector } from '../types.js'
+import type { ConnectorEnv, DirectConnector } from '../types.js'
 import { UnipileLinkedInAPI } from './api.js'
 import { createLinkedInTools } from './tools.js'
 
@@ -10,22 +10,19 @@ export class LinkedInConnector implements DirectConnector {
   private api = new UnipileLinkedInAPI()
   private tools: AgentTool[] = []
 
-  /**
-   * Token format: "apiKey|dsn|accountId"
-   * Packed by the OAuth proxy after Unipile hosted auth completes.
-   */
-  setToken(token: string): void {
-    const parts = token.split('|')
-    const apiKey = parts[0] ?? ''
-    const dsn = parts[1] ?? ''
-    const accountId = parts[2] ?? ''
-
-    this.api.setCredentials(apiKey, dsn, accountId)
+  configure(config: ConnectorEnv): void {
+    if (config.env.ACCESS_TOKEN) {
+      // Compound format from OAuth proxy: "apiKey|dsn|accountId"
+      const parts = config.env.ACCESS_TOKEN.split('|')
+      const apiKey = parts[0] ?? ''
+      const dsn = parts[1] ?? ''
+      const accountId = parts[2] ?? ''
+      this.api.setCredentials(apiKey, dsn, accountId)
+    }
+    if (config.refreshToken) {
+      this.api.setTokenProvider(config.refreshToken)
+    }
     this.tools = createLinkedInTools(this.api)
-  }
-
-  setTokenProvider(getToken: () => Promise<string>): void {
-    this.api.setTokenProvider(getToken)
   }
 
   getTools(): AgentTool[] {

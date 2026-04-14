@@ -81,7 +81,7 @@ import { createLogger } from '@anton/logger'
 import { Channel, decodeFrame, encodeFrame, parseJsonPayload } from '@anton/protocol'
 import type { AiMessage, ChannelId, ControlMessage, TerminalMessage } from '@anton/protocol'
 import { WebSocket, WebSocketServer } from 'ws'
-import { OAuthFlow, TokenStore, fetchAccountIdentity, oauthCallbackHandler } from './oauth/index.js'
+import { OAuthFlow, CredentialStore, fetchAccountIdentity, oauthCallbackHandler } from './oauth/index.js'
 import type { Scheduler } from './scheduler.js'
 import { Updater } from './updater.js'
 import { extractBindingKey, getBinding } from './webhooks/bindings.js'
@@ -234,7 +234,7 @@ export class AgentServer {
   private updater: Updater
   private mcpManager: McpManager = new McpManager()
   private oauthFlow: OAuthFlow
-  private tokenStore: TokenStore
+  private credentialStore: CredentialStore
   private connectorManager: ConnectorManager
   private webhookRouter: WebhookRouter | null = null
   private webhookRunner: WebhookAgentRunner | null = null
@@ -250,10 +250,11 @@ export class AgentServer {
     this.updater = new Updater(config.token)
 
     // Initialize OAuth infrastructure
-    this.tokenStore = new TokenStore(getAntonDir(), config.token)
-    this.oauthFlow = new OAuthFlow(config, this.tokenStore)
-    this.connectorManager = new ConnectorManager(CONNECTOR_FACTORIES, (provider) =>
-      this.oauthFlow.getToken(provider),
+    this.credentialStore = new CredentialStore(getAntonDir(), config.token)
+    this.oauthFlow = new OAuthFlow(config, this.credentialStore)
+    this.connectorManager = new ConnectorManager(
+      CONNECTOR_FACTORIES,
+      (id) => this.resolveConnectorEnv(id),
     )
 
     // Clean expired sessions on startup
@@ -483,11 +484,8 @@ export class AgentServer {
     // Start MCP connectors
     await this.startMcpConnectors()
 
-    // Activate OAuth connectors that have stored tokens
-    await this.startOAuthConnectors()
-
-    // Activate API connectors with stored tokens from config or env
-    this.startApiConnectors()
+    // Activate all direct connectors (OAuth + API) with stored credentials
+    await this.startConnectors()
 
     // Start webhook router and configured providers
     await this.startWebhooks()
@@ -3490,48 +3488,103 @@ export class AgentServer {
     }
   }
 
-  private async startOAuthConnectors(): Promise<void> {
-    const connected = this.oauthFlow.listConnected()
-    if (connected.length === 0) return
+  /**
+   * Resolve env + refreshToken for a connector. Used by ConnectorManager.activate().
+   * Priority: 1) encrypted secrets, 2) legacy OAuth accessToken, 3) process.env fallback.
+   */
+  private async resolveConnectorEnv(providerId: string): Promise<import('@anton/connectors').ConnectorEnv> {
+    const env: Record<string, string> = {}
+    const cfg = getConnectors(this.config).find((c) => c.id === providerId)
 
-    // Only activate connectors that are enabled in config
-    const enabledConnectors = getConnectors(this.config)
-    const enabledMap = new Map(enabledConnectors.filter((c) => c.enabled).map((c) => [c.id, c]))
+    // 1. Encrypted secrets (highest priority — user explicitly set these)
+    let creds: import('./credential-store.js').StoredCredentials | null = null
+    try {
+      creds = this.credentialStore.load(providerId)
+    } catch {
+      // Can't decrypt — will rely on process.env fallback
+    }
+    if (creds?.secrets) Object.assign(env, creds.secrets)
+    // Legacy: map accessToken into env for OAuth connectors
+    if (creds?.accessToken && !env.ACCESS_TOKEN) env.ACCESS_TOKEN = creds.accessToken
 
-    const toActivate = connected.filter((id) => {
-      const cfg = enabledMap.get(id)
-      if (!cfg) return false
-      const factoryId = cfg.registryId ?? id
-      return this.connectorManager.hasFactory(factoryId)
+    // 2. process.env fallback — check ONLY declared registry keys
+    const registryId = cfg?.registryId ?? providerId
+    const prefix = registryId.toUpperCase().replace(/-/g, '_')
+    const entry = CONNECTOR_REGISTRY.find((e) => e.id === registryId)
+    const declaredKeys = [
+      ...(entry?.requiredEnv ?? []),
+      ...(entry?.optionalFields?.map((f) => f.key) ?? []),
+    ]
+    for (const key of declaredKeys) {
+      if (!env[key]) {
+        // Check prefixed form first (e.g. TELEGRAM_BOT_TOKEN), then bare key
+        const prefixed = process.env[`${prefix}_${key}`]
+        const bare = process.env[key]
+        if (prefixed) env[key] = prefixed
+        else if (bare) env[key] = bare
+      }
+    }
+
+    // 3. OAuth refresh callback (only if this connector has a refresh token)
+    const refreshToken = creds?.refreshToken
+      ? () => this.oauthFlow.getToken(providerId)
+      : undefined
+
+    return { env, refreshToken }
+  }
+
+  private async startConnectors(): Promise<void> {
+    const connectors = getConnectors(this.config).filter((c) => c.enabled)
+    const toActivate = connectors.filter((c) => {
+      if (c.type === 'mcp') return false // MCP handled separately
+      const factoryId = c.registryId ?? c.id
+      if (!this.connectorManager.hasFactory(factoryId)) return false
+      // For OAuth connectors, only activate if we have stored credentials
+      if (c.type === 'oauth' && !this.credentialStore.has(c.id)) return false
+      // For API connectors, check credential store or process.env
+      if (c.type === 'api') {
+        const hasStored = this.credentialStore.has(c.id)
+        if (!hasStored) {
+          // Check process.env fallback
+          const registryId = c.registryId ?? c.id
+          const prefix = registryId.toUpperCase().replace(/-/g, '_')
+          const entry = CONNECTOR_REGISTRY.find((e) => e.id === registryId)
+          const declaredKeys = [...(entry?.requiredEnv ?? [])]
+          const hasEnv = declaredKeys.some(
+            (key) => process.env[`${prefix}_${key}`] || process.env[key],
+          )
+          if (!hasEnv) return false
+        }
+      }
+      return true
     })
+
     if (toActivate.length === 0) return
+    log.info({ count: toActivate.length }, 'Activating connectors')
 
-    log.info({ count: toActivate.length }, 'Activating OAuth connectors')
-    for (const providerId of toActivate) {
-      const cfg = enabledMap.get(providerId)!
-
-      // Backfill accountEmail for connectors that were connected before
+    for (const c of toActivate) {
+      // Backfill accountEmail for OAuth connectors that were connected before
       // identity-fetching was introduced (or where the initial fetch failed).
-      if (!cfg.accountEmail && !cfg.accountLabel) {
+      if (c.type === 'oauth' && !c.accountEmail && !c.accountLabel) {
         try {
-          const token = await this.oauthFlow.getToken(providerId)
+          const token = await this.oauthFlow.getToken(c.id)
           if (token) {
-            const registryId = cfg.registryId ?? providerId
+            const registryId = c.registryId ?? c.id
             const email = await fetchAccountIdentity(registryId, token)
             if (email) {
-              cfg.accountEmail = email
-              updateConnectorConfig(this.config, providerId, { accountEmail: email })
-              log.info({ providerId, accountEmail: email }, 'Backfilled account identity')
+              c.accountEmail = email
+              updateConnectorConfig(this.config, c.id, { accountEmail: email })
+              log.info({ providerId: c.id, accountEmail: email }, 'Backfilled account identity')
             }
           }
         } catch (err) {
-          log.warn({ providerId, err }, 'Failed to backfill account identity')
+          log.warn({ providerId: c.id, err }, 'Failed to backfill account identity')
         }
       }
 
-      await this.connectorManager.activate(providerId, {
-        registryId: cfg.registryId,
-        accountDisplayName: cfg.accountLabel ?? cfg.accountEmail,
+      await this.connectorManager.activate(c.id, {
+        registryId: c.registryId,
+        accountDisplayName: c.accountLabel ?? c.accountEmail,
       })
     }
   }
@@ -3660,10 +3713,14 @@ export class AgentServer {
   }
 
   private getTelegramToken(): string | null {
-    // Check env var first, then saved connector config
+    // Check env var first, then credential store
     if (process.env.TELEGRAM_BOT_TOKEN) return process.env.TELEGRAM_BOT_TOKEN
-    const saved = getConnectors(this.config).find((c) => c.id === 'telegram' && c.enabled)
-    return saved?.apiKey ?? null
+    try {
+      const creds = this.credentialStore.load('telegram')
+      return creds?.secrets?.BOT_TOKEN ?? creds?.secrets?.TELEGRAM_BOT_TOKEN ?? null
+    } catch {
+      return null
+    }
   }
 
   /**
@@ -3691,6 +3748,7 @@ export class AgentServer {
     /* secret is now read directly from config; nothing to invalidate */
   }
 
+<<<<<<< HEAD
   private connectorRegistryEntry(
     c: Pick<ConnectorConfig, 'id' | 'registryId'>,
   ): (typeof CONNECTOR_REGISTRY)[number] | undefined {
@@ -3758,6 +3816,9 @@ export class AgentServer {
       }
     }
   }
+=======
+  // startApiConnectors removed — unified into startConnectors()
+>>>>>>> c6ba11a625aec37d37b94503fd8b68e36c7ad39e
 
   private connectorToMcpConfig(c: ConnectorConfig): McpServerConfig {
     return {
@@ -3798,6 +3859,7 @@ export class AgentServer {
       // Provider-specific runtime metadata (Slack bot identity, team info, etc.)
       // Sensitive values are stripped before sending to the client.
       metadata: stripSensitiveMetadata(c.metadata),
+      hasCredentials: this.credentialStore.has(c.id),
       // Multi-account fields
       registryId: c.registryId,
       accountEmail: c.accountEmail,
@@ -3815,6 +3877,7 @@ export class AgentServer {
 
   private async handleConnectorAdd(msg: { connector: ConnectorConfig }): Promise<void> {
     try {
+<<<<<<< HEAD
       const persisted = this.normalizeApiConnectorAgainstRegistry(msg.connector)
       addConnector(this.config, persisted)
       if (persisted.id === 'slack-bot') this.invalidateSlackBotSecretCache()
@@ -3844,6 +3907,45 @@ export class AgentServer {
 
       // Start Telegram webhook provider if just connected
       if (persisted.id === 'telegram' && persisted.apiKey && !this.telegramProvider) {
+=======
+      // Store all env values in the credential store (encrypted)
+      if (msg.connector.env && Object.keys(msg.connector.env).length > 0) {
+        this.credentialStore.save(msg.connector.id, {
+          provider: msg.connector.id,
+          secrets: msg.connector.env,
+        })
+      }
+
+      // Strip secrets from config before persisting to config.yaml
+      const configToSave = { ...msg.connector }
+      delete configToSave.env
+      addConnector(this.config, configToSave)
+      if (msg.connector.id === 'slack-bot') this.invalidateSlackBotSecretCache()
+
+      if (msg.connector.type === 'mcp' && msg.connector.command) {
+        await this.mcpManager.addConnector(this.connectorToMcpConfig(msg.connector))
+        this.mcpManager.setToolPermissions(msg.connector.id, msg.connector.toolPermissions)
+      } else if (msg.connector.toolPermissions) {
+        this.connectorManager.setToolPermissions(msg.connector.id, msg.connector.toolPermissions)
+      }
+
+      // Activate direct connectors immediately
+      const factoryId = msg.connector.registryId ?? msg.connector.id
+      if (
+        msg.connector.type === 'api' &&
+        this.connectorManager.hasFactory(factoryId) &&
+        this.credentialStore.has(msg.connector.id)
+      ) {
+        await this.connectorManager.activate(msg.connector.id, {
+          registryId: msg.connector.registryId,
+          accountDisplayName: msg.connector.accountLabel ?? msg.connector.accountEmail,
+        })
+        this.refreshAllSessionTools()
+      }
+
+      // Start Telegram webhook provider if just connected
+      if (msg.connector.id === 'telegram' && this.credentialStore.has('telegram') && !this.telegramProvider) {
+>>>>>>> c6ba11a625aec37d37b94503fd8b68e36c7ad39e
         this.startWebhooks().catch((err) => log.error({ err }, 'Webhook startup failed'))
       }
 
@@ -3867,7 +3969,23 @@ export class AgentServer {
     changes: Partial<ConnectorConfig>
   }): Promise<void> {
     try {
+<<<<<<< HEAD
       let updated = updateConnectorConfig(this.config, msg.id, msg.changes)
+=======
+      // If env values provided, merge into credential store
+      if (msg.changes.env && Object.keys(msg.changes.env).length > 0) {
+        let existing: import('./credential-store.js').StoredCredentials | null = null
+        try { existing = this.credentialStore.load(msg.id) } catch { /* fresh */ }
+        const mergedSecrets = { ...(existing?.secrets ?? {}), ...msg.changes.env }
+        this.credentialStore.save(msg.id, {
+          ...(existing ?? { provider: msg.id }),
+          secrets: mergedSecrets,
+        })
+      }
+      // Don't persist env to config.yaml
+      const { env: _env, ...configChanges } = msg.changes
+      const updated = updateConnectorConfig(this.config, msg.id, configChanges)
+>>>>>>> c6ba11a625aec37d37b94503fd8b68e36c7ad39e
       if (!updated) {
         this.sendToClient(Channel.AI, { type: 'error', message: `Connector not found: ${msg.id}` })
         return
@@ -3880,17 +3998,20 @@ export class AgentServer {
         await this.mcpManager.addConnector(this.connectorToMcpConfig(updated))
         this.mcpManager.setToolPermissions(updated.id, updated.toolPermissions)
       } else {
-        // Direct connector — keep the ConnectorManager's permission map in
-        // lockstep with the persisted config. Without this, an `update` that
-        // tweaked permissions would only persist them; the live agent would
-        // still see the old set until process restart.
         this.connectorManager.setToolPermissions(updated.id, updated.toolPermissions)
+<<<<<<< HEAD
         // Re-apply metadata to live instances (e.g. Polymarket WALLET_ADDRESS / API_KEY edits)
         if (this.connectorManager.isActive(updated.id)) {
           this.connectorManager.applyPersistedRuntimeMetadata(updated.id, updated.metadata)
         }
         // Tools the agent sees may have changed (a 'never' tool just got
         // re-enabled, for instance) — push the new tool list into live sessions.
+=======
+        // Reconfigure live connector if env changed
+        if (msg.changes.env) {
+          await this.connectorManager.reconfigure(msg.id)
+        }
+>>>>>>> c6ba11a625aec37d37b94503fd8b68e36c7ad39e
         this.refreshAllSessionTools()
       }
 
@@ -3925,6 +4046,7 @@ export class AgentServer {
       }
       this.connectorManager.deactivate(msg.id)
       this.connectorManager.setToolPermissions(msg.id, undefined)
+      this.credentialStore.delete(msg.id)
       removeConnectorConfig(this.config, msg.id)
       if (msg.id === 'slack-bot') this.invalidateSlackBotSecretCache()
       this.refreshAllSessionTools()
@@ -3958,6 +4080,7 @@ export class AgentServer {
       } else if (isDirectConnector) {
         if (msg.enabled) {
           const connectorConfig = getConnectors(this.config).find((c) => c.id === msg.id)
+<<<<<<< HEAD
           if (connectorConfig?.type === 'api') {
             const token =
               connectorConfig.apiKey ??
@@ -3976,6 +4099,12 @@ export class AgentServer {
           } else {
             await this.connectorManager.activate(msg.id)
           }
+=======
+          await this.connectorManager.activate(msg.id, {
+            registryId: connectorConfig?.registryId,
+            accountDisplayName: connectorConfig?.accountLabel ?? connectorConfig?.accountEmail,
+          })
+>>>>>>> c6ba11a625aec37d37b94503fd8b68e36c7ad39e
         } else {
           this.connectorManager.deactivate(msg.id)
         }
@@ -4026,8 +4155,8 @@ export class AgentServer {
       // Inactive direct connector (has factory but not activated) — try to activate first
       if (this.connectorManager.hasFactory(msg.id)) {
         try {
-          // Check if this is an API-key connector — use activateWithToken instead of OAuth
           const connectorConfig = getConnectors(this.config).find((c) => c.id === msg.id)
+<<<<<<< HEAD
           if (connectorConfig?.type === 'api') {
             const token =
               connectorConfig.apiKey ??
@@ -4054,6 +4183,12 @@ export class AgentServer {
           } else {
             await this.connectorManager.activate(msg.id)
           }
+=======
+          await this.connectorManager.activate(msg.id, {
+            registryId: connectorConfig?.registryId,
+            accountDisplayName: connectorConfig?.accountLabel ?? connectorConfig?.accountEmail,
+          })
+>>>>>>> c6ba11a625aec37d37b94503fd8b68e36c7ad39e
           const result = await this.connectorManager.testConnection(msg.id)
           const tools = this.connectorManager.getStatus().find((s) => s.id === msg.id)?.tools ?? []
           this.sendToClient(Channel.AI, {
@@ -4451,6 +4586,11 @@ export class AgentServer {
     }
   }
 
+<<<<<<< HEAD
+=======
+  // applyConnectorMetadata removed — Telegram configure() now reads OWNER_CHAT_ID from env
+
+>>>>>>> c6ba11a625aec37d37b94503fd8b68e36c7ad39e
   // ── Helpers ─────────────────────────────────────────────────────
 
   /** Public: forward agent manager events to client */

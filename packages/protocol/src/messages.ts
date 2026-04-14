@@ -1032,8 +1032,6 @@ export interface ConnectorConfigPayload {
   command?: string
   args?: string[]
   env?: Record<string, string>
-  apiKey?: string
-  baseUrl?: string
   metadata?: Record<string, string>
   enabled: boolean
   oauthProvider?: string
@@ -1062,6 +1060,7 @@ export interface ConnectorStatusPayload {
    */
   metadata?: Record<string, string>
   error?: string
+  hasCredentials?: boolean
   registryId?: string
   accountEmail?: string
   accountLabel?: string

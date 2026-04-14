@@ -407,8 +407,8 @@ this matters:
    no-op for bot replies and clobber the user connector's metadata if both
    were installed.
 
-The bot's `xoxb` token is stored encrypted in the normal `TokenStore`
-(`~/.anton/tokens/slack-bot.enc`), same as every other OAuth connector.
+The bot's `xoxb` token is stored encrypted in the `CredentialStore`
+(`~/.anton/tokens/slack-bot.enc`), same as every other connector.
 
 ## What this avoids
 

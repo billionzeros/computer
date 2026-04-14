@@ -1,7 +1,7 @@
 import { createLogger } from '@anton/logger'
 import type { AgentTool } from '@mariozechner/pi-agent-core'
 import type { TSchema } from '@sinclair/typebox'
-import type { ConnectorFactory, DirectConnector, TokenGetter } from './types.js'
+import type { ConnectorEnv, ConnectorFactory, DirectConnector } from './types.js'
 
 const log = createLogger('connector-manager')
 
@@ -28,6 +28,9 @@ function pickMetadataValue(metadata: Record<string, string>, ...keys: string[]):
  */
 export type DirectToolPermission = 'auto' | 'ask' | 'never'
 
+/** Resolves env + refreshToken for a connector by its provider ID. */
+export type EnvResolver = (providerId: string) => Promise<ConnectorEnv>
+
 /**
  * Manages active direct API connectors.
  * Handles activation/deactivation and tool aggregation.
@@ -35,7 +38,7 @@ export type DirectToolPermission = 'auto' | 'ask' | 'never'
 export class ConnectorManager {
   private connectors = new Map<string, DirectConnector>()
   private factories: Record<string, ConnectorFactory>
-  private getToken: TokenGetter
+  private resolveEnv: EnvResolver
   /**
    * Maps instance ID → registryId for multi-account grouping.
    * For single-account connectors, registryId === instanceId.
@@ -60,13 +63,13 @@ export class ConnectorManager {
    */
   private toolIndex: Map<string, string> | null = null
 
-  constructor(factories: Record<string, ConnectorFactory>, getToken: TokenGetter) {
+  constructor(factories: Record<string, ConnectorFactory>, resolveEnv: EnvResolver) {
     this.factories = factories
-    this.getToken = getToken
+    this.resolveEnv = resolveEnv
   }
 
   /**
-   * Activate a connector by provider ID. Creates instance and sets token.
+   * Activate a connector by provider ID. Creates instance and configures it.
    * Returns true on success, false if there is no factory or activation
    * failed (errors are logged). Callers that need to know whether the
    * connector is now usable should check the return value — the previous
@@ -84,13 +87,9 @@ export class ConnectorManager {
     }
 
     try {
-      const token = await this.getToken(providerId)
+      const env = await this.resolveEnv(providerId)
       const connector = factory()
-      connector.setToken(token) // initial token for immediate use
-      // Set lazy token provider so the connector auto-refreshes on each API call
-      if (connector.setTokenProvider) {
-        connector.setTokenProvider(() => this.getToken(providerId))
-      }
+      connector.configure(env)
       this.connectors.set(providerId, connector)
       this.registryMap.set(providerId, factoryId)
       if (opts?.accountDisplayName) {
@@ -292,6 +291,7 @@ export class ConnectorManager {
     }))
   }
 
+<<<<<<< HEAD
   /**
    * Apply persisted config metadata to a live connector (wallet, API key hints, Telegram chat id).
    * Call after setToken so optional fields from config are never skipped.
@@ -352,9 +352,20 @@ export class ConnectorManager {
     this.registryMap.set(providerId, factoryId)
     if (opts?.accountDisplayName) {
       this.accountDisplayNames.set(providerId, opts.accountDisplayName)
+=======
+  /** Re-resolve env and reconfigure a live connector instance. */
+  async reconfigure(providerId: string): Promise<void> {
+    const connector = this.connectors.get(providerId)
+    if (!connector) return
+    try {
+      const env = await this.resolveEnv(providerId)
+      connector.configure(env)
+      this.toolIndex = null
+      log.info({ connector: connector.name }, 'reconfigured')
+    } catch (err) {
+      log.error({ providerId, err }, 'failed to reconfigure')
+>>>>>>> c6ba11a625aec37d37b94503fd8b68e36c7ad39e
     }
-    this.toolIndex = null
-    log.info({ connector: connector.name, toolCount: connector.getTools().length }, 'activated')
   }
 
   /** Update the display name for an active connector instance. */
@@ -365,18 +376,6 @@ export class ConnectorManager {
   /** Get the registryId for an active connector instance. */
   getRegistryId(instanceId: string): string | undefined {
     return this.registryMap.get(instanceId)
-  }
-
-  /** Refresh a connector's token. */
-  async refreshToken(providerId: string): Promise<void> {
-    const connector = this.connectors.get(providerId)
-    if (!connector) return
-    try {
-      const token = await this.getToken(providerId)
-      connector.setToken(token)
-    } catch (err) {
-      log.error({ providerId, err }, 'failed to refresh token')
-    }
   }
 
   /** Test a specific connector's connection. */

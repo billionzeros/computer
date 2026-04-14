@@ -15,6 +15,19 @@ import type { AgentTool } from '@mariozechner/pi-agent-core'
 export type ConnectorSurface = 'desktop' | 'slack' | 'telegram' | (string & {})
 
 /**
+ * All config values — tokens, API keys, wallet addresses, settings.
+ * Resolved from encrypted store + process.env before being passed in.
+ */
+export interface ConnectorEnv {
+  env: Record<string, string>
+
+  /** Lazy token refresh for OAuth connectors.
+   *  Returns a fresh access token. Handles expiry and refresh internally.
+   *  API-key connectors don't receive this — they read env.API_KEY directly. */
+  refreshToken?: () => Promise<string>
+}
+
+/**
  * Interface for direct API connectors.
  * Each connector wraps a service's REST/GraphQL API and exposes tools.
  */
@@ -35,13 +48,8 @@ export interface DirectConnector {
    */
   readonly surfaces?: ConnectorSurface[]
 
-  /** Set the access token. Called on activation and token refresh. */
-  setToken(accessToken: string): void
-
-  /** Set a lazy token provider that returns a fresh token on each API call.
-   *  When set, connectors call this instead of using the static token from setToken().
-   *  The provider should handle caching and refresh internally (e.g. OAuthFlow.getToken). */
-  setTokenProvider?(getToken: () => Promise<string>): void
+  /** Receive all configuration. Called on activation and on runtime config updates. */
+  configure(config: ConnectorEnv): void
 
   /** Get all tools this connector provides. */
   getTools(): AgentTool[]
@@ -52,6 +60,3 @@ export interface DirectConnector {
 
 /** Factory type for creating connector instances. */
 export type ConnectorFactory = () => DirectConnector
-
-/** Token getter function — resolves to a valid access token, handling refresh. */
-export type TokenGetter = (provider: string) => Promise<string>

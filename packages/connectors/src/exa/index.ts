@@ -1,5 +1,5 @@
 import type { AgentTool } from '@mariozechner/pi-agent-core'
-import type { DirectConnector } from '../types.js'
+import type { ConnectorEnv, DirectConnector } from '../types.js'
 import { ExaAPI } from './api.js'
 import { createExaTools } from './tools.js'
 
@@ -10,13 +10,15 @@ export class ExaConnector implements DirectConnector {
   private api = new ExaAPI()
   private tools: AgentTool[] = []
 
-  setToken(apiKey: string): void {
-    this.api.setToken(apiKey)
+  configure(config: ConnectorEnv): void {
+    if (config.env.ACCESS_TOKEN) {
+      // Legacy compound format from OAuth proxy
+      this.api.setToken(config.env.ACCESS_TOKEN)
+    }
+    if (config.refreshToken) {
+      this.api.setTokenProvider(config.refreshToken)
+    }
     this.tools = createExaTools(this.api)
-  }
-
-  setTokenProvider(getToken: () => Promise<string>): void {
-    this.api.setTokenProvider(getToken)
   }
 
   getTools(): AgentTool[] {
