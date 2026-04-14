@@ -1517,7 +1517,7 @@ export class AgentServer {
           language: msg.language,
           slug: msg.slug,
         },
-        process.env.DOMAIN,
+        process.env.ANTON_HOST,
       )
 
       // Extract slug and URL from the result string
@@ -1571,7 +1571,7 @@ export class AgentServer {
           provider: msg.provider,
           model: msg.model,
           apiKey: msg.apiKey,
-          domain: process.env.DOMAIN,
+          domain: process.env.ANTON_HOST,
           thinkingLevel: msg.thinkingLevel,
         }),
       )
@@ -2983,7 +2983,7 @@ export class AgentServer {
           DEFAULT_SESSION_ID,
           this.config,
           this.buildSessionOptions(DEFAULT_SESSION_ID, undefined, {
-            domain: process.env.DOMAIN,
+            domain: process.env.ANTON_HOST,
           }),
         )
         this.wireSessionConfirmHandler(session)
@@ -3646,7 +3646,7 @@ export class AgentServer {
       if (publicUrl) {
         await this.telegramProvider.registerWebhook(publicUrl)
       } else {
-        log.warn('Telegram token present but DOMAIN not set; webhook not registered')
+        log.warn('Telegram token present but ANTON_HOST not set; webhook not registered')
       }
       // Register slash commands with Telegram's Bot Commands menu (fire-and-forget)
       this.telegramProvider.registerCommands().catch(() => {})
@@ -3694,7 +3694,7 @@ export class AgentServer {
 
   /** Resolve the publicly reachable origin used for webhook registration. */
   private getPublicUrl(): string | null {
-    if (process.env.DOMAIN) return `https://${process.env.DOMAIN}`
+    if (process.env.ANTON_HOST) return `https://${process.env.ANTON_HOST}`
     if (process.env.OAUTH_CALLBACK_BASE_URL) {
       try {
         return new URL(process.env.OAUTH_CALLBACK_BASE_URL).origin
@@ -4117,7 +4117,14 @@ export class AgentServer {
     // Build provider-specific extra params
     let extraParams: Record<string, string> | undefined
     if (entry?.oauthProvider === 'websearch') {
-      const domain = process.env.DOMAIN
+      let domain = process.env.ANTON_HOST
+      if (!domain && process.env.OAUTH_CALLBACK_BASE_URL) {
+        try {
+          domain = new URL(process.env.OAUTH_CALLBACK_BASE_URL).hostname
+        } catch {
+          // ignore invalid URL
+        }
+      }
       if (domain) extraParams = { domain }
     }
 
