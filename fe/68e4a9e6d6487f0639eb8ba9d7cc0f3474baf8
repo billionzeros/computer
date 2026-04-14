@@ -1,0 +1,36 @@
+specs/features/connectors/connectors.md
+  35d7b460d404095c 206-283,292-309,318-323,325-333,335-401,403,411-572
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.2.8",
+  "base_commit_sha": "fe68e4a9e6d6487f0639eb8ba9d7cc0f3474baf8",
+  "prompts": {
+    "35d7b460d404095c": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "8c760af2-9f5f-49f2-a478-680270708b9d",
+        "model": "claude-opus-4-6"
+      },
+      "human_author": "Om Gupta",
+      "messages": [],
+      "total_additions": 345,
+      "total_deletions": 9,
+      "accepted_lines": 345,
+      "overriden_lines": 0
+    },
+    "6d1a34f961d845af": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "8a73fd7a-e154-4f5d-ab55-23e7ce174058",
+        "model": "claude-opus-4-6"
+      },
+      "human_author": "Om Gupta",
+      "messages": [],
+      "total_additions": 0,
+      "total_deletions": 0,
+      "accepted_lines": 6994,
+      "overriden_lines": 0
+    }
+  }
+}
