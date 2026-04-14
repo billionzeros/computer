@@ -11926,6 +11926,12 @@ button {
   transform: none;
 }
 
+.app-detail__connect--full {
+  width: 100%;
+  justify-content: center;
+  margin-top: 4px;
+}
+
 .app-detail__fields {
   width: 100%;
   display: flex;
@@ -11948,6 +11954,14 @@ button {
   margin-bottom: 5px;
   text-transform: uppercase;
   letter-spacing: 0.5px;
+}
+
+.app-detail__field--labeled label {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-subtle);
+  text-transform: none;
+  letter-spacing: 0;
 }
 
 .app-detail__field-optional {
@@ -11985,24 +11999,39 @@ button {
 .app-detail__setup-guide {
   width: 100%;
   text-align: left;
-  background: rgba(var(--overlay), 0.03);
-  border: 1px solid var(--border);
-  border-radius: 10px;
-  padding: 14px 16px;
-  margin-bottom: 4px;
+  border-top: 1px solid var(--border);
+  padding-top: 12px;
+  margin-top: 4px;
 }
 
-.app-detail__setup-guide-title {
+.app-detail__setup-guide-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
   font-size: 12px;
-  font-weight: 600;
+  font-weight: 500;
   color: var(--text-muted);
-  margin: 0 0 10px 0;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
+  cursor: pointer;
+  list-style: none;
+  padding: 4px 0;
+  user-select: none;
+}
+
+.app-detail__setup-guide-toggle::-webkit-details-marker {
+  display: none;
+}
+
+.app-detail__setup-guide-chevron {
+  transition: transform 0.2s ease;
+  flex-shrink: 0;
+}
+
+.app-detail__setup-guide[open] .app-detail__setup-guide-chevron {
+  transform: rotate(180deg);
 }
 
 .app-detail__setup-guide-steps {
-  margin: 0 0 12px 0;
+  margin: 10px 0 12px 0;
   padding-left: 18px;
   display: flex;
   flex-direction: column;

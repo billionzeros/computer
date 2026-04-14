@@ -1640,7 +1640,9 @@ export interface ConnectorRegistryEntry {
   command?: string
   args?: string[]
   requiredEnv: string[]
-  optionalFields?: { key: string; label: string; hint?: string }[]
+  /** Rich field definitions for required env keys — when present, UI uses these for labels/hints instead of raw key names */
+  requiredFields?: { key: string; label: string; hint?: string; placeholder?: string }[]
+  optionalFields?: { key: string; label: string; hint?: string; placeholder?: string }[]
   featured?: boolean
   oauthProvider?: string // provider key for the OAuth proxy
   oauthScopes?: string[] // display-only scopes for the UI
@@ -1707,11 +1709,20 @@ export const CONNECTOR_REGISTRY: ConnectorRegistryEntry[] = [
     category: 'messaging',
     type: 'api',
     requiredEnv: ['TELEGRAM_BOT_TOKEN'],
+    requiredFields: [
+      {
+        key: 'TELEGRAM_BOT_TOKEN',
+        label: 'Bot Token',
+        placeholder: 'e.g. 110201543:AAHdqTcvCH1vGWJxfSeofSAs0K5PALDsaw',
+        hint: 'The API token you received from @BotFather when creating your bot.',
+      },
+    ],
     optionalFields: [
       {
         key: 'OWNER_CHAT_ID',
         label: 'Your Chat ID',
-        hint: 'Message @userinfobot on Telegram to get your personal chat ID. Anton will use this to send you messages.',
+        placeholder: 'e.g. 123456789',
+        hint: 'Message @userinfobot on Telegram to get your personal chat ID. Anton will use this to send you messages directly.',
       },
     ],
     featured: true,

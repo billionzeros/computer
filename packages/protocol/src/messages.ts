@@ -1076,7 +1076,8 @@ export interface ConnectorRegistryEntryPayload {
   command?: string
   args?: string[]
   requiredEnv: string[]
-  optionalFields?: { key: string; label: string; hint?: string }[]
+  requiredFields?: { key: string; label: string; hint?: string; placeholder?: string }[]
+  optionalFields?: { key: string; label: string; hint?: string; placeholder?: string }[]
   featured?: boolean
   oauthProvider?: string
   oauthScopes?: string[]

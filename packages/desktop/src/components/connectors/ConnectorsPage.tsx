@@ -607,9 +607,69 @@ export function AppSetup({
         {/* Setup guide + Env fields (shown after clicking Connect or Show Details) */}
         {!isConfigured && !isOAuth && showDetails && (
           <div className="app-detail__fields">
+            {/* Credential fields */}
+            {entry.requiredEnv.map((envKey: string) => {
+              const field = entry.requiredFields?.find(
+                (f: { key: string; label: string; hint?: string; placeholder?: string }) =>
+                  f.key === envKey,
+              )
+              return (
+                <div key={envKey} className={`app-detail__field${field ? ' app-detail__field--labeled' : ''}`}>
+                  <label htmlFor={`env-${envKey}`}>{field?.label ?? envKey}</label>
+                  {field?.hint && <p className="app-detail__field-hint">{field.hint}</p>}
+                  <input
+                    id={`env-${envKey}`}
+                    type="password"
+                    placeholder={field?.placeholder ?? `Paste your ${envKey.toLowerCase().replace(/_/g, ' ')}`}
+                    value={envValues[envKey] || ''}
+                    onChange={(e) =>
+                      setEnvValues((prev) => ({ ...prev, [envKey]: e.target.value }))
+                    }
+                  />
+                </div>
+              )
+            })}
+            {(entry.optionalFields ?? []).map(
+              (field: { key: string; label: string; hint?: string; placeholder?: string }) => (
+                <div key={field.key} className="app-detail__field app-detail__field--labeled">
+                  <label htmlFor={`opt-${field.key}`}>
+                    {field.label} <span className="app-detail__field-optional">(optional)</span>
+                  </label>
+                  {field.hint && <p className="app-detail__field-hint">{field.hint}</p>}
+                  <input
+                    id={`opt-${field.key}`}
+                    type="text"
+                    placeholder={field.placeholder ?? field.label}
+                    value={optionalValues[field.key] || ''}
+                    onChange={(e) =>
+                      setOptionalValues((prev) => ({ ...prev, [field.key]: e.target.value }))
+                    }
+                  />
+                </div>
+              ),
+            )}
+
+            <button
+              type="button"
+              className="app-detail__connect app-detail__connect--full"
+              onClick={handleConnect}
+              disabled={testing || !allEnvFilled}
+            >
+              {testing ? (
+                <Loader2 size={16} className="animate-spin" />
+              ) : (
+                <Plus size={16} strokeWidth={2} />
+              )}
+              {testing ? 'Connecting...' : 'Connect'}
+            </button>
+
+            {/* Setup guide — collapsed below the form */}
             {entry.setupGuide && (
-              <div className="app-detail__setup-guide">
-                <h4 className="app-detail__setup-guide-title">How to get your credentials</h4>
+              <details className="app-detail__setup-guide">
+                <summary className="app-detail__setup-guide-toggle">
+                  <span>How to get your credentials</span>
+                  <ChevronDown size={14} strokeWidth={1.5} className="app-detail__setup-guide-chevron" />
+                </summary>
                 <ol className="app-detail__setup-guide-steps">
                   {entry.setupGuide.steps.map((step: string) => (
                     <li key={step}>{step}</li>
@@ -624,52 +684,8 @@ export function AppSetup({
                   <ExternalLink size={14} strokeWidth={1.5} />
                   {entry.setupGuide.urlLabel || 'Open Dashboard'}
                 </a>
-              </div>
+              </details>
             )}
-            {entry.requiredEnv.map((envKey: string) => (
-              <div key={envKey} className="app-detail__field">
-                <label htmlFor={`env-${envKey}`}>{envKey}</label>
-                <input
-                  id={`env-${envKey}`}
-                  type="password"
-                  placeholder={`Paste your ${envKey.toLowerCase().replace(/_/g, ' ')}`}
-                  value={envValues[envKey] || ''}
-                  onChange={(e) => setEnvValues((prev) => ({ ...prev, [envKey]: e.target.value }))}
-                />
-              </div>
-            ))}
-            {(entry.optionalFields ?? []).map(
-              (field: { key: string; label: string; hint?: string }) => (
-                <div key={field.key} className="app-detail__field">
-                  <label htmlFor={`opt-${field.key}`}>
-                    {field.label} <span className="app-detail__field-optional">(optional)</span>
-                  </label>
-                  {field.hint && <p className="app-detail__field-hint">{field.hint}</p>}
-                  <input
-                    id={`opt-${field.key}`}
-                    type="text"
-                    placeholder={field.label}
-                    value={optionalValues[field.key] || ''}
-                    onChange={(e) =>
-                      setOptionalValues((prev) => ({ ...prev, [field.key]: e.target.value }))
-                    }
-                  />
-                </div>
-              ),
-            )}
-            <button
-              type="button"
-              className="app-detail__connect"
-              onClick={handleConnect}
-              disabled={testing || !allEnvFilled}
-            >
-              {testing ? (
-                <Loader2 size={16} className="animate-spin" />
-              ) : (
-                <Plus size={16} strokeWidth={2} />
-              )}
-              {testing ? 'Connecting...' : 'Connect'}
-            </button>
           </div>
         )}
 
@@ -708,7 +724,7 @@ export function AppSetup({
         {isConfigured && entry.type === 'api' && showDetails && (entry.optionalFields?.length ?? 0) > 0 && (
           <div className="app-detail__fields">
             {(entry.optionalFields ?? []).map(
-              (field: { key: string; label: string; hint?: string }) => (
+              (field: { key: string; label: string; hint?: string; placeholder?: string }) => (
                 <div key={field.key} className="app-detail__field">
                   <label htmlFor={`opt-${field.key}`}>
                     {field.label} <span className="app-detail__field-optional">(optional)</span>
@@ -717,7 +733,7 @@ export function AppSetup({
                   <input
                     id={`opt-${field.key}`}
                     type="text"
-                    placeholder={field.label}
+                    placeholder={field.placeholder ?? field.label}
                     value={optionalValues[field.key] || ''}
                     onChange={(e) =>
                       setOptionalValues((prev) => ({ ...prev, [field.key]: e.target.value }))
