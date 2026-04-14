@@ -202,9 +202,85 @@ The server resolves env for API connectors using:
 3. **Set CF Worker secrets**: `wrangler secret put YOURSERVICE_CLIENT_ID`, etc.
 
 4. **Add direct connector** (`packages/connectors/src/yourservice/`):
-   - `api.ts` -- typed HTTP client
-   - `tools.ts` -- AgentTool definitions
-   - `index.ts` -- DirectConnector implementation with `configure(config: ConnectorEnv)`
+
+   **`api.ts`** -- typed HTTP client:
+   ```ts
+   export class YourServiceAPI {
+     private token = ''
+     private refreshFn?: () => Promise<string>
+
+     setToken(token: string): void { this.token = token }
+     setRefreshToken(fn: () => Promise<string>): void { this.refreshFn = fn }
+
+     private async getToken(): Promise<string> {
+       // If a refreshFn is set, always call it (handles expiry internally)
+       if (this.refreshFn) return this.refreshFn()
+       return this.token
+     }
+
+     async listItems(): Promise<Item[]> {
+       const token = await this.getToken()
+       const res = await fetch('https://api.yourservice.com/items', {
+         headers: { Authorization: `Bearer ${token}` },
+       })
+       if (!res.ok) throw new Error(`YourService API error: ${res.status}`)
+       return res.json()
+     }
+   }
+   ```
+
+   **`tools.ts`** -- AgentTool definitions:
+   ```ts
+   import type { AgentTool } from '@mariozechner/pi-agent-core'
+   import type { YourServiceAPI } from './api.js'
+
+   export function createYourServiceTools(api: YourServiceAPI): AgentTool[] {
+     return [
+       {
+         name: 'yourservice_list_items',           // {service}_{action} convention
+         description: 'List items from YourService',
+         parameters: { type: 'object', properties: {}, required: [] },
+         execute: async () => {
+           const items = await api.listItems()
+           return JSON.stringify(items)
+         },
+       },
+     ]
+   }
+   ```
+
+   **`index.ts`** -- DirectConnector (OAuth pattern):
+   ```ts
+   import type { AgentTool } from '@mariozechner/pi-agent-core'
+   import type { ConnectorEnv, DirectConnector } from '../types.js'
+   import { YourServiceAPI } from './api.js'
+   import { createYourServiceTools } from './tools.js'
+
+   export class YourServiceConnector implements DirectConnector {
+     readonly id = 'yourservice'
+     readonly name = 'YourService'
+
+     private api = new YourServiceAPI()
+     private tools: AgentTool[] = []
+
+     configure(config: ConnectorEnv): void {
+       this.api.setToken(config.env.ACCESS_TOKEN ?? '')
+       if (config.refreshToken) this.api.setRefreshToken(config.refreshToken)
+       this.tools = createYourServiceTools(this.api)
+     }
+
+     getTools(): AgentTool[] { return this.tools }
+
+     async testConnection(): Promise<{ success: boolean; error?: string; info?: string }> {
+       try {
+         const items = await this.api.listItems()
+         return { success: true, info: `Connected — ${items.length} item(s)` }
+       } catch (err) {
+         return { success: false, error: (err as Error).message }
+       }
+     }
+   }
+   ```
 
 5. **Add to factory** (`packages/connectors/src/index.ts`):
    ```ts
@@ -213,7 +289,24 @@ The server resolves env for API connectors using:
 
 6. **Add registry entry** (`packages/agent-config/src/config.ts`):
    ```ts
-   { id: 'yourservice', type: 'oauth', oauthProvider: 'yourservice', ... }
+   {
+     id: 'yourservice',
+     name: 'YourService',
+     description: 'What the connector does in one sentence',
+     icon: '🔧',
+     category: 'productivity',            // messaging | productivity | development | social | other
+     type: 'oauth',
+     oauthProvider: 'yourservice',         // must match the OAuth proxy provider key
+     oauthScopes: ['read', 'write'],       // display-only, actual scopes set in proxy
+     requiredEnv: [],                       // OAuth connectors usually have no requiredEnv
+     featured: true,                        // show on the main connector page
+     multiAccount: false,                   // set true if users can connect multiple accounts
+     setupGuide: {
+       steps: ['Click Connect to authorize with YourService'],
+       url: 'https://yourservice.com/docs/oauth',
+       urlLabel: 'YourService Docs',
+     },
+   }
    ```
 
 7. **Add brand icon** (`packages/desktop/src/components/connectors/ConnectorIcons.tsx`)
@@ -221,19 +314,262 @@ The server resolves env for API connectors using:
 ### API Connector (for key-based services)
 
 1. **Add direct connector** (`packages/connectors/src/yourservice/`):
-   - `api.ts` -- typed HTTP client
-   - `tools.ts` -- AgentTool definitions
-   - `index.ts` -- DirectConnector implementation reading keys from `config.env`
 
-2. **Add to factory and registry** with `type: 'api'`, `requiredEnv: ['YOUR_API_KEY']`, and optional `optionalFields`
+   **`api.ts`** -- typed HTTP client:
+   ```ts
+   export class YourServiceAPI {
+     private apiKey = ''
 
-3. All credentials are encrypted automatically via the credential store -- no special handling needed
+     setApiKey(key: string): void { this.apiKey = key }
+
+     async listItems(): Promise<Item[]> {
+       const res = await fetch('https://api.yourservice.com/items', {
+         headers: { 'X-Api-Key': this.apiKey },
+       })
+       if (!res.ok) throw new Error(`YourService API error: ${res.status}`)
+       return res.json()
+     }
+   }
+   ```
+
+   **`index.ts`** -- DirectConnector (API pattern):
+   ```ts
+   import type { ConnectorEnv, DirectConnector } from '../types.js'
+   import { YourServiceAPI } from './api.js'
+   import { createYourServiceTools } from './tools.js'
+
+   export class YourServiceConnector implements DirectConnector {
+     readonly id = 'yourservice'
+     readonly name = 'YourService'
+
+     private api = new YourServiceAPI()
+     private tools: AgentTool[] = []
+
+     configure(config: ConnectorEnv): void {
+       // Read the EXACT key names declared in requiredEnv / optionalFields
+       this.api.setApiKey(config.env.YOURSERVICE_API_KEY ?? '')
+       this.tools = createYourServiceTools(this.api)
+     }
+
+     getTools(): AgentTool[] { return this.tools }
+
+     async testConnection(): Promise<{ success: boolean; error?: string; info?: string }> {
+       try {
+         const items = await this.api.listItems()
+         return { success: true, info: `Connected — ${items.length} item(s)` }
+       } catch (err) {
+         return { success: false, error: (err as Error).message }
+       }
+     }
+   }
+   ```
+
+2. **Add to factory and registry**:
+   ```ts
+   // packages/connectors/src/index.ts
+   CONNECTOR_FACTORIES['yourservice'] = () => new YourServiceConnector()
+
+   // packages/agent-config/src/config.ts — CONNECTOR_REGISTRY
+   {
+     id: 'yourservice',
+     name: 'YourService',
+     description: 'What the connector does',
+     icon: '🔧',
+     category: 'productivity',
+     type: 'api',
+     requiredEnv: ['YOURSERVICE_API_KEY'],       // user MUST provide these to connect
+     optionalFields: [                            // shown in UI but not required
+       {
+         key: 'YOURSERVICE_WORKSPACE',
+         label: 'Workspace ID',
+         hint: 'Found in Settings → Workspace → ID',
+       },
+     ],
+     featured: false,
+     setupGuide: {
+       steps: [
+         'Go to YourService → Settings → API Keys',
+         'Generate a new key with read+write scope',
+         'Paste the key below',
+       ],
+       url: 'https://yourservice.com/docs/api-keys',
+       urlLabel: 'API Key Docs',
+     },
+   }
+   ```
+
+   **Important:** The key names in `requiredEnv` and `optionalFields[].key` MUST exactly match what the connector reads from `config.env` in its `configure()` method. The server resolves env by iterating these declared keys.
+
+3. All credentials are encrypted automatically via the credential store -- no special handling needed.
 
 ### MCP Connector (for community/custom services)
 
 1. Add registry entry with `type: 'mcp'`, `command`, `args`, `requiredEnv`
 2. Add brand icon
 3. That's it -- MCP protocol handles tool discovery automatically
+
+### Common Mistakes When Adding Connectors
+
+| Mistake | What happens | Fix |
+|---------|-------------|-----|
+| Key name in `requiredEnv` doesn't match `config.env.XXX` in `configure()` | Connector gets empty string, `testConnection` fails | Use identical key names in registry and connector code |
+| Forgot to add factory in `index.ts` | `activate()` silently fails, no tools appear | Always register `CONNECTOR_FACTORIES['id'] = () => new Connector()` |
+| Tool name doesn't follow `{service}_{action}` | Risk of name collision with other connectors | Prefix every tool with the service name |
+| Duplicate tool names within one connector | LLM API returns `400 invalid_request_error` | Each tool name must be unique across all active connectors |
+| `testConnection()` doesn't catch errors | Unhandled rejection crashes the connection test handler | Always wrap in try/catch, return `{ success: false, error }` |
+
+## Per-Tool Permissions
+
+Every connector's tools support per-tool permission overrides. Users configure these in the desktop UI on a per-tool basis.
+
+### Permission Levels
+
+| Level | Behavior |
+|-------|----------|
+| `auto` | Tool runs without confirmation (default) |
+| `ask` | Agent pauses and asks the user for confirmation before calling |
+| `never` | Tool is hidden from the agent -- it never sees it in the tool list |
+
+### How Permissions Are Stored
+
+Permissions are saved in `config.yaml` under each connector's config:
+
+```yaml
+connectors:
+  - id: github
+    type: oauth
+    enabled: true
+    toolPermissions:
+      github_create_issue: ask      # require confirmation before creating issues
+      github_add_comment: ask
+      github_search_code: auto      # search is safe, auto-approve
+```
+
+On startup and after any update, `server.ts` calls `connectorManager.setToolPermissions(id, perms)` (or `mcpManager.setToolPermissions(id, perms)` for MCP connectors) to load these into memory.
+
+### Enforcement
+
+Permissions are enforced at two layers (defense-in-depth):
+
+1. **Tool list filtering** -- `connectorManager.getAllTools()` strips tools marked `never` before the list reaches the agent. The model never sees hidden tools.
+
+2. **`session.beforeToolCall` gate** -- even if a tool somehow gets through, the session checks both `mcpManager.getToolPermission(toolName)` and `connectorManager.getToolPermission(toolName)` before execution. `never` blocks the call; `ask` routes through the user confirmation handler.
+
+### Adding Permissions for a New Connector
+
+No special code needed. Permissions work automatically for any connector whose tools are registered via `getTools()`. The desktop UI reads the tool list from `connector_test_response` and renders permission toggles for each tool.
+
+To set sensible defaults for a new connector, consider which tools have side effects:
+
+| Tool type | Suggested default | Example |
+|-----------|------------------|---------|
+| Read-only queries | `auto` | `github_list_repos`, `slack_get_history` |
+| Write operations | `ask` (or `auto` if low-risk) | `github_create_issue`, `slack_send_message` |
+| Destructive actions | `ask` or `never` | Deleting resources, revoking access |
+
+Defaults are `auto` unless the user changes them. The UI lets users override any tool to any level.
+
+## Validation & Testing
+
+### Quick Smoke Test (Manual)
+
+After adding or modifying a connector, verify the full lifecycle:
+
+1. **Add connector via UI**
+   - Open desktop → Connectors → find your connector → click Connect
+   - For OAuth: complete the authorization flow in the browser
+   - For API: fill in `requiredEnv` fields and any `optionalFields`, click Save
+   - **Verify:** `connector_added` message appears in WS, connector shows as enabled
+
+2. **Check credential storage**
+   ```bash
+   # Verify the .enc file was created
+   ls -la ~/.anton/tokens/yourservice.enc
+   # Should exist with 0600 permissions
+
+   # Verify config.yaml has NO secrets
+   cat ~/.anton/config.yaml | grep -i "key\|token\|secret"
+   # Should return nothing for your connector (only id, type, enabled, toolPermissions)
+   ```
+
+3. **Test connection**
+   - Click "Test" in the UI (or send `connector_test` via WS)
+   - **Verify:** returns `success: true` with info string, plus a tool list
+
+4. **Use a tool in a session**
+   - Start a session and ask the agent to use one of the connector's tools
+   - **Verify:** tool call succeeds and returns expected data
+
+5. **Test credential update**
+   - Edit the connector in the UI, change a field, save
+   - **Verify:** `reconfigure()` is called, existing sessions pick up the new credentials
+   - **Verify:** `.enc` file is updated (check modified timestamp)
+
+6. **Test disconnect/remove**
+   - Remove the connector via UI
+   - **Verify:** `.enc` file is deleted
+   - **Verify:** tools disappear from active sessions immediately
+   - **Verify:** `config.yaml` entry is removed
+
+### Process.env Fallback Test
+
+For headless deployments without the UI:
+
+```bash
+# 1. Add the env var to agent.env
+echo 'YOURSERVICE_API_KEY=sk-test-123' >> ~/.anton/agent.env
+
+# 2. Manually add connector to config.yaml (no secrets here)
+# connectors:
+#   - id: yourservice
+#     type: api
+#     enabled: true
+
+# 3. Restart the agent server
+sudo systemctl restart anton-agent
+
+# 4. Check logs for activation
+journalctl -u anton-agent --since "1 min ago" | grep yourservice
+# Should see: "activated { connector: 'YourService', toolCount: N }"
+```
+
+The server resolves env in this order:
+1. Encrypted secrets from `~/.anton/tokens/yourservice.enc` (highest priority)
+2. `process.env` values for keys declared in the connector's `requiredEnv` + `optionalFields`
+
+If both exist, credential store wins.
+
+### OAuth Token Refresh Test
+
+For OAuth connectors, verify token refresh works:
+
+1. Connect the OAuth connector normally
+2. Wait for the token to expire (or manually set `expiresAt` to a past timestamp in a dev build)
+3. Make a tool call that requires authentication
+4. **Verify:** the `refreshToken` callback fires, fetches a new access token from the proxy, and the call succeeds
+5. **Verify:** logs show the refresh happening (debug level): `token refreshed { provider: 'yourservice' }`
+
+### `hasCredentials` Status Test
+
+The desktop UI shows credential status without ever receiving secret values:
+
+1. Connect a connector → **Verify:** `connectors_list_response` includes `hasCredentials: true` for that connector
+2. Disconnect it → **Verify:** `hasCredentials` becomes `false` (or the connector is removed from the list)
+3. **Verify at no point** does the WS payload contain `accessToken`, `refreshToken`, `apiKey`, or any secret value
+
+### Build Verification
+
+After any connector changes, verify compilation:
+
+```bash
+# Type-check the affected packages (run from repo root)
+cd packages/connectors && npx tsc --noEmit
+cd packages/agent-server && npx tsc --noEmit
+cd packages/agent-config && npx tsc --noEmit
+cd packages/protocol && npx tsc --noEmit
+```
+
+All four must pass cleanly. Pre-existing errors in `@anton/agent-core` (unrelated to connectors) can be ignored.
 
 ## Protocol Messages
 
