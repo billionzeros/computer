@@ -6537,6 +6537,29 @@ button {
   line-height: 1.45;
 }
 
+/* Disconnect button */
+.settings-disconnect-btn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 16px;
+  width: 100%;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text-subtle);
+  font-size: 13.5px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.settings-disconnect-btn:hover {
+  background: rgba(239, 68, 68, 0.08);
+  border-color: rgba(239, 68, 68, 0.3);
+  color: #ef4444;
+}
+
 /* ═══════════════════════════════════════════════════════════════════
    SKILL DIALOG
    ═══════════════════════════════════════════════════════════════════ */

@@ -206,6 +206,7 @@ export function App() {
   const handleDisconnect = () => {
     connection.disconnect()
     useStore.getState().resetForDisconnect()
+    localStorage.removeItem('anton.lastMachineId')
     setConnected(false)
   }
 
@@ -392,6 +393,7 @@ export function App() {
         <SettingsModal
           open={showSettings}
           onClose={() => setShowSettings(false)}
+          onDisconnect={handleDisconnect}
           initialPage={settingsPage}
         />
         <DebugOverlay />

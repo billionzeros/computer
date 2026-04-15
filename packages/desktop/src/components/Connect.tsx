@@ -254,12 +254,14 @@ export function Connect({ onConnected }: { onConnected: () => void }) {
       }
     }
 
-    // Auto-connect to last used machine
-    if (machines.length > 0) {
-      autoConnectAttempted.current = true
-      const lastId = localStorage.getItem(LAST_MACHINE_KEY)
-      const target = machines.find((m) => m.id === lastId) || machines[machines.length - 1]
-      connectSaved(target)
+    // Auto-connect to last used machine (only if we have a remembered last-used ID)
+    const lastId = localStorage.getItem(LAST_MACHINE_KEY)
+    if (lastId && machines.length > 0) {
+      const target = machines.find((m) => m.id === lastId)
+      if (target) {
+        autoConnectAttempted.current = true
+        connectSaved(target)
+      }
     }
   }, [handleConnect, machines])
 

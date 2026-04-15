@@ -6,6 +6,7 @@ import {
   Cpu,
   Eye,
   EyeOff,
+  LogOut,
   Monitor,
   Moon,
   Plus,
@@ -27,6 +28,7 @@ type SettingsPage = 'general' | 'models' | 'usage'
 interface Props {
   open: boolean
   onClose: () => void
+  onDisconnect: () => void
   initialPage?: SettingsPage
 }
 
@@ -79,7 +81,7 @@ function tzLabel(tz: string): string {
   }
 }
 
-function GeneralPage() {
+function GeneralPage({ onDisconnect }: { onDisconnect: () => void }) {
   const theme = uiStore((s) => s.theme)
   const setTheme = uiStore((s) => s.setTheme)
   const devMode = uiStore((s) => s.devMode)
@@ -229,6 +231,20 @@ function GeneralPage() {
             <span className="settings-toggle__knob" />
           </button>
         </div>
+      </section>
+
+      <div className="settings-divider" />
+
+      {/* Disconnect from machine */}
+      <section className="settings-section">
+        <button
+          type="button"
+          className="settings-disconnect-btn"
+          onClick={onDisconnect}
+        >
+          <LogOut size={18} strokeWidth={1.5} />
+          Disconnect from machine
+        </button>
       </section>
     </div>
   )
@@ -912,7 +928,7 @@ function UsagePage() {
 
 // ── Main Settings Modal ──
 
-export function SettingsModal({ open, onClose, initialPage = 'general' }: Props) {
+export function SettingsModal({ open, onClose, onDisconnect, initialPage = 'general' }: Props) {
   const [activePage, setActivePage] = useState<SettingsPage>(initialPage)
 
   // Reset to initial page when modal opens
@@ -972,7 +988,7 @@ export function SettingsModal({ open, onClose, initialPage = 'general' }: Props)
               </button>
 
               <div className="settings-modal__content-body">
-                {activePage === 'general' && <GeneralPage />}
+                {activePage === 'general' && <GeneralPage onDisconnect={() => { onClose(); onDisconnect(); }} />}
                 {activePage === 'models' && <ModelsPage onClose={onClose} />}
                 {activePage === 'usage' && <UsagePage />}
               </div>
