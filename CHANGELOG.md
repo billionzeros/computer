@@ -10,6 +10,26 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versioning: [S
 
 ---
 
+## [1.0.56] - 2026-04-15
+
+### Features
+- publish modal improvements and connection domain support
+- add Pages view for managing published pages
+- publish modal with metadata tracking, view counting, and slug collision detection
+
+### Fixes
+- tighten research sub-agent with tool whitelists, budgets, and call limits
+- remove dedicated ProjectView UI and consolidate into HomeView
+- improve Telegram connector UI and fix Exa OAuth missing domain
+- resolve missing domain param in web search OAuth and rename DOMAIN to ANTON_HOST
+
+### Added
+- stuff
+
+### Other
+- restore: undo accidental mass deletion from bcef5a6
+---
+
 ## [1.0.55] - 2026-04-14
 
 ### Features
@@ -545,7 +565,8 @@ Maintenance release.
 
 ---
 
-[Unreleased]: https://github.com/OmGuptaIND/computer/compare/v1.0.55...HEAD
+[Unreleased]: https://github.com/OmGuptaIND/computer/compare/v1.0.56...HEAD
+[1.0.56]: https://github.com/OmGuptaIND/computer/compare/v$(changelog.match(/## [(d+.d+.d+)]/g)[1].match(/d+.d+.d+/)[0])...v1.0.56
 [1.0.55]: https://github.com/OmGuptaIND/computer/compare/v$(changelog.match(/## [(d+.d+.d+)]/g)[1].match(/d+.d+.d+/)[0])...v1.0.55
 [1.0.54]: https://github.com/OmGuptaIND/computer/compare/v$(changelog.match(/## [(d+.d+.d+)]/g)[1].match(/d+.d+.d+/)[0])...v1.0.54
 [1.0.53]: https://github.com/OmGuptaIND/computer/compare/v$(changelog.match(/## [(d+.d+.d+)]/g)[1].match(/d+.d+.d+/)[0])...v1.0.53

@@ -1,12 +1,12 @@
 {
-  "version": "1.0.55",
-  "gitHash": "2b69001",
+  "version": "1.0.56",
+  "gitHash": "",
   "releaseUrl": "https://github.com/OmGuptaIND/computer/releases",
-  "changelog": "Features:\n- add unified credential store and refactor connector auth\n\nFixes:\n- resolve merge conflicts and align PolymarketConnector with DirectConnector interface\n\nChores:\n- reorganize specs/ into logical subfolders with clean overview\n\nOther:\n- docs: add connector creation guide, permissions setup, and validation checklist to specs\n- fixes\n- add icon\n- add polymarket stuff",
-  "publishedAt": "2026-04-14T15:10:41.542Z",
-  "cli": "https://github.com/OmGuptaIND/computer/releases/download/v1.0.55/anton-cli.mjs",
+  "changelog": "Features:\n- publish modal improvements and connection domain support\n- add Pages view for managing published pages\n- publish modal with metadata tracking, view counting, and slug collision detection\n\nFixes:\n- tighten research sub-agent with tool whitelists, budgets, and call limits\n- remove dedicated ProjectView UI and consolidate into HomeView\n- improve Telegram connector UI and fix Exa OAuth missing domain\n- resolve missing domain param in web search OAuth and rename DOMAIN to ANTON_HOST\n\nAdded:\n- stuff\n\nOther:\n- restore: undo accidental mass deletion from bcef5a6",
+  "publishedAt": "2026-04-15T11:40:06.876Z",
+  "cli": "https://github.com/OmGuptaIND/computer/releases/download/v1.0.56/anton-cli.mjs",
   "sidecar": {
-    "linux-arm64": "https://github.com/OmGuptaIND/computer/releases/download/v1.0.55/anton-sidecar-linux-arm64",
-    "linux-amd64": "https://github.com/OmGuptaIND/computer/releases/download/v1.0.55/anton-sidecar-linux-amd64"
+    "linux-arm64": "https://github.com/OmGuptaIND/computer/releases/download/v1.0.56/anton-sidecar-linux-arm64",
+    "linux-amd64": "https://github.com/OmGuptaIND/computer/releases/download/v1.0.56/anton-sidecar-linux-amd64"
   }
 }
