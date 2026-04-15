@@ -1,0 +1,61 @@
+packages/desktop/src/lib/store/handlers/pagesHandler.ts
+  dd8e1ca6206bbe15 1-21
+packages/desktop/src/components/Sidebar.tsx
+  dd8e1ca6206bbe15 11,309-314
+packages/desktop/src/lib/store/handlers/index.ts
+  dd8e1ca6206bbe15 23,151
+packages/desktop/src/lib/store/types.ts
+  dd8e1ca6206bbe15 144
+packages/desktop/src/components/pages/PagesView.tsx
+  dd8e1ca6206bbe15 1-217
+packages/desktop/src/lib/store/pagesStore.ts
+  dd8e1ca6206bbe15 1-39
+packages/desktop/src/lib/store/handlers/eventsHandler.ts
+  dd8e1ca6206bbe15 7,33-38
+packages/protocol/src/messages.ts
+  dd8e1ca6206bbe15 1270-1301,1436-1439
+  f330e042408ffac7 15-16
+packages/desktop/src/index.css
+  f330e042408ffac7 5099,5102,5104,5112,5120,5139,7747-7754,7814-7815,7819,7822-7824,7827,7834,7839-7840,7846,7850-7851,7854,7858-7861,7864-7866,7869-7872,7874-7876,7879-7898,7901,7905,7907,7910-7911,7915-7916,7919-7920,7923-7924,7927-7928,7932-7938,7941-7943,7946-7947,7950,7952,7955-7956,7959-7963,7966-7970,7973-7986,7989-7993,7998-8000,8002-8003,8006-8008,8011-8012,8014-8015,8018,8021-8031,8034-8035,8039-8040,8043-8052,8055,8059-8060,8062-8064,8067-8068,8072-8073,8075-8076,8079-8080,8082-8086,8090,8094,8096-8101,8105-8117
+  dd8e1ca6206bbe15 18897-19186
+packages/desktop/src/App.tsx
+  dd8e1ca6206bbe15 26,285-287,371
+packages/desktop/src/lib/connection.ts
+  dd8e1ca6206bbe15 451-458
+packages/agent-server/src/server.ts
+  dd8e1ca6206bbe15 45,59,1464-1469,1651-1676
+  f330e042408ffac7 558
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.2.8",
+  "base_commit_sha": "6e495794c4e7865249bfb00f5284c627cb2d9519",
+  "prompts": {
+    "dd8e1ca6206bbe15": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "1cdcacdd-baaf-4a0a-9903-c1d62e84dd28",
+        "model": "claude-opus-4-6"
+      },
+      "human_author": "Om Gupta",
+      "messages": [],
+      "total_additions": 1059,
+      "total_deletions": 392,
+      "accepted_lines": 668,
+      "overriden_lines": 0
+    },
+    "f330e042408ffac7": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "89a394c5-163a-4e90-9b3d-adc006f0f7bb",
+        "model": "claude-opus-4-6"
+      },
+      "human_author": "Om Gupta",
+      "messages": [],
+      "total_additions": 472,
+      "total_deletions": 300,
+      "accepted_lines": 417,
+      "overriden_lines": 0
+    }
+  }
+}
