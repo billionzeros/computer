@@ -1,0 +1,29 @@
+packages/desktop/src/App.tsx
+  00da05ef9ecaa7b2 209,396
+packages/desktop/src/components/Connect.tsx
+  00da05ef9ecaa7b2 257-264
+packages/desktop/src/components/settings/SettingsModal.tsx
+  00da05ef9ecaa7b2 9,31,84,235-248,931,991
+packages/desktop/src/index.css
+  00da05ef9ecaa7b2 6540-6562
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.2.8",
+  "base_commit_sha": "9fdeaea0167d94ec41baf9d0faa99b5a7ee2242e",
+  "prompts": {
+    "00da05ef9ecaa7b2": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "27cb8fd6-85d1-4bcc-9699-bc1709795988",
+        "model": "claude-opus-4-6"
+      },
+      "human_author": "Om Gupta",
+      "messages": [],
+      "total_additions": 1464,
+      "total_deletions": 9,
+      "accepted_lines": 1464,
+      "overriden_lines": 0
+    }
+  }
+}
