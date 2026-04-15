@@ -252,6 +252,23 @@ button {
   overflow: hidden;
 }
 
+/* Branding */
+.sidebar-brand {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 14px 16px 8px;
+  -webkit-app-region: drag;
+}
+
+.sidebar-brand__text {
+  font-size: 15px;
+  font-weight: 500;
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+  letter-spacing: -0.02em;
+}
+
 /* Top primary nav: mode toggle + New task */
 .sidebar-primary {
   display: flex;
@@ -260,42 +277,6 @@ button {
   gap: 4px;
 }
 
-/* Mode toggle: Chat / Computer side by side */
-.sidebar-mode-toggle {
-  display: flex;
-  justify-content: center;
-  gap: 2px;
-  padding: 3px;
-  background: rgba(var(--overlay), 0.04);
-  border-radius: 10px;
-}
-
-.sidebar-mode-toggle__btn {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  flex: 1;
-  padding: 7px 12px;
-  border-radius: 8px;
-  font-size: 13px;
-  font-weight: 500;
-  color: var(--text-subtle);
-  background: transparent;
-  border: none;
-  cursor: pointer;
-  transition: all 0.15s ease;
-}
-
-.sidebar-mode-toggle__btn:hover {
-  color: var(--text-muted);
-}
-
-.sidebar-mode-toggle__btn--active {
-  background: rgba(var(--overlay), 0.12);
-  color: var(--text);
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
-}
 
 .sidebar-primary__item {
   display: flex;

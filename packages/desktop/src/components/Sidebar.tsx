@@ -10,26 +10,19 @@ import {
   FolderOpen,
   Globe,
   Link,
-  Loader2,
-  MessageSquare,
   Monitor,
-  MoreHorizontal,
   PanelLeft,
-  Pencil,
   Plus,
   Puzzle,
   SlidersHorizontal,
   TerminalSquare,
-  Trash2,
   Zap,
 } from 'lucide-react'
-import { useEffect, useRef, useState } from 'react'
-import { sanitizeTitle } from '../lib/conversations.js'
+import { useState } from 'react'
 import { useConnectionStatus, useStore } from '../lib/store.js'
 import { projectStore } from '../lib/store/projectStore.js'
 import { sessionStore } from '../lib/store/sessionStore.js'
 import { uiStore } from '../lib/store/uiStore.js'
-import { Skeleton } from './Skeleton.js'
 
 interface Props {
   onDisconnect: () => void
@@ -42,112 +35,34 @@ interface Props {
 export function Sidebar({ onViewChange, onOpenSettings }: Props) {
   useConnectionStatus()
   const devMode = uiStore((s) => s.devMode)
-  const conversations = useStore((s) => s.conversations)
-  const activeId = useStore((s) => s.activeConversationId)
-  const switchConversation = useStore((s) => s.switchConversation)
   const newConversation = useStore((s) => s.newConversation)
-  const deleteConversation = useStore((s) => s.deleteConversation)
   const sidebarCollapsed = uiStore((s) => s.sidebarCollapsed)
   const toggleSidebar = uiStore((s) => s.toggleSidebar)
   const currentView = uiStore((s) => s.activeView)
-  const activeMode = uiStore((s) => s.activeMode)
-  const setActiveMode = uiStore((s) => s.setActiveMode)
   const setActiveView = uiStore((s) => s.setActiveView)
-  const sessionStates = sessionStore((s) => s.sessionStates)
-  const sessionsLoaded = sessionStore((s) => s.sessionsLoaded)
 
   const projects = projectStore((s) => s.projects)
   const activeProjectId = projectStore((s) => s.activeProjectId)
   const setActiveProject = projectStore((s) => s.setActiveProject)
   const [projectDropdownOpen, setProjectDropdownOpen] = useState(false)
 
-  const defaultProjectId = projects.find((p) => p.isDefault)?.id
-  const chatConversations = conversations.filter(
-    (c) => !c.projectId || c.projectId === defaultProjectId,
-  )
-
   // Current project name
   const currentProjectName = activeProjectId
     ? (projects.find((p) => p.id === activeProjectId)?.name ?? 'Unknown')
     : 'My Computer'
 
-  // Lazy-load "Older" conversations when the user scrolls down
-  const [showOlder, setShowOlder] = useState(false)
-  const olderSentinelRef = useRef<HTMLDivElement>(null)
-
-  useEffect(() => {
-    if (showOlder) return
-    const el = olderSentinelRef.current
-    if (!el) return
-    const observer = new IntersectionObserver(
-      ([entry]) => {
-        if (entry.isIntersecting) {
-          setShowOlder(true)
-          observer.disconnect()
-        }
-      },
-      { rootMargin: '100px' },
-    )
-    observer.observe(el)
-    return () => observer.disconnect()
-  }, [showOlder])
-
-  // Group conversations by date
-  const groupConversationsByDate = () => {
-    const now = new Date()
-    const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime()
-    const yesterdayStart = todayStart - 86400000
-    const today: typeof chatConversations = []
-    const yesterday: typeof chatConversations = []
-    const older: typeof chatConversations = []
-    const sorted = [...chatConversations].sort(
-      (a, b) => (b.updatedAt || b.createdAt) - (a.updatedAt || a.createdAt),
-    )
-    for (const conv of sorted) {
-      const t = conv.updatedAt || conv.createdAt
-      if (t >= todayStart) today.push(conv)
-      else if (t >= yesterdayStart) yesterday.push(conv)
-      else older.push(conv)
-    }
-    return { today, yesterday, older }
-  }
-
-  const grouped = groupConversationsByDate()
-
-  const getConvStatus = (sessionId: string | undefined) => {
-    if (!sessionId) return null
-    const state = sessionStates.get(sessionId)
-    if (state?.pendingConfirm || state?.pendingAskUser || state?.pendingPlan) {
-      return 'awaiting'
-    }
-    if (state?.status === 'working') return 'working'
-    return null
-  }
-
   const handleNewTask = () => {
     const sessionId = `sess_${Date.now().toString(36)}`
     const ss = sessionStore.getState()
-    // In chat mode, always use the default project (My Computer)
-    // In computer mode, use the active project
-    const projectId = activeMode === 'chat' ? defaultProjectId : (activeProjectId ?? undefined)
+    const projectId = activeProjectId ?? undefined
     newConversation(undefined, sessionId, projectId)
     sessionStore.getState().createSession(sessionId, {
       provider: ss.currentProvider,
       model: ss.currentModel,
       projectId,
     })
-    if (activeMode === 'computer') {
-      setActiveView('chat')
-    }
+    setActiveView('chat')
     onViewChange('agent')
-    if (currentView !== 'chat') {
-      uiStore.getState().setActiveView('chat')
-    }
-  }
-
-  const handleDelete = (e: React.MouseEvent, convId: string) => {
-    e.stopPropagation()
-    deleteConversation(convId)
   }
 
   return (
@@ -170,32 +85,13 @@ export function Sidebar({ onViewChange, onOpenSettings }: Props) {
         style={{ overflow: 'hidden' }}
       >
         <div className="sidebar__inner">
-          {/* Mode switcher: Chat / Computer — side by side toggle */}
-          <div className="sidebar-primary">
-            <div className="sidebar-mode-toggle">
-              <button
-                type="button"
-                className={`sidebar-mode-toggle__btn${activeMode === 'chat' ? ' sidebar-mode-toggle__btn--active' : ''}`}
-                onClick={() => setActiveMode('chat')}
-              >
-                <MessageSquare size={15} strokeWidth={1.5} />
-                <span>Chat</span>
-              </button>
-              <button
-                type="button"
-                className={`sidebar-mode-toggle__btn${activeMode === 'computer' ? ' sidebar-mode-toggle__btn--active' : ''}`}
-                onClick={() => setActiveMode('computer')}
-              >
-                <Monitor size={15} strokeWidth={1.5} />
-                <span>Computer</span>
-              </button>
-            </div>
+          {/* Branding */}
+          <div className="sidebar-brand">
+            <span className="sidebar-brand__text">anton.computer</span>
           </div>
 
-          {/* Navigation — different per mode */}
-          {activeMode === 'computer' ? (
-            // ── Computer mode: project selector + nav items ──
-            <>
+          {/* Navigation */}
+          <>
               {/* Project selector */}
               <div className="sidebar-project-selector">
                 <span className="sidebar-project-selector__label">Project</span>
@@ -341,115 +237,6 @@ export function Sidebar({ onViewChange, onOpenSettings }: Props) {
                 />
               </div>
             </>
-          ) : (
-            // ── Chat mode: conversation history ──
-            <div className="sidebar-panel">
-              <button
-                type="button"
-                className="sidebar-primary__item sidebar-primary__new-task"
-                onClick={handleNewTask}
-              >
-                <Plus size={18} strokeWidth={1.5} />
-                <span>New chat</span>
-              </button>
-              <div className="sidebar-panel__inner">
-                {chatConversations.length === 0 && !sessionsLoaded ? (
-                  <div className="sidebar-recent__list">
-                    {['skel-0', 'skel-1', 'skel-2', 'skel-3', 'skel-4'].map((id, i) => (
-                      <div key={id} className="sidebar-conv-item sidebar-conv-item--skeleton">
-                        <div style={{ flex: 1, minWidth: 0 }}>
-                          <Skeleton width={`${50 + (i % 3) * 20}%`} height={13} />
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                ) : chatConversations.length > 0 ? (
-                  <div className="sidebar-recent__list">
-                    {grouped.today.length > 0 && (
-                      <>
-                        <div className="sidebar-section-label">Today</div>
-                        {grouped.today.map((conv) => (
-                          <ConversationItem
-                            key={conv.id}
-                            conv={conv}
-                            isActive={conv.id === activeId}
-                            status={getConvStatus(conv.sessionId)}
-                            onSelect={() => {
-                              switchConversation(conv.id)
-                              if (conv.sessionId) {
-                                sessionStore.getState().requestSessionHistory(conv.sessionId)
-                              }
-                              onViewChange('agent')
-                              if (currentView !== 'chat') {
-                                uiStore.getState().setActiveView('chat')
-                              }
-                            }}
-                            onDelete={(e) => handleDelete(e, conv.id)}
-                          />
-                        ))}
-                      </>
-                    )}
-                    {grouped.yesterday.length > 0 && (
-                      <>
-                        <div className="sidebar-section-label">Yesterday</div>
-                        {grouped.yesterday.map((conv) => (
-                          <ConversationItem
-                            key={conv.id}
-                            conv={conv}
-                            isActive={conv.id === activeId}
-                            status={getConvStatus(conv.sessionId)}
-                            onSelect={() => {
-                              switchConversation(conv.id)
-                              if (conv.sessionId) {
-                                sessionStore.getState().requestSessionHistory(conv.sessionId)
-                              }
-                              onViewChange('agent')
-                              if (currentView !== 'chat') {
-                                uiStore.getState().setActiveView('chat')
-                              }
-                            }}
-                            onDelete={(e) => handleDelete(e, conv.id)}
-                          />
-                        ))}
-                      </>
-                    )}
-                    {grouped.older.length > 0 && !showOlder && (
-                      <div ref={olderSentinelRef} style={{ height: 1 }} />
-                    )}
-                    {grouped.older.length > 0 && showOlder && (
-                      <>
-                        <div className="sidebar-section-label">Older</div>
-                        {grouped.older.map((conv) => (
-                          <ConversationItem
-                            key={conv.id}
-                            conv={conv}
-                            isActive={conv.id === activeId}
-                            status={getConvStatus(conv.sessionId)}
-                            onSelect={() => {
-                              switchConversation(conv.id)
-                              if (conv.sessionId) {
-                                sessionStore.getState().requestSessionHistory(conv.sessionId)
-                              }
-                              onViewChange('agent')
-                              if (currentView !== 'chat') {
-                                uiStore.getState().setActiveView('chat')
-                              }
-                            }}
-                            onDelete={(e) => handleDelete(e, conv.id)}
-                          />
-                        ))}
-                      </>
-                    )}
-                  </div>
-                ) : (
-                  <div className="sidebar-empty">
-                    <MessageSquare className="sidebar-empty__icon" />
-                    <p className="sidebar-empty__text">No conversations yet</p>
-                  </div>
-                )}
-              </div>
-            </div>
-          )}
 
           {/* Footer — bottom bar */}
           <div className="sidebar-bottombar">
@@ -525,94 +312,3 @@ function NavItem({
   )
 }
 
-// ── Conversation item (for Chat mode) ──
-
-function ConversationItem({
-  conv,
-  isActive,
-  status,
-  onSelect,
-  onDelete,
-}: {
-  conv: { id: string; sessionId: string; title: string }
-  isActive: boolean
-  status: string | null
-  onSelect: () => void
-  onDelete: (e: React.MouseEvent) => void
-}) {
-  return (
-    <div
-      onClick={onSelect}
-      onKeyDown={(e) => {
-        if (e.key === 'Enter' || e.key === ' ') onSelect()
-      }}
-      className={`sidebar-recent__item${isActive ? ' sidebar-recent__item--active' : ''}`}
-    >
-      <span className="sidebar-recent__title">{sanitizeTitle(conv.title)}</span>
-      {status === 'working' && (
-        <Loader2 size={14} strokeWidth={1.5} className="sidebar-status-spinner" />
-      )}
-      {status === 'awaiting' && <span className="sidebar-status-badge">Needs input</span>}
-      <ConversationMenu onDelete={onDelete} />
-    </div>
-  )
-}
-
-// ── Conversation context menu (3-dot) ──
-
-function ConversationMenu({ onDelete }: { onDelete: (e: React.MouseEvent) => void }) {
-  const [open, setOpen] = useState(false)
-  return (
-    <div className="sidebar-conv-menu-wrap">
-      <button
-        type="button"
-        className="sidebar-conv-menu__trigger"
-        onClick={(e) => {
-          e.stopPropagation()
-          setOpen(!open)
-        }}
-        aria-label="Conversation options"
-      >
-        <MoreHorizontal size={14} strokeWidth={1.5} />
-      </button>
-      {open && (
-        <>
-          <div
-            className="sidebar-conv-menu__backdrop"
-            onClick={(e) => {
-              e.stopPropagation()
-              setOpen(false)
-            }}
-            onKeyDown={(e) => {
-              if (e.key === 'Escape') setOpen(false)
-            }}
-          />
-          <div className="sidebar-conv-menu">
-            <button
-              type="button"
-              className="sidebar-conv-menu__item"
-              onClick={(e) => {
-                e.stopPropagation()
-                setOpen(false)
-              }}
-            >
-              <Pencil size={14} strokeWidth={1.5} />
-              <span>Rename</span>
-            </button>
-            <button
-              type="button"
-              className="sidebar-conv-menu__item sidebar-conv-menu__item--danger"
-              onClick={(e) => {
-                onDelete(e)
-                setOpen(false)
-              }}
-            >
-              <Trash2 size={14} strokeWidth={1.5} />
-              <span>Delete</span>
-            </button>
-          </div>
-        </>
-      )}
-    </div>
-  )
-}

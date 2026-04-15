@@ -126,17 +126,13 @@ export const uiStore = create<UIState>((set, get) => ({
   toggleTasksHidden: () => set((s) => ({ tasksHidden: !s.tasksHidden })),
 
   // Navigation
-  activeMode: (localStorage.getItem('anton-mode') as ActiveMode) || 'computer',
-  setActiveMode: (mode) => {
-    localStorage.setItem('anton-mode', mode)
-    if (mode === 'computer') {
-      set({ activeMode: mode, activeView: 'home' })
-    } else {
-      set({ activeMode: mode, activeView: 'chat' })
-    }
+  activeMode: 'computer' as ActiveMode,
+  setActiveMode: (_mode) => {
+    localStorage.setItem('anton-mode', 'computer')
+    set({ activeMode: 'computer', activeView: 'home' })
   },
 
-  activeView: (localStorage.getItem('anton-mode') || 'computer') === 'chat' ? 'chat' : 'home',
+  activeView: 'home' as ActiveView,
   setActiveView: (view) => set({ activeView: view }),
 
   // Side panel

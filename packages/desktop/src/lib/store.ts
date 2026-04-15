@@ -220,11 +220,11 @@ export const useStore = create<AppState>((set, get) => {
     _subAgentProgressMsgIds: new Map(),
     citations: new Map(),
 
-    setActiveMode: (mode) => {
-      localStorage.setItem('anton-mode', mode)
+    setActiveMode: (_mode) => {
+      localStorage.setItem('anton-mode', 'computer')
       uiStore.setState({
-        activeMode: mode,
-        activeView: mode === 'computer' ? 'home' : 'chat',
+        activeMode: 'computer',
+        activeView: 'home',
       })
     },
     setActiveView: (view) => {
