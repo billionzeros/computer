@@ -20,7 +20,6 @@ import { HomeView } from './components/home/HomeView.js'
 import { MemoryView } from './components/memory/MemoryView.js'
 import { CreateProjectModal } from './components/projects/CreateProjectModal.js'
 import { ProjectList } from './components/projects/ProjectList.js'
-import { ProjectView } from './components/projects/ProjectView.js'
 import { SettingsModal } from './components/settings/SettingsModal.js'
 import { SkillsPanel } from './components/skills/SkillsPanel.js'
 import { PagesView } from './components/pages/PagesView.js'
@@ -95,9 +94,7 @@ export function App() {
     ? projects.find((p) => p.id === activeConvProjectId)
     : null
 
-  // Show ProjectView when viewing a non-default project on the home screen
-  const defaultProjectId = projects.find((p) => p.isDefault)?.id
-  const showProjectView = activeProjectId && activeProjectId !== defaultProjectId
+  // All projects (including non-default) use the same HomeView for consistency
 
   // Global listener for "New project" from sidebar (works on any view)
   useEffect(() => {
@@ -353,7 +350,7 @@ export function App() {
           )}
 
           <div className="workspace-body">
-            {activeView === 'home' && (showProjectView ? <ProjectView /> : <HomeView />)}
+            {activeView === 'home' && <HomeView />}
             {activeView === 'chat' && <AgentChat />}
             {activeView === 'memory' && <MemoryView />}
             {activeView === 'agents' && <AgentsView />}
@@ -372,7 +369,7 @@ export function App() {
             {activeView === 'projects' && <ProjectList />}
 
             <AnimatePresence>
-              {(activeView === 'chat' || (activeView === 'home' && !showProjectView)) &&
+              {(activeView === 'chat' || activeView === 'home') &&
                 sidePanelOpen && <SidePanel />}
             </AnimatePresence>
           </div>

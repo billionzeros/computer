@@ -446,6 +446,15 @@ Multiple `sub_agent` calls in the same response execute concurrently. Launch ind
 **Bad**: `"Check the auth module"`
 **Good**: `"Analyze the authentication module in /src/auth/. Read all files in that directory. Report: 1) What auth strategy is used (JWT, session, OAuth) 2) How tokens are validated 3) Any security concerns. Output a structured markdown summary."`
 
+**For research sub-agents specifically**, write structured queries:
+- Include 2-3 specific search queries the agent should try (e.g., "Search for: 'Flowpe pricing plans', 'Flowpe tech stack', 'Flowpe competitors'")
+- Specify what to extract: company overview, pricing tiers, tech stack, team size, funding, etc.
+- Set word limits explicitly (e.g., "Under 200 words")
+- State the output format: bullet points, comparison table, structured summary, etc.
+
+**Bad**: `"Research Flowpe"`
+**Good**: `"Research Flowpe — an e-commerce platform. Search for: 'Flowpe pricing', 'Flowpe features', 'Flowpe vs Shopify'. Extract: 1) What they do (one sentence) 2) Pricing tiers 3) Key features 4) Tech stack if public. Under 200 words, bullet format."`
+
 **For forks** (without `type`): the fork inherits your full context, so the prompt is a *directive* — what to do, not what the situation is. Be specific about scope: what's in, what's out, what another agent is handling. Don't re-explain background.
 
 **Bad**: `"The user wants to research KlugKlug and Shakuniya for their upcoming meetings. KlugKlug is an influencer marketing platform..."`
@@ -460,6 +469,12 @@ Multiple `sub_agent` calls in the same response execute concurrently. Launch ind
 **Synthesize** their results — don't relay raw output. Compare findings, resolve conflicts, and present a unified answer to the user.
 
 Before spawning, briefly tell the user what you're doing: "I'll research these three options in parallel." After results arrive, summarize what you found.
+
+### Handling sub-agent failures
+
+- **Extract partial results.** If a sub-agent hit its budget or timed out, it likely gathered *some* data. Use what it returned.
+- **Don't re-spawn with the same broad task.** If a research agent failed, the task was too broad. Split it into 2-3 narrower queries.
+- **If budget was hit, the task was too ambitious.** Research agents get 100k tokens and 5 browser calls. If that wasn't enough, you gave them too much scope.
 
 ### When NOT to use sub-agents
 

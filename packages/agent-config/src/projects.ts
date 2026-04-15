@@ -159,7 +159,7 @@ export function createProject(input: {
     context: {
       summary: '',
       files: [],
-      notes: '',
+      notes: input.description || '',
     },
     stats: {
       sessionCount: 0,

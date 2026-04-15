@@ -344,6 +344,8 @@ export class Session {
   private maxTokenBudget: number
   private maxDurationMs: number
   private maxTurns: number
+  private maxToolCalls: Record<string, number>
+  private toolCallCounts: Record<string, number> = {}
   private _turnCount = 0
   private _processStartedAt = 0
   private _budgetWarningSent = false
@@ -382,6 +384,7 @@ export class Session {
     maxTokenBudget?: number // max total tokens before aborting (0 = unlimited)
     maxDurationMs?: number // max wall-clock time for processMessage (0 = unlimited)
     maxTurns?: number // max LLM turns per processMessage call (0 = unlimited)
+    maxToolCalls?: Record<string, number> // per-tool call limits (e.g., { browser: 5 })
     thinkingLevel?: 'off' | 'minimal' | 'low' | 'medium' | 'high'
     parentTraceSpan?: Span // for sub-agents: nest under parent's trace
     workflowMetadata?: { workflowId: string; agentKey: string; promptVersion: string }
@@ -413,6 +416,7 @@ export class Session {
     this.maxTokenBudget = opts.maxTokenBudget ?? 0
     this.maxDurationMs = opts.maxDurationMs ?? 0
     this.maxTurns = opts.maxTurns ?? 0
+    this.maxToolCalls = opts.maxToolCalls ?? {}
     this.parentTraceSpan = opts.parentTraceSpan
     this.workflowMetadata = opts.workflowMetadata
     this.surface = opts.surface
@@ -639,6 +643,18 @@ export class Session {
                 block: true,
                 reason: 'Write to system directory requires confirmation but no handler available.',
               }
+            }
+          }
+        }
+
+        // Per-tool call limits (e.g., browser: 5 for research sub-agents)
+        const toolName = ctx.toolCall.name
+        if (this.maxToolCalls[toolName] !== undefined) {
+          this.toolCallCounts[toolName] = (this.toolCallCounts[toolName] ?? 0) + 1
+          if (this.toolCallCounts[toolName] > this.maxToolCalls[toolName]) {
+            return {
+              block: true,
+              reason: `${toolName} call limit reached (${this.maxToolCalls[toolName]}). Use web_search instead or summarize what you have.`,
             }
           }
         }

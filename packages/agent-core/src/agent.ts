@@ -69,28 +69,73 @@ export { needsConfirmation } from './tools/shell.js'
 
 export type SubAgentType = 'research' | 'execute' | 'verify'
 
-/** Tools that specific sub-agent types should NOT have access to. */
-const SUB_AGENT_DISALLOWED_TOOLS: Record<SubAgentType, Set<string>> = {
-  research: new Set(['publish']),
-  execute: new Set([]),
-  verify: new Set(['publish']),
+/** Tools that each sub-agent type IS allowed to use (whitelist). */
+const SUB_AGENT_ALLOWED_TOOLS: Record<SubAgentType, Set<string>> = {
+  research: new Set([
+    'web_search',
+    'browser',
+    'read',
+    'grep',
+    'glob',
+    'list',
+    'http_api',
+    'memory',
+    'git',
+  ]),
+  execute: new Set([
+    'shell',
+    'read',
+    'write',
+    'edit',
+    'glob',
+    'list',
+    'grep',
+    'git',
+    'http_api',
+    'web_search',
+    'browser',
+    'memory',
+    'task',
+  ]),
+  verify: new Set([
+    'shell',
+    'read',
+    'glob',
+    'list',
+    'grep',
+    'git',
+    'http_api',
+    'web_search',
+    'browser',
+    'memory',
+  ]),
+}
+
+/** Budget configuration per sub-agent type. */
+const SUB_AGENT_BUDGETS: Record<SubAgentType, { maxTokenBudget: number; maxTurns: number }> = {
+  research: { maxTokenBudget: 100_000, maxTurns: 30 },
+  execute: { maxTokenBudget: 200_000, maxTurns: 50 },
+  verify: { maxTokenBudget: 100_000, maxTurns: 30 },
 }
 
 const SUB_AGENT_TYPE_PREFIXES: Record<SubAgentType, string> = {
   research: `You are a research sub-agent. You are NOT the main agent.
+
+STRATEGY: search → scan results → fetch 2-3 most relevant pages → synthesize.
 
 RULES (non-negotiable):
 1. Do NOT spawn sub-agents. You ARE the sub-agent — execute directly using your tools.
 2. Do NOT emit text between tool calls. Use tools silently, then report once at the end.
 3. Do NOT converse, ask questions, or suggest next steps.
 4. Focus on FINDING and ORGANIZING information, not on making changes.
-5. Use web_search, browser (fetch/extract), ${READ_TOOL_NAME}, ${GREP_TOOL_NAME}, ${GLOB_TOOL_NAME}, and ${HTTP_API_TOOL_NAME} to gather data.
-6. Do NOT create, modify, or delete files unless the task explicitly asks you to save results somewhere.
-7. Do NOT run shell commands that modify system state (installs, service changes).
-8. If you find conflicting information, note the discrepancy rather than silently picking one.
-9. Stay strictly within the task scope. If you discover related topics outside scope, mention them in one sentence at most.
-10. Keep your report under 500 words unless the task specifies otherwise.
-11. Be TOKEN-EFFICIENT. Prefer web_search over browser — search first, then only fetch specific pages that look relevant from the search results. Do NOT crawl or fetch pages speculatively. Limit browser calls to at most 5 per task. Each fetch/extract costs tokens — be surgical.
+5. ALWAYS start with web_search. Never open browser as your first action.
+6. Only use browser on URLs you found in search results — never guess URLs.
+7. Each browser call costs ~10k tokens. You have a HARD LIMIT of 5 browser calls — the system will block further calls. Plan accordingly: pick the 2-3 best URLs from search results.
+8. Use ${READ_TOOL_NAME}, ${GREP_TOOL_NAME}, ${GLOB_TOOL_NAME}, and ${HTTP_API_TOOL_NAME} for local/API data gathering.
+9. Do NOT create, modify, or delete files unless the task explicitly asks you to save results somewhere.
+10. If you find conflicting information, note the discrepancy rather than silently picking one.
+11. Stay strictly within the task scope. If you discover related topics outside scope, mention them in one sentence at most.
+12. Keep your report under 300 words unless the task specifies otherwise.
 
 Output format (plain text labels, not markdown headers):
   Scope: <echo back your assigned scope in one sentence>
@@ -1237,9 +1282,9 @@ export function buildTools(
               // Filter tools based on sub-agent type specialization
               // params.type is guaranteed non-undefined in this else branch (isFork is false)
               const agentType = params.type as SubAgentType
-              if (SUB_AGENT_DISALLOWED_TOOLS[agentType]) {
-                const disallowed = SUB_AGENT_DISALLOWED_TOOLS[agentType]
-                subTools = subTools.filter((t) => !disallowed.has(t.name))
+              if (SUB_AGENT_ALLOWED_TOOLS[agentType]) {
+                const allowed = SUB_AGENT_ALLOWED_TOOLS[agentType]
+                subTools = subTools.filter((t) => allowed.has(t.name))
               }
 
               const subSession = new Session({
@@ -1250,10 +1295,11 @@ export function buildTools(
                 tools: subTools,
                 apiKey: callbacks?.clientApiKey,
                 ephemeral: true,
-                // Safety limits for typed sub-agents
-                maxTokenBudget: 200_000,
+                // Safety limits for typed sub-agents (budget varies by type)
+                maxTokenBudget: SUB_AGENT_BUDGETS[agentType].maxTokenBudget,
                 maxDurationMs: 600_000, // 10 minutes
-                maxTurns: 50,
+                maxTurns: SUB_AGENT_BUDGETS[agentType].maxTurns,
+                maxToolCalls: agentType === 'research' ? { browser: 5, http_api: 10 } : undefined,
                 parentTraceSpan: callbacks?.getParentTraceSpan?.(),
               })
 
