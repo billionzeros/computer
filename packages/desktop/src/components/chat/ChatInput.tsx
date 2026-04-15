@@ -63,7 +63,6 @@ export function ChatInput({
   ignoreWorkingState,
   conversationId,
 }: Props) {
-  const setDraftInput = useStore((s) => s.setDraftInput)
   const clearDraftInput = useStore((s) => s.clearDraftInput)
   const [input, setInput] = useState('')
   const [showSlashMenu, setShowSlashMenu] = useState(false)

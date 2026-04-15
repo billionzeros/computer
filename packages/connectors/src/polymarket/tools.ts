@@ -97,10 +97,14 @@ export function createPolymarketTools(api: PolymarketAPI): AgentTool[] {
       }),
       async execute(_id, params, signal) {
         try {
-          const data = await api.searchPublic(params.q, {
-            limit_per_type: params.limit_per_type,
-            page: params.page,
-          }, signal)
+          const data = await api.searchPublic(
+            params.q,
+            {
+              limit_per_type: params.limit_per_type,
+              page: params.page,
+            },
+            signal,
+          )
           return toolResult(pretty(data))
         } catch (err) {
           return toolResult(`Error: ${(err as Error).message}`, true)
@@ -249,7 +253,7 @@ export function createPolymarketTools(api: PolymarketAPI): AgentTool[] {
       name: 'polymarket_get_portfolio_value',
       label: 'Get Portfolio Value',
       description:
-        "[Polymarket] Get total value of positions for the wallet configured on this connector (Data API). Do not ask the user for their address unless they want another wallet.",
+        '[Polymarket] Get total value of positions for the wallet configured on this connector (Data API). Do not ask the user for their address unless they want another wallet.',
       parameters: Type.Object({
         user: Type.Optional(
           Type.String({
@@ -272,8 +276,7 @@ export function createPolymarketTools(api: PolymarketAPI): AgentTool[] {
     defineTool({
       name: 'polymarket_get_open_orders',
       label: 'Get Open Orders',
-      description:
-        '[Polymarket] Get authenticated user open orders (CLOB). Requires L2 creds.',
+      description: '[Polymarket] Get authenticated user open orders (CLOB). Requires L2 creds.',
       parameters: Type.Object({
         id: Type.Optional(Type.String({ description: 'Filter by order id/hash' })),
         market: Type.Optional(Type.String({ description: 'Filter by market condition id' })),
@@ -329,4 +332,3 @@ export function createPolymarketTools(api: PolymarketAPI): AgentTool[] {
     }),
   ]
 }
-

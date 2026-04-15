@@ -137,7 +137,8 @@ export class PolymarketAPI {
     signal?: AbortSignal,
   ): Promise<T> {
     const l2 = this.config.l2
-    if (!l2) throw new Error('Missing Polymarket CLOB L2 credentials (apiKey/secret/passphrase/address)')
+    if (!l2)
+      throw new Error('Missing Polymarket CLOB L2 credentials (apiKey/secret/passphrase/address)')
     const ts = Math.floor(Date.now() / 1000)
     const bodyStr = body === undefined ? undefined : JSON.stringify(body)
     const signature = await this.buildL2Signature(l2.secret, ts, method, requestPath, bodyStr)
@@ -183,7 +184,11 @@ export class PolymarketAPI {
   }
 
   // ── Gamma (market discovery) ─────────────────────────────────────────
-  searchPublic(q: string, opts?: { limit_per_type?: number; page?: number; cache?: boolean }, signal?: AbortSignal) {
+  searchPublic(
+    q: string,
+    opts?: { limit_per_type?: number; page?: number; cache?: boolean },
+    signal?: AbortSignal,
+  ) {
     return this.getJson('gamma', '/public-search', { q, ...opts }, signal)
   }
 
@@ -200,15 +205,25 @@ export class PolymarketAPI {
   }
 
   // ── Data (portfolio) ────────────────────────────────────────────────
-  getPositions(user?: string, opts?: Record<string, string | number | boolean | undefined>, signal?: AbortSignal) {
+  getPositions(
+    user?: string,
+    opts?: Record<string, string | number | boolean | undefined>,
+    signal?: AbortSignal,
+  ) {
     const addr = user ?? this.config.walletAddress
-    if (!addr) throw new Error('Missing wallet address. Provide `user` or set walletAddress on the connector.')
+    if (!addr)
+      throw new Error(
+        'Missing wallet address. Provide `user` or set walletAddress on the connector.',
+      )
     return this.getJson('data', '/positions', { user: addr, ...(opts ?? {}) }, signal)
   }
 
   getPortfolioValue(user?: string, signal?: AbortSignal) {
     const addr = user ?? this.config.walletAddress
-    if (!addr) throw new Error('Missing wallet address. Provide `user` or set walletAddress on the connector.')
+    if (!addr)
+      throw new Error(
+        'Missing wallet address. Provide `user` or set walletAddress on the connector.',
+      )
     return this.getJson('data', '/value', { user: addr }, signal)
   }
 
@@ -226,7 +241,10 @@ export class PolymarketAPI {
   }
 
   // ── CLOB (authenticated write) ──────────────────────────────────────
-  getUserOrders(params?: { id?: string; market?: string; asset_id?: string; next_cursor?: string }, signal?: AbortSignal) {
+  getUserOrders(
+    params?: { id?: string; market?: string; asset_id?: string; next_cursor?: string },
+    signal?: AbortSignal,
+  ) {
     const qs = new URLSearchParams()
     if (params?.id) qs.set('id', params.id)
     if (params?.market) qs.set('market', params.market)
@@ -244,4 +262,3 @@ export class PolymarketAPI {
     return this.clobAuthedJson('DELETE', '/order', { orderID }, signal)
   }
 }
-

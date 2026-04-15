@@ -9,6 +9,8 @@
  * pi SDK does the heavy lifting — we just manage lifecycle and persistence.
  */
 
+import { execSync } from 'node:child_process'
+import { arch, type as osType, platform, release, userInfo } from 'node:os'
 import type {
   AgentConfig,
   PersistedSession,
@@ -28,8 +30,6 @@ import {
   saveSessionTasks,
 } from '@anton/agent-config'
 import type { ProjectType } from '@anton/agent-config'
-import { execSync } from 'node:child_process'
-import { arch, platform, release, type as osType, userInfo } from 'node:os'
 import { createLogger, withContext } from '@anton/logger'
 import type { ChatImageAttachmentInput, SessionImageAttachment, TokenUsage } from '@anton/protocol'
 

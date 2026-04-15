@@ -1671,8 +1671,7 @@ export const CONNECTOR_REGISTRY: ConnectorRegistryEntry[] = [
   {
     id: 'polymarket',
     name: 'Polymarket',
-    description:
-      'Read Polymarket markets/orderbooks and track a public wallet portfolio.',
+    description: 'Read Polymarket markets/orderbooks and track a public wallet portfolio.',
     icon: '🟦',
     category: 'other',
     type: 'api',
@@ -1681,14 +1680,12 @@ export const CONNECTOR_REGISTRY: ConnectorRegistryEntry[] = [
       {
         key: 'WALLET_ADDRESS',
         label: 'Public Wallet Address',
-        hint:
-          '0x-prefixed address used for portfolio tracking (positions/value). Find it on Polymarket: go to polymarket.com/settings and copy your “Wallet Address” / “Profile Address”. Adding this alone enables the connector.',
+        hint: '0x-prefixed address used for portfolio tracking (positions/value). Find it on Polymarket: go to polymarket.com/settings and copy your “Wallet Address” / “Profile Address”. Adding this alone enables the connector.',
       },
       {
         key: 'API_KEY',
         label: 'API Key',
-        hint:
-          'Optional. Create one on Polymarket (Builders tab): polymarket.com/settings?tab=builder. Not required for market data or portfolio tracking.',
+        hint: 'Optional. Create one on Polymarket (Builders tab): polymarket.com/settings?tab=builder. Not required for market data or portfolio tracking.',
       },
     ],
     featured: false,

@@ -17,9 +17,19 @@ import type { MessageContext } from './shared'
 import { handleToolMessage } from './toolHandler'
 
 export function handleWsMessage(channel: number, msg: IncomingMessage): void {
-  const channelName = channel === Channel.CONTROL ? 'CTRL' : channel === Channel.AI ? 'AI' : channel === Channel.EVENTS ? 'EVT' : `CH${channel}`
+  const channelName =
+    channel === Channel.CONTROL
+      ? 'CTRL'
+      : channel === Channel.AI
+        ? 'AI'
+        : channel === Channel.EVENTS
+          ? 'EVT'
+          : `CH${channel}`
   const msgType = (msg as { type?: string }).type ?? 'unknown'
-  console.log(`[WS ← ${channelName}] ${msgType}`, 'sessionId' in msg ? (msg as Record<string, unknown>).sessionId : '')
+  console.log(
+    `[WS ← ${channelName}] ${msgType}`,
+    'sessionId' in msg ? (msg as Record<string, unknown>).sessionId : '',
+  )
 
   if (channel === Channel.CONTROL) {
     handleControlMessage(msg as ControlMessage)

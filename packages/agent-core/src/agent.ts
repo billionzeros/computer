@@ -1122,7 +1122,7 @@ export function buildTools(
           'Omit `type` to create a **fork** that inherits your full conversation context — use when the task needs prior discussion history or would be tedious to restate as a self-contained prompt. ' +
           'Multiple sub_agent calls in the same response run in parallel. ' +
           'With a type: the sub-agent starts fresh — the task string is its entire context, make it self-contained. ' +
-          'Without a type (fork): the sub-agent sees everything you\'ve seen — write a short directive, not a full briefing.',
+          "Without a type (fork): the sub-agent sees everything you've seen — write a short directive, not a full briefing.",
         parameters: Type.Object({
           task: Type.String({
             description:

@@ -5,7 +5,15 @@ import type { SessionMeta } from '@/lib/store/types'
 import { colors, fontSize, radius, spacing } from '@/theme/colors'
 import type { AgentSession, Project } from '@anton/protocol'
 import { router } from 'expo-router'
-import { ArrowLeft, Bot, ChevronRight, FolderOpen, MessageSquare, Pause, Play } from 'lucide-react-native'
+import {
+  ArrowLeft,
+  Bot,
+  ChevronRight,
+  FolderOpen,
+  MessageSquare,
+  Pause,
+  Play,
+} from 'lucide-react-native'
 import { useCallback, useState } from 'react'
 import { FlatList, Pressable, StyleSheet, Text, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'

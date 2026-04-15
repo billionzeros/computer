@@ -13,11 +13,13 @@ interface Props {
 // Parse <think>...</think> blocks from assistant text
 function parseThinkBlocks(content: string): { text: string; thinking: string[] } {
   const thinking: string[] = []
-  const text = content.replace(/<think>([\s\S]*?)<\/think>/g, (_match, block) => {
-    const trimmed = block.trim()
-    if (trimmed) thinking.push(trimmed)
-    return ''
-  }).trim()
+  const text = content
+    .replace(/<think>([\s\S]*?)<\/think>/g, (_match, block) => {
+      const trimmed = block.trim()
+      if (trimmed) thinking.push(trimmed)
+      return ''
+    })
+    .trim()
   return { text, thinking }
 }
 
@@ -79,12 +81,8 @@ export const MessageBubble = memo(function MessageBubble({ message, isLastInGrou
 
   return (
     <View style={[styles.assistantRow, isLastInGroup && styles.lastInGroup]}>
-      {thinking.length > 0 && (
-        <InlineThinking blocks={thinking} />
-      )}
-      {cleanText ? (
-        <Markdown variant="assistant">{cleanText}</Markdown>
-      ) : null}
+      {thinking.length > 0 && <InlineThinking blocks={thinking} />}
+      {cleanText ? <Markdown variant="assistant">{cleanText}</Markdown> : null}
     </View>
   )
 })

@@ -7944,7 +7944,9 @@ button {
 }
 
 @keyframes publish-spin {
-  to { transform: rotate(360deg); }
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 /* ── Manage state (Notion-style) ── */
@@ -8004,8 +8006,13 @@ button {
 }
 
 @keyframes publish-pulse {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.4; }
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.4;
+  }
 }
 
 /* Action rows (Notion-style list) */
@@ -17328,7 +17335,9 @@ button {
 }
 
 @keyframes pv-spin {
-  to { transform: rotate(360deg); }
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 .pv-spinner {

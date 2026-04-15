@@ -10,7 +10,7 @@
 import { randomBytes } from 'node:crypto'
 import { type AgentConfig, CONNECTOR_REGISTRY } from '@anton/agent-config'
 import { createLogger } from '@anton/logger'
-import type { StoredCredentials, CredentialStore } from '../credential-store.js'
+import type { CredentialStore, StoredCredentials } from '../credential-store.js'
 
 const log = createLogger('oauth-flow')
 

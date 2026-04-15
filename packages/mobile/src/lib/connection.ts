@@ -138,7 +138,12 @@ export class Connection {
       return
     }
     const msgType = (message as { type?: string }).type ?? 'unknown'
-    console.log(`[WS →] ${msgType}`, (message as Record<string, unknown>).sessionId ?? (message as Record<string, unknown>).id ?? '')
+    console.log(
+      `[WS →] ${msgType}`,
+      (message as Record<string, unknown>).sessionId ??
+        (message as Record<string, unknown>).id ??
+        '',
+    )
     this.ws.send(encodeFrame(channel, message))
   }
 

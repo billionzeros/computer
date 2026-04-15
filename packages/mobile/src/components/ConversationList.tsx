@@ -45,10 +45,7 @@ export function ConversationList({ conversations, activeId, onSelect, onDelete, 
           }}
         >
           <View style={styles.itemContent}>
-            <Text
-              style={[styles.itemTitle, isActive && styles.itemTitleActive]}
-              numberOfLines={2}
-            >
+            <Text style={[styles.itemTitle, isActive && styles.itemTitleActive]} numberOfLines={2}>
               {item.title}
             </Text>
             <Text style={styles.itemPreview} numberOfLines={1}>
@@ -58,11 +55,7 @@ export function ConversationList({ conversations, activeId, onSelect, onDelete, 
               <Text style={styles.itemTime}>{timeAgo(item.updatedAt)}</Text>
             </View>
           </View>
-          <Pressable
-            style={styles.moreBtn}
-            onPress={() => onDelete(item.id)}
-            hitSlop={8}
-          >
+          <Pressable style={styles.moreBtn} onPress={() => onDelete(item.id)} hitSlop={8}>
             <MoreHorizontal size={16} strokeWidth={1.5} color={colors.textTertiary} />
           </Pressable>
         </Pressable>

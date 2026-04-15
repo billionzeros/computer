@@ -9,11 +9,10 @@ import {
 import { useConnectionStatus } from '@/lib/store'
 import { colors, fontSize, radius, spacing } from '@/theme/colors'
 import { router } from 'expo-router'
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import {
   ActivityIndicator,
   Alert,
-  Animated,
   Keyboard,
   KeyboardAvoidingView,
   Platform,
@@ -177,7 +176,10 @@ export default function ConnectScreen() {
   if (view === 'list') {
     return (
       <View style={[styles.container, { paddingTop: insets.top }]}>
-        <ScrollView contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled">
+        <ScrollView
+          contentContainerStyle={styles.scrollContent}
+          keyboardShouldPersistTaps="handled"
+        >
           <View style={styles.header}>
             <Text style={styles.logo}>Anton</Text>
             <Text style={styles.subtitle}>Your machines</Text>
@@ -193,15 +195,26 @@ export default function ConnectScreen() {
                   onPress={() => handleQuickConnect(m)}
                   disabled={connecting}
                 >
-                  <View style={[styles.machineDot, connecting && connectingId === m.id && styles.machineDotConnecting]} />
+                  <View
+                    style={[
+                      styles.machineDot,
+                      connecting && connectingId === m.id && styles.machineDotConnecting,
+                    ]}
+                  />
                   <View style={styles.machineInfo}>
-                    <Text style={styles.machineName} numberOfLines={1}>{m.name}</Text>
+                    <Text style={styles.machineName} numberOfLines={1}>
+                      {m.name}
+                    </Text>
                     <Text style={styles.machineHost} numberOfLines={1}>
                       {m.host}:{m.port}
                     </Text>
                   </View>
                   {connecting && connectingId === m.id && (
-                    <ActivityIndicator color={colors.textTertiary} size="small" style={{ marginRight: spacing.sm }} />
+                    <ActivityIndicator
+                      color={colors.textTertiary}
+                      size="small"
+                      style={{ marginRight: spacing.sm }}
+                    />
                   )}
                 </Pressable>
 
