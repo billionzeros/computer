@@ -1,6 +1,6 @@
 {
   "version": "1.0.56",
-  "gitHash": "",
+  "gitHash": "6585f66",
   "releaseUrl": "https://github.com/OmGuptaIND/computer/releases",
   "changelog": "Features:\n- publish modal improvements and connection domain support\n- add Pages view for managing published pages\n- publish modal with metadata tracking, view counting, and slug collision detection\n\nFixes:\n- tighten research sub-agent with tool whitelists, budgets, and call limits\n- remove dedicated ProjectView UI and consolidate into HomeView\n- improve Telegram connector UI and fix Exa OAuth missing domain\n- resolve missing domain param in web search OAuth and rename DOMAIN to ANTON_HOST\n\nAdded:\n- stuff\n\nOther:\n- restore: undo accidental mass deletion from bcef5a6",
   "publishedAt": "2026-04-15T11:40:06.876Z",
