@@ -1,0 +1,29 @@
+packages/desktop/src/index.css
+  e08953ddfd39472a 255-256,260-261,264-266,268-269
+packages/desktop/src/components/Sidebar.tsx
+  e08953ddfd39472a 21,57,64,88-90,93-94
+packages/desktop/src/lib/store/uiStore.ts
+  e08953ddfd39472a 129-132,135
+packages/desktop/src/lib/store.ts
+  e08953ddfd39472a 223-224,226-227
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.2.8",
+  "base_commit_sha": "945057afcaa20bd5b058e6dd92bd2f14c86cb984",
+  "prompts": {
+    "e08953ddfd39472a": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "824e683c-14d3-453c-bdcf-6432a74e99f0",
+        "model": "claude-opus-4-6"
+      },
+      "human_author": "Om Gupta",
+      "messages": [],
+      "total_additions": 45,
+      "total_deletions": 372,
+      "accepted_lines": 36,
+      "overriden_lines": 0
+    }
+  }
+}
