@@ -1,0 +1,29 @@
+{{ anton_domain }} {
+    handle /a/* {
+        uri strip_prefix /a
+        root * /home/{{ anton_user }}/.anton/published
+        file_server
+    }
+    handle /p/* {
+        uri strip_prefix /p
+        root * /home/{{ anton_user }}/Anton
+        file_server
+    }
+
+    # Sidecar — only expose /health and /status, NEVER the update endpoints
+    # (/update/check, /update/start are Bearer-token protected and must stay
+    # off the public internet). Listed before the agent catch-all so these
+    # specific paths win the match order.
+    handle_path /_anton/health {
+        reverse_proxy localhost:9878
+    }
+    handle_path /_anton/status {
+        reverse_proxy localhost:9878
+    }
+
+    # Everything else goes to the agent: /_anton/oauth/*, /_anton/telegram/*,
+    # /_anton/webhooks/* (slack-bot, future providers), /_anton/proxy/notify,
+    # and the WebSocket upgrade at /. One catch-all instead of enumerating
+    # subpaths so new providers don't need a Caddyfile edit per-install.
+    reverse_proxy localhost:{{ anton_port }}
+}
