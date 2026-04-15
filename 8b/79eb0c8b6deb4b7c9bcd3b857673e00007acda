@@ -1,0 +1,36 @@
+packages/desktop/src/components/WelcomeModal.tsx
+  2de7c339656c5b05 10,98-101,151-152,157,159,161-164,175,179-183,200-204,211,214-215,228-232,234-238,243,246-247,268-269,276,279-282,302-304,312-314,316-345
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.2.8",
+  "base_commit_sha": "8b79eb0c8b6deb4b7c9bcd3b857673e00007acda",
+  "prompts": {
+    "2de7c339656c5b05": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "f1ee049e-a6b7-4e80-8259-d0952707d0f7",
+        "model": "claude-opus-4-6"
+      },
+      "human_author": "Om Gupta",
+      "messages": [],
+      "total_additions": 84,
+      "total_deletions": 135,
+      "accepted_lines": 86,
+      "overriden_lines": 0
+    },
+    "591d861704ec3754": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "e778c223-a048-462d-9874-7e2b83379a35",
+        "model": "claude-opus-4-6"
+      },
+      "human_author": "Om Gupta",
+      "messages": [],
+      "total_additions": 0,
+      "total_deletions": 0,
+      "accepted_lines": 2487,
+      "overriden_lines": 0
+    }
+  }
+}
