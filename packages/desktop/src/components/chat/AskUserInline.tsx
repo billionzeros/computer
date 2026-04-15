@@ -13,10 +13,10 @@ function normalizeOption(opt: string | AskUserOption): { label: string; descript
   return { label: opt.label, description: opt.description }
 }
 
-/* ── Agent-create confirmation card ── */
+/* ── Routine-create confirmation card ── */
 
-interface AgentCreateMeta {
-  type: 'agent_create'
+interface RoutineCreateMeta {
+  type: 'routine_create'
   name: string
   description: string
   schedule: string | null
@@ -24,10 +24,10 @@ interface AgentCreateMeta {
   prompt: string
 }
 
-function isAgentCreate(q: AskUserQuestion): AgentCreateMeta | null {
+function isRoutineCreate(q: AskUserQuestion): RoutineCreateMeta | null {
   const m = q.metadata
-  if (m && (m as Record<string, unknown>).type === 'agent_create')
-    return m as unknown as AgentCreateMeta
+  if (m && (m as Record<string, unknown>).type === 'routine_create')
+    return m as unknown as RoutineCreateMeta
   return null
 }
 
@@ -93,11 +93,11 @@ function formatNextRun(cron: string | null): string | null {
   return null
 }
 
-function AgentCreateCard({
+function RoutineCreateCard({
   meta,
   onConfirm,
   onCancel,
-}: { meta: AgentCreateMeta; onConfirm: () => void; onCancel: () => void }) {
+}: { meta: RoutineCreateMeta; onConfirm: () => void; onCancel: () => void }) {
   const promptPreview = meta.prompt.length > 120 ? `${meta.prompt.slice(0, 120)}...` : meta.prompt
   const timezone = uiStore((s) => s.timezone)
   const nextRun = meta.cron ? formatNextRun(meta.cron) : null
@@ -176,26 +176,26 @@ function AgentCreateCard({
   )
 }
 
-/* ── Agent-delete confirmation card ── */
+/* ── Routine-delete confirmation card ── */
 
-interface AgentDeleteMeta {
-  type: 'agent_delete'
+interface RoutineDeleteMeta {
+  type: 'routine_delete'
   name: string
-  agentId: string
+  routineId: string
 }
 
-function isAgentDelete(q: AskUserQuestion): AgentDeleteMeta | null {
+function isRoutineDelete(q: AskUserQuestion): RoutineDeleteMeta | null {
   const m = q.metadata
-  if (m && (m as Record<string, unknown>).type === 'agent_delete')
-    return m as unknown as AgentDeleteMeta
+  if (m && (m as Record<string, unknown>).type === 'routine_delete')
+    return m as unknown as RoutineDeleteMeta
   return null
 }
 
-function AgentDeleteCard({
+function RoutineDeleteCard({
   meta,
   onConfirm,
   onCancel,
-}: { meta: AgentDeleteMeta; onConfirm: () => void; onCancel: () => void }) {
+}: { meta: RoutineDeleteMeta; onConfirm: () => void; onCancel: () => void }) {
   return (
     <div className="routine-confirm">
       <div className="routine-confirm__header">
@@ -258,11 +258,11 @@ export function AskUserInline({ questions, onSubmit }: Props) {
     const q = questions[0]
     const opts = (q.options ?? []).map(normalizeOption)
 
-    const createMeta = isAgentCreate(q)
+    const createMeta = isRoutineCreate(q)
     if (createMeta) {
       return (
         <div className="ask-inline">
-          <AgentCreateCard
+          <RoutineCreateCard
             meta={createMeta}
             onConfirm={() => onSubmit({ [q.question]: opts[0]?.label || 'Yes, create it' })}
             onCancel={() => onSubmit({ [q.question]: opts[1]?.label || 'No, cancel' })}
@@ -271,11 +271,11 @@ export function AskUserInline({ questions, onSubmit }: Props) {
       )
     }
 
-    const deleteMeta = isAgentDelete(q)
+    const deleteMeta = isRoutineDelete(q)
     if (deleteMeta) {
       return (
         <div className="ask-inline">
-          <AgentDeleteCard
+          <RoutineDeleteCard
             meta={deleteMeta}
             onConfirm={() => onSubmit({ [q.question]: opts[0]?.label || 'Yes, delete it' })}
             onCancel={() => onSubmit({ [q.question]: opts[1]?.label || 'No, keep it' })}

@@ -69,9 +69,7 @@ sync: _check-ansible
 	echo "  │  sync → v$$PKG_VERSION ($$GIT_HASH)"; \
 	echo "  └─────────────────────────────────────┘"; \
 	echo ""; \
-	echo "  ○ Building locally..."; \
-	pnpm -r build 2>&1 | tail -3; \
-	echo "  ✓ Build complete"; \
+	echo "  ○ Skipping local build (will build on remote)"; \
 	echo ""; \
 	grep -E '^\w+\s+ansible_host=' $(INVENTORY) | while read line; do \
 		host=$$(echo "$$line" | awk '{print $$1}'); \
@@ -94,6 +92,8 @@ sync: _check-ansible
 			--rsync-path="sudo -u anton rsync" \
 			-e "ssh $$SSH_OPTS" \
 			"$(REPO_ROOT)/" "$$USER@$$IP:$(REMOTE_REPO)/" 2>&1; \
+		echo "  ○ Building on remote..."; \
+		ssh $$SSH_OPTS "$$USER@$$IP" "cd $(REMOTE_REPO) && sudo -u anton bash -c 'pnpm -r --filter=\"./packages/*\" --filter=\"!@anton/desktop\" --filter=\"!@anton/mobile\" build'" 2>&1 | tail -10; \
 		echo "  ○ Rebuilding native modules on remote..."; \
 		ssh $$SSH_OPTS "$$USER@$$IP" "cd $(REMOTE_REPO) && sudo -u anton bash -c 'cd node_modules/.pnpm/better-sqlite3@*/node_modules/better-sqlite3 && npx --yes prebuild-install || npx --yes node-gyp rebuild --release' 2>&1" || true; \
 		echo "  ○ Writing systemd service..."; \

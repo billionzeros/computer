@@ -89,9 +89,9 @@ const commands: Command[] = [
     handler: handleProviders,
   },
   {
-    name: 'agents',
-    description: 'List scheduled agents',
-    usage: '/agents',
+    name: 'routines',
+    description: 'List scheduled routines',
+    usage: '/routines',
     handler: handleAgents,
   },
   {
@@ -284,14 +284,14 @@ function handleProviders(_args: string, ctx: CommandContext): CommandResult {
 function handleAgents(_args: string, ctx: CommandContext): CommandResult {
   const agents = ctx.listAgents?.()
   if (!agents || agents.length === 0) {
-    return ok('No scheduled agents.')
+    return ok('No scheduled routines.')
   }
   const lines = agents.map((a) => {
     const status = a.enabled ? '🟢' : '⏸️'
     const next = new Date(a.nextRun).toLocaleString()
     return `${status} **${a.name}** — ${a.schedule}\n    Next: ${next}`
   })
-  return ok(`**Scheduled Agents:**\n${lines.join('\n')}`)
+  return ok(`**Scheduled Routines:**\n${lines.join('\n')}`)
 }
 
 function handleReset(_args: string, ctx: CommandContext): CommandResult {

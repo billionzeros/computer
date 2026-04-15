@@ -575,7 +575,7 @@ export class AgentServer {
               // knows exactly which sessions are still working after reconnect
               for (const sessionId of this.activeTurns) {
                 this.sendToClient(Channel.EVENTS, {
-                  type: 'agent_status',
+                  type: 'routine_status',
                   status: 'working',
                   sessionId,
                 })
@@ -583,7 +583,7 @@ export class AgentServer {
               // If nothing is active, send a global idle to clear any stale client state
               if (this.activeTurns.size === 0) {
                 this.sendToClient(Channel.EVENTS, {
-                  type: 'agent_status',
+                  type: 'routine_status',
                   status: 'idle',
                 })
               }
@@ -2730,7 +2730,7 @@ export class AgentServer {
     }
   }
 
-  /** Build the agent action callback for the agent tool (used by the LLM) */
+  /** Build the routine action callback for the routine tool (used by the LLM) */
   private buildAgentActionHandler(
     originSessionId?: string,
   ): import('@anton/agent-core').JobActionHandler | undefined {
@@ -3167,7 +3167,7 @@ export class AgentServer {
     }
 
     this.sendToClient(Channel.EVENTS, {
-      type: 'agent_status',
+      type: 'routine_status',
       status: 'working',
       detail: 'Processing your request...',
       sessionId,
@@ -3233,7 +3233,7 @@ export class AgentServer {
           // Send "Writing response..." status only once per text block, not per token
           if (!writingStatusSent) {
             this.sendToClient(Channel.EVENTS, {
-              type: 'agent_status',
+              type: 'routine_status',
               status: 'working',
               detail: 'Writing response...',
               sessionId,
@@ -3304,14 +3304,14 @@ export class AgentServer {
             }
           }
           this.sendToClient(Channel.EVENTS, {
-            type: 'agent_status',
+            type: 'routine_status',
             status: 'working',
             detail: toolDetail,
             sessionId,
           })
         } else if (event.type === 'thinking') {
           this.sendToClient(Channel.EVENTS, {
-            type: 'agent_status',
+            type: 'routine_status',
             status: 'working',
             detail: 'Thinking...',
             sessionId,
@@ -3323,7 +3323,7 @@ export class AgentServer {
           ).tasks.find((t) => t.status === 'in_progress')
           if (active) {
             this.sendToClient(Channel.EVENTS, {
-              type: 'agent_status',
+              type: 'routine_status',
               status: 'working',
               detail: active.activeForm,
               sessionId,
@@ -3425,7 +3425,7 @@ export class AgentServer {
       textBuffer.destroy()
       this.activeTurns.delete(sessionId)
       this.sendToClient(Channel.EVENTS, {
-        type: 'agent_status',
+        type: 'routine_status',
         status: 'idle',
         sessionId,
       })
@@ -3471,7 +3471,7 @@ export class AgentServer {
     }
 
     this.sendToClient(Channel.EVENTS, {
-      type: 'agent_status',
+      type: 'routine_status',
       status: 'idle',
       sessionId,
     })

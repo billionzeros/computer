@@ -185,7 +185,7 @@ export function App({ machine }: AppProps) {
   )
 
   const handleEvent = useCallback((event: EventMessage) => {
-    if (event.type === 'agent_status') {
+    if (event.type === 'routine_status') {
       setAgentStatus(event.status)
     }
   }, [])

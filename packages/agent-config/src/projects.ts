@@ -163,7 +163,7 @@ export function createProject(input: {
     },
     stats: {
       sessionCount: 0,
-      activeAgents: 0,
+      activeRoutines: 0,
       lastActive: now,
     },
   }
@@ -652,7 +652,7 @@ export function ensureDefaultProject(config?: AgentConfig): Project {
     },
     stats: {
       sessionCount: 0,
-      activeAgents: 0,
+      activeRoutines: 0,
       lastActive: now,
     },
   }

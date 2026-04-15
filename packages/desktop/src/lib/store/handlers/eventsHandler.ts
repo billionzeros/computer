@@ -1,5 +1,5 @@
 /**
- * EVENTS channel handler: job_event, update_available, agent_status.
+ * EVENTS channel handler: job_event, update_available, routine_status.
  */
 
 import type { EventMessage } from '@anton/protocol'

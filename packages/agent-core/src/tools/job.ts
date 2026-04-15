@@ -1,23 +1,23 @@
 /**
- * Agent tool — lets a conversation create, manage, and control agents.
+ * Routine tool — lets a conversation create, manage, and control routines.
  *
- * An agent is just another conversation that runs on a schedule.
+ * A routine is just another conversation that runs on a schedule.
  * Uses a callback pattern to bridge agent-core → agent-server.
  */
 
-export interface AgentToolInput {
+export interface RoutineToolInput {
   operation: 'create' | 'list' | 'start' | 'stop' | 'delete' | 'status'
   // Create params
   name?: string
   description?: string
-  prompt?: string // instructions for the agent
+  prompt?: string // instructions for the routine
   schedule?: string // cron expression
   // Action params
-  agentId?: string // session ID of the agent
+  routineId?: string // session ID of the routine
 }
 
 // Keep old name as alias for backward compat with server handler signature
-export type JobToolInput = AgentToolInput & {
+export type JobToolInput = RoutineToolInput & {
   // Legacy fields — ignored but kept so the handler type doesn't break
   kind?: string
   command?: string

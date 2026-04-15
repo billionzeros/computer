@@ -1387,21 +1387,21 @@ export function buildTools(
     )
   }
 
-  // ── Agent management (only for project-scoped sessions with handler) ──
+  // ── Routine management (only for project-scoped sessions with handler) ──
   if (callbacks?.projectId && callbacks?.onJobAction) {
     const projectId = callbacks.projectId
     const agentHandler = callbacks.onJobAction
     const getAskUser = callbacks?.getAskUserHandler
     tools.push(
       defineTool({
-        name: 'agent',
-        label: 'Agent',
+        name: 'routine',
+        label: 'Routine',
         description:
-          'Create and manage agents — autonomous conversations that run on a schedule. ' +
-          'An agent is its own conversation with full tool and MCP access that executes instructions repeatedly. ' +
-          'Operations: create (define a new agent), list (show all agents), start (trigger a run), stop (cancel a run), ' +
-          'delete (remove an agent), status (check agent details). ' +
-          'IMPORTANT: For create, the user will be asked to confirm before the agent is created.',
+          'Create and manage routines — autonomous conversations that run on a schedule. ' +
+          'A routine is its own conversation with full tool and MCP access that executes instructions repeatedly. ' +
+          'Operations: create (define a new routine), list (show all routines), start (trigger a run), stop (cancel a run), ' +
+          'delete (remove a routine), status (check routine details). ' +
+          'IMPORTANT: For create, the user will be asked to confirm before the routine is created.',
         parameters: Type.Object({
           operation: Type.Union(
             [
@@ -1417,16 +1417,16 @@ export function buildTools(
           name: Type.Optional(
             Type.String({
               description:
-                'Agent name (for create, or for delete/start/stop to display in confirmation)',
+                'Routine name (for create, or for delete/start/stop to display in confirmation)',
             }),
           ),
           description: Type.Optional(
-            Type.String({ description: 'What the agent does (for create)' }),
+            Type.String({ description: 'What the routine does (for create)' }),
           ),
           prompt: Type.Optional(
             Type.String({
               description:
-                'Instructions for the agent — what it should do on each run. Be specific.',
+                'Instructions for the routine — what it should do on each run. Be specific.',
             }),
           ),
           schedule: Type.Optional(
@@ -1435,8 +1435,8 @@ export function buildTools(
                 'Cron expression for scheduling, e.g. "0 9 * * *" for daily at 9am, "0 */6 * * *" for every 6 hours. Omit for manual-only.',
             }),
           ),
-          agent_id: Type.Optional(
-            Type.String({ description: 'Agent session ID (for start/stop/delete/status)' }),
+          routine_id: Type.Optional(
+            Type.String({ description: 'Routine session ID (for start/stop/delete/status)' }),
           ),
         }),
         async execute(_toolCallId, params) {
@@ -1447,12 +1447,12 @@ export function buildTools(
               const humanSchedule = params.schedule ? humanizeCron(params.schedule) : null
               const answers = await askUser([
                 {
-                  question: `Create agent "${params.name || 'Untitled'}"?`,
+                  question: `Create routine "${params.name || 'Untitled'}"?`,
                   description: params.description || '',
                   options: ['Yes, create it', 'No, cancel'],
                   allowFreeText: false,
                   metadata: {
-                    type: 'agent_create',
+                    type: 'routine_create',
                     name: params.name || 'Untitled',
                     description: params.description || '',
                     schedule: humanSchedule,
@@ -1467,7 +1467,7 @@ export function buildTools(
                 answer &&
                 (answer.toLowerCase().includes('no') || answer.toLowerCase().includes('cancel'))
               ) {
-                return toolResult('Agent creation cancelled by user.')
+                return toolResult('Routine creation cancelled by user.')
               }
             }
           }
@@ -1476,17 +1476,17 @@ export function buildTools(
           if (params.operation === 'delete' && getAskUser) {
             const askUser = getAskUser()
             if (askUser) {
-              const displayName = params.name || params.agent_id || 'this agent'
+              const displayName = params.name || params.routine_id || 'this routine'
               const answers = await askUser([
                 {
-                  question: `Delete agent "${displayName}"?`,
-                  description: 'This will remove the agent and its conversation history.',
+                  question: `Delete routine "${displayName}"?`,
+                  description: 'This will remove the routine and its conversation history.',
                   options: ['Yes, delete it', 'No, keep it'],
                   allowFreeText: false,
                   metadata: {
-                    type: 'agent_delete',
+                    type: 'routine_delete',
                     name: displayName,
-                    agentId: params.agent_id || '',
+                    routineId: params.routine_id || '',
                   },
                 },
               ])
@@ -1495,7 +1495,7 @@ export function buildTools(
                 answer &&
                 (answer.toLowerCase().includes('no') || answer.toLowerCase().includes('keep'))
               ) {
-                return toolResult('Agent deletion cancelled by user.')
+                return toolResult('Routine deletion cancelled by user.')
               }
             }
           }
@@ -1506,7 +1506,7 @@ export function buildTools(
             description: params.description,
             prompt: params.prompt,
             schedule: params.schedule,
-            jobId: params.agent_id,
+            jobId: params.routine_id,
           }
           const output = await agentHandler(projectId, input)
           return toolResult(output)
