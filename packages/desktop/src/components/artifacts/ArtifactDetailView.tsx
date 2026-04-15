@@ -1,9 +1,10 @@
 import { AnimatePresence, motion } from 'framer-motion'
-import { ArrowLeft, Check, Code2, Copy, Download, Eye, Globe, Link } from 'lucide-react'
+import { ArrowLeft, Check, Code2, Copy, Download, Eye, Globe, Link, Settings2 } from 'lucide-react'
 import { useCallback, useMemo, useState } from 'react'
 import type { Artifact } from '../../lib/artifacts.js'
 import { getArtifactFileExtension, getArtifactTypeLabel } from '../../lib/artifacts.js'
 import { artifactStore } from '../../lib/store/artifactStore.js'
+import { connectionStore } from '../../lib/store/connectionStore.js'
 import { HighlightedBlock, MarkdownRenderer } from '../chat/MarkdownRenderer.js'
 import { PublishModal } from './PublishModal.js'
 
@@ -116,12 +117,22 @@ export function ArtifactDetailView() {
     setTimeout(() => setCopied(false), 2000)
   }, [artifact])
 
+  const domain = connectionStore((s) => s.domain)
+
+  // Build full published URL
+  const fullPublishedUrl = useMemo(() => {
+    if (!artifact?.publishedUrl) return ''
+    if (artifact.publishedUrl.startsWith('http')) return artifact.publishedUrl
+    if (domain) return `https://${domain}${artifact.publishedUrl}`
+    return artifact.publishedUrl
+  }, [artifact?.publishedUrl, domain])
+
   const handleCopyUrl = useCallback(() => {
-    if (!artifact?.publishedUrl) return
-    navigator.clipboard.writeText(artifact.publishedUrl)
+    if (!fullPublishedUrl) return
+    navigator.clipboard.writeText(fullPublishedUrl)
     setCopiedUrl(true)
     setTimeout(() => setCopiedUrl(false), 2000)
-  }, [artifact])
+  }, [fullPublishedUrl])
 
   const handleDownload = useCallback(() => {
     if (!artifact) return
@@ -163,12 +174,12 @@ export function ArtifactDetailView() {
         <div className="artifact-detail__published">
           <Globe size={12} strokeWidth={1.5} />
           <a
-            href={artifact.publishedUrl}
+            href={fullPublishedUrl}
             target="_blank"
             rel="noopener noreferrer"
             className="artifact-detail__published-url"
           >
-            {artifact.publishedUrl}
+            {fullPublishedUrl}
           </a>
           <button type="button" className="artifact-detail__copy-url" onClick={handleCopyUrl}>
             {copiedUrl ? <Check size={12} /> : <Link size={12} />}
@@ -199,16 +210,14 @@ export function ArtifactDetailView() {
           <span>Download</span>
         </button>
 
-        {!artifact.publishedUrl && (
-          <button
-            type="button"
-            className="artifact-detail__action artifact-detail__action--publish"
-            onClick={() => openPublishModal(artifact.id)}
-          >
-            <Globe size={14} />
-            <span>Publish</span>
-          </button>
-        )}
+        <button
+          type="button"
+          className={`artifact-detail__action ${artifact.publishedUrl ? 'artifact-detail__action--manage' : 'artifact-detail__action--publish'}`}
+          onClick={() => openPublishModal(artifact.id)}
+        >
+          {artifact.publishedUrl ? <Settings2 size={14} strokeWidth={1.5} /> : <Globe size={14} strokeWidth={1.5} />}
+          <span>{artifact.publishedUrl ? 'Manage' : 'Publish'}</span>
+        </button>
       </div>
 
       {/* Content */}

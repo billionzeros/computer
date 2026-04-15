@@ -141,6 +141,7 @@ export type ActiveView =
   | 'developer'
   | 'skills'
   | 'workflows'
+  | 'pages'
   | 'projects'
 
 export type ActiveMode = 'chat' | 'computer'

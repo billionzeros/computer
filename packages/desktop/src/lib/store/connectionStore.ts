@@ -29,9 +29,12 @@ export interface SyncProgress {
 interface ConnectionStoreState {
   initPhase: InitPhase
   syncProgress: SyncProgress
+  /** Public domain for this agent (e.g. "itsomg.antoncomputer.in") */
+  domain: string | null
 
   // Actions
   setInitPhase: (phase: InitPhase) => void
+  setDomain: (domain: string | null) => void
   startSyncing: () => void
   markSynced: (key: keyof SyncProgress) => void
   reset: () => void
@@ -47,8 +50,10 @@ export const connectionStore = create<ConnectionStoreState>((set, get) => ({
     projects: false,
     connectors: false,
   },
+  domain: null,
 
   setInitPhase: (phase) => set({ initPhase: phase }),
+  setDomain: (domain) => set({ domain }),
 
   startSyncing: () => {
     set({
@@ -99,5 +104,6 @@ export const connectionStore = create<ConnectionStoreState>((set, get) => ({
     set({
       initPhase: 'idle',
       syncProgress: { providers: false, sessions: false, projects: false, connectors: false },
+      domain: null,
     }),
 }))

@@ -11,6 +11,8 @@ import { updateStore } from '../updateStore.js'
 export function handleControlMessage(msg: ControlMessage): void {
   switch (msg.type) {
     case 'auth_ok': {
+      connectionStore.getState().setDomain(msg.domain ?? null)
+
       const us = updateStore.getState()
 
       // Capture previous version BEFORE updating state

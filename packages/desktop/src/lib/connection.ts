@@ -448,6 +448,14 @@ export class Connection {
     this.send(Channel.AI, { type: 'skill_list' })
   }
 
+  sendPublishedList() {
+    this.send(Channel.AI, { type: 'published_list' })
+  }
+
+  sendUnpublish(slug: string) {
+    this.send(Channel.AI, { type: 'unpublish', slug })
+  }
+
   sendConnectorSetToolPermission(
     id: string,
     toolName: string,

@@ -4,6 +4,7 @@
 
 import type { EventMessage } from '@anton/protocol'
 import { connection } from '../../connection.js'
+import { pagesStore } from '../pagesStore.js'
 import { projectStore } from '../projectStore.js'
 import { sessionStore } from '../sessionStore.js'
 import { uiStore } from '../uiStore.js'
@@ -26,6 +27,13 @@ export function handleEventsMessage(msg: EventMessage): void {
         changelog: msg.changelog,
         releaseUrl: msg.releaseUrl,
       })
+      return
+    }
+
+    case 'artifact_published': {
+      if (pagesStore.getState().loaded) {
+        pagesStore.getState().requestPages()
+      }
       return
     }
 

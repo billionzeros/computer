@@ -12,6 +12,8 @@ export interface AuthOkMessage {
   agentId: string
   version: string
   gitHash: string
+  /** Public domain for this agent (e.g. "itsomg.antoncomputer.in") */
+  domain?: string
   /** If the agent knows a newer version is available, include it here. */
   updateAvailable?: {
     version: string
@@ -1265,6 +1267,38 @@ export interface PublishArtifactResponse {
   error?: string
 }
 
+export interface PublishedListMessage {
+  type: 'published_list'
+}
+
+export interface PublishedListResponse {
+  type: 'published_list_response'
+  host?: string
+  pages: {
+    slug: string
+    artifactId?: string
+    title: string
+    type: 'html' | 'markdown' | 'svg' | 'mermaid' | 'code'
+    description?: string
+    createdAt: number
+    updatedAt: number
+    projectId?: string
+    views: number
+  }[]
+}
+
+export interface UnpublishMessage {
+  type: 'unpublish'
+  slug: string
+}
+
+export interface UnpublishResponse {
+  type: 'unpublish_response'
+  slug: string
+  success: boolean
+  error?: string
+}
+
 export type AiMessage =
   // Session management
   | SessionCreateMessage
@@ -1399,6 +1433,10 @@ export type AiMessage =
   // Publish
   | PublishArtifactMessage
   | PublishArtifactResponse
+  | PublishedListMessage
+  | PublishedListResponse
+  | UnpublishMessage
+  | UnpublishResponse
   // Usage stats
   | UsageStatsMessage
   | UsageStatsResponse
