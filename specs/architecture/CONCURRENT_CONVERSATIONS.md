@@ -88,7 +88,7 @@ When a session needs user approval (tool confirm, ask_user questions, plan revie
 
 1. Server sends the message with `sessionId` attached
 2. Client stores it with `sessionId` in `pendingConfirm` / `pendingAskUser` / `pendingPlan`
-3. AgentChat only displays the dialog if it belongs to the active conversation's session
+3. RoutineChat only displays the dialog if it belongs to the active conversation's session
 4. The sidebar shows "Needs input" on conversations awaiting approval regardless of which is active
 
 ## Session Persistence

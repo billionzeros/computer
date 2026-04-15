@@ -20,7 +20,7 @@ This is not a future where you talk to an AI. This is a future where AI works fo
 
 Ship:
 - [x] Agent daemon with pi SDK brain + 5 tools (shell, fs, browser, process, network)
-- [x] Desktop app with connect screen, agent chat, terminal
+- [x] Desktop app with connect screen, routine chat, terminal
 - [x] WebSocket pipe protocol (multiplexed, binary framing)
 - [x] Skills system (YAML files → AI workers)
 - [x] Scheduler (skills run on cron — 24/7 autonomous work)

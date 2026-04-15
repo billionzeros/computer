@@ -1,6 +1,6 @@
 import {
   ArrowRight,
-  Bot,
+  Repeat,
   Briefcase,
   Check,
   GraduationCap,
@@ -228,8 +228,8 @@ export function WelcomeModal({ open, onClose, onOpenSettings }: Props) {
               <div className="welcome-modal__info-block">
                 <div className="welcome-modal__info-items">
                   <div className="welcome-modal__info-item">
-                    <Bot size={16} strokeWidth={1.5} />
-                    <span>Autonomous agents run 24/7, even when you're not looking</span>
+                    <Repeat size={16} strokeWidth={1.5} />
+                    <span>Routines run 24/7, even when you're not looking</span>
                   </div>
                   <div className="welcome-modal__info-item">
                     <Zap size={16} strokeWidth={1.5} />

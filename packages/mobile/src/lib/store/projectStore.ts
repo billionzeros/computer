@@ -1,8 +1,8 @@
 /**
- * Project domain store — projects, agents, project sessions.
+ * Project domain store — projects, routines, project sessions.
  */
 
-import type { AgentSession, Project } from '@anton/protocol'
+import type { RoutineSession, Project } from '@anton/protocol'
 import { create } from 'zustand'
 import { connection } from '../connection'
 import type { SessionMeta } from './types'
@@ -12,8 +12,8 @@ interface ProjectStoreState {
   activeProjectId: string | null
   projectSessions: SessionMeta[]
   projectSessionsLoading: boolean
-  projectAgents: AgentSession[]
-  projectAgentsLoading: boolean
+  projectRoutines: RoutineSession[]
+  projectRoutinesLoading: boolean
 
   setProjects: (projects: Project[]) => void
   addProject: (project: Project) => void
@@ -21,11 +21,11 @@ interface ProjectStoreState {
   removeProject: (id: string) => void
   setActiveProject: (id: string | null) => void
   setProjectSessions: (sessions: SessionMeta[]) => void
-  setProjectAgents: (agents: AgentSession[]) => void
+  setProjectRoutines: (routines: RoutineSession[]) => void
 
   listProjects: () => void
   listProjectSessions: (projectId: string) => void
-  listAgents: (projectId: string) => void
+  listRoutines: (projectId: string) => void
 
   reset: () => void
   resetTransient: () => void
@@ -36,8 +36,8 @@ export const projectStore = create<ProjectStoreState>((set, _get) => ({
   activeProjectId: null,
   projectSessions: [],
   projectSessionsLoading: false,
-  projectAgents: [],
-  projectAgentsLoading: false,
+  projectRoutines: [],
+  projectRoutinesLoading: false,
 
   setProjects: (projects) => set({ projects }),
 
@@ -55,19 +55,19 @@ export const projectStore = create<ProjectStoreState>((set, _get) => ({
       activeProjectId: id,
       projectSessions: [],
       projectSessionsLoading: !!id,
-      projectAgents: [],
-      projectAgentsLoading: !!id,
+      projectRoutines: [],
+      projectRoutinesLoading: !!id,
     })
     if (id) {
       connection.sendProjectSessionsList(id)
-      connection.sendAgentsList(id)
+      connection.sendRoutinesList(id)
     }
   },
 
   setProjectSessions: (sessions) =>
     set({ projectSessions: sessions, projectSessionsLoading: false }),
 
-  setProjectAgents: (agents) => set({ projectAgents: agents, projectAgentsLoading: false }),
+  setProjectRoutines: (routines) => set({ projectRoutines: routines, projectRoutinesLoading: false }),
 
   listProjects: () => connection.sendProjectsList(),
 
@@ -76,9 +76,9 @@ export const projectStore = create<ProjectStoreState>((set, _get) => ({
     connection.sendProjectSessionsList(projectId)
   },
 
-  listAgents: (projectId) => {
-    set({ projectAgentsLoading: true })
-    connection.sendAgentsList(projectId)
+  listRoutines: (projectId) => {
+    set({ projectRoutinesLoading: true })
+    connection.sendRoutinesList(projectId)
   },
 
   reset: () =>
@@ -87,15 +87,15 @@ export const projectStore = create<ProjectStoreState>((set, _get) => ({
       activeProjectId: null,
       projectSessions: [],
       projectSessionsLoading: false,
-      projectAgents: [],
-      projectAgentsLoading: false,
+      projectRoutines: [],
+      projectRoutinesLoading: false,
     }),
 
   resetTransient: () =>
     set({
       projectSessions: [],
       projectSessionsLoading: false,
-      projectAgents: [],
-      projectAgentsLoading: false,
+      projectRoutines: [],
+      projectRoutinesLoading: false,
     }),
 }))

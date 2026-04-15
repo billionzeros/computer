@@ -319,11 +319,11 @@ export class Connection {
     this.send(Channel.AI, { type: 'project_sessions_list', projectId })
   }
 
-  // ── Agents ─────────────────────────────────────────────────────
+  // ── Routines ───────────────────────────────────────────────────
 
-  sendAgentCreate(
+  sendRoutineCreate(
     projectId: string,
-    agent: {
+    routine: {
       name: string
       description?: string
       instructions: string
@@ -331,22 +331,22 @@ export class Connection {
       originConversationId?: string
     },
   ) {
-    this.send(Channel.AI, { type: 'agent_create', projectId, agent })
+    this.send(Channel.AI, { type: 'routine_create', projectId, routine })
   }
 
-  sendAgentsList(projectId: string) {
-    this.send(Channel.AI, { type: 'agents_list', projectId })
+  sendRoutinesList(projectId: string) {
+    this.send(Channel.AI, { type: 'routines_list', projectId })
   }
 
-  sendAgentAction(
+  sendRoutineAction(
     projectId: string,
     sessionId: string,
     action: 'start' | 'stop' | 'delete' | 'pause' | 'resume',
   ) {
-    this.send(Channel.AI, { type: 'agent_action', projectId, sessionId, action })
+    this.send(Channel.AI, { type: 'routine_action', projectId, sessionId, action })
   }
 
-  sendAgentRunLogs(
+  sendRoutineRunLogs(
     projectId: string,
     sessionId: string,
     startedAt: number,
@@ -354,7 +354,7 @@ export class Connection {
     runSessionId?: string,
   ) {
     this.send(Channel.AI, {
-      type: 'agent_run_logs',
+      type: 'routine_run_logs',
       projectId,
       sessionId,
       startedAt,

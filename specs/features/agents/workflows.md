@@ -4,9 +4,9 @@
 
 ## Overview
 
-Workflows are **installable, self-contained automation packages** that ship with agent prompts, scripts, templates, and configuration. Each workflow installs as its own project with an interactive bootstrap conversation and a scheduled agent.
+Workflows are **installable, self-contained automation packages** that ship with routine prompts, scripts, templates, and configuration. Each workflow installs as its own project with an interactive bootstrap conversation and a scheduled routine.
 
-**User flow:** Browse workflows → click Install → modal checks connectors → creates new project → bootstrap conversation guides setup → workflow runs on schedule.
+**User flow:** Browse workflows → click Install → modal checks connectors → creates new project → bootstrap conversation guides setup → routine runs on schedule.
 
 ---
 
@@ -20,21 +20,21 @@ Workflows are **installable, self-contained automation packages** that ship with
 
 ## Architecture
 
-Workflows build ON TOP of agents. A workflow installation creates a regular agent with richer context. **Zero changes to AgentManager.**
+Workflows build ON TOP of routines. A workflow installation creates a regular routine with richer context. **Zero changes to AgentManager.**
 
 ```
 Install clicked → new project created → workflow files copied
-→ agent created with workflowId → bootstrap.md saved as project instructions
+→ routine created with workflowId → bootstrap.md saved as project instructions
 → user lands in bootstrap conversation → setup completes
-→ scheduled agent activates → runs on cron
+→ scheduled routine activates → runs on cron
 ```
 
-On each agent run:
+On each routine run:
 ```
 AgentManager.runAgent() → buildSessionOptions() detects workflowId
 → buildWorkflowAgentContext() assembles: orchestrator.md + sub-agents
   + templates + user config ({{variables}} substituted) + script paths
-→ Agent executes with connector tools + shell + full context
+→ Routine executes with connector tools + shell + full context
 → Memory saved for next run
 ```
 
@@ -140,7 +140,7 @@ Server:
   1. Copies workflow dir to project's workflows/ directory
   2. Creates state/ directory
   3. Saves user-config.json
-  4. Creates agent with cron schedule (PAUSED until bootstrap completes)
+  4. Creates routine with cron schedule (PAUSED until bootstrap completes)
   5. Sets agent.workflowId on metadata
   6. If bootstrap exists: saves bootstrap.md as project instructions.md
   7. Writes installed.json
@@ -209,7 +209,7 @@ The LLM reads this and naturally suggests workflows when relevant.
 | **WorkflowStatusBanner** | `components/workflows/WorkflowStatusBanner.tsx` | ProjectLanding banner: active/paused, last run, next run, Run Now/Pause |
 
 **Sidebar:** Workflows nav item in Computer mode.
-**Top bar:** "Workflows" title shown in workspace header (consistent with Memory, Agents, etc.)
+**Top bar:** "Workflows" title shown in workspace header (consistent with Memory, Routines, etc.)
 **Centering:** Content centered with `max-width: 720px; margin: 0 auto` (matches Memory page pattern).
 
 ### UI Details
@@ -224,14 +224,14 @@ The LLM reads this and naturally suggests workflows when relevant.
 **WorkflowDetailPage:** Hardcoded `WHAT_IT_DOES`, `AGENTS`, and `SCRIPTS` display mappings per workflow ID. Shows "Try asking..." examples, agent/script/connector chips.
 
 **WorkflowStatusBanner features:**
-- "Run Now" button → triggers immediate agent run
-- "Pause / Resume" button → toggles scheduled agent status
+- "Run Now" button → triggers immediate routine run
+- "Pause / Resume" button → toggles scheduled routine status
 - Shows schedule as human-readable text ("Runs every 2 hours")
 - Shows last run + next run as relative times
 
 **Registry `featured` flag:** `WorkflowRegistryEntry.featured?: boolean` — set to `true` for all builtin workflows. Can be used for sorting/highlighting in UI.
 
-**`InstalledWorkflow.bootstrapped` semantics:** Set to `true` at install time if the workflow has NO bootstrap (ready immediately). Set to `false` if bootstrap exists (agent starts paused until bootstrap conversation completes).
+**`InstalledWorkflow.bootstrapped` semantics:** Set to `true` at install time if the workflow has NO bootstrap (ready immediately). Set to `false` if bootstrap exists (routine starts paused until bootstrap conversation completes).
 
 ---
 
@@ -298,7 +298,7 @@ workflowConnectorCheck: {                       // Result of pre-install connect
 | Component | File |
 |-----------|------|
 | Workflow types + hooks + preferences | `packages/protocol/src/workflows.ts` |
-| AgentMetadata.workflowId | `packages/protocol/src/projects.ts` |
+| RoutineMetadata.workflowId | `packages/protocol/src/projects.ts` |
 | Protocol messages (10 types) | `packages/protocol/src/messages.ts` |
 | Filesystem loader | `packages/agent-config/src/workflows.ts` |
 | Context builder (prompt assembly) | `packages/agent-server/src/workflows/workflow-context.ts` |
@@ -356,7 +356,7 @@ These features have TypeScript types in `packages/protocol/src/workflows.ts` but
 |----------|----------|
 | Workflow = project? | **Yes.** Installing always creates a new project. Isolation, clean history, custom instructions. |
 | Bootstrap model? | **Project instructions.** bootstrap.md saved as project's instructions.md. First conversation is guided by it. |
-| Agent paused until bootstrap? | **Yes.** Scheduled agent starts paused. Activates after bootstrap completes. |
+| Agent paused until bootstrap? | **Yes.** Scheduled routine starts paused. Activates after bootstrap completes. |
 | Auto-suggest? | **System prompt injection.** `whenToUse` field in manifest, injected into every session as `<system-reminder>`. LLM decides when to suggest. |
 | Deployment? | **Repo-clone.** Full repo at `/opt/anton/`. No SEA binary. `make sync` rsyncs built output. All files on disk. |
 | Sub-agent model? | **Prompt modules for v1.** Sub-agent .md files loaded into orchestrator context. `context:fork` planned for v2. |

@@ -1,9 +1,9 @@
 /**
- * Project domain store — projects, agents, workflows, project context.
+ * Project domain store — projects, routines, workflows, project context.
  */
 
 import type {
-  AgentSession,
+  RoutineSession,
   InstalledWorkflow,
   Project,
   WorkflowRegistryEntry,
@@ -28,12 +28,12 @@ interface ProjectState {
   projectSessions: SessionMeta[]
   projectSessionsLoading: boolean
 
-  // Project agents
-  projectAgents: AgentSession[]
-  projectAgentsLoading: boolean
-  selectedAgentId: string | null
-  agentRunLogs: import('@anton/protocol').AgentRunLogEntry[] | null
-  agentRunLogsLoading: boolean
+  // Project routines
+  projectRoutines: RoutineSession[]
+  projectRoutinesLoading: boolean
+  selectedRoutineId: string | null
+  routineRunLogs: import('@anton/protocol').RoutineRunLogEntry[] | null
+  routineRunLogsLoading: boolean
   // Workflows
   workflowRegistry: WorkflowRegistryEntry[]
   projectWorkflows: InstalledWorkflow[]
@@ -59,8 +59,8 @@ interface ProjectState {
   updateProject: (id: string, changes: Partial<Project>) => void
   removeProject: (id: string) => void
   setProjectSessions: (sessions: SessionMeta[]) => void
-  setProjectAgents: (agents: AgentSession[]) => void
-  setSelectedAgent: (id: string | null) => void
+  setProjectRoutines: (routines: RoutineSession[]) => void
+  setSelectedRoutine: (id: string | null) => void
   setActiveProjectSession: (sessionId: string | null) => void
   setProjectInstructions: (content: string) => void
   setProjectPreferences: (
@@ -69,7 +69,7 @@ interface ProjectState {
   setMemories: (
     memories: { name: string; content: string; scope: 'global' | 'conversation' | 'project' }[],
   ) => void
-  setAgentRunLogs: (logs: import('@anton/protocol').AgentRunLogEntry[] | null) => void
+  setRoutineRunLogs: (logs: import('@anton/protocol').RoutineRunLogEntry[] | null) => void
   setWorkflowRegistry: (entries: WorkflowRegistryEntry[]) => void
   setProjectWorkflows: (workflows: InstalledWorkflow[]) => void
   setWorkflowConnectorCheck: (check: ProjectState['workflowConnectorCheck']) => void
@@ -85,8 +85,8 @@ interface ProjectState {
   updateProjectRemote: (id: string, changes: Record<string, unknown>) => void
   listProjects: () => void
   listProjectSessions: (projectId: string) => void
-  listAgents: (projectId: string) => void
-  createAgent: (
+  listRoutines: (projectId: string) => void
+  createRoutine: (
     projectId: string,
     config: {
       name: string
@@ -96,12 +96,12 @@ interface ProjectState {
       provider?: string
     },
   ) => void
-  agentAction: (
+  routineAction: (
     projectId: string,
-    agentId: string,
+    routineId: string,
     action: 'start' | 'stop' | 'pause' | 'resume' | 'delete',
   ) => void
-  getAgentRunLogs: (
+  getRoutineRunLogs: (
     projectId: string,
     sessionId: string,
     startedAt: number,
@@ -124,7 +124,7 @@ interface ProjectState {
   addProjectPreference: (projectId: string, title: string, content: string) => void
   deleteProjectPreference: (projectId: string, preferenceId: string) => void
   updateProjectContext: (projectId: string, field: 'notes' | 'summary', value: string) => void
-  sendAgentAction: (
+  sendRoutineAction: (
     projectId: string,
     sessionId: string,
     action: 'start' | 'stop' | 'pause' | 'resume' | 'delete',
@@ -141,11 +141,11 @@ export const projectStore = create<ProjectState>((set, get) => ({
   activeProjectSessionId: null,
   projectSessions: [],
   projectSessionsLoading: false,
-  projectAgents: [],
-  projectAgentsLoading: false,
-  selectedAgentId: null,
-  agentRunLogs: null,
-  agentRunLogsLoading: false,
+  projectRoutines: [],
+  projectRoutinesLoading: false,
+  selectedRoutineId: null,
+  routineRunLogs: null,
+  routineRunLogsLoading: false,
   workflowRegistry: [],
   projectWorkflows: [],
   workflowConnectorCheck: null,
@@ -179,11 +179,11 @@ export const projectStore = create<ProjectState>((set, get) => ({
       // Clear ALL project-scoped state to prevent cross-project leaks
       projectSessions: [],
       projectSessionsLoading: !!id,
-      projectAgents: [],
-      projectAgentsLoading: !!id,
-      selectedAgentId: null,
-      agentRunLogs: null,
-      agentRunLogsLoading: false,
+      projectRoutines: [],
+      projectRoutinesLoading: !!id,
+      selectedRoutineId: null,
+      routineRunLogs: null,
+      routineRunLogsLoading: false,
       projectWorkflows: [],
       workflowConnectorCheck: null,
       projectInstructions: '',
@@ -235,15 +235,15 @@ export const projectStore = create<ProjectState>((set, get) => ({
     console.log(`[ProjectSync] setProjectSessions: ${sessions.length} session(s), loading=false`)
     set({ projectSessions: sessions, projectSessionsLoading: false })
   },
-  setProjectAgents: (agents) => set({ projectAgents: agents, projectAgentsLoading: false }),
-  setSelectedAgent: (id) => set({ selectedAgentId: id }),
+  setProjectRoutines: (routines) => set({ projectRoutines: routines, projectRoutinesLoading: false }),
+  setSelectedRoutine: (id) => set({ selectedRoutineId: id }),
   setActiveProjectSession: (sessionId) => set({ activeProjectSessionId: sessionId }),
   setProjectInstructions: (content) =>
     set({ projectInstructions: content, projectInstructionsLoading: false }),
   setProjectPreferences: (prefs) =>
     set({ projectPreferences: prefs, projectPreferencesLoading: false }),
   setMemories: (memories) => set({ memories, memoriesLoading: false }),
-  setAgentRunLogs: (logs) => set({ agentRunLogs: logs, agentRunLogsLoading: false }),
+  setRoutineRunLogs: (logs) => set({ routineRunLogs: logs, routineRunLogsLoading: false }),
   setWorkflowRegistry: (entries) => set({ workflowRegistry: entries }),
   setProjectWorkflows: (workflows) => set({ projectWorkflows: workflows }),
   setWorkflowConnectorCheck: (check) => set({ workflowConnectorCheck: check }),
@@ -254,12 +254,12 @@ export const projectStore = create<ProjectState>((set, get) => ({
   updateProjectRemote: (id, changes) => connection.sendProjectUpdate(id, changes),
   listProjects: () => connection.sendProjectsList(),
   listProjectSessions: (projectId) => connection.sendProjectSessionsList(projectId),
-  listAgents: (projectId) => connection.sendAgentsList(projectId),
-  createAgent: (projectId, config) => connection.sendAgentCreate(projectId, config),
-  agentAction: (projectId, agentId, action) =>
-    connection.sendAgentAction(projectId, agentId, action),
-  getAgentRunLogs: (projectId, sessionId, startedAt, completedAt, runSessionId) =>
-    connection.sendAgentRunLogs(projectId, sessionId, startedAt, completedAt, runSessionId),
+  listRoutines: (projectId) => connection.sendRoutinesList(projectId),
+  createRoutine: (projectId, config) => connection.sendRoutineCreate(projectId, config),
+  routineAction: (projectId, routineId, action) =>
+    connection.sendRoutineAction(projectId, routineId, action),
+  getRoutineRunLogs: (projectId, sessionId, startedAt, completedAt, runSessionId) =>
+    connection.sendRoutineRunLogs(projectId, sessionId, startedAt, completedAt, runSessionId),
   listWorkflowRegistry: () => connection.sendWorkflowRegistryList(),
   checkWorkflowConnectors: (workflowId) => connection.sendWorkflowCheckConnectors(workflowId),
   installWorkflow: (projectId, workflowId, userInputs) =>
@@ -279,8 +279,8 @@ export const projectStore = create<ProjectState>((set, get) => ({
     connection.sendProjectPreferenceDelete(projectId, preferenceId),
   updateProjectContext: (projectId, field, value) =>
     connection.sendProjectContextUpdate(projectId, field, value),
-  sendAgentAction: (projectId, sessionId, action) =>
-    connection.sendAgentAction(projectId, sessionId, action),
+  sendRoutineAction: (projectId, sessionId, action) =>
+    connection.sendRoutineAction(projectId, sessionId, action),
 
   // Reset
   reset: () => {
@@ -290,11 +290,11 @@ export const projectStore = create<ProjectState>((set, get) => ({
       activeProjectSessionId: null,
       projectSessions: [],
       projectSessionsLoading: false,
-      projectAgents: [],
-      projectAgentsLoading: false,
-      selectedAgentId: null,
-      agentRunLogs: null,
-      agentRunLogsLoading: false,
+      projectRoutines: [],
+      projectRoutinesLoading: false,
+      selectedRoutineId: null,
+      routineRunLogs: null,
+      routineRunLogsLoading: false,
       workflowRegistry: [],
       projectWorkflows: [],
       workflowConnectorCheck: null,
@@ -311,9 +311,9 @@ export const projectStore = create<ProjectState>((set, get) => ({
     set({
       projectSessions: [],
       projectSessionsLoading: false,
-      projectAgents: [],
-      projectAgentsLoading: false,
-      selectedAgentId: null,
+      projectRoutines: [],
+      projectRoutinesLoading: false,
+      selectedRoutineId: null,
     })
   },
 }))

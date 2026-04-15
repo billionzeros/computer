@@ -25,7 +25,7 @@ Core system architecture, protocols, and data models.
 
 ### features/agents/
 
-Agent system, workflows, skills, and automation.
+Routines system, workflows, skills, and automation.
 
 | File | Description |
 |------|-------------|

@@ -1,4 +1,4 @@
-import type { AgentRunLogEntry } from '@anton/protocol'
+import type { RoutineRunLogEntry } from '@anton/protocol'
 import { AnimatePresence, motion } from 'framer-motion'
 import {
   AlertTriangle,
@@ -47,10 +47,10 @@ type GroupedRunItem =
   | { type: 'thinking'; content: string; ts: number }
   | {
       type: 'tool_group'
-      actions: { call: AgentRunLogEntry; result: AgentRunLogEntry | null }[]
+      actions: { call: RoutineRunLogEntry; result: RoutineRunLogEntry | null }[]
     }
 
-function groupRunLogs(logs: AgentRunLogEntry[]): GroupedRunItem[] {
+function groupRunLogs(logs: RoutineRunLogEntry[]): GroupedRunItem[] {
   const items: GroupedRunItem[] = []
   let isFirstUser = true
 
@@ -82,7 +82,7 @@ function groupRunLogs(logs: AgentRunLogEntry[]): GroupedRunItem[] {
 
     if (log.role === 'tool_call') {
       // Collect consecutive tool_call + tool_result pairs
-      const actions: { call: AgentRunLogEntry; result: AgentRunLogEntry | null }[] = []
+      const actions: { call: RoutineRunLogEntry; result: RoutineRunLogEntry | null }[] = []
 
       while (i < logs.length && (logs[i].role === 'tool_call' || logs[i].role === 'tool_result')) {
         const current = logs[i]
@@ -270,7 +270,7 @@ function NarrativeStep({ content, ts }: { content: string; ts: number }) {
 function ToolActionItem({
   call,
   result,
-}: { call: AgentRunLogEntry; result: AgentRunLogEntry | null }) {
+}: { call: RoutineRunLogEntry; result: RoutineRunLogEntry | null }) {
   const [expanded, setExpanded] = useState(false)
   const Icon = getRunToolIcon(call.toolName || '')
   const label = call.toolName ? prettifyToolName(call.toolName) : 'Tool Call'
@@ -336,7 +336,7 @@ function ToolActionItem({
 
 function ToolGroupStep({
   actions,
-}: { actions: { call: AgentRunLogEntry; result: AgentRunLogEntry | null }[] }) {
+}: { actions: { call: RoutineRunLogEntry; result: RoutineRunLogEntry | null }[] }) {
   return (
     <div className="run-step run-step--tools">
       {actions.map((action, i) => (
@@ -365,16 +365,16 @@ interface Props {
   onBack: () => void
 }
 
-export function AgentRunView({ agentSessionId, projectId, run, onBack }: Props) {
-  const agentRunLogs = projectStore((s) => s.agentRunLogs)
-  const agentRunLogsLoading = projectStore((s) => s.agentRunLogsLoading)
+export function RoutineRunView({ agentSessionId, projectId, run, onBack }: Props) {
+  const agentRunLogs = projectStore((s) => s.routineRunLogs)
+  const agentRunLogsLoading = projectStore((s) => s.routineRunLogsLoading)
 
   useEffect(() => {
     if (!run.completedAt) return
-    projectStore.setState({ agentRunLogs: null, agentRunLogsLoading: true })
+    projectStore.setState({ routineRunLogs: null, routineRunLogsLoading: true })
     projectStore
       .getState()
-      .getAgentRunLogs(projectId, agentSessionId, run.startedAt, run.completedAt, run.runSessionId)
+      .getRoutineRunLogs(projectId, agentSessionId, run.startedAt, run.completedAt, run.runSessionId)
   }, [projectId, agentSessionId, run.startedAt, run.completedAt, run.runSessionId])
 
   const grouped = useMemo(() => {
@@ -391,7 +391,7 @@ export function AgentRunView({ agentSessionId, projectId, run, onBack }: Props) 
           type="button"
           className="conv-panel__back"
           onClick={onBack}
-          aria-label="Back to agent"
+          aria-label="Back to routine"
         >
           <ArrowLeft size={16} strokeWidth={1.5} />
         </button>
@@ -410,17 +410,17 @@ export function AgentRunView({ agentSessionId, projectId, run, onBack }: Props) 
         </div>
       </div>
 
-      <div className="agent-run-view__body">
+      <div className="routine-run-view__body">
         {agentRunLogsLoading ? (
-          <div className="agent-run-view__loading">
-            <Loader2 size={20} strokeWidth={1.5} className="agent-run-view__spinner" />
+          <div className="routine-run-view__loading">
+            <Loader2 size={20} strokeWidth={1.5} className="routine-run-view__spinner" />
             <span>Loading run logs...</span>
           </div>
         ) : !agentRunLogs?.length ? (
-          <div className="agent-run-view__empty">
+          <div className="routine-run-view__empty">
             {isError && run.error ? (
-              <div className="agent-run-view__error-msg">
-                <span className="agent-run-view__error-label">Error</span>
+              <div className="routine-run-view__error-msg">
+                <span className="routine-run-view__error-label">Error</span>
                 <pre>{run.error}</pre>
               </div>
             ) : (

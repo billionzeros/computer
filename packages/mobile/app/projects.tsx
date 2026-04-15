@@ -3,11 +3,11 @@ import { useStore } from '@/lib/store'
 import { projectStore } from '@/lib/store/projectStore'
 import type { SessionMeta } from '@/lib/store/types'
 import { colors, fontSize, radius, spacing } from '@/theme/colors'
-import type { AgentSession, Project } from '@anton/protocol'
+import type { RoutineSession, Project } from '@anton/protocol'
 import { router } from 'expo-router'
 import {
   ArrowLeft,
-  Bot,
+  Repeat,
   ChevronRight,
   FolderOpen,
   MessageSquare,
@@ -23,7 +23,7 @@ export default function ProjectsScreen() {
   const projects = projectStore((s) => s.projects)
   const [expandedId, setExpandedId] = useState<string | null>(null)
   const projectSessions = projectStore((s) => s.projectSessions)
-  const projectAgents = projectStore((s) => s.projectAgents)
+  const projectRoutines = projectStore((s) => s.projectRoutines)
 
   const handleExpand = useCallback(
     (id: string) => {
@@ -49,9 +49,9 @@ export default function ProjectsScreen() {
     router.navigate('/')
   }, [])
 
-  const handleAgentAction = useCallback(
-    (projectId: string, agent: AgentSession, action: 'start' | 'stop') => {
-      connection.sendAgentAction(projectId, agent.sessionId, action)
+  const handleRoutineAction = useCallback(
+    (projectId: string, routine: RoutineSession, action: 'start' | 'stop') => {
+      connection.sendRoutineAction(projectId, routine.sessionId, action)
     },
     [],
   )
@@ -85,31 +85,31 @@ export default function ProjectsScreen() {
 
           {isExpanded && (
             <View style={styles.expandedContent}>
-              {/* Agents */}
-              {projectAgents.length > 0 && (
+              {/* Routines */}
+              {projectRoutines.length > 0 && (
                 <View style={styles.subsection}>
-                  <Text style={styles.subsectionTitle}>Agents</Text>
-                  {projectAgents.map((agent) => (
-                    <View key={agent.sessionId} style={styles.agentRow}>
-                      <Bot size={14} strokeWidth={1.5} color={colors.textSecondary} />
-                      <View style={styles.agentInfo}>
-                        <Text style={styles.agentName}>{agent.agent.name}</Text>
-                        <Text style={styles.agentStatus}>
-                          {agent.agent.status}
-                          {agent.agent.schedule?.cron ? ` • ${agent.agent.schedule.cron}` : ''}
+                  <Text style={styles.subsectionTitle}>Routines</Text>
+                  {projectRoutines.map((routine) => (
+                    <View key={routine.sessionId} style={styles.routineRow}>
+                      <Repeat size={14} strokeWidth={1.5} color={colors.textSecondary} />
+                      <View style={styles.routineInfo}>
+                        <Text style={styles.routineName}>{routine.agent.name}</Text>
+                        <Text style={styles.routineStatus}>
+                          {routine.agent.status}
+                          {routine.agent.schedule?.cron ? ` • ${routine.agent.schedule.cron}` : ''}
                         </Text>
                       </View>
                       <Pressable
-                        style={styles.agentAction}
+                        style={styles.routineAction}
                         onPress={() =>
-                          handleAgentAction(
+                          handleRoutineAction(
                             item.id,
-                            agent,
-                            agent.agent.status === 'running' ? 'stop' : 'start',
+                            routine,
+                            routine.agent.status === 'running' ? 'stop' : 'start',
                           )
                         }
                       >
-                        {agent.agent.status === 'running' ? (
+                        {routine.agent.status === 'running' ? (
                           <Pause size={14} strokeWidth={1.5} color={colors.warning} />
                         ) : (
                           <Play size={14} strokeWidth={1.5} color={colors.success} />
@@ -139,8 +139,8 @@ export default function ProjectsScreen() {
                 </View>
               )}
 
-              {projectAgents.length === 0 && projectSessions.length === 0 && (
-                <Text style={styles.emptyExpanded}>No sessions or agents yet</Text>
+              {projectRoutines.length === 0 && projectSessions.length === 0 && (
+                <Text style={styles.emptyExpanded}>No sessions or routines yet</Text>
               )}
             </View>
           )}
@@ -150,10 +150,10 @@ export default function ProjectsScreen() {
     [
       expandedId,
       projectSessions,
-      projectAgents,
+      projectRoutines,
       handleExpand,
       handleOpenSession,
-      handleAgentAction,
+      handleRoutineAction,
     ],
   )
 
@@ -269,26 +269,26 @@ const styles = StyleSheet.create({
     letterSpacing: 0.5,
     marginBottom: spacing.sm,
   },
-  agentRow: {
+  routineRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.sm,
     paddingVertical: spacing.sm,
   },
-  agentInfo: {
+  routineInfo: {
     flex: 1,
   },
-  agentName: {
+  routineName: {
     color: colors.text,
     fontSize: fontSize.sm,
     fontWeight: '500',
   },
-  agentStatus: {
+  routineStatus: {
     color: colors.textTertiary,
     fontSize: fontSize.xs,
     marginTop: 1,
   },
-  agentAction: {
+  routineAction: {
     padding: spacing.sm,
   },
   sessionRow: {

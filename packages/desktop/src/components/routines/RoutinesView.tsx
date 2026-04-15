@@ -1,36 +1,36 @@
-import type { AgentRunRecord } from '@anton/protocol'
+import type { RoutineRunRecord, RoutineSession } from '@anton/protocol'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { connectionStore } from '../../lib/store/connectionStore.js'
 import { projectStore } from '../../lib/store/projectStore.js'
 import { WorkflowPipelineView } from '../workflows/WorkflowPipelineView.js'
-import { AgentDetailView } from './AgentDetailView.js'
-import { AgentListView } from './AgentListView.js'
-import { AgentRunView } from './AgentRunView.js'
+import { RoutineDetailView } from './RoutineDetailView.js'
+import { RoutineListView } from './RoutineListView.js'
+import { RoutineRunView } from './RoutineRunView.js'
 
-type RightPanel = { view: 'home' } | { view: 'run'; run: AgentRunRecord }
+type RightPanel = { view: 'home' } | { view: 'run'; run: RoutineRunRecord }
 type DetailTab = 'flow' | 'agent'
 
-export function AgentsView() {
-  const [selectedAgentId, setSelectedAgentId] = useState<string | null>(null)
+export function RoutinesView() {
+  const [selectedRoutineId, setSelectedRoutineId] = useState<string | null>(null)
   const [rightPanel, setRightPanel] = useState<RightPanel>({ view: 'home' })
   const [detailTab, setDetailTab] = useState<DetailTab>('flow')
   const [leftWidth, setLeftWidth] = useState(340)
   const dragRef = useRef<{ startX: number; startW: number } | null>(null)
   const [isDragging, setIsDragging] = useState(false)
-  const projectAgents = projectStore((s) => s.projectAgents)
+  const projectRoutines = projectStore((s) => s.projectRoutines)
   const projectWorkflows = projectStore((s) => s.projectWorkflows)
   const activeProjectId = projectStore((s) => s.activeProjectId)
   const connectionStatus = connectionStore((s) => s.initPhase)
 
-  // Fetch agents when view mounts or project/connection changes
+  // Fetch routines when view mounts or project/connection changes
   useEffect(() => {
     if (activeProjectId && connectionStatus === 'ready') {
-      projectStore.getState().listAgents(activeProjectId)
+      projectStore.getState().listRoutines(activeProjectId)
     }
   }, [activeProjectId, connectionStatus])
 
-  const selectedAgent = selectedAgentId
-    ? projectAgents.find((a) => a.sessionId === selectedAgentId)
+  const selectedRoutine = selectedRoutineId
+    ? projectRoutines.find((a: RoutineSession) => a.sessionId === selectedRoutineId)
     : null
 
   const handleDragStart = useCallback(
@@ -66,23 +66,23 @@ export function AgentsView() {
     }
   }, [isDragging])
 
-  // Check if selected agent belongs to a workflow with pipeline data
-  const selectedWorkflow = selectedAgentId
-    ? projectWorkflows.find((w) => w.agentSessionId === selectedAgentId)
+  // Check if selected routine belongs to a workflow with pipeline data
+  const selectedWorkflow = selectedRoutineId
+    ? projectWorkflows.find((w) => w.agentSessionId === selectedRoutineId)
     : null
   const pipelineSteps = selectedWorkflow?.manifest?.pipeline
 
   const handleSelect = useCallback((id: string) => {
-    setSelectedAgentId(id)
+    setSelectedRoutineId(id)
     setRightPanel({ view: 'home' })
     setDetailTab('flow')
   }, [])
 
-  const handleViewRun = useCallback((run: AgentRunRecord) => {
+  const handleViewRun = useCallback((run: RoutineRunRecord) => {
     setRightPanel({ view: 'run', run })
   }, [])
 
-  const hasOpen = !!selectedAgentId
+  const hasOpen = !!selectedRoutineId
 
   return (
     <div className="home-layout">
@@ -93,9 +93,9 @@ export function AgentsView() {
           flexShrink: hasOpen ? 0 : 1,
         }}
       >
-        <AgentListView
+        <RoutineListView
           mode={hasOpen ? 'compact' : 'full'}
-          selectedId={selectedAgentId}
+          selectedId={selectedRoutineId}
           onSelect={handleSelect}
         />
       </div>
@@ -109,10 +109,10 @@ export function AgentsView() {
 
       {hasOpen && (
         <div className="home-layout__right">
-          {rightPanel.view === 'run' && selectedAgent ? (
-            <AgentRunView
-              agentSessionId={selectedAgent.sessionId}
-              projectId={selectedAgent.projectId}
+          {rightPanel.view === 'run' && selectedRoutine ? (
+            <RoutineRunView
+              agentSessionId={selectedRoutine.sessionId}
+              projectId={selectedRoutine.projectId}
               run={rightPanel.run}
               onBack={() => setRightPanel({ view: 'home' })}
             />
@@ -132,7 +132,7 @@ export function AgentsView() {
                     className={`wf-tab-bar__tab${detailTab === 'agent' ? ' wf-tab-bar__tab--active' : ''}`}
                     onClick={() => setDetailTab('agent')}
                   >
-                    Agent
+                    Routine
                   </button>
                 </div>
               )}
@@ -141,9 +141,9 @@ export function AgentsView() {
                   <WorkflowPipelineView steps={pipelineSteps} />
                 </div>
               ) : (
-                <AgentDetailView
-                  agentId={selectedAgentId!}
-                  onBack={() => setSelectedAgentId(null)}
+                <RoutineDetailView
+                  agentId={selectedRoutineId!}
+                  onBack={() => setSelectedRoutineId(null)}
                   onViewRun={handleViewRun}
                 />
               )}

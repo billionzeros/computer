@@ -1,4 +1,4 @@
-import type { AgentSession, InstalledWorkflow } from '@anton/protocol'
+import type { RoutineSession, InstalledWorkflow } from '@anton/protocol'
 import { Clock, Pause, Play, Zap } from 'lucide-react'
 import { projectStore } from '../../lib/store/projectStore.js'
 
@@ -24,7 +24,7 @@ export function WorkflowStatusBanner({
   agent,
 }: {
   workflow: InstalledWorkflow
-  agent: AgentSession | undefined
+  agent: RoutineSession | undefined
 }) {
   const status = agent?.agent.status || 'idle'
   const lastRun = agent?.agent.lastRunAt
@@ -33,13 +33,13 @@ export function WorkflowStatusBanner({
   const schedule = agent?.agent.schedule?.cron
 
   const handleRunNow = () => {
-    if (agent) projectStore.getState().sendAgentAction(workflow.projectId, agent.sessionId, 'start')
+    if (agent) projectStore.getState().sendRoutineAction(workflow.projectId, agent.sessionId, 'start')
   }
   const handlePause = () => {
     if (agent) {
       projectStore
         .getState()
-        .sendAgentAction(
+        .sendRoutineAction(
           workflow.projectId,
           agent.sessionId,
           status === 'paused' ? 'resume' : 'pause',

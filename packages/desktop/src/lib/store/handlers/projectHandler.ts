@@ -1,5 +1,5 @@
 /**
- * AI channel: project_*, agent_*, workflow_* responses.
+ * AI channel: project_*, routine_*, workflow_* responses.
  */
 
 import type { AiMessage } from '@anton/protocol'
@@ -155,43 +155,43 @@ export function handleProjectMessage(msg: AiMessage): boolean {
       return true
     }
 
-    // ── Agents ──
-    case 'agents_list_response': {
+    // ── Routines ──
+    case 'routines_list_response': {
       const ps = projectStore.getState()
       if (msg.projectId === ps.activeProjectId) {
-        ps.setProjectAgents(msg.agents)
+        ps.setProjectRoutines(msg.routines)
       }
       return true
     }
 
-    case 'agent_created': {
+    case 'routine_created': {
       const ps = projectStore.getState()
-      if (msg.agent.projectId === ps.activeProjectId) {
-        const agents = [...ps.projectAgents]
-        const idx = agents.findIndex((a) => a.sessionId === msg.agent.sessionId)
-        if (idx >= 0) agents[idx] = msg.agent
-        else agents.push(msg.agent)
-        ps.setProjectAgents(agents)
+      if (msg.routine.projectId === ps.activeProjectId) {
+        const routines = [...ps.projectRoutines]
+        const idx = routines.findIndex((a) => a.sessionId === msg.routine.sessionId)
+        if (idx >= 0) routines[idx] = msg.routine
+        else routines.push(msg.routine)
+        ps.setProjectRoutines(routines)
       }
       return true
     }
 
-    case 'agent_updated': {
+    case 'routine_updated': {
       const ps = projectStore.getState()
-      ps.setProjectAgents(
-        ps.projectAgents.map((a) => (a.sessionId === msg.agent.sessionId ? msg.agent : a)),
+      ps.setProjectRoutines(
+        ps.projectRoutines.map((a) => (a.sessionId === msg.routine.sessionId ? msg.routine : a)),
       )
       return true
     }
 
-    case 'agent_deleted': {
+    case 'routine_deleted': {
       const ps = projectStore.getState()
-      ps.setProjectAgents(ps.projectAgents.filter((a) => a.sessionId !== msg.sessionId))
+      ps.setProjectRoutines(ps.projectRoutines.filter((a) => a.sessionId !== msg.sessionId))
       return true
     }
 
-    case 'agent_result_delivered': {
-      // Agent delivered results to a project conversation — refresh that conversation's history
+    case 'routine_result_delivered': {
+      // Routine delivered results to a project conversation — refresh that conversation's history
       const store = useStore.getState()
       const conv = store.conversations.find(
         (c) => c.sessionId === msg.originConversationId || c.id === msg.originConversationId,
@@ -206,8 +206,8 @@ export function handleProjectMessage(msg: AiMessage): boolean {
       return true
     }
 
-    case 'agent_run_logs_response': {
-      projectStore.getState().setAgentRunLogs(msg.logs)
+    case 'routine_run_logs_response': {
+      projectStore.getState().setRoutineRunLogs(msg.logs)
       return true
     }
 
@@ -231,9 +231,9 @@ export function handleProjectMessage(msg: AiMessage): boolean {
       const ps = projectStore.getState()
       ps.setProjectWorkflows([...ps.projectWorkflows, msg.workflow])
       if (msg.workflow.projectId) {
-        // Switch to the new project and fetch its agents
+        // Switch to the new project and fetch its routines
         ps.setActiveProject(msg.workflow.projectId)
-        connection.sendAgentsList(msg.workflow.projectId)
+        connection.sendRoutinesList(msg.workflow.projectId)
         // Navigate to home view and create a setup conversation
         const store = useStore.getState()
         store.newConversation(
@@ -243,7 +243,7 @@ export function handleProjectMessage(msg: AiMessage): boolean {
         )
         uiStore.setState({ activeView: 'home' })
       } else if (ps.activeProjectId) {
-        connection.sendAgentsList(ps.activeProjectId)
+        connection.sendRoutinesList(ps.activeProjectId)
       }
       return true
     }
@@ -267,12 +267,12 @@ export function handleProjectMessage(msg: AiMessage): boolean {
           w.workflowId === msg.workflow.workflowId ? msg.workflow : w,
         ),
       )
-      // Sync server-created agents into project agents list
-      if (msg.agents?.length && msg.workflow.projectId === ps.activeProjectId) {
-        const existing = ps.projectAgents.filter(
-          (a) => !msg.agents.some((na: { sessionId: string }) => na.sessionId === a.sessionId),
+      // Sync server-created routines into project routines list
+      if (msg.routines?.length && msg.workflow.projectId === ps.activeProjectId) {
+        const existing = ps.projectRoutines.filter(
+          (a) => !msg.routines.some((na: { sessionId: string }) => na.sessionId === a.sessionId),
         )
-        ps.setProjectAgents([...existing, ...msg.agents])
+        ps.setProjectRoutines([...existing, ...msg.routines])
       }
       return true
     }

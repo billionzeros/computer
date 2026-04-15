@@ -218,7 +218,7 @@ For reference, here's how a user query flows through the system:
 
 ```
 1. User types in ChatInput → onSend(text, attachments)
-2. AgentChat calls connection.sendAiMessageToSession()
+2. RoutineChat calls connection.sendAiMessageToSession()
 3. WebSocket frame: [Channel.AI][{type:'message', content, sessionId}]
 4. Server.handleChatMessage() gets/creates session
 5. On first message: session.loadConversationContext() injects memories
@@ -244,7 +244,7 @@ The system prompt seen by the LLM is assembled in layers, each wrapped in `<syst
 - Current context (workspace path, project info, date)
 - Memory (global + conversation-scoped + cross-conversation keyword matches)
 - Project memory instructions (if session is scoped to a project)
-- Agent context (scheduled agents: standing instructions + run history)
+- Agent context (scheduled routines: standing instructions + run history)
 - Project type guidelines (code.md, document.md, etc.)
 - Reference knowledge (auto-selected coding guides)
 - Active skills

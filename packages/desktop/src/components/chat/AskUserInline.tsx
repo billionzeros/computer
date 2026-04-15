@@ -1,5 +1,5 @@
 import type { AskUserOption, AskUserQuestion } from '@anton/protocol'
-import { Bot, Calendar, Clock, FileText, Play, Trash2 } from 'lucide-react'
+import { Calendar, Clock, FileText, Play, Repeat, Trash2 } from 'lucide-react'
 import { useState } from 'react'
 import { uiStore } from '../../lib/store/uiStore.js'
 
@@ -104,72 +104,72 @@ function AgentCreateCard({
   const tzCity = timezone.split('/').pop()?.replace(/_/g, ' ') ?? timezone
 
   return (
-    <div className="agent-confirm">
-      <div className="agent-confirm__header">
-        <div className="agent-confirm__icon">
-          <Bot size={18} strokeWidth={1.5} />
+    <div className="routine-confirm">
+      <div className="routine-confirm__header">
+        <div className="routine-confirm__icon">
+          <Repeat size={18} strokeWidth={1.5} />
         </div>
-        <div className="agent-confirm__title-group">
-          <span className="agent-confirm__title">Create Agent</span>
-          <span className="agent-confirm__name">{meta.name}</span>
+        <div className="routine-confirm__title-group">
+          <span className="routine-confirm__title">Create Routine</span>
+          <span className="routine-confirm__name">{meta.name}</span>
         </div>
       </div>
 
-      {meta.description && <p className="agent-confirm__desc">{meta.description}</p>}
+      {meta.description && <p className="routine-confirm__desc">{meta.description}</p>}
 
-      <div className="agent-confirm__fields">
-        <div className="agent-confirm__field">
-          <span className="agent-confirm__field-icon">
+      <div className="routine-confirm__fields">
+        <div className="routine-confirm__field">
+          <span className="routine-confirm__field-icon">
             {meta.schedule ? (
               <Calendar size={14} strokeWidth={1.5} />
             ) : (
               <Clock size={14} strokeWidth={1.5} />
             )}
           </span>
-          <span className="agent-confirm__field-label">Schedule</span>
-          <span className="agent-confirm__field-value">{meta.schedule || 'Manual only'}</span>
+          <span className="routine-confirm__field-label">Schedule</span>
+          <span className="routine-confirm__field-value">{meta.schedule || 'Manual only'}</span>
         </div>
 
         {nextRun && (
-          <div className="agent-confirm__field">
-            <span className="agent-confirm__field-icon">
+          <div className="routine-confirm__field">
+            <span className="routine-confirm__field-icon">
               <Play size={14} strokeWidth={1.5} />
             </span>
-            <span className="agent-confirm__field-label">Next run</span>
-            <span className="agent-confirm__field-value">
+            <span className="routine-confirm__field-label">Next run</span>
+            <span className="routine-confirm__field-value">
               {nextRun}
-              <span className="agent-confirm__field-tz">{tzCity}</span>
+              <span className="routine-confirm__field-tz">{tzCity}</span>
             </span>
           </div>
         )}
 
         {promptPreview && (
-          <div className="agent-confirm__field agent-confirm__field--block">
-            <span className="agent-confirm__field-icon">
+          <div className="routine-confirm__field routine-confirm__field--block">
+            <span className="routine-confirm__field-icon">
               <FileText size={14} strokeWidth={1.5} />
             </span>
-            <span className="agent-confirm__field-label">Prompt</span>
-            <span className="agent-confirm__field-value agent-confirm__field-value--prompt">
+            <span className="routine-confirm__field-label">Prompt</span>
+            <span className="routine-confirm__field-value routine-confirm__field-value--prompt">
               {promptPreview}
             </span>
           </div>
         )}
       </div>
 
-      <div className="agent-confirm__actions">
+      <div className="routine-confirm__actions">
         <button
           type="button"
-          className="agent-confirm__btn agent-confirm__btn--cancel"
+          className="routine-confirm__btn routine-confirm__btn--cancel"
           onClick={onCancel}
         >
           Cancel
         </button>
         <button
           type="button"
-          className="agent-confirm__btn agent-confirm__btn--confirm"
+          className="routine-confirm__btn routine-confirm__btn--confirm"
           onClick={onConfirm}
         >
-          Create Agent
+          Create Routine
         </button>
       </div>
     </div>
@@ -197,49 +197,49 @@ function AgentDeleteCard({
   onCancel,
 }: { meta: AgentDeleteMeta; onConfirm: () => void; onCancel: () => void }) {
   return (
-    <div className="agent-confirm">
-      <div className="agent-confirm__header">
-        <div className="agent-confirm__icon agent-confirm__icon--danger">
+    <div className="routine-confirm">
+      <div className="routine-confirm__header">
+        <div className="routine-confirm__icon routine-confirm__icon--danger">
           <Trash2 size={18} strokeWidth={1.5} />
         </div>
-        <div className="agent-confirm__title-group">
-          <span className="agent-confirm__title">Delete Agent</span>
-          <span className="agent-confirm__name">{meta.name}</span>
+        <div className="routine-confirm__title-group">
+          <span className="routine-confirm__title">Delete Routine</span>
+          <span className="routine-confirm__name">{meta.name}</span>
         </div>
       </div>
 
-      <p className="agent-confirm__desc">
-        This will permanently remove the agent and its conversation history.
+      <p className="routine-confirm__desc">
+        This will permanently remove the routine and its conversation history.
       </p>
 
       {meta.agentId && meta.agentId !== meta.name && (
-        <div className="agent-confirm__fields">
-          <div className="agent-confirm__field">
-            <span className="agent-confirm__field-icon">
-              <Bot size={14} strokeWidth={1.5} />
+        <div className="routine-confirm__fields">
+          <div className="routine-confirm__field">
+            <span className="routine-confirm__field-icon">
+              <Repeat size={14} strokeWidth={1.5} />
             </span>
-            <span className="agent-confirm__field-label">ID</span>
-            <span className="agent-confirm__field-value agent-confirm__field-value--mono">
+            <span className="routine-confirm__field-label">ID</span>
+            <span className="routine-confirm__field-value routine-confirm__field-value--mono">
               {meta.agentId}
             </span>
           </div>
         </div>
       )}
 
-      <div className="agent-confirm__actions">
+      <div className="routine-confirm__actions">
         <button
           type="button"
-          className="agent-confirm__btn agent-confirm__btn--cancel"
+          className="routine-confirm__btn routine-confirm__btn--cancel"
           onClick={onCancel}
         >
           Keep it
         </button>
         <button
           type="button"
-          className="agent-confirm__btn agent-confirm__btn--danger"
+          className="routine-confirm__btn routine-confirm__btn--danger"
           onClick={onConfirm}
         >
-          Delete Agent
+          Delete Routine
         </button>
       </div>
     </div>

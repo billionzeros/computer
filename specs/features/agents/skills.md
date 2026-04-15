@@ -311,7 +311,7 @@ Old `.skill-card` / `.skill-dialog` classes replaced with:
 | `packages/desktop/src/components/skills/SkillsPanel.tsx` | Rewritten: Connectors-style layout with server fetch |
 | `packages/desktop/src/components/skills/SkillDialog.tsx` | **Deleted** |
 | `packages/desktop/src/components/chat/SlashCommandMenu.tsx` | Updated for new Skill interface (no `.id`, `.command`) |
-| `packages/desktop/src/components/AgentChat.tsx` | Updated import: SkillDialog → SkillDetail |
+| `packages/desktop/src/components/RoutineChat.tsx` | Updated import: SkillDialog → SkillDetail |
 | `packages/desktop/src/index.css` | Replaced old skill CSS with new Connectors-matching styles |
 
 ---

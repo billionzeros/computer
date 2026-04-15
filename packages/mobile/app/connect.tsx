@@ -271,7 +271,7 @@ export default function ConnectScreen() {
 
         <View style={[styles.header, machines.length === 0 && { paddingTop: 80 }]}>
           <Text style={styles.logo}>Anton</Text>
-          <Text style={styles.subtitle}>Connect to your agent</Text>
+          <Text style={styles.subtitle}>Connect to your server</Text>
         </View>
 
         {/* Mode toggle */}

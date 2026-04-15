@@ -1,9 +1,9 @@
 import type { ConnectionStatus } from '../../lib/connection.js'
-import type { AgentStatus } from '../../lib/store.js'
+import type { RoutineStatus } from '../../lib/store.js'
 
 interface Props {
   type: 'connection' | 'agent'
-  status: ConnectionStatus | AgentStatus
+  status: ConnectionStatus | RoutineStatus
   label?: boolean
 }
 
@@ -11,7 +11,7 @@ export function StatusIndicator({ type, status, label = true }: Props) {
   const config =
     type === 'connection'
       ? connectionConfig[status as ConnectionStatus] || connectionConfig.disconnected
-      : agentConfig[status as AgentStatus] || agentConfig.unknown
+      : agentConfig[status as RoutineStatus] || agentConfig.unknown
 
   return (
     <div className="status-indicator">
@@ -46,7 +46,7 @@ const connectionConfig: Record<
   error: { className: 'status-indicator__dot--danger', label: 'Error', animate: false },
 }
 
-const agentConfig: Record<AgentStatus, { className: string; label: string; animate: boolean }> = {
+const agentConfig: Record<RoutineStatus, { className: string; label: string; animate: boolean }> = {
   idle: { className: 'status-indicator__dot--success', label: 'Ready', animate: false },
   working: { className: 'status-indicator__dot--warning', label: 'Working...', animate: true },
   error: { className: 'status-indicator__dot--danger', label: 'Error', animate: false },

@@ -230,7 +230,7 @@ Only `sess_*` sessions appear in the chat sidebar. Other prefixes have their own
 | `sess_*` | Chat sidebar |
 | `proj_*` | Project view |
 | `agent-run--*` | Inside parent conversation |
-| `agent--*` | Project agents list |
+| `agent--*` | Project routines list |
 | `slack:*` | Connectors |
 | `telegram-*` | Connectors |
 

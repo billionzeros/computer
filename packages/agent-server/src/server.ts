@@ -1389,18 +1389,18 @@ export class AgentServer {
         this.handleProjectPreferenceDelete(msg)
         break
 
-      // ── Agents ──
-      case 'agent_create':
-        this.handleAgentCreate(msg)
+      // ── Routines ──
+      case 'routine_create':
+        this.handleRoutineCreate(msg)
         break
-      case 'agents_list':
-        this.handleAgentsList(msg)
+      case 'routines_list':
+        this.handleRoutinesList(msg)
         break
-      case 'agent_action':
-        this.handleAgentAction(msg)
+      case 'routine_action':
+        this.handleRoutineAction(msg)
         break
-      case 'agent_run_logs':
-        this.handleAgentRunLogs(msg)
+      case 'routine_run_logs':
+        this.handleRoutineRunLogs(msg)
         break
 
       // ── Workflows ──
@@ -2301,48 +2301,48 @@ export class AgentServer {
     }
   }
 
-  // ── Agent handlers ─────────────────────────────────────────────
+  // ── Routine handlers ─────────────────────────────────────────────
 
-  private handleAgentCreate(msg: { projectId: string; agent: Record<string, unknown> }) {
+  private handleRoutineCreate(msg: { projectId: string; routine: Record<string, unknown> }) {
     if (!this.agentManager) {
-      this.sendToClient(Channel.AI, { type: 'error', message: 'Agent manager not initialized' })
+      this.sendToClient(Channel.AI, { type: 'error', message: 'Routine manager not initialized' })
       return
     }
     try {
-      const spec = msg.agent as {
+      const spec = msg.routine as {
         name: string
         description?: string
         instructions: string
         schedule?: string
         originConversationId?: string
       }
-      const agent = this.agentManager.createAgent(msg.projectId, spec)
-      this.sendToClient(Channel.AI, { type: 'agent_created', agent })
+      const routine = this.agentManager.createAgent(msg.projectId, spec)
+      this.sendToClient(Channel.AI, { type: 'routine_created', routine })
     } catch (err: unknown) {
       this.sendToClient(Channel.AI, { type: 'error', message: (err as Error).message })
     }
   }
 
-  private handleAgentsList(msg: { projectId: string }) {
+  private handleRoutinesList(msg: { projectId: string }) {
     if (!this.agentManager) {
       this.sendToClient(Channel.AI, {
-        type: 'agents_list_response',
+        type: 'routines_list_response',
         projectId: msg.projectId,
-        agents: [],
+        routines: [],
       })
       return
     }
-    const agents = this.agentManager.listAgents(msg.projectId)
+    const routines = this.agentManager.listAgents(msg.projectId)
     this.sendToClient(Channel.AI, {
-      type: 'agents_list_response',
+      type: 'routines_list_response',
       projectId: msg.projectId,
-      agents,
+      routines,
     })
   }
 
-  private handleAgentAction(msg: { projectId: string; sessionId: string; action: string }) {
+  private handleRoutineAction(msg: { projectId: string; sessionId: string; action: string }) {
     if (!this.agentManager) {
-      this.sendToClient(Channel.AI, { type: 'error', message: 'Agent manager not initialized' })
+      this.sendToClient(Channel.AI, { type: 'error', message: 'Routine manager not initialized' })
       return
     }
 
@@ -2351,31 +2351,31 @@ export class AgentServer {
         this.agentManager.runAgent(msg.sessionId, 'manual')
         break
       case 'stop': {
-        const agent = this.agentManager.stopAgent(msg.sessionId)
-        if (agent) this.sendToClient(Channel.AI, { type: 'agent_updated', agent })
+        const routine = this.agentManager.stopAgent(msg.sessionId)
+        if (routine) this.sendToClient(Channel.AI, { type: 'routine_updated', routine })
         break
       }
       case 'pause': {
-        const agent = this.agentManager.pauseAgent(msg.sessionId)
-        if (agent) this.sendToClient(Channel.AI, { type: 'agent_updated', agent })
+        const routine = this.agentManager.pauseAgent(msg.sessionId)
+        if (routine) this.sendToClient(Channel.AI, { type: 'routine_updated', routine })
         break
       }
       case 'resume': {
-        const agent = this.agentManager.resumeAgent(msg.sessionId)
-        if (agent) this.sendToClient(Channel.AI, { type: 'agent_updated', agent })
+        const routine = this.agentManager.resumeAgent(msg.sessionId)
+        if (routine) this.sendToClient(Channel.AI, { type: 'routine_updated', routine })
         break
       }
       case 'delete':
         if (this.agentManager.deleteAgent(msg.sessionId)) {
           this.sendToClient(Channel.AI, {
-            type: 'agent_deleted',
+            type: 'routine_deleted',
             projectId: msg.projectId,
             sessionId: msg.sessionId,
           })
         } else {
           this.sendToClient(Channel.AI, {
             type: 'error',
-            message: `Agent not found: ${msg.sessionId}`,
+            message: `Routine not found: ${msg.sessionId}`,
           })
         }
         break
@@ -2384,7 +2384,7 @@ export class AgentServer {
     }
   }
 
-  private handleAgentRunLogs(msg: {
+  private handleRoutineRunLogs(msg: {
     projectId: string
     sessionId: string
     runSessionId?: string
@@ -2408,7 +2408,7 @@ export class AgentServer {
 
         if (!session) {
           this.sendToClient(Channel.AI, {
-            type: 'agent_run_logs_response',
+            type: 'routine_run_logs_response',
             sessionId: msg.sessionId,
             logs: [],
           })
@@ -2428,14 +2428,14 @@ export class AgentServer {
       }))
 
       this.sendToClient(Channel.AI, {
-        type: 'agent_run_logs_response',
+        type: 'routine_run_logs_response',
         sessionId: msg.sessionId,
         logs,
       })
     } catch (err) {
-      log.error({ err }, 'Failed to get agent run logs')
+      log.error({ err }, 'Failed to get routine run logs')
       this.sendToClient(Channel.AI, {
-        type: 'agent_run_logs_response',
+        type: 'routine_run_logs_response',
         sessionId: msg.sessionId,
         logs: [],
       })
@@ -2514,7 +2514,7 @@ export class AgentServer {
     if (!this.agentManager) {
       this.sendToClient(Channel.AI, {
         type: 'error',
-        message: 'Agent manager not available',
+        message: 'Routine manager not available',
       })
       return
     }
@@ -2582,7 +2582,7 @@ export class AgentServer {
     if (!this.agentManager) {
       this.sendToClient(Channel.AI, {
         type: 'error',
-        message: 'Agent manager not available',
+        message: 'Routine manager not available',
       })
       return
     }
@@ -2590,13 +2590,13 @@ export class AgentServer {
     try {
       const installer = new WorkflowInstaller(this.agentManager)
       const installed = installer.activateWorkflow(msg.projectId, msg.workflowId)
-      const agents = this.agentManager
+      const routines = this.agentManager
         .listAgents(msg.projectId)
         .filter((a) => a.agent.workflowId === msg.workflowId)
       this.sendToClient(Channel.AI, {
         type: 'workflow_activated',
         workflow: installed,
-        agents,
+        routines,
       })
     } catch (err) {
       this.sendToClient(Channel.AI, {
@@ -2741,22 +2741,22 @@ export class AgentServer {
       switch (input.operation) {
         case 'create': {
           if (!input.name) return 'Error: name is required for create'
-          if (!input.prompt) return 'Error: prompt/instructions is required for agent'
+          if (!input.prompt) return 'Error: prompt/instructions is required for routine'
           // Flat ownership: always point to the root human conversation, not the calling agent
           const rootConversationId = this.resolveRootConversation(originSessionId)
-          const agent = am.createAgent(projectId, {
+          const routine = am.createAgent(projectId, {
             name: input.name,
             description: input.description,
             instructions: input.prompt,
             schedule: input.schedule,
             originConversationId: rootConversationId,
           })
-          this.sendToClient(Channel.AI, { type: 'agent_created', agent })
-          return `Agent created: ${agent.agent.name} (session: ${agent.sessionId}, schedule: ${agent.agent.schedule?.cron ?? 'manual'})`
+          this.sendToClient(Channel.AI, { type: 'routine_created', routine })
+          return `Routine created: ${routine.agent.name} (session: ${routine.sessionId}, schedule: ${routine.agent.schedule?.cron ?? 'manual'})`
         }
         case 'list': {
           const agents = am.listAgents(projectId)
-          if (agents.length === 0) return 'No agents in this project.'
+          if (agents.length === 0) return 'No routines in this project.'
           return agents
             .map(
               (a) =>
@@ -2767,32 +2767,32 @@ export class AgentServer {
         case 'start': {
           if (!input.jobId) return 'Error: job_id (session ID) is required for start'
           const agent = await am.runAgent(input.jobId, 'manual')
-          if (!agent) return `Error: Agent not found: ${input.jobId}`
-          return `Agent "${agent.agent.name}" started`
+          if (!agent) return `Error: Routine not found: ${input.jobId}`
+          return `Routine "${agent.agent.name}" started`
         }
         case 'stop': {
           if (!input.jobId) return 'Error: job_id (session ID) is required for stop'
           const agent = am.stopAgent(input.jobId)
-          if (!agent) return `Error: Agent not found: ${input.jobId}`
-          return `Agent "${agent.agent.name}" stopped.`
+          if (!agent) return `Error: Routine not found: ${input.jobId}`
+          return `Routine "${agent.agent.name}" stopped.`
         }
         case 'delete': {
           if (!input.jobId) return 'Error: job_id (session ID) is required for delete'
           const success = am.deleteAgent(input.jobId)
-          if (!success) return `Error: Agent not found: ${input.jobId}`
+          if (!success) return `Error: Routine not found: ${input.jobId}`
           this.sendToClient(Channel.AI, {
-            type: 'agent_deleted',
+            type: 'routine_deleted',
             projectId,
             sessionId: input.jobId,
           })
-          return 'Agent deleted.'
+          return 'Routine deleted.'
         }
         case 'status': {
           if (!input.jobId) return 'Error: job_id (session ID) is required for status'
           const agent = am.getAgent(input.jobId)
-          if (!agent) return `Error: Agent not found: ${input.jobId}`
+          if (!agent) return `Error: Routine not found: ${input.jobId}`
           return [
-            `Agent: ${agent.agent.name}`,
+            `Routine: ${agent.agent.name}`,
             `Status: ${agent.agent.status}`,
             `Runs: ${agent.agent.runCount}`,
             agent.agent.schedule ? `Schedule: ${agent.agent.schedule.cron}` : 'Schedule: manual',
@@ -2817,19 +2817,19 @@ export class AgentServer {
       try {
         const installer = new WorkflowInstaller(this.agentManager!)
         const installed = installer.activateWorkflow(projectId, workflowId)
-        const agents = this.agentManager!.listAgents(projectId).filter(
+        const routines = this.agentManager!.listAgents(projectId).filter(
           (a) => a.agent.workflowId === workflowId,
         )
 
-        // Notify the client about the new agents
+        // Notify the client about the new routines
         this.sendToClient(Channel.AI, {
           type: 'workflow_activated',
           workflow: installed,
-          agents,
+          routines,
         })
 
-        const agentNames = agents.map((a) => a.agent.name).join(', ')
-        return `Workflow "${workflowId}" activated successfully. Created ${agents.length} agents: ${agentNames}. They will start running on their configured schedules.`
+        const routineNames = routines.map((a) => a.agent.name).join(', ')
+        return `Workflow "${workflowId}" activated successfully. Created ${routines.length} routines: ${routineNames}. They will start running on their configured schedules.`
       } catch (err) {
         return `Failed to activate workflow: ${err instanceof Error ? err.message : String(err)}`
       }
@@ -2890,7 +2890,7 @@ export class AgentServer {
         originId,
         {
           role: 'assistant',
-          content: `**Agent: ${agent.agent.name}**\n\n${result.content}`,
+          content: `**Routine: ${agent.agent.name}**\n\n${result.content}`,
           agentName: agent.agent.name,
           agentSessionId,
         },
@@ -2903,12 +2903,12 @@ export class AgentServer {
 
       // Notify the client so the UI updates if that conversation is open
       this.sendToClient(Channel.AI, {
-        type: 'agent_result_delivered',
+        type: 'routine_result_delivered',
         projectId,
-        agentSessionId,
-        agentName: agent.agent.name,
+        routineSessionId: agentSessionId,
+        routineName: agent.agent.name,
         originConversationId: originId,
-        summary: result.summary ?? 'Agent delivered results',
+        summary: result.summary ?? 'Routine delivered results',
       })
 
       return 'Results delivered to your origin conversation.'

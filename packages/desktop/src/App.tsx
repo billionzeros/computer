@@ -1,7 +1,7 @@
 import { AnimatePresence } from 'framer-motion'
 import { Code, FolderOpen, MoreHorizontal, Ticket, X } from 'lucide-react'
 import { useEffect, useState } from 'react'
-import { AgentChat } from './components/AgentChat.js'
+import { RoutineChat } from './components/RoutineChat.js'
 import { Connect } from './components/Connect.js'
 import { FileBrowser } from './components/FileBrowser.js'
 import { ForceUpdateGate } from './components/ForceUpdateGate.js'
@@ -11,7 +11,7 @@ import { Sidebar } from './components/Sidebar.js'
 import { Terminal } from './components/Terminal.js'
 import { UpdateBanner } from './components/UpdateBanner.js'
 import { WelcomeModal } from './components/WelcomeModal.js'
-import { AgentsView } from './components/agents/AgentsView.js'
+import { RoutinesView } from './components/routines/RoutinesView.js'
 import { DebugOverlay } from './components/chat/DebugOverlay.js'
 import { ConnectorsView } from './components/connectors/ConnectorsView.js'
 import { DeveloperView } from './components/developer/DeveloperView.js'
@@ -126,8 +126,8 @@ export function App() {
       document.title = 'Terminal \u2014 anton'
     } else if (activeView === 'memory') {
       document.title = 'Memory \u2014 anton'
-    } else if (activeView === 'agents') {
-      document.title = 'Agents \u2014 anton'
+    } else if (activeView === 'routines') {
+      document.title = 'Routines \u2014 anton'
     } else if (activeView === 'developer') {
       document.title = 'Developer \u2014 anton'
     } else if (activeConv?.title && activeConv.title !== 'New conversation') {
@@ -282,8 +282,8 @@ export function App() {
                       : 'New conversation'
                     : activeView === 'memory'
                       ? 'Memory'
-                      : activeView === 'agents'
-                        ? 'Agents'
+                      : activeView === 'routines'
+                        ? 'Routines'
                         : activeView === 'terminal'
                           ? 'Terminal'
                           : activeView === 'files'
@@ -364,9 +364,9 @@ export function App() {
 
           <div className="workspace-body">
             {activeView === 'home' && <HomeView />}
-            {activeView === 'chat' && <AgentChat />}
+            {activeView === 'chat' && <RoutineChat />}
             {activeView === 'memory' && <MemoryView />}
-            {activeView === 'agents' && <AgentsView />}
+            {activeView === 'routines' && <RoutinesView />}
             {activeView === 'developer' && <DeveloperView />}
             {activeView === 'terminal' && (
               <>

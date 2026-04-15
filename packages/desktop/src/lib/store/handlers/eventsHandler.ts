@@ -14,7 +14,7 @@ export function handleEventsMessage(msg: EventMessage): void {
   switch (msg.type) {
     case 'job_event': {
       if (msg.projectId === projectStore.getState().activeProjectId) {
-        connection.sendAgentsList(msg.projectId)
+        connection.sendRoutinesList(msg.projectId)
       }
       return
     }
@@ -37,7 +37,7 @@ export function handleEventsMessage(msg: EventMessage): void {
       return
     }
 
-    case 'agent_status': {
+    case 'routine_status': {
       uiStore
         .getState()
         .appendEventLog(

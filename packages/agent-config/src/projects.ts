@@ -20,8 +20,8 @@ import {
 } from 'node:fs'
 import { dirname, join } from 'node:path'
 import type {
-  AgentMetadata,
-  AgentSession,
+  RoutineMetadata,
+  RoutineSession,
   Project,
   ProjectSource,
   ProjectType,
@@ -30,7 +30,7 @@ import { type SessionMeta, ensureWorkspaceRoot, getAntonDir } from './config.js'
 import type { AgentConfig } from './config.js'
 
 export type { Project } from '@anton/protocol'
-export type { AgentMetadata, AgentSession } from '@anton/protocol'
+export type { RoutineMetadata, RoutineSession } from '@anton/protocol'
 
 let _projectsDir: string | undefined
 let _indexPath: string | undefined
@@ -685,7 +685,7 @@ export function ensureDefaultProject(config?: AgentConfig): Project {
 // ── Agent persistence (agent.json in conversation directory) ─────────
 
 /** Load agent metadata from a conversation directory, if it exists */
-export function loadAgentMetadata(projectId: string, sessionId: string): AgentMetadata | null {
+export function loadAgentMetadata(projectId: string, sessionId: string): RoutineMetadata | null {
   const agentPath = join(getProjectSessionsDir(projectId), sessionId, 'agent.json')
   if (!existsSync(agentPath)) return null
   try {
@@ -699,7 +699,7 @@ export function loadAgentMetadata(projectId: string, sessionId: string): AgentMe
 export function saveAgentMetadata(
   projectId: string,
   sessionId: string,
-  agent: AgentMetadata,
+  agent: RoutineMetadata,
 ): void {
   const dir = join(getProjectSessionsDir(projectId), sessionId)
   if (!existsSync(dir)) mkdirSync(dir, { recursive: true })
@@ -729,8 +729,8 @@ export function deleteAgentSession(projectId: string, sessionId: string): boolea
 }
 
 /** List all agents in a project (conversations that have agent.json) */
-export function listProjectAgents(projectId: string): AgentSession[] {
-  const agents: AgentSession[] = []
+export function listProjectAgents(projectId: string): RoutineSession[] {
+  const agents: RoutineSession[] = []
   const dir = getProjectSessionsDir(projectId)
   if (!existsSync(dir)) return agents
 
@@ -740,7 +740,7 @@ export function listProjectAgents(projectId: string): AgentSession[] {
     if (!existsSync(agentPath)) continue
 
     try {
-      const agent: AgentMetadata = JSON.parse(readFileSync(agentPath, 'utf-8'))
+      const agent: RoutineMetadata = JSON.parse(readFileSync(agentPath, 'utf-8'))
       // Also read meta.json for conversation title/lastActiveAt
       const metaPath = join(dir, entry.name, 'meta.json')
       let title: string | undefined

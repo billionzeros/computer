@@ -1,8 +1,8 @@
 /**
- * Workflow Prompt Loader — loads and assembles workflow agent prompts for eval.
+ * Workflow Prompt Loader — loads and assembles workflow routine prompts for eval.
  *
  * Used by the eval harness to inject real workflow instructions into eval sessions.
- * Reads .md agent files and template resources directly from the builtin workflow
+ * Reads .md routine files and template resources directly from the builtin workflow
  * directory (no project installation needed).
  *
  * This is a lightweight version of workflow-context.ts that doesn't need
@@ -98,7 +98,7 @@ export function loadWorkflowPrompt(
       `**Scripts directory:** ${workflowDir}/scripts/`,
       `**Version:** ${manifest.version}`,
       '',
-      'You are a workflow agent running in EVAL MODE.',
+      'You are a workflow routine running in EVAL MODE.',
       'Follow the instructions below precisely. When you cannot access external tools,',
       'describe what you would do and output the structured result.',
     ].join('\n'),

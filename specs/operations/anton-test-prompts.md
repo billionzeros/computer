@@ -179,9 +179,9 @@ Help me create a month of social media content for my developer tool. I need twe
 
 ## Category 5: Power User & Edge Cases
 
-### 25. Real-Time Monitoring Agent
+### 25. Real-Time Monitoring Routine
 ```
-Create an agent that watches my server logs for errors and sends me a notification whenever something critical happens.
+Create a routine that watches my server logs for errors and sends me a notification whenever something critical happens.
 ```
 **Triggers**: ask_user (which logs? what's critical? how to notify?) + plan (agent architecture, log parsing, notification setup) + agent tool (create scheduled/persistent agent)
 

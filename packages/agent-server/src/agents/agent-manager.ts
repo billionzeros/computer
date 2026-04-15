@@ -20,7 +20,7 @@ import {
   saveAgentMetadata,
 } from '@anton/agent-config'
 import { createLogger } from '@anton/logger'
-import type { AgentMetadata, AgentRunRecord, AgentSession } from '@anton/protocol'
+import type { RoutineMetadata, RoutineRunRecord, RoutineSession } from '@anton/protocol'
 import { getNextCronTime, isValidCron } from './cron.js'
 
 function generateSessionId(projectId: string): string {
@@ -44,8 +44,8 @@ export type SendMessageHandler = (
 export type AgentEventCallback = (event: AgentEvent) => void
 
 export interface AgentEvent {
-  type: 'agent_updated' | 'agent_deleted'
-  agent?: AgentSession
+  type: 'routine_updated' | 'routine_deleted'
+  routine?: RoutineSession
   projectId?: string
   sessionId?: string
 }
@@ -53,7 +53,7 @@ export interface AgentEvent {
 const log = createLogger('agent-manager')
 
 export class AgentManager {
-  private agents: Map<string, AgentSession> = new Map() // sessionId → AgentSession
+  private agents: Map<string, RoutineSession> = new Map() // sessionId → RoutineSession
   private running = false
   private timer: NodeJS.Timeout | null = null
   private sendMessage: SendMessageHandler | null = null
@@ -103,7 +103,7 @@ export class AgentManager {
       schedule?: string // cron expression
       originConversationId?: string
     },
-  ): AgentSession {
+  ): RoutineSession {
     const sessionId = generateSessionId(projectId)
     const now = Date.now()
 
@@ -112,7 +112,7 @@ export class AgentManager {
       throw new Error(`Invalid cron expression: ${spec.schedule}`)
     }
 
-    const agent: AgentMetadata = {
+    const agent: RoutineMetadata = {
       name: spec.name,
       description: spec.description ?? '',
       instructions: spec.instructions,
@@ -137,7 +137,7 @@ export class AgentManager {
     // Save agent.json
     saveAgentMetadata(projectId, sessionId, agent)
 
-    const session: AgentSession = {
+    const session: RoutineSession = {
       sessionId,
       projectId,
       agent,
@@ -159,11 +159,11 @@ export class AgentManager {
     return true
   }
 
-  getAgent(sessionId: string): AgentSession | undefined {
+  getAgent(sessionId: string): RoutineSession | undefined {
     return this.agents.get(sessionId)
   }
 
-  listAgents(projectId: string): AgentSession[] {
+  listAgents(projectId: string): RoutineSession[] {
     return Array.from(this.agents.values()).filter((a) => a.projectId === projectId)
   }
 
@@ -172,7 +172,7 @@ export class AgentManager {
   async runAgent(
     sessionId: string,
     trigger: 'cron' | 'manual' = 'manual',
-  ): Promise<AgentSession | undefined> {
+  ): Promise<RoutineSession | undefined> {
     const entry = this.agents.get(sessionId)
     if (!entry) return undefined
     if (entry.agent.status === 'running') return entry // already running
@@ -183,7 +183,7 @@ export class AgentManager {
     }
 
     // Start a run record
-    const runRecord: AgentRunRecord = {
+    const runRecord: RoutineRunRecord = {
       startedAt: Date.now(),
       completedAt: null,
       status: 'success',
@@ -269,7 +269,7 @@ export class AgentManager {
     return entry
   }
 
-  stopAgent(sessionId: string): AgentSession | undefined {
+  stopAgent(sessionId: string): RoutineSession | undefined {
     const entry = this.agents.get(sessionId)
     if (!entry) return undefined
 
@@ -279,7 +279,7 @@ export class AgentManager {
     return entry
   }
 
-  pauseAgent(sessionId: string): AgentSession | undefined {
+  pauseAgent(sessionId: string): RoutineSession | undefined {
     const entry = this.agents.get(sessionId)
     if (!entry) return undefined
 
@@ -290,7 +290,7 @@ export class AgentManager {
     return entry
   }
 
-  resumeAgent(sessionId: string): AgentSession | undefined {
+  resumeAgent(sessionId: string): RoutineSession | undefined {
     const entry = this.agents.get(sessionId)
     if (!entry) return undefined
 
@@ -345,8 +345,8 @@ export class AgentManager {
 
   // ── Events ───────────────────────────────────────────────────────
 
-  private emitUpdate(entry: AgentSession): void {
-    this.onEvent({ type: 'agent_updated', agent: entry })
+  private emitUpdate(entry: RoutineSession): void {
+    this.onEvent({ type: 'routine_updated', routine: entry })
   }
 
   // ── Shutdown ─────────────────────────────────────────────────────

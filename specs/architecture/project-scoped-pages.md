@@ -1,6 +1,6 @@
 # Project-Scoped Pages: Frontend Spec
 
-Everything in the sidebar (Tasks, Memory, Agents, Files, Connectors, Skills) is scoped to the **active project**. Switching projects changes what you see on every page.
+Everything in the sidebar (Tasks, Memory, Routines, Files, Connectors, Skills) is scoped to the **active project**. Switching projects changes what you see on every page.
 
 ---
 
@@ -10,7 +10,7 @@ Everything in the sidebar (Tasks, Memory, Agents, Files, Connectors, Skills) is 
 |------|--------|-------------|
 | Tasks (Home) | Done | Split-pane, task list + detail, chat, hero input. **Project-scoped** — filters by `activeProjectId`. |
 | Memory | Done | Fetches real data from server via `config_query`. Shows project context (summary + notes) and chat memories (global + conversation) with scope badges and filter tabs. |
-| Agents | Built | Split-pane, agent list + detail + run logs. Session creation passes `projectId`. |
+| Routines | Built | Split-pane, routine list + detail + run logs. Session creation passes `projectId`. |
 | Files | Built | Terminal PTY + file browser. Already project-scoped. |
 | Connectors | Built | OAuth/MCP/API setup modal (opens settings) |
 | Skills | Stubbed | Components exist, not wired in App.tsx |
@@ -26,7 +26,7 @@ Project Selector: [Twitter Scraper v]
 
 Tasks    → only Twitter Scraper tasks
 Memory   → only Twitter Scraper preferences & memories
-Agents   → only Twitter Scraper agents
+Routines → only Twitter Scraper routines
 Files    → only Twitter Scraper files
 Connectors → project-level + global connectors
 Skills   → all skills (not project-scoped, globally available)
@@ -57,7 +57,7 @@ projects: Project[]              // includes default project with isDefault: tru
 conversations: Conversation[]       // Tasks page — filtered in TaskListView by activeProjectId
 memories: { name, content, scope }[] // Memory page — fetched from server with projectId
 memoriesLoading: boolean
-allAgents: AgentSession[]           // Agents page — filter by projectId
+allRoutines: RoutineSession[]       // Routines page — filter by projectId
 projectFiles: FileEntry[]           // Files page — already project-scoped
 connectors: ConnectorStatusInfo[]   // Connectors — global + project-level
 ```
@@ -115,25 +115,25 @@ Memory auto-created → LLM's `memory` tool saves .md files during chat
 - Memory deletion from the UI
 - Searchable/filterable memories by type
 
-### 3. Agents (activeView: 'agents')
+### 3. Routines (activeView: 'routines')
 
 **Built.** Needs tighter project scoping.
 
 ```
-Mount → fetchAllAgents()
-      → filter where agent.projectId === activeProjectId
-      → render AgentListView with filtered list
+Mount → fetchAllRoutines()
+      → filter where routine.projectId === activeProjectId
+      → render RoutineListView with filtered list
 
-Select agent → show AgentDetailView with runs, logs, schedule
+Select routine → show RoutineDetailView with runs, logs, schedule
 
-Create agent → from task detail ("make this an agent")
-             → or from Agents page "+" button
-             → tagged with activeProjectId
+Create routine → from task detail ("make this a routine")
+              → or from Routines page "+" button
+              → tagged with activeProjectId
 ```
 
 **What's missing:**
-- "Create agent" flow from Agents page (currently agents are created from tasks only)
-- Agent count badge in sidebar
+- "Create routine" flow from Routines page (currently routines are created from tasks only)
+- Routine count badge in sidebar
 
 ### 4. Files (activeView: 'files')
 
@@ -180,7 +180,7 @@ Configure → OAuth flow / API key entry
 ```
 
 **Current behavior:** Clicking "Connectors" in sidebar opens settings modal at connectors tab.
-**Target behavior:** Connectors becomes a full page view like Tasks/Memory/Agents.
+**Target behavior:** Connectors becomes a full page view like Tasks/Memory/Routines.
 
 **What's missing:**
 - `activeView === 'connectors'` rendering a page (not a modal)
@@ -214,7 +214,7 @@ Click skill → open SkillDialog with details
 const navItems = [
   { id: 'home',       label: 'Tasks',      icon: CheckSquare, badge: taskCount },
   { id: 'memory',     label: 'Memory',     icon: Brain,       badge: memoryCount },
-  { id: 'agents',     label: 'Agents',     icon: Bot,         badge: agentCount },
+  { id: 'routines',   label: 'Routines',   icon: Bot,         badge: routineCount },
   { id: 'files',      label: 'Files',      icon: Files,       badge: fileCount },
   { id: 'connectors', label: 'Connectors', icon: Link,        badge: connectorCount },
   { id: 'skills',     label: 'Skills',     icon: Puzzle },
@@ -245,9 +245,9 @@ User clicks project dropdown
 ```tsx
 // In the workspace-body render section:
 {activeView === 'home' && <HomeView />}             // ✅ Task list, project-scoped
-{activeView === 'chat' && <AgentChat />}             // ✅ Chat with project context
+{activeView === 'chat' && <RoutineChat />}            // ✅ Chat with project context
 {activeView === 'memory' && <MemoryView />}          // ✅ Instructions + Preferences + Memories
-{activeView === 'agents' && <AgentsView />}          // ✅ Agent list + detail
+{activeView === 'routines' && <RoutinesView />}      // ✅ Routine list + detail
 {activeView === 'files' && <ProjectFilesView />}     // ✅ Visual file grid with upload
 {activeView === 'terminal' && <Terminal + FileBrowser />}  // ✅ Separate nav item
 {activeView === 'connectors' && /* opens settings */}
@@ -258,7 +258,7 @@ User clicks project dropdown
 
 ## Shared Patterns
 
-### Split-pane layout (reused by Tasks, Agents)
+### Split-pane layout (reused by Tasks, Routines)
 
 ```
 ┌── List (resizable) ──┬── Detail (flex: 1) ──┐
@@ -279,7 +279,7 @@ Each page needs an empty state for when a project has no data:
 |------|-----------------|--------|
 | Tasks | "No tasks yet. Start one above." | Hero input focused |
 | Memory | "No memories yet." | "+ Add preference" button |
-| Agents | "No agents in this project." | "Create agent" button |
+| Routines | "No routines in this project." | "Create routine" button |
 | Files | "No files yet." | Upload or drag-drop zone |
 | Connectors | "No connectors enabled." | Browse available connectors |
 | Skills | "Explore available skills." | Skill grid shown by default |
@@ -293,7 +293,7 @@ Each page needs an empty state for when a project has no data:
 | 1 | **Project scoping on Tasks** — Tag conversations with projectId, filter task list | Done |
 | 2 | **Memory wired to server** — Fetches real data via config_query with projectId | Done |
 | 3 | **Default project ("My Computer")** — Auto-created, isDefault flag, cannot delete | Done |
-| 4 | **All session creation passes projectId** — Sidebar, TaskListView, AgentChat, AgentListView | Done |
+| 4 | **All session creation passes projectId** — Sidebar, TaskListView, RoutineChat, RoutineListView | Done |
 | 5 | **Skills page wiring** — Add render handler in App.tsx, create SkillsPageView wrapper | Not yet |
 | 6 | **Connectors as page** — Move from modal to full page view | Not yet |
 | 7 | **Sidebar badges** — Dynamic counts per active project | Not yet |
@@ -359,7 +359,7 @@ Popover dropdown from top bar showing task progress: ✓ completed, ◎ in progr
 
 ### Phase 7: Projects Hero View
 
-Enhanced project cards with agent count, task count, active/idle status.
+Enhanced project cards with routine count, task count, active/idle status.
 
 ---
 
@@ -387,7 +387,7 @@ HomeView
 |---|---|---|
 | `hero` | "What should we work on next?" | TaskListView (both modes) |
 | `minimal` | "Type a command..." | TaskDetailView |
-| `docked` | "Ask a follow-up" | AgentChat (not on home) |
+| `docked` | "Ask a follow-up" | RoutineChat (not on home) |
 
 ### Task Status Derivation
 

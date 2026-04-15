@@ -1,13 +1,13 @@
-import type { AgentSession } from '@anton/protocol'
+import type { RoutineSession } from '@anton/protocol'
 import { Calendar, Play, Square } from 'lucide-react'
 import { cronToHuman } from '../../lib/agent-utils.js'
 import { projectStore } from '../../lib/store/projectStore.js'
 
 interface Props {
-  agent: AgentSession
+  agent: RoutineSession
 }
 
-export function AgentChatHeader({ agent }: Props) {
+export function RoutineChatHeader({ agent }: Props) {
   const meta = agent.agent
   const isRunning = meta.status === 'running'
   const isError = meta.status === 'error'
@@ -15,33 +15,33 @@ export function AgentChatHeader({ agent }: Props) {
   const statusLabel = isRunning ? 'Running' : isError ? 'Error' : 'Idle'
 
   return (
-    <div className="agent-chat-header">
-      <div className="agent-chat-header__left">
+    <div className="routine-chat-header">
+      <div className="routine-chat-header__left">
         <span
-          className={`agent-chat-header__dot${isRunning ? ' agent-chat-header__dot--running' : isError ? ' agent-chat-header__dot--error' : ''}`}
+          className={`routine-chat-header__dot${isRunning ? ' routine-chat-header__dot--running' : isError ? ' routine-chat-header__dot--error' : ''}`}
         />
-        <span className="agent-chat-header__name">{meta.name}</span>
-        {meta.description && <span className="agent-chat-header__desc">{meta.description}</span>}
+        <span className="routine-chat-header__name">{meta.name}</span>
+        {meta.description && <span className="routine-chat-header__desc">{meta.description}</span>}
       </div>
-      <div className="agent-chat-header__right">
+      <div className="routine-chat-header__right">
         {meta.schedule?.cron && (
-          <span className="agent-chat-header__schedule">
+          <span className="routine-chat-header__schedule">
             <Calendar size={11} strokeWidth={1.5} />
             {cronToHuman(meta.schedule.cron)}
           </span>
         )}
-        <span className={`agent-chat-header__status agent-chat-header__status--${meta.status}`}>
+        <span className={`routine-chat-header__status routine-chat-header__status--${meta.status}`}>
           {statusLabel}
         </span>
         <button
           type="button"
-          className="agent-chat-header__action"
+          className="routine-chat-header__action"
           onClick={() => {
             projectStore
               .getState()
-              .sendAgentAction(agent.projectId, agent.sessionId, isRunning ? 'stop' : 'start')
+              .sendRoutineAction(agent.projectId, agent.sessionId, isRunning ? 'stop' : 'start')
           }}
-          aria-label={isRunning ? 'Stop agent' : 'Run agent'}
+          aria-label={isRunning ? 'Stop routine' : 'Run routine'}
         >
           {isRunning ? (
             <Square size={13} strokeWidth={1.5} />

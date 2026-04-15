@@ -10,7 +10,7 @@ Every good AI workspace separates three things:
 | **Knowledge** | Reference material the AI can use | User | Design docs, API specs, CSV data files, URLs |
 | **Memory** | Learned facts from conversations | AI (auto) | "User prefers Playwright over Puppeteer", "Auth uses JWT" |
 
-Claude Projects does this. Perplexity Spaces does this. Claude Code does this (CLAUDE.md + auto-memory + files). Anton should do it better because Anton is project-scoped with 24/7 agents.
+Claude Projects does this. Perplexity Spaces does this. Claude Code does this (CLAUDE.md + auto-memory + files). Anton should do it better because Anton is project-scoped with 24/7 routines.
 
 ---
 
@@ -36,7 +36,7 @@ Every project (including "My Computer") has:
 ├── context/
 │   ├── session-history.jsonl # Summaries of completed sessions
 │   └── notes.md              # (legacy, migrated to instructions.md)
-├── jobs/                     # Agent definitions
+├── jobs/                     # Routine definitions
 └── files/                    # Project workspace files
 ```
 

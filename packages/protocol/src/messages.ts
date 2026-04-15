@@ -1,4 +1,4 @@
-import type { AgentSession, Project } from './projects.js'
+import type { RoutineSession, Project } from './projects.js'
 
 // ── Control Channel (0x00) ──────────────────────────────────────────
 
@@ -854,13 +854,13 @@ export interface ProjectSessionsListResponse {
   sessions: SessionMeta[]
 }
 
-// ── Agent management ─────────────────────────────────────────────────
+// ── Routine management ───────────────────────────────────────────────
 
 // Client → Server
-export interface AgentCreateMessage {
-  type: 'agent_create'
+export interface RoutineCreateMessage {
+  type: 'routine_create'
   projectId: string
-  agent: {
+  routine: {
     name: string
     description?: string
     instructions: string
@@ -869,53 +869,53 @@ export interface AgentCreateMessage {
   }
 }
 
-export interface AgentsListMessage {
-  type: 'agents_list'
+export interface RoutinesListMessage {
+  type: 'routines_list'
   projectId: string
 }
 
-export interface AgentActionMessage {
-  type: 'agent_action'
+export interface RoutineActionMessage {
+  type: 'routine_action'
   projectId: string
-  sessionId: string // the agent's conversation session ID
+  sessionId: string // the routine's conversation session ID
   action: 'start' | 'stop' | 'delete' | 'pause' | 'resume'
 }
 
 // Server → Client
-export interface AgentCreatedMessage {
-  type: 'agent_created'
-  agent: AgentSession
+export interface RoutineCreatedMessage {
+  type: 'routine_created'
+  routine: RoutineSession
 }
 
-export interface AgentsListResponse {
-  type: 'agents_list_response'
+export interface RoutinesListResponse {
+  type: 'routines_list_response'
   projectId: string
-  agents: AgentSession[]
+  routines: RoutineSession[]
 }
 
-export interface AgentUpdatedMessage {
-  type: 'agent_updated'
-  agent: AgentSession
+export interface RoutineUpdatedMessage {
+  type: 'routine_updated'
+  routine: RoutineSession
 }
 
-export interface AgentDeletedMessage {
-  type: 'agent_deleted'
+export interface RoutineDeletedMessage {
+  type: 'routine_deleted'
   projectId: string
   sessionId: string
 }
 
-export interface AgentResultDeliveredMessage {
-  type: 'agent_result_delivered'
+export interface RoutineResultDeliveredMessage {
+  type: 'routine_result_delivered'
   projectId: string
-  agentSessionId: string
-  agentName: string
+  routineSessionId: string
+  routineName: string
   originConversationId: string
   summary: string
 }
 
-// Client → Server: request logs for a specific agent run
-export interface AgentRunLogsMessage {
-  type: 'agent_run_logs'
+// Client → Server: request logs for a specific routine run
+export interface RoutineRunLogsMessage {
+  type: 'routine_run_logs'
   projectId: string
   sessionId: string
   runSessionId?: string // specific run session (new arch: each run = fresh session)
@@ -923,14 +923,14 @@ export interface AgentRunLogsMessage {
   completedAt: number
 }
 
-// Server → Client: logs for a specific agent run
-export interface AgentRunLogsResponse {
-  type: 'agent_run_logs_response'
+// Server → Client: logs for a specific routine run
+export interface RoutineRunLogsResponse {
+  type: 'routine_run_logs_response'
   sessionId: string
-  logs: AgentRunLogEntry[]
+  logs: RoutineRunLogEntry[]
 }
 
-export interface AgentRunLogEntry {
+export interface RoutineRunLogEntry {
   ts: number
   role: 'user' | 'assistant' | 'tool_call' | 'tool_result'
   content: string
@@ -1012,7 +1012,7 @@ export interface WorkflowActivateMessage {
 export interface WorkflowActivatedMessage {
   type: 'workflow_activated'
   workflow: InstalledWorkflow
-  agents: AgentSession[]
+  routines: RoutineSession[]
 }
 
 // ── Connector management ─────────────────────────────────────────────
@@ -1383,17 +1383,17 @@ export type AiMessage =
   | ProjectPreferencesResponse
   | ProjectPreferenceAddMessage
   | ProjectPreferenceDeleteMessage
-  // Agents
-  | AgentCreateMessage
-  | AgentCreatedMessage
-  | AgentsListMessage
-  | AgentsListResponse
-  | AgentActionMessage
-  | AgentUpdatedMessage
-  | AgentDeletedMessage
-  | AgentResultDeliveredMessage
-  | AgentRunLogsMessage
-  | AgentRunLogsResponse
+  // Routines
+  | RoutineCreateMessage
+  | RoutineCreatedMessage
+  | RoutinesListMessage
+  | RoutinesListResponse
+  | RoutineActionMessage
+  | RoutineUpdatedMessage
+  | RoutineDeletedMessage
+  | RoutineResultDeliveredMessage
+  | RoutineRunLogsMessage
+  | RoutineRunLogsResponse
   // Workflows
   | WorkflowRegistryListMessage
   | WorkflowRegistryListResponse
@@ -1461,8 +1461,8 @@ export interface TaskCompletedEvent {
   summary: string
 }
 
-export interface AgentStatusEvent {
-  type: 'agent_status'
+export interface RoutineStatusEvent {
+  type: 'routine_status'
   status: 'idle' | 'working' | 'error'
   detail?: string
   sessionId?: string
@@ -1494,7 +1494,7 @@ export type EventMessage =
   | FileChangedEvent
   | PortChangedEvent
   | TaskCompletedEvent
-  | AgentStatusEvent
+  | RoutineStatusEvent
   | UpdateAvailableEvent
   | ArtifactPublishedEvent
   | JobEvent

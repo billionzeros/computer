@@ -19,7 +19,7 @@ Anton should work the same way:
 | Every task starts from zero | "Scrape @elonmusk" just works because the Twitter Scraper project remembers everything |
 | No persistent memory | Project memory grows with every task |
 | No files stay | Files live in the project folder |
-| No agents | Projects can have agents running 24/7 |
+| No routines | Projects can have routines running 24/7 |
 
 **"Train Anton once, use forever"** — that's the pitch. That's why projects are the hero.
 
@@ -59,7 +59,7 @@ Anton should work the same way:
 - Created automatically on first connect
 - All quick tasks go here unless you specify a project
 - Like your Desktop — the catch-all workspace
-- Has its own memory, files, agents (like any project)
+- Has its own memory, files, routines (like any project)
 - Name options: "My Computer", "Workspace", "Home", "General"
 
 Better name ideas:
@@ -73,13 +73,13 @@ The sidebar has a project dropdown/selector. Switching projects changes:
 - Which tasks you see
 - Which files you see
 - What context gets injected into new tasks
-- Which agents are shown
+- Which routines are shown
 
 ```
 ┌─────────────────────────────────┐
 │ 📂 Twitter Scraper          ˅  │
 │                                 │
-│ Tasks (12)  Files (8)  Agents (2)│
+│ Tasks (12)  Files (8)  Routines (2)│
 └─────────────────────────────────┘
 ```
 
@@ -111,7 +111,7 @@ Each project has:
 ├── 📝 Instructions    "Scrape Twitter using the Apify connector..."
 ├── 🧠 Memory          { "auth_token": "...", "last_scrape": "2026-03-31" }
 ├── 📁 Files           scraped_data/, templates/, config.yaml
-├── 🤖 Agents          "Daily scraper" (runs every 6h)
+├── 🤖 Routines        "Daily scraper" (runs every 6h)
 ├── ☑ Tasks            all tasks done in this project
 └── 🔗 Connectors      Twitter API, Google Sheets (project-specific)
 ```
@@ -169,12 +169,12 @@ Tasks | Projects | Files | Connectors | Skills
 ─────────────────
 📂 [Project Selector ˅]
 ─────────────────
-Tasks | Files | Agents
+Tasks | Files | Routines
 ─────────────────
 Connectors | Skills | Settings
 ```
 
-Key change: **Projects move from a nav item to a first-class selector**. You're always "in" a project. Tasks, Files, and Agents are scoped to that project.
+Key change: **Projects move from a nav item to a first-class selector**. You're always "in" a project. Tasks, Files, and Routines are scoped to that project.
 
 ### Task Creation
 
@@ -205,7 +205,7 @@ Key change: **Projects move from a nav item to a first-class selector**. You're 
 | 1 | **Create default project on connect** — `ensureDefaultProject()` auto-creates "My Computer" with `isDefault: true` on first `projects_list` request | Done |
 | 2 | **Project selector in sidebar** — dropdown showing real projects (default uses Monitor icon, others use FolderOpen) | Done |
 | 3 | **Scope task list to current project** — `TaskListView` filters conversations by `activeProjectId` | Done |
-| 4 | **Always pass projectId on session creation** — all `sendSessionCreate` calls (Sidebar, TaskListView, AgentChat, AgentListView) now pass `activeProjectId` | Done |
+| 4 | **Always pass projectId on session creation** — all `sendSessionCreate` calls (Sidebar, TaskListView, RoutineChat, RoutineListView) now pass `activeProjectId` | Done |
 | 5 | **Always inject project context** — every task gets project context because every task has a project | Done |
 | 6 | **Prevent default project deletion** — `deleteProject()` rejects if `isDefault === true`, UI hides delete button | Done |
 | 7 | **Auto-select default project** — `setProjects()` auto-selects default project when `activeProjectId` is null | Done |

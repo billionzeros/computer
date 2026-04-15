@@ -257,7 +257,7 @@ Artifacts are shown in a **persistent rail** (compact sidebar) and a **detail Si
 
 ```
 ┌──────────┬─────────────────────┬────────────┐
-│ Sidebar  │  Chat (AgentChat)   │ Artifact   │
+│ Sidebar  │  Chat (RoutineChat) │ Artifact   │
 │ (240px)  │  (flex: 1)          │ Rail       │
 │          │                     │ (180px)    │
 │          │                     │            │

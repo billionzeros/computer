@@ -227,16 +227,16 @@ export class Connection {
     this.send(Channel.AI, { type: 'project_sessions_list', projectId })
   }
 
-  sendAgentsList(projectId: string) {
-    this.send(Channel.AI, { type: 'agents_list', projectId })
+  sendRoutinesList(projectId: string) {
+    this.send(Channel.AI, { type: 'routines_list', projectId })
   }
 
-  sendAgentAction(
+  sendRoutineAction(
     projectId: string,
     sessionId: string,
     action: 'start' | 'stop' | 'delete' | 'pause' | 'resume',
   ) {
-    this.send(Channel.AI, { type: 'agent_action', projectId, sessionId, action })
+    this.send(Channel.AI, { type: 'routine_action', projectId, sessionId, action })
   }
 
   // ── Connectors ────────────────────────────────────────────────────

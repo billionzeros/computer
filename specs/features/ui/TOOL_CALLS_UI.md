@@ -51,7 +51,7 @@ Tool calls are displayed in a **tree layout** inspired by Claude Code's CLI inte
 | code_search | Search    | Query string                     |
 | git         | Git       | Operation + path                 |
 | http_api    | HTTP      | METHOD hostname                  |
-| sub_agent   | Agent     | Task description                 |
+| sub_agent   | Routine   | Task description                 |
 | artifact    | Artifact  | Title                            |
 | database    | Database  | Operation                        |
 | memory      | Memory    | Key                              |

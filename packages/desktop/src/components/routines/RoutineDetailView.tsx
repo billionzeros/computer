@@ -1,4 +1,4 @@
-import type { AgentRunLogEntry, AgentRunRecord } from '@anton/protocol'
+import type { RoutineRunLogEntry, RoutineRunRecord, RoutineSession } from '@anton/protocol'
 import {
   AlertCircle,
   ArrowLeft,
@@ -36,7 +36,7 @@ function RunLogsModal({
   logs,
   loading,
   onClose,
-}: { logs: AgentRunLogEntry[] | null; loading: boolean; onClose: () => void }) {
+}: { logs: RoutineRunLogEntry[] | null; loading: boolean; onClose: () => void }) {
   return (
     <div
       className="run-logs-modal__backdrop"
@@ -95,7 +95,7 @@ function RunEntry({
   run,
   onViewLogs,
 }: {
-  run: AgentRunRecord
+  run: RoutineRunRecord
   onViewLogs: () => void
 }) {
   const [expanded, setExpanded] = useState(false)
@@ -103,10 +103,10 @@ function RunEntry({
   const hasLogs = run.completedAt != null && run.durationMs != null && run.durationMs > 100
 
   return (
-    <div className={`agent-run-entry${isErr ? ' agent-run-entry--error' : ''}`}>
+    <div className={`routine-run-entry${isErr ? ' routine-run-entry--error' : ''}`}>
       <button
         type="button"
-        className="agent-run-entry__row"
+        className="routine-run-entry__row"
         onClick={() => {
           if (hasLogs) {
             onViewLogs()
@@ -120,25 +120,25 @@ function RunEntry({
           <AlertCircle
             size={12}
             strokeWidth={1.5}
-            className="agent-run-entry__icon agent-run-entry__icon--error"
+            className="routine-run-entry__icon routine-run-entry__icon--error"
           />
         ) : (
           <CheckCircle2
             size={12}
             strokeWidth={1.5}
-            className="agent-run-entry__icon agent-run-entry__icon--success"
+            className="routine-run-entry__icon routine-run-entry__icon--success"
           />
         )}
-        <span className="agent-run-entry__time">{formatAbsoluteTime(run.startedAt)}</span>
-        <span className={`agent-run-entry__trigger agent-run-entry__trigger--${run.trigger}`}>
+        <span className="routine-run-entry__time">{formatAbsoluteTime(run.startedAt)}</span>
+        <span className={`routine-run-entry__trigger routine-run-entry__trigger--${run.trigger}`}>
           {run.trigger}
         </span>
         {run.durationMs != null && (
-          <span className="agent-run-entry__duration">{formatDuration(run.durationMs)}</span>
+          <span className="routine-run-entry__duration">{formatDuration(run.durationMs)}</span>
         )}
-        {hasLogs && <Terminal size={10} strokeWidth={1.5} className="agent-run-entry__logs-icon" />}
+        {hasLogs && <Terminal size={10} strokeWidth={1.5} className="routine-run-entry__logs-icon" />}
       </button>
-      {expanded && run.error && <div className="agent-run-entry__error">{run.error}</div>}
+      {expanded && run.error && <div className="routine-run-entry__error">{run.error}</div>}
     </div>
   )
 }
@@ -148,33 +148,33 @@ function RunEntry({
 interface Props {
   agentId: string
   onBack: () => void
-  onViewRun?: (run: AgentRunRecord) => void
+  onViewRun?: (run: RoutineRunRecord) => void
 }
 
-export function AgentDetailView({ agentId, onBack, onViewRun }: Props) {
-  const projectAgents = projectStore((s) => s.projectAgents)
-  const agentRunLogs = projectStore((s) => s.agentRunLogs)
-  const agentRunLogsLoading = projectStore((s) => s.agentRunLogsLoading)
+export function RoutineDetailView({ agentId, onBack, onViewRun }: Props) {
+  const projectAgents = projectStore((s) => s.projectRoutines)
+  const agentRunLogs = projectStore((s) => s.routineRunLogs)
+  const agentRunLogsLoading = projectStore((s) => s.routineRunLogsLoading)
   const addMessage = useStore((s) => s.addMessage)
 
   const [showInstructions, setShowInstructions] = useState(false)
   const [showHistory, setShowHistory] = useState(true)
   const [showLogsModal, setShowLogsModal] = useState(false)
 
-  const agent = projectAgents.find((a) => a.sessionId === agentId)
+  const agent = projectAgents.find((a: RoutineSession) => a.sessionId === agentId)
 
   const handleViewRunLogs = useCallback(
-    (run: AgentRunRecord) => {
+    (run: RoutineRunRecord) => {
       if (!run.completedAt || !agent) return
       if (onViewRun) {
         onViewRun(run)
         return
       }
-      projectStore.setState({ agentRunLogs: null, agentRunLogsLoading: true })
+      projectStore.setState({ routineRunLogs: null, routineRunLogsLoading: true })
       setShowLogsModal(true)
       projectStore
         .getState()
-        .getAgentRunLogs(
+        .getRoutineRunLogs(
           agent.projectId,
           agent.sessionId,
           run.startedAt,
@@ -188,9 +188,9 @@ export function AgentDetailView({ agentId, onBack, onViewRun }: Props) {
   const handleRunStop = useCallback(() => {
     if (!agent) return
     if (agent.agent.status === 'running') {
-      projectStore.getState().agentAction(agent.projectId, agent.sessionId, 'stop')
+      projectStore.getState().routineAction(agent.projectId, agent.sessionId, 'stop')
     } else {
-      projectStore.getState().agentAction(agent.projectId, agent.sessionId, 'start')
+      projectStore.getState().routineAction(agent.projectId, agent.sessionId, 'start')
     }
   }, [agent])
 
@@ -223,7 +223,7 @@ export function AgentDetailView({ agentId, onBack, onViewRun }: Props) {
           <button type="button" className="conv-panel__back" onClick={onBack}>
             <ArrowLeft size={16} strokeWidth={1.5} />
           </button>
-          <div className="conv-panel__title">Agent not found</div>
+          <div className="conv-panel__title">Routine not found</div>
         </div>
       </div>
     )
@@ -241,7 +241,7 @@ export function AgentDetailView({ agentId, onBack, onViewRun }: Props) {
           type="button"
           className="conv-panel__back"
           onClick={onBack}
-          aria-label="Back to agents"
+          aria-label="Back to routines"
         >
           <ArrowLeft size={16} strokeWidth={1.5} />
         </button>
@@ -251,7 +251,7 @@ export function AgentDetailView({ agentId, onBack, onViewRun }: Props) {
             type="button"
             className={`conv-panel__action-btn conv-panel__action-btn--label${isRunning ? ' conv-panel__action-btn--danger' : ''}`}
             onClick={handleRunStop}
-            aria-label={isRunning ? 'Stop agent' : 'Run agent'}
+            aria-label={isRunning ? 'Stop routine' : 'Run routine'}
           >
             {isRunning ? (
               <>
@@ -272,14 +272,14 @@ export function AgentDetailView({ agentId, onBack, onViewRun }: Props) {
       </div>
 
       {/* Content */}
-      <div className="agent-home">
+      <div className="routine-home">
         {/* Agent identity */}
-        <div className="agent-home__identity">
-          <div className="agent-home__status-row">
+        <div className="routine-home__identity">
+          <div className="routine-home__status-row">
             <span
-              className={`agent-home__dot${isRunning ? ' agent-home__dot--running' : isError ? ' agent-home__dot--error' : ''}`}
+              className={`routine-home__dot${isRunning ? ' routine-home__dot--running' : isError ? ' routine-home__dot--error' : ''}`}
             />
-            <span className="agent-home__status-text">
+            <span className="routine-home__status-text">
               {isRunning
                 ? 'Running'
                 : isError
@@ -289,47 +289,47 @@ export function AgentDetailView({ agentId, onBack, onViewRun }: Props) {
                     : 'Idle'}
             </span>
             {meta.schedule?.cron && (
-              <span className="agent-home__schedule">
+              <span className="routine-home__schedule">
                 <Calendar size={12} strokeWidth={1.5} />
                 {cronToHuman(meta.schedule.cron)}
               </span>
             )}
           </div>
-          {meta.description && <p className="agent-home__desc">{meta.description}</p>}
+          {meta.description && <p className="routine-home__desc">{meta.description}</p>}
         </div>
 
         {/* Stats row */}
-        <div className="agent-home__stats">
-          <div className="agent-home__stat">
+        <div className="routine-home__stats">
+          <div className="routine-home__stat">
             <Clock size={13} strokeWidth={1.5} />
             <span>{meta.lastRunAt ? formatRelativeTime(meta.lastRunAt) : 'Never'}</span>
-            <span className="agent-home__stat-label">last run</span>
+            <span className="routine-home__stat-label">last run</span>
           </div>
-          <div className="agent-home__stat">
+          <div className="routine-home__stat">
             <Calendar size={13} strokeWidth={1.5} />
             <span>{meta.nextRunAt ? formatRelativeTime(meta.nextRunAt) : 'Manual'}</span>
-            <span className="agent-home__stat-label">next run</span>
+            <span className="routine-home__stat-label">next run</span>
           </div>
-          <div className="agent-home__stat">
+          <div className="routine-home__stat">
             <Hash size={13} strokeWidth={1.5} />
             <span>{meta.runCount}</span>
-            <span className="agent-home__stat-label">runs</span>
+            <span className="routine-home__stat-label">runs</span>
           </div>
-          <div className="agent-home__stat">
+          <div className="routine-home__stat">
             <Zap size={13} strokeWidth={1.5} />
             <span>
               {meta.tokenBudget ? `${Math.round(meta.tokenBudget.usedThisMonth / 1000)}k` : '—'}
             </span>
-            <span className="agent-home__stat-label">tokens</span>
+            <span className="routine-home__stat-label">tokens</span>
           </div>
         </div>
 
         {/* Instructions (collapsible) */}
         {meta.instructions && (
-          <div className="agent-home__section">
+          <div className="routine-home__section">
             <button
               type="button"
-              className="agent-home__section-toggle"
+              className="routine-home__section-toggle"
               onClick={() => setShowInstructions(!showInstructions)}
             >
               <span>Instructions</span>
@@ -340,16 +340,16 @@ export function AgentDetailView({ agentId, onBack, onViewRun }: Props) {
               )}
             </button>
             {showInstructions && (
-              <pre className="agent-home__instructions-body">{meta.instructions}</pre>
+              <pre className="routine-home__instructions-body">{meta.instructions}</pre>
             )}
           </div>
         )}
 
         {/* Run History */}
-        <div className="agent-home__section">
+        <div className="routine-home__section">
           <button
             type="button"
-            className="agent-home__section-toggle"
+            className="routine-home__section-toggle"
             onClick={() => setShowHistory(!showHistory)}
           >
             <span>Run History ({meta.runHistory?.length ?? 0})</span>
@@ -360,9 +360,9 @@ export function AgentDetailView({ agentId, onBack, onViewRun }: Props) {
             )}
           </button>
           {showHistory && (
-            <div className="agent-home__run-list">
+            <div className="routine-home__run-list">
               {!meta.runHistory?.length ? (
-                <div className="agent-home__run-empty">
+                <div className="routine-home__run-empty">
                   No runs yet. Click Run to trigger the first execution.
                 </div>
               ) : (
@@ -387,7 +387,7 @@ export function AgentDetailView({ agentId, onBack, onViewRun }: Props) {
           onSend={handleSend}
           onSkillSelect={handleSkillSelect}
           variant="minimal"
-          placeholder="Chat with this agent..."
+          placeholder="Chat with this routine..."
         />
       </div>
 

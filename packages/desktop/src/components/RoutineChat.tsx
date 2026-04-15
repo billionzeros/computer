@@ -7,8 +7,8 @@ import { connectionStore } from '../lib/store/connectionStore.js'
 import { projectStore } from '../lib/store/projectStore.js'
 import { sessionStore, useSessionState } from '../lib/store/sessionStore.js'
 import { uiStore } from '../lib/store/uiStore.js'
-import { AgentChatHeader } from './chat/AgentChatHeader.js'
-import { AgentEmptyState } from './chat/AgentEmptyState.js'
+import { RoutineChatHeader } from './chat/RoutineChatHeader.js'
+import { RoutineEmptyState } from './chat/RoutineEmptyState.js'
 import { ChatInput } from './chat/ChatInput.js'
 import { ConfirmDialog } from './chat/ConfirmDialog.js'
 import { ContextIndicator } from './chat/ContextIndicator.js'
@@ -17,9 +17,9 @@ import { MessageList } from './chat/MessageList.js'
 import { PlanReviewOverlay } from './chat/PlanReviewOverlay.js'
 import { SkillDetail } from './skills/SkillDetail.js'
 
-export function AgentChat() {
+export function RoutineChat() {
   const activeConv = useStore((s) => s.getActiveConversation())
-  const agentSession = useStore((s) => s.getActiveAgentSession())
+  const agentSession = useStore((s) => s.getActiveRoutineSession())
   const addMessage = useStore((s) => s.addMessage)
   const newConversation = useStore((s) => s.newConversation)
   const activeSessionId = activeConv?.sessionId
@@ -167,7 +167,7 @@ export function AgentChat() {
       if (freshConv?.agentSessionId && freshConv.messages.length <= 1) {
         const agent = projectStore
           .getState()
-          .projectAgents.find((a) => a.sessionId === freshConv.agentSessionId)
+          .projectRoutines.find((a) => a.sessionId === freshConv.agentSessionId)
         if (agent) {
           outboundText = `<agent_context>\nAgent: ${agent.agent.name}\nDescription: ${agent.agent.description}\nInstructions: ${agent.agent.instructions}\n</agent_context>\n\n${text}`
         }
@@ -270,13 +270,13 @@ export function AgentChat() {
           <Loader2 size={20} strokeWidth={1.5} className="chat-shell__sync-spinner" />
         </div>
       ) : messages.length === 0 && agentSession ? (
-        <AgentEmptyState agent={agentSession} />
+        <RoutineEmptyState agent={agentSession} />
       ) : messages.length === 0 ? (
         <EmptyState onSend={handleSend} onSkillSelect={setSelectedSkill} />
       ) : (
         /* Show existing messages while syncing in background — replaced seamlessly when server responds */
         <>
-          {agentSession && <AgentChatHeader agent={agentSession} />}
+          {agentSession && <RoutineChatHeader agent={agentSession} />}
           <MessageList messages={messages} />
         </>
       )}

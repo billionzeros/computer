@@ -1,6 +1,6 @@
-import type { AgentSession } from '@anton/protocol'
+import type { RoutineSession } from '@anton/protocol'
 import {
-  Bot,
+  Repeat,
   Calendar,
   GitPullRequest,
   Mail,
@@ -23,7 +23,7 @@ import { ChatInput } from '../chat/ChatInput.js'
 
 type DisplayStatus = 'running' | 'completed' | 'error' | 'idle' | 'scheduled'
 
-function getDisplayStatus(agent: AgentSession): DisplayStatus {
+function getDisplayStatus(agent: RoutineSession): DisplayStatus {
   const s = agent.agent.status
   if (s === 'running') return 'running'
   if (s === 'error') return 'error'
@@ -41,7 +41,7 @@ const STATUS_LABELS: Record<DisplayStatus, string> = {
   scheduled: 'Scheduled',
 }
 
-function AgentStatusIcon({ status }: { status: DisplayStatus }) {
+function RoutineStatusIcon({ status }: { status: DisplayStatus }) {
   if (status === 'completed' || status === 'scheduled') {
     return (
       <svg
@@ -102,7 +102,7 @@ function AgentStatusIcon({ status }: { status: DisplayStatus }) {
   )
 }
 
-function AgentMenu({ onDelete }: { onDelete: () => void }) {
+function RoutineMenu({ onDelete }: { onDelete: () => void }) {
   const [open, setOpen] = useState(false)
   const triggerRef = useRef<HTMLButtonElement>(null)
   const [pos, setPos] = useState({ top: 0, right: 0 })
@@ -123,7 +123,7 @@ function AgentMenu({ onDelete }: { onDelete: () => void }) {
         type="button"
         className="task-menu__trigger"
         onClick={handleOpen}
-        aria-label="Agent options"
+        aria-label="Routine options"
       >
         <MoreHorizontal size={16} strokeWidth={1.5} />
       </button>
@@ -149,7 +149,7 @@ function AgentMenu({ onDelete }: { onDelete: () => void }) {
               }}
             >
               <Pencil size={14} strokeWidth={1.5} />
-              <span>Edit agent</span>
+              <span>Edit routine</span>
             </button>
             <button
               type="button"
@@ -161,7 +161,7 @@ function AgentMenu({ onDelete }: { onDelete: () => void }) {
               }}
             >
               <Trash2 size={14} strokeWidth={1.5} />
-              <span>Delete agent</span>
+              <span>Delete routine</span>
             </button>
           </div>
         </>
@@ -176,8 +176,8 @@ interface Props {
   onSelect: (id: string) => void
 }
 
-export function AgentListView({ mode, selectedId, onSelect }: Props) {
-  const projectAgents = projectStore((s) => s.projectAgents)
+export function RoutineListView({ mode, selectedId, onSelect }: Props) {
+  const projectRoutines = projectStore((s) => s.projectRoutines)
   const projects = projectStore((s) => s.projects)
   const [searchQuery, setSearchQuery] = useState('')
   const [searchOpen, setSearchOpen] = useState(false)
@@ -187,7 +187,7 @@ export function AgentListView({ mode, selectedId, onSelect }: Props) {
   const setActiveView = useStore((s) => s.setActiveView)
 
   const filtered = useMemo(() => {
-    const sorted = [...projectAgents].sort((a, b) => {
+    const sorted = [...projectRoutines].sort((a, b) => {
       const aTime = a.agent.lastRunAt || a.agent.createdAt
       const bTime = b.agent.lastRunAt || b.agent.createdAt
       return bTime - aTime
@@ -200,14 +200,14 @@ export function AgentListView({ mode, selectedId, onSelect }: Props) {
         a.projectId.toLowerCase().includes(q) ||
         a.agent.description?.toLowerCase().includes(q),
     )
-  }, [projectAgents, searchQuery])
+  }, [projectRoutines, searchQuery])
 
-  const handleDelete = (agent: AgentSession) => {
-    projectStore.getState().agentAction(agent.projectId, agent.sessionId, 'delete')
+  const handleDelete = (agent: RoutineSession) => {
+    projectStore.getState().routineAction(agent.projectId, agent.sessionId, 'delete')
   }
 
-  const handleNewAgent = (text: string, attachments?: ChatImageAttachment[]) => {
-    // Create a new conversation that will guide agent creation
+  const handleNewRoutine = (text: string, attachments?: ChatImageAttachment[]) => {
+    // Create a new conversation that will guide routine creation
     const store = useStore.getState()
     const sessionId = `sess_${Date.now().toString(36)}`
     const projectId = projectStore.getState().activeProjectId ?? undefined
@@ -232,7 +232,7 @@ export function AgentListView({ mode, selectedId, onSelect }: Props) {
       const conv = useStore.getState().findConversationBySession(sessionId)
       if (conv) {
         useStore.getState().switchConversation(conv.id)
-        const prompt = `I want to create an agent: ${text}\n\nPlease help me set this up as an agent. Ask me any clarifying questions about what it should do, when it should run, and what tools/connectors it needs.`
+        const prompt = `I want to create a routine: ${text}\n\nPlease help me set this up as a routine. Ask me any clarifying questions about what it should do, when it should run, and what tools/connectors it needs.`
         useStore.getState().addMessage({
           id: `msg_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
           role: 'user',
@@ -249,10 +249,10 @@ export function AgentListView({ mode, selectedId, onSelect }: Props) {
 
   const handleSkillSelect = (_skill: Skill) => {}
 
-  const AGENT_CARDS = [
+  const ROUTINE_CARDS = [
     {
       icon: <GitPullRequest size={20} strokeWidth={1.5} />,
-      title: 'Code review agent',
+      title: 'Code review routine',
       description: 'Automatically review PRs, catch bugs, and suggest improvements before merge.',
       prompt:
         'Review my PRs every morning — catch bugs, suggest improvements, and flag any security issues before merge',
@@ -306,7 +306,7 @@ export function AgentListView({ mode, selectedId, onSelect }: Props) {
               <input
                 ref={inputRef}
                 type="text"
-                placeholder="Filter agents..."
+                placeholder="Filter routines..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 className="task-panel__search-input"
@@ -314,13 +314,13 @@ export function AgentListView({ mode, selectedId, onSelect }: Props) {
             </div>
           )}
 
-          {/* Hero input for creating new agents */}
+          {/* Hero input for creating new routines */}
           <div className="task-list-full__hero">
             <ChatInput
-              onSend={handleNewAgent}
+              onSend={handleNewRoutine}
               onSkillSelect={handleSkillSelect}
               variant="hero"
-              placeholder="Describe an agent... e.g. 'Review my PRs every morning'"
+              placeholder="Describe a routine... e.g. 'Review my PRs every morning'"
               initialValue={prefillPrompt}
             />
           </div>
@@ -328,7 +328,7 @@ export function AgentListView({ mode, selectedId, onSelect }: Props) {
           <div className="task-table">
             <div className="task-table__header">
               <div className="task-table__col task-table__col--status">Status</div>
-              <div className="task-table__col task-table__col--name">Agent</div>
+              <div className="task-table__col task-table__col--name">Routine</div>
               <div className="task-table__col task-table__col--project">Project</div>
               <div className="task-table__col task-table__col--updated">Last run</div>
               <div className="task-table__col task-table__col--actions" />
@@ -336,22 +336,22 @@ export function AgentListView({ mode, selectedId, onSelect }: Props) {
             <div className="task-table__body">
               {filtered.length === 0 ? (
                 <div className="task-table__empty">
-                  <Bot size={18} strokeWidth={1.5} style={{ opacity: 0.4 }} />
-                  <span>No agents yet. Describe one above to get started.</span>
+                  <Repeat size={18} strokeWidth={1.5} style={{ opacity: 0.4 }} />
+                  <span>No routines yet. Describe one above to get started.</span>
                 </div>
               ) : (
-                filtered.map((agent) => {
-                  const status = getDisplayStatus(agent)
+                filtered.map((routine) => {
+                  const status = getDisplayStatus(routine)
                   return (
                     // biome-ignore lint/a11y/useKeyWithClickEvents: table row selection
                     <div
-                      key={agent.sessionId}
-                      className={`task-table__row${selectedId === agent.sessionId ? ' task-table__row--selected' : ''}`}
-                      onClick={() => onSelect(agent.sessionId)}
+                      key={routine.sessionId}
+                      className={`task-table__row${selectedId === routine.sessionId ? ' task-table__row--selected' : ''}`}
+                      onClick={() => onSelect(routine.sessionId)}
                       style={{ cursor: 'pointer' }}
                     >
                       <div className="task-table__col task-table__col--status">
-                        <AgentStatusIcon status={status} />
+                        <RoutineStatusIcon status={status} />
                         <span
                           className={`task-table__status-label task-table__status-label--${status === 'running' ? 'working' : status === 'scheduled' ? 'completed' : status}`}
                         >
@@ -359,20 +359,20 @@ export function AgentListView({ mode, selectedId, onSelect }: Props) {
                         </span>
                       </div>
                       <div className="task-table__col task-table__col--name task-table__col--clickable">
-                        <span className="task-table__task-title">{agent.agent.name}</span>
+                        <span className="task-table__task-title">{routine.agent.name}</span>
                       </div>
                       <div className="task-table__col task-table__col--project">
-                        <span className="agent-project-pill">
-                          {projects.find((p) => p.id === agent.projectId)?.name || agent.projectId}
+                        <span className="routine-project-pill">
+                          {projects.find((p) => p.id === routine.projectId)?.name || routine.projectId}
                         </span>
                       </div>
                       <div className="task-table__col task-table__col--updated">
-                        {agent.agent.lastRunAt
-                          ? formatRelativeTime(agent.agent.lastRunAt)
+                        {routine.agent.lastRunAt
+                          ? formatRelativeTime(routine.agent.lastRunAt)
                           : 'Never'}
                       </div>
                       <div className="task-table__col task-table__col--actions">
-                        <AgentMenu onDelete={() => handleDelete(agent)} />
+                        <RoutineMenu onDelete={() => handleDelete(routine)} />
                       </div>
                     </div>
                   )
@@ -382,19 +382,19 @@ export function AgentListView({ mode, selectedId, onSelect }: Props) {
           </div>
 
           {/* Feature cards */}
-          <div className="agent-features">
-            <div className="agent-features__header">Try an agent template</div>
-            <div className="agent-features__grid">
-              {AGENT_CARDS.map((card) => (
+          <div className="routine-features">
+            <div className="routine-features__header">Try a routine template</div>
+            <div className="routine-features__grid">
+              {ROUTINE_CARDS.map((card) => (
                 <button
                   key={card.title}
                   type="button"
-                  className="agent-features__card"
+                  className="routine-features__card"
                   onClick={() => setPrefillPrompt(card.prompt)}
                 >
-                  <div className="agent-features__icon">{card.icon}</div>
-                  <div className="agent-features__title">{card.title}</div>
-                  <div className="agent-features__desc">{card.description}</div>
+                  <div className="routine-features__icon">{card.icon}</div>
+                  <div className="routine-features__title">{card.title}</div>
+                  <div className="routine-features__desc">{card.description}</div>
                 </button>
               ))}
             </div>
@@ -408,7 +408,7 @@ export function AgentListView({ mode, selectedId, onSelect }: Props) {
   return (
     <div className="task-panel">
       <div className="task-panel__header">
-        <h2 className="task-panel__title">Agents</h2>
+        <h2 className="task-panel__title">Routines</h2>
         <div className="task-panel__header-actions">
           <button
             type="button"
@@ -429,7 +429,7 @@ export function AgentListView({ mode, selectedId, onSelect }: Props) {
           <input
             ref={inputRef}
             type="text"
-            placeholder="Filter agents..."
+            placeholder="Filter routines..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             className="task-panel__search-input"
@@ -438,23 +438,23 @@ export function AgentListView({ mode, selectedId, onSelect }: Props) {
       )}
 
       <div className="task-panel__list">
-        {filtered.map((agent) => {
-          const status = getDisplayStatus(agent)
+        {filtered.map((routine) => {
+          const status = getDisplayStatus(routine)
           const projectName =
-            projects.find((p) => p.id === agent.projectId)?.name || agent.projectId
+            projects.find((p) => p.id === routine.projectId)?.name || routine.projectId
           return (
             <div
-              key={agent.sessionId}
-              className={`task-row${selectedId === agent.sessionId ? ' task-row--active' : ''}`}
+              key={routine.sessionId}
+              className={`task-row${selectedId === routine.sessionId ? ' task-row--active' : ''}`}
             >
               <button
                 type="button"
                 className="task-row__clickable"
-                onClick={() => onSelect(agent.sessionId)}
+                onClick={() => onSelect(routine.sessionId)}
               >
-                <AgentStatusIcon status={status} />
+                <RoutineStatusIcon status={status} />
                 <div className="task-row__content">
-                  <span className="task-row__name">{agent.agent.name}</span>
+                  <span className="task-row__name">{routine.agent.name}</span>
                   <span className="task-row__detail">
                     <span
                       className={`task-row__status-label task-row__status-label--${status === 'running' ? 'working' : status === 'scheduled' ? 'completed' : status}`}
@@ -466,14 +466,14 @@ export function AgentListView({ mode, selectedId, onSelect }: Props) {
                   </span>
                 </div>
                 <span className="task-row__time">
-                  {agent.agent.lastRunAt ? formatRelativeTime(agent.agent.lastRunAt) : 'Never'}
+                  {routine.agent.lastRunAt ? formatRelativeTime(routine.agent.lastRunAt) : 'Never'}
                 </span>
               </button>
-              <AgentMenu onDelete={() => handleDelete(agent)} />
+              <RoutineMenu onDelete={() => handleDelete(routine)} />
             </div>
           )
         })}
-        {filtered.length === 0 && <div className="task-panel__empty">No agents yet</div>}
+        {filtered.length === 0 && <div className="task-panel__empty">No routines yet</div>}
       </div>
     </div>
   )

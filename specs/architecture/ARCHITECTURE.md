@@ -2,7 +2,7 @@
 
 ## One-Liner
 
-A TypeScript agent server on your VPS + Go sidecar for health/status + desktop app + CLI, connected by multiplexed WebSocket. Projects are the core primitive — every task, file, agent, and memory is scoped to a project.
+A TypeScript agent server on your VPS + Go sidecar for health/status + desktop app + CLI, connected by multiplexed WebSocket. Projects are the core primitive — every task, file, routine, and memory is scoped to a project.
 
 ## System Diagram
 
@@ -17,7 +17,7 @@ YOUR BROWSER / DESKTOP                                YOUR VPS / CLOUD SERVER
 │  │ Tasks (project-scoped)│──┼── AI channel ───────►│  │  Agent (Node.js :9876) │  │
 │  │ Memory Page          │──┼── AI channel ───────►│  │  ├── WebSocket Server  │  │
 │  │ Files Page           │──┼── AI channel ───────►│  │  ├── Session Router    │  │
-│  │ Agents Page          │──┼── AI channel ───────►│  │  ├── Project Manager   │  │
+│  │ Routines Page        │──┼── AI channel ───────►│  │  ├── Project Manager   │  │
 │  │ Terminal             │──┼── PTY channel ──────►│  │  └── Tool Execution    │  │
 │  │ Agent Chat           │──┼── AI channel ───────►│  │                        │  │
 │  └──────────────────────┘  │                        │  └────────────────────────┘  │
@@ -39,14 +39,14 @@ antoncomputer.in                                      │                       
 
 ### Projects
 
-Everything lives in a project. Projects are the scope boundary for tasks, files, agents, memory, and context.
+Everything lives in a project. Projects are the scope boundary for tasks, files, routines, memory, and context.
 
 ```
 Project: "SEO Analyser"
 ├── Tasks        → conversations scoped to this project
 ├── Memory       → instructions + preferences + auto-memories
 ├── Files        → workspace files (uploads + AI-created)
-├── Agents       → background jobs running on cron
+├── Routines     → background jobs running on cron
 └── Context      → auto-maintained project summary + session history
 ```
 
@@ -101,12 +101,12 @@ Session "sess_abc123"
         │   └── {sessionId}/
         │       ├── meta.json
         │       ├── messages.jsonl
-        │       ├── agent.json               # (if this session is an agent)
+        │       ├── agent.json               # (if this session is a routine)
         │       └── memory/                  # Session-scoped memories
         ├── context/
         │   ├── session-history.jsonl        # Summaries of completed sessions
         │   └── notes.md                     # Legacy notes (superseded by instructions.md)
-        └── jobs/                            # Agent/job definitions
+        └── jobs/                            # Routine/job definitions
 
 ~/Anton/                                     # Default workspace root (configurable)
 ├── my-computer/                             # Default project workspace
@@ -126,7 +126,7 @@ Session "sess_abc123"
 
 1. **Always in a project** — user is always inside a project (default = "My Computer")
 2. **Project selector** — dropdown in sidebar, shows all projects
-3. **Everything scoped** — Tasks, Memory, Files, Agents pages show data for the active project only
+3. **Everything scoped** — Tasks, Memory, Files, Routines pages show data for the active project only
 4. **Context injection** — every session gets project instructions, preferences, and memory
 5. **Workspace** — each project has a real directory where files live
 
@@ -189,7 +189,7 @@ Visual file grid showing workspace files (`project.workspacePath`). Perplexity-s
 |------|---------|---------|
 | 0x00 | CONTROL | Ping/pong, config queries, updates |
 | 0x01 | TERMINAL | PTY spawn/data/resize/close |
-| 0x02 | AI | Sessions, messages, projects, agents |
+| 0x02 | AI | Sessions, messages, projects, routines |
 | 0x03 | FILESYNC | Filesystem listing (for FileBrowser) |
 | 0x04 | EVENTS | Agent status, update notifications |
 
@@ -203,7 +203,7 @@ Visual file grid showing workspace files (`project.workspacePath`). Perplexity-s
 
 **Project files:** project_file_upload, project_file_text_create, project_file_delete, project_files_list
 
-**Agents:** agent_create, agents_list, agent_action (start/stop/delete/pause/resume)
+**Routines:** routine_create, routines_list, routine_action (start/stop/delete/pause/resume)
 
 **Config:** config_query (providers, defaults, security, system_prompt, memories)
 
@@ -220,17 +220,17 @@ Layer 3: Project context (buildProjectContext)
          ├── Legacy notes (if no instructions.md)
          └── Recent session history (last 5)
 Layer 4: Memory (global + conversation-scoped memories)
-Layer 5: Agent instructions (if agent session)
+Layer 5: Routine instructions (if routine session)
 Layer 6: Project type guidelines (code/data/document prompts)
 Layer 7: Current date, model info
 ```
 
 ## Security Model
 
-1. **Auth**: Shared secret token (`ak_<hex>`) generated on agent install
+1. **Auth**: Shared secret token (`ak_<hex>`) generated on Agent Server install
 2. **TLS**: Self-signed cert at `~/.anton/certs/`, port 9877
 3. **Confirmation**: Dangerous shell patterns require client approval (60s timeout)
-4. **Forbidden paths**: Agent cannot read/write sensitive files
+4. **Forbidden paths**: Agent Server cannot read/write sensitive files
 5. **One client**: Only one active connection at a time
 6. **Default project delete protection**: `isDefault` projects cannot be deleted
 
@@ -252,7 +252,7 @@ App.tsx
 │   │   ├── + New task button
 │   │   ├── Tasks (project-scoped conversation list)
 │   │   ├── Memory (instructions + preferences + memories)
-│   │   ├── Agents (project-scoped agent list)
+│   │   ├── Routines (project-scoped routine list)
 │   │   ├── Files (workspace file grid with upload)
 │   │   ├── Terminal (PTY in project workspace)
 │   │   ├── Connectors (opens settings)
@@ -260,9 +260,9 @@ App.tsx
 │   │
 │   ├── Views
 │   │   ├── HomeView (TaskListView — project-scoped)
-│   │   ├── AgentChat (conversation with AI)
+│   │   ├── RoutineChat (conversation with AI)
 │   │   ├── MemoryView (instructions + preferences + memories)
-│   │   ├── AgentsView (agent list + detail + run logs)
+│   │   ├── RoutinesView (routine list + detail + run logs)
 │   │   ├── ProjectFilesView (visual file grid)
 │   │   ├── Terminal + FileBrowser (scoped to workspace)
 │   │   └── DeveloperView (system prompt viewer)
@@ -273,7 +273,7 @@ App.tsx
 │       ├── projectInstructions, projectPreferences
 │       ├── memories, memoriesLoading
 │       ├── projectFiles, projectFilesLoading
-│       ├── projectAgents, projectAgentsLoading
+│       ├── projectRoutines, projectRoutinesLoading
 │       └── sessions, currentSessionId
 ```
 

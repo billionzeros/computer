@@ -388,11 +388,11 @@ Sessions are the source of truth on the agent VM. Clients behave as follows:
 6. If user scrolls to top and `hasMore=true`: send paginated request with `before` param
 7. Prepend older messages, maintain scroll position
 
-**On open agent:**
+**On open routine:**
 1. Create a new `proj_{projectId}_sess_{timestamp}` session
-2. Tag local conversation with `agentSessionId` pointing to the agent's metadata session
-3. Show `AgentEmptyState` with agent info, stats, and controls
-4. On first message: inject agent context (name, description, instructions) into the outbound message
+2. Tag local conversation with `agentSessionId` pointing to the routine's metadata session
+3. Show `RoutineEmptyState` with routine info, stats, and controls
+4. On first message: inject routine context (name, description, instructions) into the outbound message
 5. Conversation appears in sidebar with Bot icon, auto-titled from user's first message
 
 **Local state (thin cache):**
@@ -427,12 +427,12 @@ SessionStore (sessionStore — zustand):
 
 ProjectStore (projectStore — zustand):
   projects[]                  ← from projects_list_response
-  projectAgents[]             ← from agents_list_response (AgentSession objects)
+  projectRoutines[]           ← from routines_list_response (RoutineSession objects)
   projectSessions[]           ← from project_sessions_list_response
 ```
 
 Derived selectors:
-- `getActiveAgentSession()` — if active conversation has `agentSessionId`, returns matching `AgentSession` from `projectAgents[]`
+- `getActiveRoutineSession()` — if active conversation has `agentSessionId`, returns matching `RoutineSession` from `projectRoutines[]`
 
 ### CLI (Ink TUI)
 

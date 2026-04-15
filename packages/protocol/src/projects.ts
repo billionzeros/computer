@@ -9,7 +9,7 @@ export interface ProjectContext {
 
 export interface ProjectStats {
   sessionCount: number
-  activeAgents: number
+  activeRoutines: number
   lastActive: number
 }
 
@@ -40,15 +40,15 @@ export interface Project {
   isDefault?: boolean
 }
 
-// ── Agent types ──────────────────────────────────────────────────────
+// ── Routine types ────────────────────────────────────────────────────
 //
-// An agent is a conversation with metadata. It lives as agent.json
+// A routine is a conversation with metadata. It lives as agent.json
 // alongside meta.json and messages.jsonl in the conversation directory.
 
-export type AgentStatus = 'idle' | 'running' | 'paused' | 'error'
+export type RoutineStatus = 'idle' | 'running' | 'paused' | 'error'
 
-/** A single agent run record for debug visibility */
-export interface AgentRunRecord {
+/** A single routine run record for debug visibility */
+export interface RoutineRunRecord {
   startedAt: number
   completedAt: number | null
   status: 'success' | 'error' | 'timeout'
@@ -59,21 +59,21 @@ export interface AgentRunRecord {
   runSessionId?: string
 }
 
-/** Agent metadata — stored as agent.json in the conversation directory */
-export interface AgentMetadata {
-  /** Agent display name */
+/** Routine metadata — stored as agent.json in the conversation directory */
+export interface RoutineMetadata {
+  /** Routine display name */
   name: string
-  /** Short description of what the agent does */
+  /** Short description of what the routine does */
   description: string
-  /** The prompt/instructions the agent executes on each run */
+  /** The prompt/instructions the routine executes on each run */
   instructions: string
-  /** If this agent was created from a workflow, the workflow ID */
+  /** If this routine was created from a workflow, the workflow ID */
   workflowId?: string
   /** Key in the workflow manifest's agents map (e.g., "orchestrator", "lead-scorer") */
   workflowAgentKey?: string
   /** Cron schedule — null means manual-only */
   schedule?: { cron: string }
-  /** Which conversation created this agent (for result delivery) */
+  /** Which conversation created this routine (for result delivery) */
   originConversationId?: string
   /** Token budget controls */
   tokenBudget?: {
@@ -82,7 +82,7 @@ export interface AgentMetadata {
     usedThisMonth: number
   }
   /** Current status */
-  status: AgentStatus
+  status: RoutineStatus
   /** Timestamp of last run completion */
   lastRunAt: number | null
   /** Timestamp of next scheduled run */
@@ -91,17 +91,17 @@ export interface AgentMetadata {
   runCount: number
   createdAt: number
   /** Recent run history for debug visibility (last 20 runs) */
-  runHistory?: AgentRunRecord[]
+  runHistory?: RoutineRunRecord[]
 }
 
-/** Agent session = conversation metadata + agent config */
-export interface AgentSession {
+/** Routine session = conversation metadata + routine config */
+export interface RoutineSession {
   /** The conversation's session ID */
   sessionId: string
-  /** Project this agent belongs to */
+  /** Project this routine belongs to */
   projectId: string
-  /** Agent metadata from agent.json */
-  agent: AgentMetadata
+  /** Routine metadata from agent.json */
+  agent: RoutineMetadata
   /** Conversation title (from meta.json) */
   title?: string
   /** Last active timestamp (from meta.json) */

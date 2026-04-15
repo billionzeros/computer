@@ -1,7 +1,7 @@
 import { motion } from 'framer-motion'
 import {
   BarChart3,
-  Bot,
+  Repeat,
   Brain,
   CheckSquare,
   ChevronDown,
@@ -295,10 +295,10 @@ export function Sidebar({ onViewChange, onOpenSettings }: Props) {
                   onClick={() => setActiveView('memory')}
                 />
                 <NavItem
-                  icon={Bot}
-                  label="Agents"
-                  active={currentView === 'agents'}
-                  onClick={() => setActiveView('agents')}
+                  icon={Repeat}
+                  label="Routines"
+                  active={currentView === 'routines'}
+                  onClick={() => setActiveView('routines')}
                 />
                 <NavItem
                   icon={Files}

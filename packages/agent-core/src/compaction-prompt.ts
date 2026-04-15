@@ -5,7 +5,7 @@
  * and older messages need to be summarized.
  */
 
-export const COMPACTION_SYSTEM_PROMPT = `You are a conversation summarizer. Your job is to condense a conversation between a user and an AI agent into a concise but complete summary that preserves all information needed to continue the work.
+export const COMPACTION_SYSTEM_PROMPT = `You are a conversation summarizer. Your job is to condense a conversation between a user and an AI assistant into a concise but complete summary that preserves all information needed to continue the work.
 
 Rules:
 - Preserve ALL file paths, function names, variable names, URLs, and command outputs mentioned

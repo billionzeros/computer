@@ -16,7 +16,7 @@ import { connectorStore } from './store/connectorStore.js'
 import { handleWsMessage } from './store/handlers/index.js'
 import { projectStore } from './store/projectStore.js'
 import { sessionStore, useActiveSessionState } from './store/sessionStore.js'
-import type { AgentStatus } from './store/types.js'
+import type { RoutineStatus } from './store/types.js'
 import { uiStore } from './store/uiStore.js'
 import { updateStore } from './store/updateStore.js'
 import { usageStore } from './store/usageStore.js'
@@ -67,8 +67,8 @@ export interface SavedMachine {
 }
 
 export type {
-  AgentStep,
-  AgentStatus,
+  RoutineStep,
+  RoutineStatus,
   ConnectorStatusInfo,
   ConnectorRegistryInfo,
   UpdateInfo,
@@ -131,7 +131,7 @@ interface AppState {
       | 'home'
       | 'chat'
       | 'memory'
-      | 'agents'
+      | 'routines'
       | 'terminal'
       | 'files'
       | 'connectors'
@@ -174,7 +174,7 @@ interface AppState {
   ) => void
   replaceAssistantText: (search: string, replacement: string, sessionId?: string) => void
   getActiveConversation: () => Conversation | null
-  getActiveAgentSession: () => import('@anton/protocol').AgentSession | null
+  getActiveRoutineSession: () => import('@anton/protocol').RoutineSession | null
   findConversationBySession: (sessionId: string) => Conversation | undefined
   loadSessionMessages: (sessionId: string, messages: ChatMessage[]) => void
   prependSessionMessages: (sessionId: string, messages: ChatMessage[]) => void
@@ -702,12 +702,12 @@ export const useStore = create<AppState>((set, get) => {
       return conversations.find((c) => c.id === activeConversationId) || null
     },
 
-    getActiveAgentSession: () => {
+    getActiveRoutineSession: () => {
       const state = get()
       const conv = state.conversations.find((c) => c.id === state.activeConversationId)
       if (!conv?.agentSessionId) return null
       return (
-        projectStore.getState().projectAgents.find((a) => a.sessionId === conv.agentSessionId) ??
+        projectStore.getState().projectRoutines.find((a) => a.sessionId === conv.agentSessionId) ??
         null
       )
     },
@@ -917,7 +917,7 @@ export function useConnectionStatus(): ConnectionStatus {
   return useStore((s) => s.connectionStatus)
 }
 
-export function useAgentStatus(): AgentStatus {
+export function useRoutineStatus(): RoutineStatus {
   return useActiveSessionState((s) => s.status)
 }
 

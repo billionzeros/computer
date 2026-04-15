@@ -14,11 +14,11 @@ export default function SettingsScreen() {
   const _currentProvider = sessionStore((s) => s.currentProvider)
   const currentModel = sessionStore((s) => s.currentModel)
   const thinkingEnabled = sessionStore((s) => s.thinkingEnabled)
-  const agentVersion = connection.currentAgentVersion
-  const agentId = connection.currentAgentId
+  const serverVersion = connection.currentAgentVersion
+  const serverId = connection.currentAgentId
 
   const handleDisconnect = useCallback(() => {
-    Alert.alert('Disconnect', 'Disconnect from this agent?', [
+    Alert.alert('Disconnect', 'Disconnect from this server?', [
       { text: 'Cancel', style: 'cancel' },
       {
         text: 'Disconnect',
@@ -74,16 +74,16 @@ export default function SettingsScreen() {
       </View>
 
       <ScrollView contentContainerStyle={styles.content}>
-        {/* Agent info */}
+        {/* Server info */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Agent</Text>
+          <Text style={styles.sectionTitle}>Server</Text>
           <View style={styles.card}>
             <View style={styles.row}>
               <Server size={18} strokeWidth={1.5} color={colors.textSecondary} />
               <View style={styles.rowContent}>
-                <Text style={styles.rowLabel}>Agent ID</Text>
+                <Text style={styles.rowLabel}>Server ID</Text>
                 <Text style={styles.rowValue} numberOfLines={1}>
-                  {agentId || 'Unknown'}
+                  {serverId || 'Unknown'}
                 </Text>
               </View>
             </View>
@@ -92,7 +92,7 @@ export default function SettingsScreen() {
               <Zap size={18} strokeWidth={1.5} color={colors.textSecondary} />
               <View style={styles.rowContent}>
                 <Text style={styles.rowLabel}>Version</Text>
-                <Text style={styles.rowValue}>{agentVersion || 'Unknown'}</Text>
+                <Text style={styles.rowValue}>{serverVersion || 'Unknown'}</Text>
               </View>
             </View>
           </View>

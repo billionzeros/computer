@@ -53,9 +53,9 @@ export type ProviderInfo = ProviderInfoPayload
 
 export type SessionMeta = ProtocolSessionMeta
 
-export type AgentStatus = 'idle' | 'working' | 'error' | 'unknown'
+export type RoutineStatus = 'idle' | 'working' | 'error' | 'unknown'
 
-export interface AgentStep {
+export interface RoutineStep {
   id: string
   type: 'thinking' | 'tool_call' | 'tool_result'
   label: string
@@ -134,7 +134,7 @@ export type ActiveView =
   | 'home'
   | 'chat'
   | 'memory'
-  | 'agents'
+  | 'routines'
   | 'terminal'
   | 'files'
   | 'connectors'

@@ -1,7 +1,7 @@
 import { AnimatePresence } from 'framer-motion'
 import { ArrowDown, Loader2 } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { type ChatMessage, useAgentStatus, useStore } from '../../lib/store.js'
+import { type ChatMessage, useRoutineStatus, useStore } from '../../lib/store.js'
 import { sessionStore, useActiveSessionState } from '../../lib/store/sessionStore.js'
 import { uiStore } from '../../lib/store/uiStore.js'
 import { ActionsGroup } from './ActionsGroup.js'
@@ -57,7 +57,7 @@ export function MessageList({ messages }: Props) {
   const containerRef = useRef<HTMLDivElement>(null)
   const bottomRef = useRef<HTMLDivElement>(null)
   const [showScrollBtn, setShowScrollBtn] = useState(false)
-  const agentStatus = useAgentStatus()
+  const agentStatus = useRoutineStatus()
   const grouped = useMemo(() => groupMessages(messages), [messages])
 
   // Pagination: load older messages on scroll-to-top

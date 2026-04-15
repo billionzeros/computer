@@ -1,8 +1,8 @@
 /**
- * AI channel: project, agent, workflow, connector, provider, skill messages.
+ * AI channel: project, routine, workflow, connector, provider, skill messages.
  */
 
-import type { AgentSession, AiMessage, Project } from '@anton/protocol'
+import type { RoutineSession, AiMessage, Project } from '@anton/protocol'
 import { connectionStore } from '../connectionStore'
 import { projectStore } from '../projectStore'
 import { sessionStore } from '../sessionStore'
@@ -38,35 +38,35 @@ export function handleProjectMessage(msg: AiMessage): boolean {
       return true
     }
 
-    case 'agents_list_response': {
-      projectStore.getState().setProjectAgents((msg.agents || []) as AgentSession[])
+    case 'routines_list_response': {
+      projectStore.getState().setProjectRoutines((msg.routines || []) as RoutineSession[])
       return true
     }
 
-    case 'agent_created':
-    case 'agent_updated': {
-      const agent = msg.agent as AgentSession
-      if (agent) {
+    case 'routine_created':
+    case 'routine_updated': {
+      const routine = msg.routine as RoutineSession
+      if (routine) {
         const ps = projectStore.getState()
-        const exists = ps.projectAgents.some((a) => a.sessionId === agent.sessionId)
+        const exists = ps.projectRoutines.some((a) => a.sessionId === routine.sessionId)
         if (exists) {
-          ps.setProjectAgents(
-            ps.projectAgents.map((a) => (a.sessionId === agent.sessionId ? agent : a)),
+          ps.setProjectRoutines(
+            ps.projectRoutines.map((a) => (a.sessionId === routine.sessionId ? routine : a)),
           )
         } else {
-          ps.setProjectAgents([...ps.projectAgents, agent])
+          ps.setProjectRoutines([...ps.projectRoutines, routine])
         }
       }
       return true
     }
 
-    case 'agent_deleted': {
+    case 'routine_deleted': {
       const ps = projectStore.getState()
-      ps.setProjectAgents(ps.projectAgents.filter((a) => a.sessionId !== msg.sessionId))
+      ps.setProjectRoutines(ps.projectRoutines.filter((a) => a.sessionId !== msg.sessionId))
       return true
     }
 
-    case 'agent_result_delivered':
+    case 'routine_result_delivered':
       return true
 
     case 'providers_list_response': {

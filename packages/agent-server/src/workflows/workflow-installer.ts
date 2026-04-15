@@ -83,7 +83,7 @@ export class WorkflowInstaller {
           `Workflow ID: \`${workflowId}\``,
           `Workflow directory: \`${getWorkflowDir(projectId, workflowId)}\``,
           '',
-          'No agents have been created yet — they will be deployed after you complete setup.',
+          'No routines have been created yet — they will be deployed after you complete setup.',
           `When the user approves the final plan, call the \`activate_workflow\` tool with workflow_id: "${workflowId}".`,
         ]
 

@@ -178,5 +178,5 @@ Chat header gets a context indicator:
 | `packages/agent-server/src/server.ts` | Send context_info message after session create/resume |
 | `packages/protocol/src/messages.ts` | Add ContextInfoMessage type |
 | `packages/desktop/src/lib/store.ts` | Store context info per conversation |
-| `packages/desktop/src/components/AgentChat.tsx` | Handle context_info message |
+| `packages/desktop/src/components/RoutineChat.tsx` | Handle context_info message |
 | `packages/desktop/src/components/chat/ContextPanel.tsx` | New: context transparency panel |

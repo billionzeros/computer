@@ -15,7 +15,7 @@ import type {
 } from '@anton/protocol'
 import { create } from 'zustand'
 import { connection } from '../connection.js'
-import type { AgentStatus, AgentStep, ProviderInfo, SessionMeta } from './types.js'
+import type { RoutineStatus, RoutineStep, ProviderInfo, SessionMeta } from './types.js'
 
 // ── Consolidated per-session state ────────────────────────────────
 
@@ -41,7 +41,7 @@ export interface PendingAskUser {
 
 export interface SessionState {
   // Core status
-  status: AgentStatus
+  status: RoutineStatus
   statusDetail: string | null
   isStreaming: boolean
 
@@ -49,7 +49,7 @@ export interface SessionState {
   tasks: TaskItem[]
 
   // Agent steps (tool call sequence)
-  agentSteps: AgentStep[]
+  agentSteps: RoutineStep[]
 
   // Turn timing
   workingStartedAt: number | null
@@ -183,9 +183,9 @@ interface SessionStoreState {
   removeSessionState: (sessionId: string) => void
 
   // Convenience helpers for common per-session operations
-  setSessionStatus: (sessionId: string, status: AgentStatus, statusDetail?: string | null) => void
-  addAgentStep: (sessionId: string, step: AgentStep) => void
-  updateAgentStep: (sessionId: string, stepId: string, updates: Partial<AgentStep>) => void
+  setSessionStatus: (sessionId: string, status: RoutineStatus, statusDetail?: string | null) => void
+  addRoutineStep: (sessionId: string, step: RoutineStep) => void
+  updateRoutineStep: (sessionId: string, stepId: string, updates: Partial<RoutineStep>) => void
 
   // Session readiness
   registerPendingSession: (id: string) => Promise<void>
@@ -370,14 +370,14 @@ export const sessionStore = create<SessionStoreState>((set, get) => {
       }
     },
 
-    addAgentStep: (sessionId, step) => {
+    addRoutineStep: (sessionId, step) => {
       const ss = get().getSessionState(sessionId)
       get().updateSessionState(sessionId, {
         agentSteps: [...ss.agentSteps, step],
       })
     },
 
-    updateAgentStep: (sessionId, stepId, updates) => {
+    updateRoutineStep: (sessionId, stepId, updates) => {
       const ss = get().getSessionState(sessionId)
       get().updateSessionState(sessionId, {
         agentSteps: ss.agentSteps.map((s) => (s.id === stepId ? { ...s, ...updates } : s)),
