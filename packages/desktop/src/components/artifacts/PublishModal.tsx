@@ -166,7 +166,6 @@ export function PublishModal() {
                 value={name}
                 onChange={(e) => setName(e.target.value)}
                 placeholder="Page title"
-                autoFocus
               />
             </div>
 
@@ -219,9 +218,7 @@ export function PublishModal() {
             {/* Domain breadcrumb */}
             <div className="publish-modal__breadcrumb">
               <Globe size={13} strokeWidth={1.5} />
-              <span className="publish-modal__breadcrumb-domain">
-                {domain || 'your-site'}
-              </span>
+              <span className="publish-modal__breadcrumb-domain">{domain || 'your-site'}</span>
               <span className="publish-modal__breadcrumb-sep">/</span>
               <span className="publish-modal__breadcrumb-slug">
                 {artifact.publishedSlug || slug}
@@ -234,24 +231,20 @@ export function PublishModal() {
 
             {/* Action rows — Notion style */}
             <div className="publish-modal__actions-list">
-              <button
-                type="button"
-                className="publish-modal__action-row"
-                onClick={handleCopyEmbed}
-              >
+              <button type="button" className="publish-modal__action-row" onClick={handleCopyEmbed}>
                 <Code2 size={15} strokeWidth={1.5} />
                 <span>{copiedEmbed ? 'Copied embed code' : 'Embed this page'}</span>
-                {copiedEmbed && <Check size={14} strokeWidth={1.5} className="publish-modal__action-check" />}
+                {copiedEmbed && (
+                  <Check size={14} strokeWidth={1.5} className="publish-modal__action-check" />
+                )}
               </button>
 
-              <button
-                type="button"
-                className="publish-modal__action-row"
-                onClick={handleCopyLink}
-              >
+              <button type="button" className="publish-modal__action-row" onClick={handleCopyLink}>
                 <Copy size={15} strokeWidth={1.5} />
                 <span>{copiedLink ? 'Link copied' : 'Copy link'}</span>
-                {copiedLink && <Check size={14} strokeWidth={1.5} className="publish-modal__action-check" />}
+                {copiedLink && (
+                  <Check size={14} strokeWidth={1.5} className="publish-modal__action-check" />
+                )}
               </button>
 
               <div className="publish-modal__action-row publish-modal__action-row--group">

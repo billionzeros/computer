@@ -30,7 +30,14 @@ export interface CommandContext {
   /** List available AI providers with key status. */
   listProviders?: () => { name: string; hasKey: boolean; isDefault: boolean }[]
   /** List scheduled agents/bots. */
-  listAgents?: () => { name: string; description: string; schedule: string; nextRun: number; lastRun: number | null; enabled: boolean }[]
+  listAgents?: () => {
+    name: string
+    description: string
+    schedule: string
+    nextRun: number
+    lastRun: number | null
+    enabled: boolean
+  }[]
 }
 
 export interface CommandResult {
@@ -243,7 +250,7 @@ function handleStatus(_args: string, ctx: CommandContext): CommandResult {
   if (session) {
     lines.push(`**Model:** \`${session.model}\``)
     lines.push(`**Provider:** \`${session.provider}\``)
-    lines.push(`**Session:** active`)
+    lines.push('**Session:** active')
   } else {
     const override = ctx.getModelOverride?.()
     const defaults = ctx.getDefaultModel?.()

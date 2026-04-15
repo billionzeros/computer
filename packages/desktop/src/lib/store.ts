@@ -110,7 +110,9 @@ interface AppState {
   // Draft input persistence (keyed by conversationId)
   draftInputs: Map<string, { text: string; attachments: ChatImageAttachment[] }>
   setDraftInput: (convId: string, text: string, attachments: ChatImageAttachment[]) => void
-  getDraftInput: (convId: string) => { text: string; attachments: ChatImageAttachment[] } | undefined
+  getDraftInput: (
+    convId: string,
+  ) => { text: string; attachments: ChatImageAttachment[] } | undefined
   clearDraftInput: (convId: string) => void
 
   // Per-session assistant message tracking (keyed by sessionId for isolation)

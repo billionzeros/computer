@@ -11,7 +11,7 @@ import {
 import { useEffect, useRef, useState } from 'react'
 import { artifactStore } from '../../lib/store/artifactStore.js'
 import { connectionStore } from '../../lib/store/connectionStore.js'
-import { pagesStore, type PublishedPage } from '../../lib/store/pagesStore.js'
+import { type PublishedPage, pagesStore } from '../../lib/store/pagesStore.js'
 
 function formatRelativeTime(ts: number): string {
   const diff = Date.now() - ts
@@ -43,12 +43,18 @@ function typeIcon(type: PublishedPage['type']) {
 
 function typeLabel(type: PublishedPage['type']): string {
   switch (type) {
-    case 'html': return 'HTML'
-    case 'markdown': return 'Markdown'
-    case 'svg': return 'SVG'
-    case 'mermaid': return 'Mermaid'
-    case 'code': return 'Code'
-    default: return type
+    case 'html':
+      return 'HTML'
+    case 'markdown':
+      return 'Markdown'
+    case 'svg':
+      return 'SVG'
+    case 'mermaid':
+      return 'Mermaid'
+    case 'code':
+      return 'Code'
+    default:
+      return type
   }
 }
 
@@ -102,7 +108,16 @@ function PageRow({ page, host }: { page: PublishedPage; host: string | null }) {
   }
 
   return (
-    <div className="pv-row" onClick={openInBrowser}>
+    <div
+      className="pv-row"
+      onClick={openInBrowser}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' || e.key === ' ') openInBrowser()
+      }}
+      // biome-ignore lint/a11y/useSemanticElements: row contains nested buttons; cannot be a <button>
+      role="button"
+      tabIndex={0}
+    >
       <div className="pv-row__name-cell">
         <span className="pv-row__icon">{typeIcon(page.type)}</span>
         <span className="pv-row__title">{page.title}</span>
@@ -112,6 +127,7 @@ function PageRow({ page, host }: { page: PublishedPage; host: string | null }) {
       <span className="pv-row__updated">{formatRelativeTime(page.updatedAt)}</span>
       <div className="pv-row__actions" ref={menuRef}>
         <button
+          type="button"
           className="pv-row__menu-btn"
           onClick={(e) => {
             e.stopPropagation()
@@ -123,24 +139,49 @@ function PageRow({ page, host }: { page: PublishedPage; host: string | null }) {
         </button>
         {menuOpen && (
           <div className="pv-dropdown">
-            <button className="pv-dropdown__item" onClick={(e) => { e.stopPropagation(); copyLink() }}>
+            <button
+              type="button"
+              className="pv-dropdown__item"
+              onClick={(e) => {
+                e.stopPropagation()
+                copyLink()
+              }}
+            >
               <Copy size={14} strokeWidth={1.5} />
               {copied ? 'Copied!' : 'Copy link'}
             </button>
-            <button className="pv-dropdown__item" onClick={(e) => { e.stopPropagation(); openInBrowser() }}>
+            <button
+              type="button"
+              className="pv-dropdown__item"
+              onClick={(e) => {
+                e.stopPropagation()
+                openInBrowser()
+              }}
+            >
               <ExternalLink size={14} strokeWidth={1.5} />
               Open in browser
             </button>
             {page.artifactId && (
-              <button className="pv-dropdown__item" onClick={(e) => { e.stopPropagation(); handleManage() }}>
+              <button
+                type="button"
+                className="pv-dropdown__item"
+                onClick={(e) => {
+                  e.stopPropagation()
+                  handleManage()
+                }}
+              >
                 <Globe size={14} strokeWidth={1.5} />
                 Manage
               </button>
             )}
             <div className="pv-dropdown__sep" />
             <button
+              type="button"
               className="pv-dropdown__item pv-dropdown__item--danger"
-              onClick={(e) => { e.stopPropagation(); handleUnpublish() }}
+              onClick={(e) => {
+                e.stopPropagation()
+                handleUnpublish()
+              }}
             >
               <Trash2 size={14} strokeWidth={1.5} />
               {confirmUnpublish ? 'Confirm unpublish' : 'Unpublish'}
@@ -188,9 +229,7 @@ export function PagesView() {
               <Globe size={28} strokeWidth={1.2} />
             </div>
             <p className="pv-empty__title">No published pages yet</p>
-            <p className="pv-empty__desc">
-              When you publish an artifact, it will appear here
-            </p>
+            <p className="pv-empty__desc">When you publish an artifact, it will appear here</p>
           </div>
         ) : (
           <div className="pv-table">

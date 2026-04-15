@@ -215,7 +215,11 @@ export function ArtifactDetailView() {
           className={`artifact-detail__action ${artifact.publishedUrl ? 'artifact-detail__action--manage' : 'artifact-detail__action--publish'}`}
           onClick={() => openPublishModal(artifact.id)}
         >
-          {artifact.publishedUrl ? <Settings2 size={14} strokeWidth={1.5} /> : <Globe size={14} strokeWidth={1.5} />}
+          {artifact.publishedUrl ? (
+            <Settings2 size={14} strokeWidth={1.5} />
+          ) : (
+            <Globe size={14} strokeWidth={1.5} />
+          )}
           <span>{artifact.publishedUrl ? 'Manage' : 'Publish'}</span>
         </button>
       </div>

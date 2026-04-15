@@ -24,10 +24,7 @@ export interface PerToolBreakdown {
  * Compute per-tool breakdown and composite score.
  * Also returns the structured stats for logging to Braintrust metadata.
  */
-export function computePerToolBreakdown(
-  _evalCase: EvalCase,
-  result: EvalResult,
-): PerToolBreakdown {
+export function computePerToolBreakdown(_evalCase: EvalCase, result: EvalResult): PerToolBreakdown {
   const toolMap = new Map<string, { calls: number; errors: number }>()
 
   // Count calls per tool
@@ -62,9 +59,7 @@ export function computePerToolBreakdown(
   // Composite score = weighted average success rate (weighted by call count)
   const totalCalls = tools.reduce((sum, t) => sum + t.calls, 0)
   const score =
-    totalCalls === 0
-      ? 1.0
-      : tools.reduce((sum, t) => sum + t.successRate * t.calls, 0) / totalCalls
+    totalCalls === 0 ? 1.0 : tools.reduce((sum, t) => sum + t.successRate * t.calls, 0) / totalCalls
 
   return { score, tools }
 }

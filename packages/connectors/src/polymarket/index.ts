@@ -55,4 +55,3 @@ export class PolymarketConnector implements DirectConnector {
     }
   }
 }
-

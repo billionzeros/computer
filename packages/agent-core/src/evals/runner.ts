@@ -9,8 +9,8 @@
 import { loadCoreSystemPrompt } from '@anton/agent-config'
 import type { AgentConfig } from '@anton/agent-config'
 import type { SessionEvent } from '../session.js'
-import type { EvalCase, EvalResult } from './types.js'
 import { buildEvalSystemPrompt } from './runtime-profile.js'
+import type { EvalCase, EvalResult } from './types.js'
 
 /**
  * Run a single eval case through the agent and collect the result.

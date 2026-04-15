@@ -13,7 +13,14 @@
  */
 
 import type { AgentConfig } from '@anton/agent-config'
-import type { CommandContext, CommandResult, JobActionHandler, McpManager, Session, SurfaceInfo } from '@anton/agent-core'
+import type {
+  CommandContext,
+  CommandResult,
+  JobActionHandler,
+  McpManager,
+  Session,
+  SurfaceInfo,
+} from '@anton/agent-core'
 import { createSession, executeCommand, resumeSession } from '@anton/agent-core'
 import type { ConnectorManager } from '@anton/connectors'
 import { createLogger } from '@anton/logger'
@@ -136,7 +143,14 @@ export class WebhookAgentRunner {
   private progressStates = new Map<string, ProgressState>()
 
   /** Optional callback to list scheduled jobs (wired by the server). */
-  private getSchedulerJobs?: () => { name: string; description: string; schedule: string; nextRun: number; lastRun: number | null; enabled: boolean }[]
+  private getSchedulerJobs?: () => {
+    name: string
+    description: string
+    schedule: string
+    nextRun: number
+    lastRun: number | null
+    enabled: boolean
+  }[]
 
   constructor(
     private config: AgentConfig,
@@ -170,7 +184,15 @@ export class WebhookAgentRunner {
       }),
       listProviders: () => {
         const defaultProvider = this.config.defaults.provider
-        const knownProviders = ['anthropic', 'openai', 'google', 'groq', 'together', 'openrouter', 'mistral']
+        const knownProviders = [
+          'anthropic',
+          'openai',
+          'google',
+          'groq',
+          'together',
+          'openrouter',
+          'mistral',
+        ]
         return knownProviders.map((name) => ({
           name,
           hasKey: this.hasApiKey(name),

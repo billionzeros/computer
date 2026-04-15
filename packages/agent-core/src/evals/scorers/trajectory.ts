@@ -65,10 +65,7 @@ function scoreRedundancy(toolCalls: EvalResult['toolCalls']): number {
 /**
  * Score dead-ends: tool calls that error then retry with identical input.
  */
-function scoreDeadEnds(
-  toolCalls: EvalResult['toolCalls'],
-  events: EvalResult['events'],
-): number {
+function scoreDeadEnds(toolCalls: EvalResult['toolCalls'], events: EvalResult['events']): number {
   if (toolCalls.length <= 1) return 1.0
 
   // Build a set of tool call indices that produced errors

@@ -231,9 +231,7 @@ export function AppSetup({
   const canAddAnother = entry.multiAccount && isConfigured
   /** Per-row account UI (with per-account Disconnect) — only when needed to avoid duplicate Disconnect buttons */
   const showPerAccountRows =
-    isConfigured &&
-    instances.length > 0 &&
-    (entry.multiAccount || isOAuth || instances.length > 1)
+    isConfigured && instances.length > 0 && (entry.multiAccount || isOAuth || instances.length > 1)
 
   const existingMetaKey = existing?.metadata
     ? Object.entries(existing.metadata)
@@ -243,6 +241,7 @@ export function AppSetup({
     : ''
 
   // Prefill optional fields from existing connector metadata (so "Connect" opens a usable editor)
+  // biome-ignore lint/correctness/useExhaustiveDependencies: keyed on existing?.id and existingMetaKey to avoid churn
   useEffect(() => {
     if (!existing?.metadata) return
     const next: Record<string, string> = {}
@@ -251,7 +250,6 @@ export function AppSetup({
       if (typeof v === 'string' && v.length > 0) next[field.key] = v
     }
     if (Object.keys(next).length > 0) setOptionalValues(next)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [existing?.id, existingMetaKey])
 
   const startOAuthFlow = (instanceId: string, registryId?: string) => {
@@ -535,22 +533,19 @@ export function AppSetup({
         )}
 
         {/* Single-account API: compact status (no duplicate Disconnect in the row above) */}
-        {isConfigured &&
-          !showPerAccountRows &&
-          entry.type === 'api' &&
-          instances[0]?.connected && (
-            <div className="app-detail__accounts app-detail__accounts--compact">
-              <div className="app-detail__account-row app-detail__account-row--static">
-                <div className="app-detail__account-info">
-                  <span className="app-detail__account-dot app-detail__account-dot--connected" />
-                  <span className="app-detail__account-name">{entry.name}</span>
-                  <span className="app-detail__account-tools">
-                    {instances[0].toolCount ?? instances[0].tools?.length ?? 0} tools
-                  </span>
-                </div>
+        {isConfigured && !showPerAccountRows && entry.type === 'api' && instances[0]?.connected && (
+          <div className="app-detail__accounts app-detail__accounts--compact">
+            <div className="app-detail__account-row app-detail__account-row--static">
+              <div className="app-detail__account-info">
+                <span className="app-detail__account-dot app-detail__account-dot--connected" />
+                <span className="app-detail__account-name">{entry.name}</span>
+                <span className="app-detail__account-tools">
+                  {instances[0].toolCount ?? instances[0].tools?.length ?? 0} tools
+                </span>
               </div>
             </div>
-          )}
+          </div>
+        )}
 
         {/* Add another account button (multi-account) */}
         {canAddAnother && isOAuth && (
@@ -614,13 +609,18 @@ export function AppSetup({
                   f.key === envKey,
               )
               return (
-                <div key={envKey} className={`app-detail__field${field ? ' app-detail__field--labeled' : ''}`}>
+                <div
+                  key={envKey}
+                  className={`app-detail__field${field ? ' app-detail__field--labeled' : ''}`}
+                >
                   <label htmlFor={`env-${envKey}`}>{field?.label ?? envKey}</label>
                   {field?.hint && <p className="app-detail__field-hint">{field.hint}</p>}
                   <input
                     id={`env-${envKey}`}
                     type="password"
-                    placeholder={field?.placeholder ?? `Paste your ${envKey.toLowerCase().replace(/_/g, ' ')}`}
+                    placeholder={
+                      field?.placeholder ?? `Paste your ${envKey.toLowerCase().replace(/_/g, ' ')}`
+                    }
                     value={envValues[envKey] || ''}
                     onChange={(e) =>
                       setEnvValues((prev) => ({ ...prev, [envKey]: e.target.value }))
@@ -668,7 +668,11 @@ export function AppSetup({
               <details className="app-detail__setup-guide">
                 <summary className="app-detail__setup-guide-toggle">
                   <span>How to get your credentials</span>
-                  <ChevronDown size={14} strokeWidth={1.5} className="app-detail__setup-guide-chevron" />
+                  <ChevronDown
+                    size={14}
+                    strokeWidth={1.5}
+                    className="app-detail__setup-guide-chevron"
+                  />
                 </summary>
                 <ol className="app-detail__setup-guide-steps">
                   {entry.setupGuide.steps.map((step: string) => (
@@ -721,32 +725,39 @@ export function AppSetup({
         )}
 
         {/* Settings editor for configured API connectors */}
-        {isConfigured && entry.type === 'api' && showDetails && (entry.optionalFields?.length ?? 0) > 0 && (
-          <div className="app-detail__fields">
-            {(entry.optionalFields ?? []).map(
-              (field: { key: string; label: string; hint?: string; placeholder?: string }) => (
-                <div key={field.key} className="app-detail__field">
-                  <label htmlFor={`opt-${field.key}`}>
-                    {field.label} <span className="app-detail__field-optional">(optional)</span>
-                  </label>
-                  {field.hint && <p className="app-detail__field-hint">{field.hint}</p>}
-                  <input
-                    id={`opt-${field.key}`}
-                    type="text"
-                    placeholder={field.placeholder ?? field.label}
-                    value={optionalValues[field.key] || ''}
-                    onChange={(e) =>
-                      setOptionalValues((prev) => ({ ...prev, [field.key]: e.target.value }))
-                    }
-                  />
-                </div>
-              ),
-            )}
-            <button type="button" className="app-detail__connect" onClick={handleSaveOptionalFields}>
-              Save
-            </button>
-          </div>
-        )}
+        {isConfigured &&
+          entry.type === 'api' &&
+          showDetails &&
+          (entry.optionalFields?.length ?? 0) > 0 && (
+            <div className="app-detail__fields">
+              {(entry.optionalFields ?? []).map(
+                (field: { key: string; label: string; hint?: string; placeholder?: string }) => (
+                  <div key={field.key} className="app-detail__field">
+                    <label htmlFor={`opt-${field.key}`}>
+                      {field.label} <span className="app-detail__field-optional">(optional)</span>
+                    </label>
+                    {field.hint && <p className="app-detail__field-hint">{field.hint}</p>}
+                    <input
+                      id={`opt-${field.key}`}
+                      type="text"
+                      placeholder={field.placeholder ?? field.label}
+                      value={optionalValues[field.key] || ''}
+                      onChange={(e) =>
+                        setOptionalValues((prev) => ({ ...prev, [field.key]: e.target.value }))
+                      }
+                    />
+                  </div>
+                ),
+              )}
+              <button
+                type="button"
+                className="app-detail__connect"
+                onClick={handleSaveOptionalFields}
+              >
+                Save
+              </button>
+            </div>
+          )}
 
         {/* Test result */}
         {testResult && (

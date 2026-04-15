@@ -14,7 +14,7 @@ import { connectionStore } from '@/lib/store/connectionStore'
 import { sessionStore, useActiveSessionState } from '@/lib/store/sessionStore'
 import { colors, fontSize, radius, spacing } from '@/theme/colors'
 import { router } from 'expo-router'
-import { Monitor, MessageSquare, MoreHorizontal } from 'lucide-react-native'
+import { MessageSquare, Monitor, MoreHorizontal } from 'lucide-react-native'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   FlatList,
@@ -128,10 +128,6 @@ export default function ChatScreen() {
   const handleCancel = useCallback(() => {
     const sid = sessionStore.getState().currentSessionId
     if (sid) sessionStore.getState().sendCancelTurn(sid)
-  }, [])
-
-  const handleNewConversation = useCallback(() => {
-    useStore.getState().newConversation()
   }, [])
 
   const handleConfirmApprove = useCallback(() => {
@@ -276,9 +272,7 @@ export default function ChatScreen() {
             ref={listRef}
             data={grouped}
             renderItem={renderGroupedItem}
-            keyExtractor={(item) =>
-              item.type === 'message' ? item.message.id : item.id
-            }
+            keyExtractor={(item) => (item.type === 'message' ? item.message.id : item.id)}
             contentContainerStyle={styles.messageList}
             keyboardShouldPersistTaps="handled"
             keyboardDismissMode="interactive"
@@ -308,7 +302,11 @@ export default function ChatScreen() {
           />
         )}
         {pendingPlan && (
-          <PlanReviewSheet plan={pendingPlan} onApprove={handlePlanApprove} onDeny={handlePlanDeny} />
+          <PlanReviewSheet
+            plan={pendingPlan}
+            onApprove={handlePlanApprove}
+            onDeny={handlePlanDeny}
+          />
         )}
         {pendingAskUser && <AskUserSheet askUser={pendingAskUser} onSubmit={handleAskUserSubmit} />}
 

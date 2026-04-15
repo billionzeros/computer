@@ -9,7 +9,6 @@ import { colors, fontSize, radius, spacing } from '@/theme/colors'
 import {
   Check,
   ChevronDown,
-  FileText,
   FolderOpen,
   Globe,
   Loader,
@@ -115,28 +114,24 @@ function ToolActionRow({ action }: { action: ToolAction }) {
 
   return (
     <View style={styles.toolItem}>
-      <Pressable
-        style={styles.toolRow}
-        onPress={() => hasResult && setShowResult(!showResult)}
-      >
+      <Pressable style={styles.toolRow} onPress={() => hasResult && setShowResult(!showResult)}>
         <View style={styles.toolIconWrap}>
           <Icon size={12} strokeWidth={1.5} color={colors.textTertiary} />
         </View>
         <Text style={styles.toolLabel} numberOfLines={1}>
           {label}
         </Text>
-        {action.result?.isError && (
-          <XCircle size={12} strokeWidth={1.5} color={colors.error} />
-        )}
+        {action.result?.isError && <XCircle size={12} strokeWidth={1.5} color={colors.error} />}
         {action.result && !action.result.isError && (
           <Check size={12} strokeWidth={1.5} color={colors.success} />
         )}
-        {!action.result && (
-          <Loader size={12} strokeWidth={1.5} color={colors.working} />
-        )}
+        {!action.result && <Loader size={12} strokeWidth={1.5} color={colors.working} />}
       </Pressable>
       {showResult && action.result && (
-        <Text style={[styles.resultText, action.result.isError && styles.errorText]} numberOfLines={6}>
+        <Text
+          style={[styles.resultText, action.result.isError && styles.errorText]}
+          numberOfLines={6}
+        >
           {action.result.content.slice(0, 400)}
         </Text>
       )}

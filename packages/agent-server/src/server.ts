@@ -42,12 +42,12 @@ import {
   getProvidersList,
   getPublished,
   getPublishedDir,
-  listPublished,
   getSyncVersion,
   incrementViews,
   listProjectIndex,
   listProjectSessions,
   listProjectWorkflows,
+  listPublished,
   listSessionMetas,
   loadAgentMetadata,
   loadProject,
@@ -1549,7 +1549,7 @@ export class AgentServer {
       // Reject if slug is already taken by a different artifact
       if (msg.slug) {
         const existing = getPublished(msg.slug)
-        if (existing && existing.artifactId && existing.artifactId !== msg.artifactId) {
+        if (existing?.artifactId && existing.artifactId !== msg.artifactId) {
           this.sendToClient(Channel.AI, {
             type: 'publish_artifact_response',
             artifactId: msg.artifactId,

@@ -18,11 +18,11 @@ import { DeveloperView } from './components/developer/DeveloperView.js'
 import { ProjectFilesView } from './components/files/ProjectFilesView.js'
 import { HomeView } from './components/home/HomeView.js'
 import { MemoryView } from './components/memory/MemoryView.js'
+import { PagesView } from './components/pages/PagesView.js'
 import { CreateProjectModal } from './components/projects/CreateProjectModal.js'
 import { ProjectList } from './components/projects/ProjectList.js'
 import { SettingsModal } from './components/settings/SettingsModal.js'
 import { SkillsPanel } from './components/skills/SkillsPanel.js'
-import { PagesView } from './components/pages/PagesView.js'
 import { WorkflowsPage } from './components/workflows/WorkflowsPage.js'
 import { connection } from './lib/connection.js'
 import { sanitizeTitle } from './lib/conversations.js'
@@ -53,7 +53,6 @@ export function App() {
   uiStore((s) => s.toggleSidebar)
   const updateStage = updateStore((s) => s.updateStage)
   const sidePanelOpen = artifactPanelOpen
-  const activeProjectId = projectStore((s) => s.activeProjectId)
   const projects = projectStore((s) => s.projects)
   const theme = uiStore((s) => s.theme)
   const devMode = uiStore((s) => s.devMode)
@@ -369,8 +368,7 @@ export function App() {
             {activeView === 'projects' && <ProjectList />}
 
             <AnimatePresence>
-              {(activeView === 'chat' || activeView === 'home') &&
-                sidePanelOpen && <SidePanel />}
+              {(activeView === 'chat' || activeView === 'home') && sidePanelOpen && <SidePanel />}
             </AnimatePresence>
           </div>
         </div>

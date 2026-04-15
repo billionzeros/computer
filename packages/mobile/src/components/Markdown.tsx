@@ -17,10 +17,7 @@ export const Markdown = memo(function Markdown({ children, variant = 'assistant'
   const isUser = variant === 'user'
 
   return (
-    <MarkdownDisplay
-      style={isUser ? userStyles : assistantStyles}
-      mergeStyle
-    >
+    <MarkdownDisplay style={isUser ? userStyles : assistantStyles} mergeStyle>
       {children}
     </MarkdownDisplay>
   )
