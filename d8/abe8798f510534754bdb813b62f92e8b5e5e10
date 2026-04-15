@@ -1,0 +1,54 @@
+packages/agent-core/src/commands.ts
+  a7adf8125178f41d 92-94,287,294
+packages/mobile/src/lib/store/handlers/eventsHandler.ts
+  a7adf8125178f41d 2,10
+packages/agent-core/src/tools/job.ts
+  a7adf8125178f41d 2,4,8,13,16,20
+Makefile
+  a7adf8125178f41d 72,95-96
+packages/desktop/src/components/chat/AskUserInline.tsx
+  a7adf8125178f41d 16,18-19,27,29-30,96,100,179,181-182,184,187,189-190,194,198,261,265,274,278
+packages/cli/src/ui/App.tsx
+  a7adf8125178f41d 188
+packages/agent-core/src/agent.ts
+  a7adf8125178f41d 1390,1397-1398,1400-1404,1420,1424,1429,1438-1439,1450,1455,1470,1479,1482-1483,1487,1489,1498,1509
+packages/desktop/src/lib/store/handlers/eventsHandler.ts
+  a7adf8125178f41d 2
+packages/agent-config/src/projects.ts
+  a7adf8125178f41d 166,655
+packages/agent-server/src/server.ts
+  a7adf8125178f41d 578,586,2733,3170,3236,3307,3314,3326,3428,3474
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.2.8",
+  "base_commit_sha": "d8abe8798f510534754bdb813b62f92e8b5e5e10",
+  "prompts": {
+    "046406fc59da0f3f": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "72abed1e-3d08-492c-8e63-46ea93c41460",
+        "model": "claude-opus-4-6"
+      },
+      "human_author": "Om Gupta",
+      "messages": [],
+      "total_additions": 2,
+      "total_deletions": 2,
+      "accepted_lines": 0,
+      "overriden_lines": 0
+    },
+    "a7adf8125178f41d": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "0b57ecd3-701f-4ea6-a525-9c40c47b2c7a",
+        "model": "claude-opus-4-6"
+      },
+      "human_author": "Om Gupta",
+      "messages": [],
+      "total_additions": 77,
+      "total_deletions": 77,
+      "accepted_lines": 74,
+      "overriden_lines": 0
+    }
+  }
+}
