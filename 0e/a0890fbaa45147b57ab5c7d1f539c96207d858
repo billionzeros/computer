@@ -1,0 +1,93 @@
+specs/features/core/web-search-and-readability.md
+  946f567e7342cac9 1-136
+specs/features/messaging/slack-telegram-messaging-flow.md
+  946f567e7342cac9 1-275
+specs/features/ui/memory-page.md
+  946f567e7342cac9 1-113
+specs/reference/project-first-architecture.md
+  946f567e7342cac9 1-228
+specs/features/core/background-memory-extraction.md
+  946f567e7342cac9 1-150
+specs/features/core/session-sync-protocol.md
+  946f567e7342cac9 1-316
+specs/operations/anton-test-prompts.md
+  946f567e7342cac9 1-246
+specs/features/agents/workflow-multi-agent-architecture.md
+  946f567e7342cac9 1-245
+specs/features/agents/skills.md
+  946f567e7342cac9 1-330
+specs/reference/perplexity-reference.md
+  946f567e7342cac9 1-349
+specs/features/agents/sub-agents.md
+  946f567e7342cac9 1-129
+specs/architecture/project-context-and-memory.md
+  946f567e7342cac9 1-391
+deploy/install.sh
+  946f567e7342cac9 1-247
+specs/features/agents/workflow-ux.md
+  946f567e7342cac9 1-101
+specs/features/core/text-stream-buffer.md
+  946f567e7342cac9 1-172
+specs/features/agents/code-review-agent.md
+  946f567e7342cac9 1-505
+deploy/ansible/roles/anton-agent/handlers/main.yml
+  946f567e7342cac9 1-15
+deploy/ansible/roles/anton-agent/tasks/main.yml
+  946f567e7342cac9 1-357
+specs/features/core/browser-automation.md
+  946f567e7342cac9 1-248
+specs/features/agents/workflows.md
+  946f567e7342cac9 1-363
+deploy/ansible/deploy.sh
+  946f567e7342cac9 1-92
+specs/features/messaging/webhook-commands-and-project-scoping.md
+  946f567e7342cac9 1-193
+deploy/ansible/inventory.ini
+  946f567e7342cac9 1-14
+deploy/ansible/playbook.yml
+  946f567e7342cac9 1-22
+specs/architecture/deployment.md
+  946f567e7342cac9 1-179
+specs/features/ui/citations.md
+  946f567e7342cac9 1-138
+infra-providers/huddle/cloud-init.sh
+  946f567e7342cac9 1-393
+specs/features/core/thinking-cot.md
+  946f567e7342cac9 1-208
+specs/features/connectors/connector-credentials.md
+  946f567e7342cac9 1-166
+deploy/docker-compose.yml
+  946f567e7342cac9 1-22
+specs/features/agents/agents.md
+  946f567e7342cac9 1-205
+deploy/ansible/roles/anton-agent/defaults/main.yml
+  946f567e7342cac9 1-26
+specs/features/connectors/connectors.md
+  946f567e7342cac9 1-776
+deploy/ansible/ansible.cfg
+  946f567e7342cac9 1-11
+specs/architecture/project-scoped-pages.md
+  946f567e7342cac9 1-423
+deploy/sync.sh
+  946f567e7342cac9 1-25
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.2.8",
+  "base_commit_sha": "0ea0890fbaa45147b57ab5c7d1f539c96207d858",
+  "prompts": {
+    "946f567e7342cac9": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "91951fce-bcfd-4fdc-9893-47fedbdcc58c",
+        "model": "claude-opus-4-6"
+      },
+      "human_author": "Om Gupta",
+      "messages": [],
+      "total_additions": 16832,
+      "total_deletions": 0,
+      "accepted_lines": 16832,
+      "overriden_lines": 0
+    }
+  }
+}
