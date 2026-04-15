@@ -1,0 +1,42 @@
+packages/agent-core/src/commands.ts
+  3979eb2ca3008fc5 253
+packages/desktop/src/components/pages/PagesView.tsx
+  3979eb2ca3008fc5 111-120,130,143,154,166,179
+packages/desktop/src/components/connectors/ConnectorsPage.tsx
+  3979eb2ca3008fc5 244
+packages/agent-server/src/server.ts
+  3979eb2ca3008fc5 1552
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.2.8",
+  "base_commit_sha": "9c6af1bb6d21032fb8e9bfea5938f081974c4969",
+  "prompts": {
+    "3979eb2ca3008fc5": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "3b6190a7-32ba-4d76-a873-46b4771c0049",
+        "model": "claude-opus-4-6"
+      },
+      "human_author": "Om Gupta",
+      "messages": [],
+      "total_additions": 19,
+      "total_deletions": 12,
+      "accepted_lines": 18,
+      "overriden_lines": 0
+    },
+    "946f567e7342cac9": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "91951fce-bcfd-4fdc-9893-47fedbdcc58c",
+        "model": "claude-opus-4-6"
+      },
+      "human_author": "Om Gupta",
+      "messages": [],
+      "total_additions": 0,
+      "total_deletions": 0,
+      "accepted_lines": 9023,
+      "overriden_lines": 0
+    }
+  }
+}
