@@ -1,0 +1,38 @@
+packages/desktop/src/lib/notifications.ts
+  223948f652bd2ea2 261
+packages/agent-server/src/server.ts
+  223948f652bd2ea2 3361
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.2.8",
+  "base_commit_sha": "bd41877f06be27a5b6f70c7de856359c413faa3f",
+  "prompts": {
+    "223948f652bd2ea2": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "d1b5fe73-d42c-4565-99cc-f2334671f49f",
+        "model": "claude-opus-4-6"
+      },
+      "human_author": "Om Gupta",
+      "messages": [],
+      "total_additions": 2,
+      "total_deletions": 2,
+      "accepted_lines": 2,
+      "overriden_lines": 0
+    },
+    "ada82d4e712cacd0": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "3b4dd73b-6365-4f9e-addb-f7422ad225af",
+        "model": "claude-opus-4-6"
+      },
+      "human_author": "Om Gupta",
+      "messages": [],
+      "total_additions": 548,
+      "total_deletions": 600,
+      "accepted_lines": 539,
+      "overriden_lines": 1
+    }
+  }
+}
