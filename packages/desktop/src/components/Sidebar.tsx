@@ -8,6 +8,7 @@ import {
   Code,
   Files,
   FolderOpen,
+  Globe,
   Link,
   Loader2,
   MessageSquare,
@@ -304,6 +305,12 @@ export function Sidebar({ onViewChange, onOpenSettings }: Props) {
                   label="Files"
                   active={currentView === 'files'}
                   onClick={() => setActiveView('files')}
+                />
+                <NavItem
+                  icon={Globe}
+                  label="Pages"
+                  active={currentView === 'pages'}
+                  onClick={() => setActiveView('pages')}
                 />
 
                 <div className="sidebar-nav__divider" />

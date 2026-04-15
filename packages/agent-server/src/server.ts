@@ -42,6 +42,7 @@ import {
   getProvidersList,
   getPublished,
   getPublishedDir,
+  listPublished,
   getSyncVersion,
   incrementViews,
   listProjectIndex,
@@ -55,6 +56,7 @@ import {
   loadProjects,
   loadUserRules,
   onSyncChange,
+  removePublished,
   saveConfig,
   saveProjectInstructions,
   savePublishedMeta,
@@ -553,6 +555,7 @@ export class AgentServer {
                 agentId: this.config.agentId,
                 version: VERSION,
                 gitHash: GIT_HASH,
+                domain: process.env.ANTON_HOST || undefined,
               }
 
               // Include update info if available
@@ -1458,6 +1461,12 @@ export class AgentServer {
       case 'publish_artifact':
         this.handlePublishArtifact(msg)
         break
+      case 'published_list':
+        this.handlePublishedList()
+        break
+      case 'unpublish':
+        this.handleUnpublish(msg)
+        break
 
       // ── Chat messages ──
       case 'message':
@@ -1633,6 +1642,32 @@ export class AgentServer {
         artifactId: msg.artifactId,
         publicUrl: '',
         slug: '',
+        success: false,
+        error: (err as Error).message,
+      })
+    }
+  }
+
+  private handlePublishedList() {
+    this.sendToClient(Channel.AI, {
+      type: 'published_list_response',
+      host: process.env.ANTON_HOST || undefined,
+      pages: listPublished(),
+    })
+  }
+
+  private handleUnpublish(msg: { slug: string }) {
+    try {
+      removePublished(msg.slug)
+      this.sendToClient(Channel.AI, {
+        type: 'unpublish_response',
+        slug: msg.slug,
+        success: true,
+      })
+    } catch (err: unknown) {
+      this.sendToClient(Channel.AI, {
+        type: 'unpublish_response',
+        slug: msg.slug,
         success: false,
         error: (err as Error).message,
       })

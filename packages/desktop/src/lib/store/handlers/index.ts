@@ -20,6 +20,7 @@ import { handleProjectMessage } from './projectHandler.js'
 import { handleProviderMessage } from './providerHandler.js'
 import { handleSessionMessage } from './sessionHandler.js'
 import type { MessageContext } from './shared.js'
+import { handlePagesMessage } from './pagesHandler.js'
 import { handleSkillMessage } from './skillHandler.js'
 import { handleToolMessage } from './toolHandler.js'
 
@@ -147,4 +148,5 @@ export function handleWsMessage(channel: number, msg: IncomingMessage): void {
   if (handleProjectMessage(aiMsg)) return
   if (handleConnectorMessage(aiMsg)) return
   if (handleSkillMessage(aiMsg)) return
+  if (handlePagesMessage(aiMsg)) return
 }

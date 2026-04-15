@@ -23,6 +23,7 @@ import { ProjectList } from './components/projects/ProjectList.js'
 import { ProjectView } from './components/projects/ProjectView.js'
 import { SettingsModal } from './components/settings/SettingsModal.js'
 import { SkillsPanel } from './components/skills/SkillsPanel.js'
+import { PagesView } from './components/pages/PagesView.js'
 import { WorkflowsPage } from './components/workflows/WorkflowsPage.js'
 import { connection } from './lib/connection.js'
 import { sanitizeTitle } from './lib/conversations.js'
@@ -281,7 +282,9 @@ export function App() {
                               ? 'Workflows'
                               : activeView === 'skills'
                                 ? 'Skills'
-                                : ''}
+                                : activeView === 'pages'
+                                  ? 'Pages'
+                                  : ''}
                 </h2>
               </div>
 
@@ -365,6 +368,7 @@ export function App() {
             {activeView === 'connectors' && <ConnectorsView />}
             {activeView === 'skills' && <SkillsPanel />}
             {activeView === 'workflows' && <WorkflowsPage />}
+            {activeView === 'pages' && <PagesView />}
             {activeView === 'projects' && <ProjectList />}
 
             <AnimatePresence>
