@@ -1,0 +1,84 @@
+packages/agent-core/src/harness/__fixtures__/check.ts
+  2d5ac6b7340430d4 216-217
+packages/agent-core/src/tools/update-project-context.ts
+  2d5ac6b7340430d4 1-48
+packages/agent-core/src/agent.ts
+  2d5ac6b7340430d4 43,633,729-739,825,948,1233
+packages/agent-core/src/tools/memory.ts
+  2d5ac6b7340430d4 150-196
+packages/agent-core/src/tools/factories.ts
+  2d5ac6b7340430d4 1-66
+packages/agent-core/src/tools/publish.ts
+  2d5ac6b7340430d4 321-364
+packages/agent-core/src/harness/tool-registry.ts
+  2d5ac6b7340430d4 2,4-6,8-11,13-14,19,70,79-80,92,98-99,111-113,118-129,138
+packages/agent-core/src/index.ts
+  2d5ac6b7340430d4 56-62
+packages/agent-core/src/tools/notification.ts
+  2d5ac6b7340430d4 37-64
+packages/agent-core/src/tools/database.ts
+  2d5ac6b7340430d4 108-148
+packages/agent-core/src/tools/_helpers.ts
+  2d5ac6b7340430d4 1-38
+packages/agent-core/src/tools/activate-workflow.ts
+  2d5ac6b7340430d4 12-45
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.3.0",
+  "base_commit_sha": "16c532023d9cda66e1aaa664eca59325236f6ea6",
+  "prompts": {
+    "2d5ac6b7340430d4": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "a30d512c-9d2b-4864-9d97-0a0730cb300b",
+        "model": "claude-opus-4-7"
+      },
+      "human_author": "Om Gupta",
+      "messages": [],
+      "total_additions": 687,
+      "total_deletions": 751,
+      "accepted_lines": 404,
+      "overriden_lines": 0
+    },
+    "9c82084046028fb6": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "6cb6e0c9-2742-4889-a168-64c9dd238d69",
+        "model": "claude-opus-4-6"
+      },
+      "human_author": null,
+      "messages": [],
+      "total_additions": 0,
+      "total_deletions": 0,
+      "accepted_lines": 169,
+      "overriden_lines": 0
+    },
+    "b299fb53cb40af39": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "30011bfc-eb0d-4fba-9639-68381d221d21",
+        "model": "claude-opus-4-6"
+      },
+      "human_author": null,
+      "messages": [],
+      "total_additions": 0,
+      "total_deletions": 0,
+      "accepted_lines": 326,
+      "overriden_lines": 0
+    },
+    "d0b23d44e70ce0f4": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "9fe6bb27-5421-43d0-b52f-a64fe32ad91f",
+        "model": "claude-opus-4-6"
+      },
+      "human_author": null,
+      "messages": [],
+      "total_additions": 0,
+      "total_deletions": 0,
+      "accepted_lines": 574,
+      "overriden_lines": 0
+    }
+  }
+}
