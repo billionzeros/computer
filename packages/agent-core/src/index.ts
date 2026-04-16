@@ -53,12 +53,9 @@ export {
   type CommandResult,
 } from './commands.js'
 export { executePublish, type PublishInput } from './tools/publish.js'
-export { buildDatabaseTool } from './tools/database.js'
-export { buildMemoryTool } from './tools/memory.js'
-export { buildNotificationTool } from './tools/notification.js'
-export { buildPublishTool } from './tools/publish.js'
-export { buildActivateWorkflowTool } from './tools/activate-workflow.js'
-export { buildUpdateProjectContextTool } from './tools/update-project-context.js'
+// Individual tool factories (buildMemoryTool, buildDatabaseTool, etc.) are
+// internal to agent-core — external callers should use buildAntonCoreTools
+// or, for the Pi SDK path, go through buildTools() from './agent.js'.
 export { buildAntonCoreTools, type AntonCoreToolContext } from './tools/factories.js'
 export { initTracing, flushTraces, hashPromptVersion } from './tracing.js'
 export { closeBrowserSession } from './tools/browser.js'

@@ -41,6 +41,7 @@ import { executePlan } from './tools/plan.js'
 // process and network tools removed — shell handles ps/kill/ping/curl
 import { executePublish } from './tools/publish.js'
 import { buildAntonCoreTools } from './tools/factories.js'
+import { defineTool, toolResult } from './tools/_helpers.js'
 import { executeRead } from './tools/read.js'
 import { setForbiddenPaths } from './tools/security.js'
 import type { SharedStateHandler } from './tools/shared-state.js'
@@ -312,30 +313,7 @@ export type AskUserHandler = (questions: AskUserQuestion[]) => Promise<Record<st
  */
 export const CORE_SYSTEM_PROMPT = loadCoreSystemPrompt()
 
-/**
- * Wrap a string result into the AgentToolResult format pi SDK expects.
- */
-function toolResult(output: string, isError = false) {
-  const content: TextContent[] = [{ type: 'text', text: output }]
-  return { content, details: { raw: output, isError } }
-}
-
-/**
- * Type-safe tool factory. Infers the params type from the typebox schema
- * so each execute() gets properly typed params, while the returned tool
- * is widened to AgentTool<TSchema> for the heterogeneous array.
- */
-function defineTool<T extends TSchema>(
-  def: Omit<AgentTool<T>, 'execute'> & {
-    execute: (
-      toolCallId: string,
-      params: Static<T>,
-      signal?: AbortSignal,
-    ) => Promise<AgentToolResult<unknown>>
-  },
-): AgentTool {
-  return def as AgentTool
-}
+// defineTool + toolResult helpers live in tools/_helpers.ts — imported at top of this file.
 
 /**
  * Build the tool set. Shared across all sessions — tools are stateless,
