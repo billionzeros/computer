@@ -13,6 +13,18 @@ export interface CodexAgentMessageItem {
   text: string
 }
 
+/**
+ * Model reasoning summary. Codex only emits these when a reasoning
+ * summary mode is enabled (e.g. `-c model_reasoning_summary="detailed"`);
+ * by default Codex suppresses them from the JSONL stream, so without the
+ * flag no reasoning item appears regardless of adapter support.
+ */
+export interface CodexReasoningItem {
+  id: string
+  type: 'reasoning'
+  text: string
+}
+
 export interface CodexCommandExecutionItem {
   id: string
   type: 'command_execution'
@@ -48,7 +60,11 @@ export interface CodexMcpResult {
   structured_content?: unknown
 }
 
-export type CodexItem = CodexAgentMessageItem | CodexCommandExecutionItem | CodexMcpToolCallItem
+export type CodexItem =
+  | CodexAgentMessageItem
+  | CodexReasoningItem
+  | CodexCommandExecutionItem
+  | CodexMcpToolCallItem
 
 // ── Stream event types ──────────────────────────────────────────────
 

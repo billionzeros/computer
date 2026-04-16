@@ -28,6 +28,7 @@ import {
   codexSimpleExpected,
   codexToolCallExpected,
   codexErrorExpected,
+  codexMcpRealExpected,
 } from './expected.js'
 
 const __dirname = fileURLToPath(new URL('.', import.meta.url))
@@ -49,6 +50,10 @@ const cases: Case[] = [
   { name: 'codex-simple', adapter: codex, fixture: 'codex-simple.ndjson', expected: codexSimpleExpected },
   { name: 'codex-tool-call', adapter: codex, fixture: 'codex-tool-call.ndjson', expected: codexToolCallExpected },
   { name: 'codex-error', adapter: codex, fixture: 'codex-error.ndjson', expected: codexErrorExpected },
+  // Real stdout captured from Codex CLI in production (Apr 2026). If
+  // this fails, Codex changed its mcp_tool_call item shape again and
+  // the adapter needs to be updated to match.
+  { name: 'codex-mcp-real', adapter: codex, fixture: 'codex-mcp-real.ndjson', expected: codexMcpRealExpected },
 ]
 
 function runFixture(c: Case): SessionEvent[] {
@@ -453,6 +458,27 @@ const identityCases: IdentityCase[] = [
   {
     name: 'Scope section (prevents over-application)',
     assert: (b) => (b.includes('## Scope') ? null : 'missing "Scope" header'),
+  },
+  {
+    name: 'MCP server-preference section',
+    assert: (b) =>
+      b.includes('## MCP server preference') ? null : 'missing "MCP server preference" header',
+  },
+  {
+    name: 'explicit anton-over-vendor rule',
+    assert: (b) =>
+      b.includes('ALWAYS prefer the `anton` MCP server') &&
+      b.includes('codex_apps') &&
+      b.includes('anton:gmail_search_emails')
+        ? null
+        : 'missing explicit rule about preferring anton over vendor MCP servers',
+  },
+  {
+    name: 'guard against sending user to a vendor auth flow',
+    assert: (b) =>
+      b.includes('Settings → Connectors') && b.includes("Do NOT ask the user to install")
+        ? null
+        : 'missing guidance to redirect users to Anton Settings instead of vendor auth',
   },
   {
     name: 'every core tool name is mentioned',

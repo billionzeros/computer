@@ -115,3 +115,37 @@ export const codexToolCallExpected: SessionEvent[] = [
 export const codexErrorExpected: SessionEvent[] = [
   { type: 'error', message: 'stream error: 401 Unauthorized', code: 'not_authed' },
 ]
+
+/**
+ * Captured from production Codex stdout (Apr 16, 2026). Exercises the
+ * real shape of an mcp_tool_call item: new type name, new field names
+ * (server/tool not server_label/tool_name), object arguments and
+ * object result with a content[] array. Guards against accidentally
+ * reverting to the pre-release shape.
+ */
+export const codexMcpRealExpected: SessionEvent[] = [
+  { type: 'text', content: 'Using gmail:gmail to inspect your inbox.' },
+  {
+    type: 'tool_call',
+    id: 'item_2',
+    name: 'codex_apps:gmail_search_emails',
+    input: { query: 'in:inbox', max_results: 10 },
+  },
+  {
+    type: 'tool_result',
+    id: 'item_2',
+    output: '{"emails":[]}',
+    isError: false,
+  },
+  { type: 'text', content: 'Your latest inbox messages I found are listed above.' },
+  {
+    type: 'done',
+    usage: {
+      inputTokens: 2000,
+      outputTokens: 300,
+      totalTokens: 2300,
+      cacheReadTokens: 0,
+      cacheWriteTokens: 0,
+    },
+  },
+]

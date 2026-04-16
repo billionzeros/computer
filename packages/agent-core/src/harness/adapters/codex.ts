@@ -71,6 +71,11 @@ export class CodexAdapter implements HarnessAdapter {
         '--json',
         '--full-auto',
         '--skip-git-repo-check',
+        // Surface reasoning summaries in the JSONL stream so we can
+        // render them as thinking blocks in the UI. Codex hides these
+        // by default.
+        '-c',
+        'model_reasoning_summary="detailed"',
       ]
 
       if (opts.model) {
@@ -97,6 +102,11 @@ export class CodexAdapter implements HarnessAdapter {
       'never',
       '--full-auto',
       '--skip-git-repo-check',
+      // Surface reasoning summaries in the JSONL stream so we can
+      // render them as thinking blocks in the UI. Codex hides these
+      // by default.
+      '-c',
+      'model_reasoning_summary="detailed"',
     ]
 
     if (opts.model) {
@@ -214,6 +224,12 @@ export class CodexAdapter implements HarnessAdapter {
     switch (item.type) {
       case 'agent_message':
         return [{ type: 'text', content: item.text }]
+      case 'reasoning':
+        // Codex emits reasoning summaries (when enabled via
+        // model_reasoning_summary). Surface as thinking blocks so the
+        // desktop renders them and the mirror persists them, matching
+        // the Pi SDK and Claude Code adapter behavior.
+        return item.text ? [{ type: 'thinking', text: item.text }] : []
       case 'command_execution':
         return this.parseCommandResult(item)
       case 'mcp_tool_call':
