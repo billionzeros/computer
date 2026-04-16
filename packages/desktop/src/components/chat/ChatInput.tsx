@@ -9,7 +9,6 @@ import { sessionStore } from '../../lib/store/sessionStore.js'
 import { AskUserInline } from './AskUserInline.js'
 import { ConnectorBanner, ConnectorPill } from './ConnectorToolbar.js'
 import { ModelSelector } from './ModelSelector.js'
-import { HarnessProviderSwitch } from './HarnessProviderSwitch.js'
 import type { RichInputHandle } from './RichInput.js'
 import { RichInput } from './RichInput.js'
 import { SlashCommandMenu } from './SlashCommandMenu.js'
@@ -347,7 +346,6 @@ export function ChatInput({
               </button>
             </div>
             <div className="composer__toolbar-right">
-              <HarnessProviderSwitch />
               <ModelSelector />
               {isCurrentSessionWorking ? (
                 <>
