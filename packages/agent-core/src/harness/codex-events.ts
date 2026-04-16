@@ -22,18 +22,33 @@ export interface CodexCommandExecutionItem {
   status: 'in_progress' | 'completed'
 }
 
-export interface CodexMcpCallItem {
+/**
+ * MCP tool invocation. Codex emits this for every MCP server call,
+ * including its own hosted "codex_apps" server (Gmail, Calendar, GitHub,
+ * etc.) and any user-registered server like Anton's MCP shim.
+ *
+ * NOTE: Field names changed in newer Codex versions — type is now
+ * `mcp_tool_call` (was `mcp_call`), `server` (was `server_label`),
+ * `tool` (was `tool_name`); `arguments` is a parsed object (was a JSON
+ * string); `result` is an MCP-style structured response (was a string).
+ */
+export interface CodexMcpToolCallItem {
   id: string
-  type: 'mcp_call'
-  server_label: string
-  tool_name: string
-  arguments: string
-  result?: string
-  error?: string
+  type: 'mcp_tool_call'
+  server: string
+  tool: string
+  arguments: Record<string, unknown>
+  result: CodexMcpResult | null
+  error: string | null
   status: 'in_progress' | 'completed'
 }
 
-export type CodexItem = CodexAgentMessageItem | CodexCommandExecutionItem | CodexMcpCallItem
+export interface CodexMcpResult {
+  content?: Array<{ type: 'text'; text: string } | { type: string; [key: string]: unknown }>
+  structured_content?: unknown
+}
+
+export type CodexItem = CodexAgentMessageItem | CodexCommandExecutionItem | CodexMcpToolCallItem
 
 // ── Stream event types ──────────────────────────────────────────────
 

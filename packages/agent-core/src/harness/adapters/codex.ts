@@ -10,10 +10,9 @@ import type { SessionEvent } from '../../session.js'
 import type { DetectResult, EnvOpts, HarnessAdapter, SpawnOpts } from '../adapter.js'
 import type {
   CodexCommandExecutionItem,
-  CodexItem,
   CodexItemCompletedEvent,
   CodexItemStartedEvent,
-  CodexMcpCallItem,
+  CodexMcpToolCallItem,
   CodexStreamEvent,
 } from '../codex-events.js'
 
@@ -202,7 +201,7 @@ export class CodexAdapter implements HarnessAdapter {
     switch (item.type) {
       case 'command_execution':
         return this.parseCommandStart(item)
-      case 'mcp_call':
+      case 'mcp_tool_call':
         return this.parseMcpCallStart(item)
       default:
         return []
@@ -217,7 +216,7 @@ export class CodexAdapter implements HarnessAdapter {
         return [{ type: 'text', content: item.text }]
       case 'command_execution':
         return this.parseCommandResult(item)
-      case 'mcp_call':
+      case 'mcp_tool_call':
         return this.parseMcpCallResult(item)
       default:
         return []
@@ -246,33 +245,53 @@ export class CodexAdapter implements HarnessAdapter {
     ]
   }
 
-  private parseMcpCallStart(item: CodexMcpCallItem): SessionEvent[] {
+  private parseMcpCallStart(item: CodexMcpToolCallItem): SessionEvent[] {
     return [
       {
         type: 'tool_call',
         id: item.id,
-        name: `${item.server_label}:${item.tool_name}`,
-        input: this.safeParseJson(item.arguments),
+        name: `${item.server}:${item.tool}`,
+        input: item.arguments ?? {},
       },
     ]
   }
 
-  private parseMcpCallResult(item: CodexMcpCallItem): SessionEvent[] {
+  private parseMcpCallResult(item: CodexMcpToolCallItem): SessionEvent[] {
     return [
       {
         type: 'tool_result',
         id: item.id,
-        output: item.result ?? item.error ?? '',
+        output: this.flattenMcpResult(item),
         isError: Boolean(item.error),
       },
     ]
   }
 
-  private safeParseJson(str: string): Record<string, unknown> {
-    try {
-      return JSON.parse(str)
-    } catch {
-      return { raw: str }
+  /**
+   * Codex's MCP result is `{ content: [{type:'text', text}, ...], structured_content? }`.
+   * We collapse it to a single string for the SessionEvent (which is
+   * what Pi SDK tool_results carry too). Errors win over results.
+   */
+  private flattenMcpResult(item: CodexMcpToolCallItem): string {
+    if (item.error) return item.error
+    const result = item.result
+    if (!result) return ''
+    if (Array.isArray(result.content) && result.content.length > 0) {
+      const chunks: string[] = []
+      for (const c of result.content) {
+        if (c && typeof c === 'object' && 'type' in c && c.type === 'text' && typeof (c as { text?: unknown }).text === 'string') {
+          chunks.push((c as { text: string }).text)
+        }
+      }
+      if (chunks.length > 0) return chunks.join('\n')
     }
+    if (result.structured_content !== undefined) {
+      try {
+        return JSON.stringify(result.structured_content)
+      } catch {
+        // fall through
+      }
+    }
+    return ''
   }
 }
