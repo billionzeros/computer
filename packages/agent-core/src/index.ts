@@ -68,6 +68,8 @@ export {
   type McpToolSchema,
   type McpToolResult,
   AntonToolRegistry,
+  type AntonToolRegistryOpts,
+  type HarnessSessionContext,
   buildHarnessContextPrompt,
   type HarnessContextPromptOpts,
   type WorkflowEntry,

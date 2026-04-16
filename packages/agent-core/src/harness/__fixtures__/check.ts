@@ -178,3 +178,116 @@ if (layerFailed > 0) {
 }
 
 console.log(`All ${layerCases.length} prompt-layer checks passed`)
+
+// ── Tool registry smoke tests ──────────────────────────────────────
+// Exercises AntonToolRegistry composition: static tools always present,
+// project-scoped tools appear only when the session context has a
+// projectId + handler, connector tools flow through the AgentTool→MCP
+// adapter.
+
+import { AntonToolRegistry } from '../tool-registry.js'
+import { Type } from '@sinclair/typebox'
+import type { AgentTool } from '@mariozechner/pi-agent-core'
+
+// Fake connector tool built with the same shape Pi SDK connectors use.
+const fakeConnectorTool: AgentTool = {
+  name: 'github_list_issues',
+  label: 'GitHub: List Issues',
+  description: 'List open issues in a repository.',
+  parameters: Type.Object({
+    repo: Type.String({ description: 'owner/repo' }),
+  }),
+  async execute(_id, params) {
+    return {
+      content: [{ type: 'text', text: `issues for ${(params as { repo: string }).repo}` }],
+      details: {},
+    }
+  },
+}
+
+interface RegistryCase {
+  name: string
+  setup: () => AntonToolRegistry
+  sessionId: string
+  mustInclude: string[]
+  mustNotInclude?: string[]
+}
+
+const STATIC_NAMES = [
+  'memory_save',
+  'memory_recall',
+  'memory_list',
+  'notify',
+  'database_query',
+  'publish',
+]
+
+const registryCases: RegistryCase[] = [
+  {
+    name: 'static-tools-always-present',
+    setup: () => new AntonToolRegistry(),
+    sessionId: 'sess-bare',
+    mustInclude: STATIC_NAMES,
+    mustNotInclude: ['activate_workflow', 'update_project_context', 'github_list_issues'],
+  },
+  {
+    name: 'project-context-adds-update-project-context',
+    setup: () =>
+      new AntonToolRegistry({
+        getSessionContext: () => ({ projectId: 'proj_1' }),
+      }),
+    sessionId: 'sess-p',
+    mustInclude: [...STATIC_NAMES, 'update_project_context'],
+    mustNotInclude: ['activate_workflow'],
+  },
+  {
+    name: 'project-plus-workflow-handler-adds-activate-workflow',
+    setup: () =>
+      new AntonToolRegistry({
+        getSessionContext: () => ({
+          projectId: 'proj_1',
+          onActivateWorkflow: async () => 'ok',
+        }),
+      }),
+    sessionId: 'sess-pw',
+    mustInclude: [...STATIC_NAMES, 'activate_workflow', 'update_project_context'],
+  },
+  {
+    name: 'connector-tools-flow-through-adapter',
+    setup: () =>
+      new AntonToolRegistry({
+        connectorManager: { getAllTools: () => [fakeConnectorTool] },
+      }),
+    sessionId: 'sess-c',
+    mustInclude: [...STATIC_NAMES, 'github_list_issues'],
+  },
+]
+
+let regFailed = 0
+for (const c of registryCases) {
+  try {
+    const reg = c.setup()
+    const names = reg.getTools(c.sessionId).map((t) => t.name)
+    const missing = c.mustInclude.filter((n) => !names.includes(n))
+    const leaked = (c.mustNotInclude || []).filter((n) => names.includes(n))
+    if (missing.length === 0 && leaked.length === 0) {
+      console.log(`✓ registry: ${c.name}`)
+    } else {
+      regFailed++
+      console.error(`✗ registry: ${c.name}`)
+      if (missing.length) console.error('  missing:', missing)
+      if (leaked.length) console.error('  leaked:', leaked)
+      console.error('  names:', names)
+    }
+  } catch (err) {
+    regFailed++
+    console.error(`✗ registry: ${c.name} (threw)`, err)
+  }
+}
+
+if (regFailed > 0) {
+  console.error(`\n${regFailed}/${registryCases.length} registry checks failed`)
+  process.exit(1)
+}
+
+console.log(`All ${registryCases.length} registry checks passed`)

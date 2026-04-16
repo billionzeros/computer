@@ -272,7 +272,8 @@ export class AgentServer {
   private ptys: Map<string, PtyHandle> = new Map()
   private activeWorkspacePath: string | null = null
   private mcpIpcServer: import('@anton/agent-core').McpIpcServer | null = null
-  private toolRegistry = new AntonToolRegistry()
+  private harnessSessionContexts = new Map<string, import('@anton/agent-core').HarnessSessionContext>()
+  private toolRegistry!: AntonToolRegistry
   private pendingLoginProc: import('node:child_process').ChildProcess | null = null
 
   constructor(config: AgentConfig) {
@@ -287,6 +288,15 @@ export class AgentServer {
     this.connectorManager = new ConnectorManager(CONNECTOR_FACTORIES, (id: string) =>
       this.resolveConnectorEnv(id),
     )
+
+    // Tool registry for harness sessions: exposes static Anton tools +
+    // dynamic per-session tools (connectors, activate_workflow,
+    // update_project_context) via MCP. Must be constructed after
+    // connectorManager is assigned.
+    this.toolRegistry = new AntonToolRegistry({
+      connectorManager: this.connectorManager,
+      getSessionContext: (sessionId) => this.harnessSessionContexts.get(sessionId),
+    })
 
     // Clean expired sessions on startup
     const ttl = config.sessions?.ttlDays ?? 7
@@ -1753,6 +1763,20 @@ export class AgentServer {
           log.error({ sessionId: msg.id }, 'MCP IPC server not initialized — harness session cannot authenticate')
         }
 
+        // Register the harness-session context so the tool registry can
+        // expose project-scoped tools (activate_workflow,
+        // update_project_context) and surface-filtered connector tools.
+        this.harnessSessionContexts.set(msg.id, {
+          projectId: harnessProjectId,
+          // Harness sessions today only run on the desktop surface. When
+          // we start routing harness replies through Slack/Telegram, this
+          // should pick up the same surface string the Pi SDK uses.
+          surface: 'desktop',
+          onActivateWorkflow: harnessProjectId
+            ? this.buildActivateWorkflowHandler()
+            : undefined,
+        })
+
         // Per-turn system-prompt builder: mirror Pi SDK's
         // Session.getSystemPrompt() context layers (project, memory,
         // workflows, surface) so harness turns see the same Anton-owned
@@ -2174,6 +2198,9 @@ export class AgentServer {
       deletePersistedSession(msg.id)
       if (wasHarness && this.mcpIpcServer) {
         this.mcpIpcServer.unregisterSession(msg.id)
+      }
+      if (wasHarness) {
+        this.harnessSessionContexts.delete(msg.id)
       }
     } catch (err: unknown) {
       log.error({ err, sessionId: msg.id }, 'Error destroying session')

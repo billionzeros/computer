@@ -11,7 +11,12 @@ export {
   type McpToolSchema,
   type McpToolResult,
 } from './mcp-ipc-handler.js'
-export { AntonToolRegistry } from './tool-registry.js'
+export {
+  AntonToolRegistry,
+  agentToolToMcpDefinition,
+  type AntonToolRegistryOpts,
+  type HarnessSessionContext,
+} from './tool-registry.js'
 export {
   buildHarnessContextPrompt,
   buildCurrentContextLayer,
