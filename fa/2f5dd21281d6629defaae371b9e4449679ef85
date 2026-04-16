@@ -1,0 +1,83 @@
+packages/desktop/src/lib/connection.ts
+  2d5ac6b7340430d4 208-216
+packages/desktop/src/lib/store/handlers/sessionHandler.ts
+  2d5ac6b7340430d4 206-222
+packages/desktop/src/components/chat/HarnessProviderSwitch.tsx
+  2d5ac6b7340430d4 1-151
+packages/desktop/src/lib/store/sessionStore.ts
+  2d5ac6b7340430d4 205,420-421
+packages/desktop/src/components/chat/ChatInput.tsx
+  2d5ac6b7340430d4 12,350
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.3.0",
+  "base_commit_sha": "fa2f5dd21281d6629defaae371b9e4449679ef85",
+  "prompts": {
+    "2d5ac6b7340430d4": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "a30d512c-9d2b-4864-9d97-0a0730cb300b",
+        "model": "claude-opus-4-7"
+      },
+      "human_author": "Om Gupta",
+      "messages": [],
+      "total_additions": 1341,
+      "total_deletions": 0,
+      "accepted_lines": 1341,
+      "overriden_lines": 0
+    },
+    "9c82084046028fb6": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "6cb6e0c9-2742-4889-a168-64c9dd238d69",
+        "model": "claude-opus-4-6"
+      },
+      "human_author": null,
+      "messages": [],
+      "total_additions": 0,
+      "total_deletions": 0,
+      "accepted_lines": 169,
+      "overriden_lines": 0
+    },
+    "9eb62e34765fb8dc": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "a68d8df9-5adc-4326-b74e-c5bb3eed3d20",
+        "model": "claude-opus-4-6"
+      },
+      "human_author": null,
+      "messages": [],
+      "total_additions": 0,
+      "total_deletions": 0,
+      "accepted_lines": 0,
+      "overriden_lines": 0
+    },
+    "b299fb53cb40af39": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "30011bfc-eb0d-4fba-9639-68381d221d21",
+        "model": "claude-opus-4-6"
+      },
+      "human_author": null,
+      "messages": [],
+      "total_additions": 0,
+      "total_deletions": 0,
+      "accepted_lines": 407,
+      "overriden_lines": 17
+    },
+    "d0b23d44e70ce0f4": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "9fe6bb27-5421-43d0-b52f-a64fe32ad91f",
+        "model": "claude-opus-4-6"
+      },
+      "human_author": null,
+      "messages": [],
+      "total_additions": 0,
+      "total_deletions": 0,
+      "accepted_lines": 896,
+      "overriden_lines": 24
+    }
+  }
+}
