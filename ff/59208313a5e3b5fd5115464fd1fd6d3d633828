@@ -1,0 +1,62 @@
+specs/operations/HARNESS.md
+  2d5ac6b7340430d4 1-96
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.3.0",
+  "base_commit_sha": "ff59208313a5e3b5fd5115464fd1fd6d3d633828",
+  "prompts": {
+    "2d5ac6b7340430d4": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "a30d512c-9d2b-4864-9d97-0a0730cb300b",
+        "model": "claude-opus-4-7"
+      },
+      "human_author": "Om Gupta",
+      "messages": [],
+      "total_additions": 0,
+      "total_deletions": 0,
+      "accepted_lines": 96,
+      "overriden_lines": 0
+    },
+    "9c82084046028fb6": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "6cb6e0c9-2742-4889-a168-64c9dd238d69",
+        "model": "claude-opus-4-6"
+      },
+      "human_author": null,
+      "messages": [],
+      "total_additions": 0,
+      "total_deletions": 0,
+      "accepted_lines": 169,
+      "overriden_lines": 0
+    },
+    "b299fb53cb40af39": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "30011bfc-eb0d-4fba-9639-68381d221d21",
+        "model": "claude-opus-4-6"
+      },
+      "human_author": null,
+      "messages": [],
+      "total_additions": 0,
+      "total_deletions": 0,
+      "accepted_lines": 326,
+      "overriden_lines": 0
+    },
+    "d0b23d44e70ce0f4": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "9fe6bb27-5421-43d0-b52f-a64fe32ad91f",
+        "model": "claude-opus-4-6"
+      },
+      "human_author": null,
+      "messages": [],
+      "total_additions": 0,
+      "total_deletions": 0,
+      "accepted_lines": 574,
+      "overriden_lines": 0
+    }
+  }
+}
