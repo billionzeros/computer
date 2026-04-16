@@ -77,4 +77,7 @@ export {
   buildHarnessContextPrompt,
   type HarnessContextPromptOpts,
   type WorkflowEntry,
+  synthesizeHarnessTurn,
+  ensureHarnessSessionInit,
+  appendHarnessTurn,
 } from './harness/index.js'

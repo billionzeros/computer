@@ -99,6 +99,9 @@ import {
   createMcpIpcServer,
   buildHarnessContextPrompt,
   assembleConversationContext,
+  ensureHarnessSessionInit,
+  synthesizeHarnessTurn,
+  appendHarnessTurn,
 } from '@anton/agent-core'
 import { CONNECTOR_FACTORIES, ConnectorManager } from '@anton/connectors'
 import { createLogger } from '@anton/logger'
@@ -1837,6 +1840,107 @@ export class AgentServer {
           })
         }
 
+        // Initialize the on-disk session (meta.json + empty
+        // messages.jsonl) so harness sessions appear in the index and
+        // exports / desktop search pick them up the same way Pi SDK
+        // sessions do.
+        try {
+          ensureHarnessSessionInit({
+            sessionId: msg.id,
+            projectId: harnessProjectId,
+            provider: providerName,
+            model,
+          })
+        } catch (err) {
+          log.warn(
+            { err, sessionId: msg.id },
+            'failed to initialize harness session on disk — mirror will be incomplete',
+          )
+        }
+
+        // Per-turn mirror: synthesize SessionMessages from the turn's
+        // events, append to messages.jsonl, capture update_project_context
+        // tool results, and update project history / summary — matching
+        // the Pi SDK path's post-turn behavior.
+        const mirrorProjectId = harnessProjectId
+        const onTurnEnd = async (turn: {
+          userMessage: string
+          events: Parameters<
+            NonNullable<ConstructorParameters<typeof HarnessSession>[0]['onTurnEnd']>
+          >[0]['events']
+        }) => {
+          // Synthesize + append
+          const messages = synthesizeHarnessTurn(turn.userMessage, turn.events)
+          const firstText = turn.events.find((e) => e.type === 'text') as
+            | { content: string }
+            | undefined
+          appendHarnessTurn({
+            sessionId: msg.id,
+            projectId: mirrorProjectId,
+            messages,
+            firstTitle: firstText?.content,
+          })
+
+          // Capture update_project_context if called this turn. Walks
+          // the event stream the same way the Pi SDK turn loop does.
+          const pendingToolNames = new Map<string, string>()
+          let projectContextUpdate: { sessionSummary: string; projectSummary?: string } | undefined
+          for (const ev of turn.events) {
+            if (ev.type === 'tool_call') {
+              pendingToolNames.set(ev.id, ev.name)
+            } else if (ev.type === 'tool_result') {
+              if (pendingToolNames.get(ev.id) === 'update_project_context') {
+                try {
+                  const parsed = JSON.parse(ev.output) as {
+                    sessionSummary?: unknown
+                    projectSummary?: unknown
+                  }
+                  if (typeof parsed.sessionSummary === 'string') {
+                    projectContextUpdate = {
+                      sessionSummary: parsed.sessionSummary,
+                      projectSummary:
+                        typeof parsed.projectSummary === 'string'
+                          ? parsed.projectSummary
+                          : undefined,
+                    }
+                  }
+                } catch {
+                  /* malformed — ignore */
+                }
+              }
+              pendingToolNames.delete(ev.id)
+            }
+          }
+
+          // Project history: only for project-scoped harness sessions
+          // that have something to record.
+          if (mirrorProjectId && firstText?.content) {
+            try {
+              const title = firstText.content.slice(0, 60).split('\n')[0]
+              const sessionSummary = projectContextUpdate?.sessionSummary || title
+              if (projectContextUpdate?.projectSummary) {
+                updateProjectContext(mirrorProjectId, 'summary', projectContextUpdate.projectSummary)
+              }
+              appendSessionHistory(mirrorProjectId, {
+                sessionId: msg.id,
+                title,
+                summary: sessionSummary,
+                ts: Date.now(),
+              })
+              updateProjectStats(mirrorProjectId)
+              const updatedProject = loadProject(mirrorProjectId)
+              if (updatedProject) {
+                this.sendToClient(Channel.AI, { type: 'project_updated', project: updatedProject })
+              }
+            } catch (err) {
+              log.warn(
+                { err, sessionId: msg.id, projectId: mirrorProjectId },
+                'harness project-history update failed',
+              )
+            }
+          }
+        }
+
         const session = new HarnessSession({
           id: msg.id,
           provider: providerName,
@@ -1847,6 +1951,7 @@ export class AgentServer {
           authToken,
           cwd,
           buildSystemPrompt,
+          onTurnEnd,
         })
         this.sessions.set(msg.id, session)
 

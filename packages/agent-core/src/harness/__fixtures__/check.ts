@@ -384,3 +384,136 @@ if (snapFailed > 0) {
 }
 
 console.log(`All ${layerSnapshots.length} snapshot checks passed`)
+
+// ── Mirror synthesizer tests ───────────────────────────────────────
+// Pure-function coverage of synthesizeHarnessTurn. No disk I/O.
+
+import { synthesizeHarnessTurn } from '../mirror.js'
+
+interface MirrorCase {
+  name: string
+  userMessage: string
+  events: SessionEvent[]
+  expectedRoles: string[]
+  // Optional content checks keyed by message index
+  expectedContent?: Record<number, unknown>
+}
+
+const mirrorCases: MirrorCase[] = [
+  {
+    name: 'user + assistant text only',
+    userMessage: 'hi',
+    events: [{ type: 'text', content: 'Hello!' }],
+    expectedRoles: ['user', 'assistant'],
+    expectedContent: {
+      0: [{ type: 'text', text: 'hi' }],
+      1: [{ type: 'text', text: 'Hello!' }],
+    },
+  },
+  {
+    name: 'assistant thinks + uses tool + gets result + replies',
+    userMessage: 'list files',
+    events: [
+      { type: 'thinking', text: 'I should list files.' },
+      { type: 'tool_call', id: 't1', name: 'Bash', input: { command: 'ls' } },
+      { type: 'tool_result', id: 't1', output: 'a.txt\nb.txt' },
+      { type: 'text', content: 'Two files.' },
+    ],
+    expectedRoles: ['user', 'assistant', 'tool', 'assistant'],
+    expectedContent: {
+      1: [
+        { type: 'thinking', thinking: 'I should list files.' },
+        { type: 'tool_use', id: 't1', name: 'Bash', input: { command: 'ls' } },
+      ],
+      2: [{ type: 'tool_result', tool_use_id: 't1', content: 'a.txt\nb.txt' }],
+      3: [{ type: 'text', text: 'Two files.' }],
+    },
+  },
+  {
+    name: 'multiple tool_calls + batched results',
+    userMessage: 'check both',
+    events: [
+      { type: 'tool_call', id: 'a', name: 'Bash', input: { command: 'ls' } },
+      { type: 'tool_call', id: 'b', name: 'Bash', input: { command: 'pwd' } },
+      { type: 'tool_result', id: 'a', output: 'x' },
+      { type: 'tool_result', id: 'b', output: '/tmp' },
+      { type: 'text', content: 'Done.' },
+    ],
+    expectedRoles: ['user', 'assistant', 'tool', 'assistant'],
+    expectedContent: {
+      2: [
+        { type: 'tool_result', tool_use_id: 'a', content: 'x' },
+        { type: 'tool_result', tool_use_id: 'b', content: '/tmp' },
+      ],
+    },
+  },
+  {
+    name: 'tool error marks is_error',
+    userMessage: 'run',
+    events: [
+      { type: 'tool_call', id: 't1', name: 'shell', input: { command: 'false' } },
+      { type: 'tool_result', id: 't1', output: 'exit 1', isError: true },
+    ],
+    expectedRoles: ['user', 'assistant', 'tool'],
+    expectedContent: {
+      2: [{ type: 'tool_result', tool_use_id: 't1', content: 'exit 1', is_error: true }],
+    },
+  },
+  {
+    name: 'metadata events (done/error/title) are ignored',
+    userMessage: 'hi',
+    events: [
+      { type: 'title_update', title: 'Greeting' },
+      { type: 'text', content: 'Hi.' },
+      { type: 'done', usage: { inputTokens: 1, outputTokens: 1, totalTokens: 2 } },
+    ],
+    expectedRoles: ['user', 'assistant'],
+  },
+  {
+    name: 'empty events only emits user message',
+    userMessage: 'hi',
+    events: [],
+    expectedRoles: ['user'],
+  },
+]
+
+let mirrorFailed = 0
+for (const c of mirrorCases) {
+  try {
+    const msgs = synthesizeHarnessTurn(c.userMessage, c.events, 1000)
+    const roles = msgs.map((m) => m.role)
+    const rolesMatch = JSON.stringify(roles) === JSON.stringify(c.expectedRoles)
+    let contentOk = true
+    if (c.expectedContent) {
+      for (const [idxStr, expected] of Object.entries(c.expectedContent)) {
+        const actual = msgs[Number(idxStr)]?.content
+        if (JSON.stringify(actual) !== JSON.stringify(expected)) {
+          contentOk = false
+          console.error(`  content mismatch at index ${idxStr}`)
+          console.error('    expected:', JSON.stringify(expected))
+          console.error('    actual:  ', JSON.stringify(actual))
+        }
+      }
+    }
+    if (rolesMatch && contentOk) {
+      console.log(`✓ mirror: ${c.name}`)
+    } else {
+      mirrorFailed++
+      console.error(`✗ mirror: ${c.name}`)
+      if (!rolesMatch) {
+        console.error('  expected roles:', c.expectedRoles)
+        console.error('  actual roles:  ', roles)
+      }
+    }
+  } catch (err) {
+    mirrorFailed++
+    console.error(`✗ mirror: ${c.name} (threw)`, err)
+  }
+}
+
+if (mirrorFailed > 0) {
+  console.error(`\n${mirrorFailed}/${mirrorCases.length} mirror checks failed`)
+  process.exit(1)
+}
+
+console.log(`All ${mirrorCases.length} mirror checks passed`)

@@ -42,6 +42,18 @@ export interface HarnessSessionOpts {
    * When set, `systemPrompt` is ignored.
    */
   buildSystemPrompt?: (userMessage: string, turnIndex: number) => Promise<string>
+  /**
+   * Called once per turn after the CLI exits, before the terminal `done`
+   * event is yielded. Gives the caller the user message and the ordered
+   * list of SessionEvents the turn produced — intended for the
+   * conversation mirror (messages.jsonl append, project-context
+   * capture, etc.). Errors from the callback are logged and swallowed
+   * so they never break the stream.
+   */
+  onTurnEnd?: (turn: {
+    userMessage: string
+    events: SessionEvent[]
+  }) => void | Promise<void>
   maxBudgetUsd?: number
 }
 
@@ -58,6 +70,7 @@ export class HarnessSession {
   private cwd?: string
   private systemPrompt?: string
   private buildSystemPromptFn?: (userMessage: string, turnIndex: number) => Promise<string>
+  private onTurnEnd?: (turn: { userMessage: string; events: SessionEvent[] }) => void | Promise<void>
   private turnIndex = 0
   private maxBudgetUsd?: number
   private proc: ChildProcess | null = null
@@ -81,6 +94,7 @@ export class HarnessSession {
     this.cwd = opts.cwd
     this.systemPrompt = opts.systemPrompt
     this.buildSystemPromptFn = opts.buildSystemPrompt
+    this.onTurnEnd = opts.onTurnEnd
     this.maxBudgetUsd = opts.maxBudgetUsd
     this.createdAt = Date.now()
     this.lastActiveAt = Date.now()
@@ -266,11 +280,18 @@ export class HarnessSession {
         })
       })
 
+      // Accumulate every yielded event for the onTurnEnd callback
+      // (conversation mirror / project-context capture). Terminal
+      // `done` is excluded — it's a stream marker, not content.
+      const turnEvents: SessionEvent[] = []
+
       // Yield events as they arrive
       while (!done || eventQueue.length > 0) {
         if (eventQueue.length > 0) {
           receivedFirstEvent = true
-          yield eventQueue.shift()!
+          const ev = eventQueue.shift()!
+          turnEvents.push(ev)
+          yield ev
         } else if (!done) {
           await new Promise<void>((resolve) => {
             resolveWait = resolve
@@ -283,7 +304,23 @@ export class HarnessSession {
 
       if (exitCode !== 0 && exitCode !== null) {
         const errMsg = stderrChunks.trim() || `CLI exited with code ${exitCode}`
-        yield { type: 'error', message: errMsg, code: classifyStartupError(stderrChunks) }
+        const errorEvent: SessionEvent = {
+          type: 'error',
+          message: errMsg,
+          code: classifyStartupError(stderrChunks),
+        }
+        turnEvents.push(errorEvent)
+        yield errorEvent
+      }
+
+      // Mirror hook: fire before the terminal `done` so consumers see
+      // the persisted turn before the stream closes.
+      if (this.onTurnEnd) {
+        try {
+          await this.onTurnEnd({ userMessage, events: turnEvents })
+        } catch (err) {
+          log.warn({ err, sessionId: this.id }, 'onTurnEnd callback threw — turn still completes')
+        }
       }
 
       // Ensure a done event is always emitted

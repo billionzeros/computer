@@ -25,3 +25,10 @@ export {
   type HarnessContextPromptOpts,
   type WorkflowEntry,
 } from '../prompt-layers.js'
+export {
+  synthesizeHarnessTurn,
+  ensureHarnessSessionInit,
+  appendHarnessTurn,
+  type HarnessSessionInitOpts,
+  type AppendHarnessTurnOpts,
+} from './mirror.js'
