@@ -154,7 +154,7 @@ function buildOpenRouterModel(modelId: string) {
  * Tries pi-ai's built-in registry first, then falls back to the anton catalog
  * or OpenRouter's generic model builder.
  */
-function resolveModel(provider: string, modelId: string): Model<Api> | undefined {
+export function resolveModel(provider: string, modelId: string): Model<Api> | undefined {
   // pi-ai's registry (hardcoded at build time)
   const piModel = (piGetModel as (p: string, m: string) => Model<Api> | undefined)(
     provider,

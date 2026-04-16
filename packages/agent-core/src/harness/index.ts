@@ -35,3 +35,8 @@ export {
   type AppendHarnessTurnOpts,
 } from './mirror.js'
 export { buildReplaySeed, type BuildReplaySeedOpts } from './replay.js'
+export {
+  extractHarnessMemoriesFromMirror,
+  type ExtractHarnessMemoriesOpts,
+  type HarnessExtractionResult,
+} from './memory-extract.js'

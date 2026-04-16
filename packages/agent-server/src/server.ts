@@ -105,6 +105,8 @@ import {
   appendHarnessTurn,
   readHarnessHistory,
   buildReplaySeed,
+  extractHarnessMemoriesFromMirror,
+  resolveModel,
 } from '@anton/agent-core'
 import { CONNECTOR_FACTORIES, ConnectorManager } from '@anton/connectors'
 import { createLogger } from '@anton/logger'
@@ -279,6 +281,13 @@ export class AgentServer {
   private activeWorkspacePath: string | null = null
   private mcpIpcServer: import('@anton/agent-core').McpIpcServer | null = null
   private harnessSessionContexts = new Map<string, import('@anton/agent-core').HarnessSessionContext>()
+  /**
+   * Per-harness-session cursor into the mirror for memory extraction.
+   * Advanced after each successful extraction; the same index is passed
+   * as sinceIndex on the next call so we don't re-scan prior messages.
+   * Cleared on session destroy.
+   */
+  private harnessExtractionCursor = new Map<string, number>()
   private toolRegistry!: AntonToolRegistry
   private pendingLoginProc: import('node:child_process').ChildProcess | null = null
 
@@ -2014,6 +2023,11 @@ export class AgentServer {
           log.warn({ err, sessionId: id, projectId: mirrorProjectId }, 'harness project-history update failed')
         }
       }
+
+      // Fire-and-forget background memory extraction. Mirrors what
+      // Pi SDK does via session.maybeExtractMemories(). Silently
+      // skips if no Pi SDK provider has an API key configured.
+      this.runHarnessMemoryExtraction(id, mirrorProjectId)
     }
 
     const session = new HarnessSession({
@@ -2141,6 +2155,81 @@ export class AgentServer {
       { sessionId: msg.id, provider: msg.provider, model: msg.model, hadReplaySeed: Boolean(replaySeed) },
       'Harness session provider switched',
     )
+  }
+
+  /**
+   * Fire-and-forget background memory extraction for a harness session.
+   * Pi SDK sessions get the same via session.maybeExtractMemories().
+   *
+   * Picks a Pi SDK provider with an API key for the extractor LLM —
+   * the harness provider itself (Codex/Claude-Code) can't be used
+   * because extractMemories needs a raw Pi SDK model handle. If no
+   * suitable Pi SDK provider is configured, silently skip. Tracks a
+   * per-session cursor so consecutive turns don't re-scan messages.
+   */
+  private runHarnessMemoryExtraction(sessionId: string, projectId: string | undefined): void {
+    // Find any configured Pi SDK provider that has an API key set.
+    // Prefer the config's default provider; fall back to any match.
+    const tryProviders = [
+      this.config.defaults.provider,
+      ...Object.keys(this.config.providers),
+    ]
+    let chosenProvider: string | undefined
+    let apiKey: string | undefined
+    for (const name of tryProviders) {
+      const cfg = this.config.providers[name] || DEFAULT_PROVIDERS[name]
+      if (!cfg || cfg.type === 'harness') continue
+      const key = this.config.providers[name]?.apiKey
+      if (key) {
+        chosenProvider = name
+        apiKey = key
+        break
+      }
+    }
+    if (!chosenProvider || !apiKey) {
+      // No Pi SDK provider with a key → skip silently. Users running
+      // pure-harness will only get memories from explicit memory_save
+      // tool calls, which still work.
+      return
+    }
+
+    // Resolve a Pi SDK model for the extractor's fallback. Use the
+    // provider's first configured model, else its default.
+    const provCfg =
+      this.config.providers[chosenProvider] || DEFAULT_PROVIDERS[chosenProvider]
+    const modelId = provCfg?.models?.[0]
+    if (!modelId) return
+    const fallbackModel = resolveModel(chosenProvider, modelId)
+    if (!fallbackModel) return
+
+    const providerName = chosenProvider
+    const apiKeyValue = apiKey
+    const sinceIndex = this.harnessExtractionCursor.get(sessionId) ?? 0
+
+    void extractHarnessMemoriesFromMirror({
+      sessionId,
+      projectId,
+      sinceIndex,
+      provider: providerName,
+      fallbackModel,
+      getApiKey: (p) => (p === providerName ? apiKeyValue : undefined),
+    })
+      .then((result) => {
+        this.harnessExtractionCursor.set(sessionId, result.newCursor)
+        if (result.memories.length > 0) {
+          log.info(
+            {
+              sessionId,
+              count: result.memories.length,
+              keys: result.memories.map((m) => m.key),
+            },
+            'harness memories extracted',
+          )
+        }
+      })
+      .catch((err) => {
+        log.warn({ err, sessionId }, 'harness memory extraction failed')
+      })
   }
 
   /**
@@ -2439,6 +2528,7 @@ export class AgentServer {
       }
       if (wasHarness) {
         this.harnessSessionContexts.delete(msg.id)
+        this.harnessExtractionCursor.delete(msg.id)
       }
     } catch (err: unknown) {
       log.error({ err, sessionId: msg.id }, 'Error destroying session')

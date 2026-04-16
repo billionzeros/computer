@@ -82,4 +82,6 @@ export {
   appendHarnessTurn,
   readHarnessHistory,
   buildReplaySeed,
+  extractHarnessMemoriesFromMirror,
 } from './harness/index.js'
+export { resolveModel } from './session.js'
