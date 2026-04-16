@@ -1,0 +1,134 @@
+packages/agent-core/src/index.ts
+  217b4b964ebf2fbf 61
+  d0b23d44e70ce0f4 58-60,62-70
+packages/agent-core/src/harness/adapter.ts
+  217b4b964ebf2fbf 18-23
+packages/protocol/src/messages.ts
+  d0b23d44e70ce0f4 325-326,336-373,1365-1368
+packages/desktop/src/components/chat/model-utils.ts
+  217b4b964ebf2fbf 28
+  d0b23d44e70ce0f4 27
+packages/desktop/src/lib/store/connectionStore.ts
+  d0b23d44e70ce0f4 66
+packages/agent-core/src/harness/adapters/codex.ts
+  1790b06bb95fbe36 65,74,79-86,172-174
+  217b4b964ebf2fbf 1-64,66-73,75-78,87-171,175-269
+packages/desktop/src/lib/store/sessionStore.ts
+  d0b23d44e70ce0f4 214-219,452-459
+packages/agent-config/src/config.ts
+  d0b23d44e70ce0f4 24,325,394-397,709-713,746
+  217b4b964ebf2fbf 398-401
+packages/desktop/src/lib/store/handlers/providerHandler.ts
+  d0b23d44e70ce0f4 44-78
+packages/agent-core/src/harness/codex-events.ts
+  1790b06bb95fbe36 68-72,79
+  217b4b964ebf2fbf 1-67,73-78
+packages/desktop/src/lib/connection.ts
+  d0b23d44e70ce0f4 246-253
+packages/agent-server/src/server.ts
+  b299fb53cb40af39 273,2390-2395,2406-2414,2416,2432-2434,2440-2441,2444-2446,2448-2450,2474-2492,2499-2503,2506,2509,2551-2588
+  217b4b964ebf2fbf 96,1730,2263-2267,2279-2284,2291-2293,2336,2341,2344,2361,2402,2417-2431,2439,2442-2443,2447,2451-2473
+  1790b06bb95fbe36 1735,1737,1741-1758,1769
+  d0b23d44e70ce0f4 26,93-95,97-98,249,271-272,284,309-312,336-349,762,1371-1378,1516,1724-1729,1731-1734,1736,1738-1740,1759,1761-1768,1770-1771,1773-1831,1878,1955,2112,2198,2220,2233,2262,2268-2278,2285-2290,2294-2335,2337-2340,2342-2343,2345-2360,2362-2389,2396-2401,2403-2405,2415,2435-2438,2493-2498,2504-2505,2507-2508,2510-2550,2589-2599,2622,2624,2861,2863,3431,3606,3621-3622,3639-3641,3799,3820-3824,3827-3832,3834-3837,3839-3845,3847-3852,4359-4360,4368,4576,4608,4628,4867-4869
+packages/desktop/src/lib/store/handlers/index.ts
+  d0b23d44e70ce0f4 90-91
+packages/agent-core/src/harness/harness-session.ts
+  1790b06bb95fbe36 126-224
+  217b4b964ebf2fbf 100-102
+packages/agent-core/src/harness/index.ts
+  217b4b964ebf2fbf 3-5
+packages/desktop/src/index.css
+  9c82084046028fb6 5657-5689,5710,5715-5717,5721-5722,5727,5732-5739,5745-5760,5764-5765,5772-5774,5777,5779-5780,5792-5813,5818,5826,5830,5836-5841,5846,5856-5860,5864-5865,5869,5871,5883,5913-5915,5918-5919,5932-6169,6202-6206,6213-6214,6216,6248-6249,6262-6263,6267,6269,6302-6304,6362-6363,6368,6370,6603-6611,6613-6614,6622,6632-6633,6635-6636,6638,6652,6656,6661-6662,6667,6672-6691,6704,6709,6718-6719,6722,6724-6725
+  d0b23d44e70ce0f4 6191-6201,6207-6212,6215,6217-6247,6250-6261,6264-6266,6268,6270-6301,6305-6352,6360-6361,6364-6367,6369,6371-6411,6413,6416-6417,6420,6423,6426,6432,6435-6446,6449-6455,6458-6463,6466-6468,6471,6476,6478,6481,6483,6485-6487,6490,6494-6495,6498,6503,6507-6515,6518-6519,6522-6527,6531-6532,6535-6536
+  217b4b964ebf2fbf 6353-6359,6539-6566,6568-6570,6573-6575
+packages/desktop/src/components/settings/SettingsModal.tsx
+  9c82084046028fb6 679,701,705,707,754,757,896,1060,1132
+  b299fb53cb40af39 295-297,330-331,379-393,399-402,411,417-443,664-668,695-697,699-700,702-704,706,708,719,721,726,728,743-745,748-750,752-753,755-756,758,768-772,775,777,787,789,803-805,813-844,846-864,868-878,895,897,904,912,916-917,1002,1008-1033,1035-1036,1038,1040-1059,1061-1079,1085,1101-1115,1127,1135,1153,1179-1198,1200-1202,1204-1205,1207-1208,1210,1213-1249
+  217b4b964ebf2fbf 6,298-329,449-526,712,720,727,761,764-767,776,778-782,788,793,1034,1037,1039,1138
+  d0b23d44e70ce0f4 8-9,12-13,394-398,403-410,412-416,444-448,658-663,669,672-678,680-694,698,709-711,713-718,722-725,729-742,746-747,751,759-760,762-763,773-774,783-786,790-792,794-802,806-810,812,1137,1139-1141,1144-1152,1154-1156
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.3.0",
+  "base_commit_sha": "30fa97ad5797924388010cddad1e9371d52e52f5",
+  "prompts": {
+    "1790b06bb95fbe36": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "eab956a3-26be-4ad1-93c6-dbc2a904ec9b",
+        "model": "claude-opus-4-6"
+      },
+      "human_author": "Om Gupta",
+      "messages": [],
+      "total_additions": 75,
+      "total_deletions": 4,
+      "accepted_lines": 75,
+      "overriden_lines": 0
+    },
+    "217b4b964ebf2fbf": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "4306adca-28fc-4638-95fc-dfaf0b459cc1",
+        "model": "claude-opus-4-6"
+      },
+      "human_author": "Om Gupta",
+      "messages": [],
+      "total_additions": 600,
+      "total_deletions": 47,
+      "accepted_lines": 586,
+      "overriden_lines": 0
+    },
+    "9c82084046028fb6": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "6cb6e0c9-2742-4889-a168-64c9dd238d69",
+        "model": "claude-opus-4-6"
+      },
+      "human_author": null,
+      "messages": [],
+      "total_additions": 0,
+      "total_deletions": 0,
+      "accepted_lines": 169,
+      "overriden_lines": 0
+    },
+    "9eb62e34765fb8dc": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "a68d8df9-5adc-4326-b74e-c5bb3eed3d20",
+        "model": "claude-opus-4-6"
+      },
+      "human_author": null,
+      "messages": [],
+      "total_additions": 0,
+      "total_deletions": 0,
+      "accepted_lines": 0,
+      "overriden_lines": 0
+    },
+    "b299fb53cb40af39": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "30011bfc-eb0d-4fba-9639-68381d221d21",
+        "model": "claude-opus-4-6"
+      },
+      "human_author": "Om Gupta",
+      "messages": [],
+      "total_additions": 2,
+      "total_deletions": 2,
+      "accepted_lines": 406,
+      "overriden_lines": 0
+    },
+    "d0b23d44e70ce0f4": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "9fe6bb27-5421-43d0-b52f-a64fe32ad91f",
+        "model": "claude-opus-4-6"
+      },
+      "human_author": null,
+      "messages": [],
+      "total_additions": 0,
+      "total_deletions": 0,
+      "accepted_lines": 948,
+      "overriden_lines": 1
+    }
+  }
+}
