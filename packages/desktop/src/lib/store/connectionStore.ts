@@ -63,6 +63,7 @@ export const connectionStore = create<ConnectionStoreState>((set, get) => ({
 
     // Fire all initial list requests
     sessionStore.getState().sendProvidersList()
+    sessionStore.getState().sendDetectHarnesses()
     // Use incremental sync protocol — send lastSyncVersion from cache
     // Falls back to full bootstrap if server can't serve deltas
     const cache = loadSessionCache()

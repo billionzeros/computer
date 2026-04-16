@@ -211,6 +211,12 @@ interface SessionStoreState {
   sendProviderSetKey: (provider: string, apiKey: string) => void
   sendProviderSetModels: (provider: string, models: string[]) => void
   sendProviderSetDefault: (provider: string, model: string) => void
+  sendDetectHarnesses: () => void
+  sendHarnessSetup: (harnessId: string, action: 'install' | 'login' | 'login_code' | 'status', code?: string) => void
+  harnessStatuses: Record<string, { installed: boolean; version?: string; auth?: { loggedIn: boolean; email?: string; subscriptionType?: string } }>
+  harnessSetupProgress: Record<string, { action: string; step?: string; message?: string; success?: boolean }>
+  setHarnessStatus: (id: string, status: { installed: boolean; version?: string; auth?: { loggedIn: boolean; email?: string; subscriptionType?: string } }) => void
+  setHarnessSetupProgress: (id: string, progress: { action: string; step?: string; message?: string; success?: boolean }) => void
   sendAiMessage: (text: string, attachments?: ChatImageAttachmentInput[]) => void
   sendAiMessageToSession: (
     text: string,
@@ -443,6 +449,14 @@ export const sessionStore = create<SessionStoreState>((set, get) => {
     sendProviderSetKey: (provider, apiKey) => connection.sendProviderSetKey(provider, apiKey),
     sendProviderSetModels: (provider, models) => connection.sendProviderSetModels(provider, models),
     sendProviderSetDefault: (provider, model) => connection.sendProviderSetDefault(provider, model),
+    sendDetectHarnesses: () => connection.sendDetectHarnesses(),
+    sendHarnessSetup: (harnessId, action, code) => connection.sendHarnessSetup(harnessId, action, code),
+    harnessStatuses: {},
+    harnessSetupProgress: {},
+    setHarnessStatus: (id, status) =>
+      set((s) => ({ harnessStatuses: { ...s.harnessStatuses, [id]: status } })),
+    setHarnessSetupProgress: (id, progress) =>
+      set((s) => ({ harnessSetupProgress: { ...s.harnessSetupProgress, [id]: progress } })),
     sendAiMessage: (text, attachments) => {
       connection.sendAiMessage(text, attachments)
       // Optimistic: show working state immediately instead of waiting for server event.

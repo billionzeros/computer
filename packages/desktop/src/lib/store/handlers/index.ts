@@ -87,6 +87,8 @@ export function handleWsMessage(channel: number, msg: IncomingMessage): void {
     'usage_stats_response',
     'project_sessions_list_response',
     'providers_list_response',
+    'detect_harnesses_response',
+    'harness_setup_response',
   ])
   if (
     msgSessionId &&

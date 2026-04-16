@@ -55,3 +55,16 @@ export {
 export { executePublish, type PublishInput } from './tools/publish.js'
 export { initTracing, flushTraces, hashPromptVersion } from './tracing.js'
 export { closeBrowserSession } from './tools/browser.js'
+export {
+  type HarnessAdapter,
+  ClaudeAdapter,
+  CodexAdapter,
+  HarnessSession,
+  isHarnessSession,
+  type HarnessSessionOpts,
+  createMcpIpcServer,
+  type IpcToolProvider,
+  type McpToolSchema,
+  type McpToolResult,
+  AntonToolRegistry,
+} from './harness/index.js'

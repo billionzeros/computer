@@ -243,6 +243,14 @@ export class Connection {
     this.send(Channel.AI, { type: 'provider_set_default', provider, model })
   }
 
+  sendDetectHarnesses() {
+    this.send(Channel.AI, { type: 'detect_harnesses' })
+  }
+
+  sendHarnessSetup(harnessId: string, action: 'install' | 'login' | 'login_code' | 'status', code?: string) {
+    this.send(Channel.AI, { type: 'harness_setup', harnessId, action, code })
+  }
+
   // ── Config management ───────────────────────────────────────────
 
   sendConfigQuery(

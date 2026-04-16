@@ -23,6 +23,7 @@ import { createServer as createHttpServer } from 'node:http'
 import { createServer as createHttpsServer } from 'node:https'
 import { join, resolve } from 'node:path'
 import type { AgentConfig } from '@anton/agent-config'
+import { DEFAULT_PROVIDERS } from '@anton/agent-config'
 import {
   addProjectPreference,
   appendMessageToSession,
@@ -89,6 +90,12 @@ import {
   executePublish,
   hashPromptVersion,
   resumeSession,
+  HarnessSession,
+  isHarnessSession,
+  ClaudeAdapter,
+  CodexAdapter,
+  AntonToolRegistry,
+  createMcpIpcServer,
 } from '@anton/agent-core'
 import { CONNECTOR_FACTORIES, ConnectorManager } from '@anton/connectors'
 import { createLogger } from '@anton/logger'
@@ -239,7 +246,7 @@ function spawnFallback(shell: string, cols: number, rows: number, cwd: string): 
 export class AgentServer {
   private wss: WebSocketServer | null = null
   private config: AgentConfig
-  private sessions: Map<string, Session> = new Map()
+  private sessions: Map<string, Session | HarnessSession> = new Map()
   private activeTurns: Set<string> = new Set() // sessions currently processing a turn
   private activeClient: WebSocket | null = null
   // Track pending interactive prompts so they can be re-sent on client reconnect
@@ -261,6 +268,9 @@ export class AgentServer {
   private slackBotProvider: SlackWebhookProvider | null = null
   private ptys: Map<string, PtyHandle> = new Map()
   private activeWorkspacePath: string | null = null
+  private mcpIpcServer: import('node:net').Server | null = null
+  private toolRegistry = new AntonToolRegistry()
+  private pendingLoginProc: import('node:child_process').ChildProcess | null = null
 
   constructor(config: AgentConfig) {
     this.config = config
@@ -271,7 +281,7 @@ export class AgentServer {
     // Initialize OAuth infrastructure
     this.credentialStore = new CredentialStore(getAntonDir(), config.token)
     this.oauthFlow = new OAuthFlow(config, this.credentialStore)
-    this.connectorManager = new ConnectorManager(CONNECTOR_FACTORIES, (id) =>
+    this.connectorManager = new ConnectorManager(CONNECTOR_FACTORIES, (id: string) =>
       this.resolveConnectorEnv(id),
     )
 
@@ -296,6 +306,10 @@ export class AgentServer {
         })
       }
     })
+
+    // Start MCP IPC server for harness sessions
+    const socketPath = join(getAntonDir(), 'harness.sock')
+    this.mcpIpcServer = createMcpIpcServer(socketPath, this.toolRegistry)
   }
 
   setScheduler(scheduler: Scheduler) {
@@ -318,6 +332,20 @@ export class AgentServer {
         /* best-effort */
       }
       this.ptys.delete(id)
+    }
+    // Shutdown harness sessions and IPC server
+    for (const [id, session] of this.sessions) {
+      if (isHarnessSession(session)) {
+        try {
+          await session.shutdown()
+        } catch {
+          /* best-effort */
+        }
+      }
+    }
+    if (this.mcpIpcServer) {
+      this.mcpIpcServer.close()
+      this.mcpIpcServer = null
     }
   }
 
@@ -731,7 +759,7 @@ export class AgentServer {
         // If a session is active, return the full composed prompt (what the model actually sees)
         if (sessionId) {
           const session = this.sessions.get(sessionId)
-          if (session) {
+          if (session && !isHarnessSession(session)) {
             value = session.getComposedSystemPrompt()
             break
           }
@@ -1340,6 +1368,14 @@ export class AgentServer {
         this.handleProviderSetModels(msg)
         break
 
+      case 'detect_harnesses':
+        this.handleDetectHarnesses()
+        break
+
+      case 'harness_setup':
+        this.handleHarnessSetup(msg)
+        break
+
       // ── Skills ──
       case 'skill_list':
         this.handleSkillList()
@@ -1477,7 +1513,7 @@ export class AgentServer {
       case 'steer': {
         const steerSessionId = msg.sessionId || DEFAULT_SESSION_ID
         const steerSession = this.sessions.get(steerSessionId)
-        if (steerSession && this.activeTurns.has(steerSessionId)) {
+        if (steerSession && !isHarnessSession(steerSession) && this.activeTurns.has(steerSessionId)) {
           steerSession.steer(msg.content, msg.attachments)
           this.sendToClient(Channel.AI, {
             type: 'steer_ack',
@@ -1685,29 +1721,114 @@ export class AgentServer {
     thinkingLevel?: 'off' | 'minimal' | 'low' | 'medium' | 'high'
   }) {
     try {
-      const session = createSession(
-        msg.id,
-        this.config,
-        this.buildSessionOptions(msg.id, msg.projectId, {
-          provider: msg.provider,
-          model: msg.model,
-          apiKey: msg.apiKey,
-          domain: process.env.ANTON_HOST,
-          thinkingLevel: msg.thinkingLevel,
-        }),
-      )
+      // Determine provider type (harness vs API)
+      const providerName = msg.provider || this.config.defaults.provider
+      const providerConfig = this.config.providers[providerName] || DEFAULT_PROVIDERS[providerName]
 
-      this.wireSessionConfirmHandler(session)
-      this.wirePlanConfirmHandler(session)
-      this.wireAskUserHandler(session)
-      this.sessions.set(msg.id, session)
+      if (providerConfig?.type === 'harness') {
+        // ── Harness session: spawn CLI subprocess ──
+        const adapter = providerName === 'codex' ? new CodexAdapter() : new ClaudeAdapter()
+        const model = msg.model || this.config.defaults.model
+        const socketPath = join(getAntonDir(), 'harness.sock')
+        const shimPath = join(getAntonDir(), '..', 'node_modules', '@anton', 'agent-core', 'dist', 'harness', 'anton-mcp-shim.js')
 
-      this.sendToClient(Channel.AI, {
-        type: 'session_created',
-        id: msg.id,
-        provider: session.provider,
-        model: session.model,
-      })
+        // Resolve workspace path and build context from project
+        let cwd: string | undefined
+        let systemPrompt: string | undefined
+        if (msg.projectId) {
+          const project = loadProject(msg.projectId)
+          if (project?.workspacePath) cwd = project.workspacePath
+          if (project) {
+            const contextLines: string[] = [
+              `You are running inside Anton, a personal AI computer.`,
+              `Project: ${project.name}`,
+            ]
+            if (project.description) contextLines.push(`Description: ${project.description}`)
+            if (cwd) contextLines.push(`Working directory: ${cwd}`)
+            contextLines.push(`Today's date: ${new Date().toISOString().split('T')[0]}`)
+
+            // Include project instructions if available
+            const instructions = loadProjectInstructions(msg.projectId)
+            if (instructions) contextLines.push(`\nProject Instructions:\n${instructions}`)
+
+            // Include project summary for context
+            if (project.context.summary) contextLines.push(`\nProject Summary:\n${project.context.summary}`)
+
+            systemPrompt = contextLines.join('\n')
+          }
+        }
+
+        const session = new HarnessSession({
+          id: msg.id,
+          provider: providerName,
+          model,
+          adapter,
+          socketPath,
+          shimPath,
+          cwd,
+          systemPrompt,
+        })
+        this.sessions.set(msg.id, session)
+
+        this.sendToClient(Channel.AI, {
+          type: 'session_created',
+          id: msg.id,
+          provider: providerName,
+          model,
+        })
+
+        log.info(
+          { sessionId: msg.id, provider: providerName, model, type: 'harness' },
+          'Harness session created',
+        )
+      } else {
+        // ── Standard API session (Pi SDK) ──
+        const session = createSession(
+          msg.id,
+          this.config,
+          this.buildSessionOptions(msg.id, msg.projectId, {
+            provider: msg.provider,
+            model: msg.model,
+            apiKey: msg.apiKey,
+            domain: process.env.ANTON_HOST,
+            thinkingLevel: msg.thinkingLevel,
+          }),
+        )
+
+        this.wireSessionConfirmHandler(session)
+        this.wirePlanConfirmHandler(session)
+        this.wireAskUserHandler(session)
+        this.sessions.set(msg.id, session)
+
+        this.sendToClient(Channel.AI, {
+          type: 'session_created',
+          id: msg.id,
+          provider: session.provider,
+          model: session.model,
+        })
+
+        // Send context info if available
+        if (session.contextInfo) {
+          this.sendToClient(Channel.AI, {
+            type: 'context_info',
+            sessionId: msg.id,
+            globalMemories: session.contextInfo.globalMemories,
+            conversationMemories: session.contextInfo.conversationMemories,
+            crossConversationMemories: session.contextInfo.crossConversationMemories,
+            projectId: session.contextInfo.projectId,
+          })
+        }
+
+        log.info(
+          {
+            sessionId: msg.id,
+            provider: session.provider,
+            model: session.model,
+            projectId: msg.projectId,
+          },
+          'Session created',
+        )
+      }
 
       // Update project stats so session count is accurate
       if (msg.projectId) {
@@ -1721,27 +1842,6 @@ export class AgentServer {
         }
       }
 
-      // Send context info if available
-      if (session.contextInfo) {
-        this.sendToClient(Channel.AI, {
-          type: 'context_info',
-          sessionId: msg.id,
-          globalMemories: session.contextInfo.globalMemories,
-          conversationMemories: session.contextInfo.conversationMemories,
-          crossConversationMemories: session.contextInfo.crossConversationMemories,
-          projectId: session.contextInfo.projectId,
-        })
-      }
-
-      log.info(
-        {
-          sessionId: msg.id,
-          provider: session.provider,
-          model: session.model,
-          projectId: msg.projectId,
-        },
-        'Session created',
-      )
     } catch (err: unknown) {
       this.sendToClient(Channel.AI, {
         type: 'error',
@@ -1775,7 +1875,7 @@ export class AgentServer {
 
     // Add in-memory sessions that aren't persisted yet (exclude project sessions)
     for (const [id, session] of this.sessions) {
-      if (!metas.some((m) => m.id === id) && !id.match(/^proj_/)) {
+      if (!metas.some((m) => m.id === id) && !id.match(/^proj_/) && !isHarnessSession(session)) {
         const info = session.getInfo()
         sessions.push({
           id: info.id,
@@ -1852,7 +1952,7 @@ export class AgentServer {
     // Build a map of in-memory sessions (these have live usage data)
     const inMemoryMap = new Map<string, ReturnType<Session['getInfo']>>()
     for (const [id, session] of this.sessions) {
-      if (!id.match(/^proj_/)) {
+      if (!id.match(/^proj_/) && !isHarnessSession(session)) {
         inMemoryMap.set(id, session.getInfo())
       }
     }
@@ -2009,7 +2109,7 @@ export class AgentServer {
   private handleSessionDestroy(msg: { id: string }) {
     // Extract projectId before deleting so we can update stats
     const session = this.sessions.get(msg.id)
-    const projectId = session?.contextInfo?.projectId ?? this.extractProjectId(msg.id)
+    const projectId = (session && !isHarnessSession(session) ? session.contextInfo?.projectId : undefined) ?? this.extractProjectId(msg.id)
 
     try {
       this.sessions.delete(msg.id)
@@ -2095,6 +2195,7 @@ export class AgentServer {
       const isFirstPage = msg.before === undefined
 
       // Get full history to compute totalCount and lastSeq
+      if (isHarnessSession(session)) return
       const fullHistory = session.getHistory()
       const totalCount = fullHistory.length
       const lastSeq = totalCount > 0 ? fullHistory[totalCount - 1].seq : 0
@@ -2116,7 +2217,7 @@ export class AgentServer {
       )
 
       // On first page, include artifacts extracted from full history
-      const artifacts = isFirstPage ? session.getArtifacts() : undefined
+      const artifacts = isFirstPage && !isHarnessSession(session) ? session.getArtifacts() : undefined
 
       this.sendToClient(Channel.AI, {
         type: 'session_history_response',
@@ -2129,6 +2230,7 @@ export class AgentServer {
       })
 
       // Restore task state after history
+      if (isHarnessSession(session)) return
       const sessionInfo = session.getInfo()
       if (sessionInfo.lastTasks && sessionInfo.lastTasks.length > 0) {
         this.sendToClient(Channel.AI, {
@@ -2157,6 +2259,344 @@ export class AgentServer {
     })
   }
 
+  private async handleDetectHarnesses() {
+    const adapters = [new ClaudeAdapter(), new CodexAdapter()]
+    const harnesses = await Promise.all(
+      adapters.map(async (adapter) => {
+        const result = await adapter.detect()
+        return {
+          id: adapter.id,
+          name: adapter.name,
+          installed: result.installed,
+          version: result.version,
+          auth: result.auth
+            ? {
+                loggedIn: result.auth.loggedIn,
+                email: result.auth.email,
+                subscriptionType: result.auth.subscriptionType,
+              }
+            : undefined,
+        }
+      }),
+    )
+    this.sendToClient(Channel.AI, {
+      type: 'detect_harnesses_response',
+      harnesses,
+    })
+  }
+
+  private async handleHarnessSetup(msg: { harnessId: string; action: string }) {
+    const { harnessId, action } = msg
+
+    const adapter = harnessId === 'codex' ? new CodexAdapter() : harnessId === 'claude-code' ? new ClaudeAdapter() : null
+
+    if (!adapter) {
+      this.sendToClient(Channel.AI, {
+        type: 'harness_setup_response',
+        harnessId,
+        action: action as 'install' | 'login' | 'status',
+        success: false,
+        message: `Unknown harness: ${harnessId}`,
+      })
+      return
+    }
+
+    switch (action) {
+      case 'status': {
+        const result = await adapter.detect()
+        this.sendToClient(Channel.AI, {
+          type: 'harness_setup_response',
+          harnessId,
+          action: 'status',
+          success: true,
+          status: {
+            id: adapter.id,
+            name: adapter.name,
+            installed: result.installed,
+            version: result.version,
+            auth: result.auth
+              ? {
+                  loggedIn: result.auth.loggedIn,
+                  email: result.auth.email,
+                  subscriptionType: result.auth.subscriptionType,
+                }
+              : undefined,
+          },
+        })
+        break
+      }
+
+      case 'install': {
+        this.sendToClient(Channel.AI, {
+          type: 'harness_setup_response',
+          harnessId,
+          action: 'install',
+          success: true,
+          step: 'installing',
+          message: `Installing ${adapter.name} CLI...`,
+        })
+
+        try {
+          const { execFile: execFileCb } = await import('node:child_process')
+          const npmPackage = harnessId === 'codex' ? '@openai/codex' : '@anthropic-ai/claude-code'
+
+          await new Promise<void>((resolve, reject) => {
+            execFileCb('sudo', ['npm', 'install', '-g', npmPackage], { timeout: 120_000 }, (err, _stdout, stderr) => {
+              if (err) {
+                reject(new Error(stderr?.trim() || err.message))
+              } else {
+                resolve()
+              }
+            })
+          })
+
+          // Re-detect after install
+          const result = await adapter.detect()
+          this.sendToClient(Channel.AI, {
+            type: 'harness_setup_response',
+            harnessId,
+            action: 'install',
+            success: true,
+            step: 'done',
+            message: `${adapter.name} CLI installed (${result.version || 'success'})`,
+            status: {
+              id: adapter.id,
+              name: adapter.name,
+              installed: result.installed,
+              version: result.version,
+              auth: result.auth
+                ? {
+                    loggedIn: result.auth.loggedIn,
+                    email: result.auth.email,
+                    subscriptionType: result.auth.subscriptionType,
+                  }
+                : undefined,
+            },
+          })
+        } catch (err) {
+          this.sendToClient(Channel.AI, {
+            type: 'harness_setup_response',
+            harnessId,
+            action: 'install',
+            success: false,
+            step: 'error',
+            message: `Install failed: ${(err as Error).message}`,
+          })
+        }
+        break
+      }
+
+      case 'login': {
+        // Kill any existing login process to prevent races from multiple clicks
+        if (this.pendingLoginProc) {
+          this.pendingLoginProc.kill()
+          this.pendingLoginProc = null
+        }
+
+        this.sendToClient(Channel.AI, {
+          type: 'harness_setup_response',
+          harnessId,
+          action: 'login',
+          success: true,
+          step: 'starting',
+          message: `Starting ${adapter.name} login...`,
+        })
+
+        try {
+          const { spawn: spawnLogin } = await import('node:child_process')
+          const { createInterface: createRl } = await import('node:readline')
+
+          // On headless servers, the OAuth localhost redirect can't reach the CLI,
+          // so the user must paste the auth code manually. The CLI reads this via
+          // an interactive prompt (readline), which requires a TTY.
+          // We use Python's pty.spawn() to give the CLI a real PTY — it handles
+          // stdin/stdout forwarding automatically and is available on all Linux systems.
+          // BROWSER=true silently succeeds without printing/spamming.
+          await new Promise<void>((resolve, reject) => {
+            const needsPty = process.platform === 'linux'
+
+            let cmd: string
+            let args: string[]
+            if (harnessId === 'codex') {
+              // Codex uses device-auth flow (no localhost callback needed)
+              cmd = needsPty ? 'python3' : 'codex'
+              args = needsPty
+                ? ['-c', 'import pty,sys;sys.exit(pty.spawn(["codex","login","--device-auth"]))']
+                : ['login', '--device-auth']
+            } else {
+              cmd = needsPty ? 'python3' : 'claude'
+              args = needsPty
+                ? ['-c', 'import pty,sys;sys.exit(pty.spawn(["claude","auth","login"]))']
+                : ['auth', 'login']
+            }
+            const proc = spawnLogin(cmd, args, {
+              stdio: ['pipe', 'pipe', 'pipe'],
+              env: { ...process.env, BROWSER: 'true' },
+            })
+            this.pendingLoginProc = proc
+
+            let output = ''
+            let detectedUrl = ''
+
+            const handleLine = (line: string) => {
+              // Strip ANSI escape codes (Codex outputs colored text)
+              const clean = line.trim().replace(/\x1b\[[0-9;]*m/g, '')
+              if (!clean) return
+
+              output += clean + '\n'
+              log.info({ line: clean, harnessId }, 'harness auth login output')
+
+              const urlMatch = clean.match(/(https?:\/\/[^\s]+)/)
+              if (urlMatch) {
+                detectedUrl = urlMatch[1]
+              }
+
+              // For Codex device-auth: detect the one-time device code (e.g. "JY9T-N884D")
+              // It appears after the URL line as an alphanumeric code with dashes
+              if (harnessId === 'codex' && detectedUrl) {
+                const codeMatch = clean.match(/^([A-Z0-9]{4,}-[A-Z0-9]{4,})$/)
+                if (codeMatch) {
+                  // Send both URL and device code — UI shows "open URL and enter code"
+                  this.sendToClient(Channel.AI, {
+                    type: 'harness_setup_response',
+                    harnessId,
+                    action: 'login',
+                    success: true,
+                    step: 'waiting',
+                    message: JSON.stringify({ url: detectedUrl, deviceCode: codeMatch[1] }),
+                  })
+                  return
+                }
+              }
+
+              // For Claude: send URL for auth code paste flow
+              if (urlMatch && harnessId !== 'codex') {
+                this.sendToClient(Channel.AI, {
+                  type: 'harness_setup_response',
+                  harnessId,
+                  action: 'login',
+                  success: true,
+                  step: 'waiting',
+                  message: urlMatch[1],
+                })
+              }
+            }
+
+            if (proc.stdout) {
+              const rl = createRl({ input: proc.stdout })
+              rl.on('line', handleLine)
+            }
+            if (proc.stderr) {
+              const rlErr = createRl({ input: proc.stderr })
+              rlErr.on('line', handleLine)
+            }
+
+            const timeout = setTimeout(() => {
+              proc.kill()
+              reject(new Error('Login timed out after 5 minutes'))
+            }, 300_000)
+
+            proc.on('close', (code) => {
+              clearTimeout(timeout)
+              this.pendingLoginProc = null
+              if (code === 0) resolve()
+              else reject(new Error(output.trim() || `Login process exited with code ${code}`))
+            })
+
+            proc.on('error', (err) => {
+              clearTimeout(timeout)
+              this.pendingLoginProc = null
+              reject(err)
+            })
+          })
+
+          // Re-detect to confirm auth status
+          const result = await adapter.detect()
+          this.sendToClient(Channel.AI, {
+            type: 'harness_setup_response',
+            harnessId,
+            action: 'login',
+            success: result.auth?.loggedIn ?? false,
+            step: 'done',
+            message: result.auth?.loggedIn
+              ? `Logged in as ${result.auth.email || 'unknown'} (${result.auth.subscriptionType || 'active'})`
+              : 'Login did not complete — please try again',
+            status: {
+              id: adapter.id,
+              name: adapter.name,
+              installed: result.installed,
+              version: result.version,
+              auth: result.auth
+                ? {
+                    loggedIn: result.auth.loggedIn,
+                    email: result.auth.email,
+                    subscriptionType: result.auth.subscriptionType,
+                  }
+                : undefined,
+            },
+          })
+        } catch (err) {
+          this.sendToClient(Channel.AI, {
+            type: 'harness_setup_response',
+            harnessId,
+            action: 'login',
+            success: false,
+            step: 'error',
+            message: `Login failed: ${(err as Error).message}`,
+          })
+        }
+        break
+      }
+
+      case 'login_code': {
+        const code = (msg as { code?: string }).code
+        if (!code) {
+          this.sendToClient(Channel.AI, {
+            type: 'harness_setup_response',
+            harnessId,
+            action: 'login_code',
+            success: false,
+            message: 'No auth code provided',
+          })
+          break
+        }
+
+        if (!this.pendingLoginProc || !this.pendingLoginProc.stdin) {
+          this.sendToClient(Channel.AI, {
+            type: 'harness_setup_response',
+            harnessId,
+            action: 'login_code',
+            success: false,
+            message: 'No login process waiting for a code — try signing in again',
+          })
+          break
+        }
+
+        log.info('Writing auth code to claude login process via PTY')
+        // Send \r (carriage return) not \n — Ink uses raw mode where Enter = \r
+        this.pendingLoginProc.stdin.write(code.trim() + '\r')
+        this.sendToClient(Channel.AI, {
+          type: 'harness_setup_response',
+          harnessId,
+          action: 'login_code',
+          success: true,
+          step: 'waiting',
+          message: 'Auth code submitted, completing login...',
+        })
+        break
+      }
+
+      default:
+        this.sendToClient(Channel.AI, {
+          type: 'harness_setup_response',
+          harnessId,
+          action: action as 'install' | 'login' | 'login_code' | 'status',
+          success: false,
+          message: `Unknown action: ${action}`,
+        })
+    }
+  }
+
   private handleProviderSetKey(msg: { provider: string; apiKey: string }) {
     try {
       setProviderKey(this.config, msg.provider, msg.apiKey)
@@ -2179,8 +2619,9 @@ export class AgentServer {
     try {
       setDefault(this.config, msg.provider, msg.model)
 
-      // Switch all active sessions to the new default model
+      // Switch all active API sessions to the new default model (harness sessions manage their own model)
       for (const [id, session] of this.sessions) {
+        if (isHarnessSession(session)) continue
         try {
           session.switchModel(msg.provider, msg.model)
           log.debug(
@@ -2417,8 +2858,9 @@ export class AgentServer {
       }
 
       // Get full history — for run-specific sessions, return everything (no time filtering needed)
+      if (isHarnessSession(session)) return
       const fullHistory = session.getHistory()
-      const logs = fullHistory.map((entry) => ({
+      const logs = fullHistory.map((entry: { ts: number; role: string; content: unknown; toolName?: string; toolInput?: unknown; isError?: boolean }) => ({
         ts: entry.ts,
         role: entry.role as 'user' | 'assistant' | 'tool_call' | 'tool_result',
         content: typeof entry.content === 'string' ? entry.content.slice(0, 2000) : '',
@@ -2986,7 +3428,7 @@ export class AgentServer {
     const prefix = `proj_${msg.projectId}_sess_`
     let inMemoryCount = 0
     for (const [id, session] of this.sessions) {
-      if (id.startsWith(prefix) && !persisted.some((s) => s.id === id)) {
+      if (id.startsWith(prefix) && !persisted.some((s) => s.id === id) && !isHarnessSession(session)) {
         const info = session.getInfo()
         sessions.push({
           id: info.id,
@@ -3161,7 +3603,7 @@ export class AgentServer {
     }
 
     // Handle /compact command
-    if (msg.content.startsWith('/compact')) {
+    if (msg.content.startsWith('/compact') && !isHarnessSession(session)) {
       await this.handleCompactCommand(session, sessionId, msg.content)
       return 0
     }
@@ -3176,7 +3618,8 @@ export class AgentServer {
     log.info({ sessionId, content: msg.content.slice(0, 50) }, 'Processing message')
 
     // Load conversation context on first message (cross-conversation matching uses message text)
-    if (!session.contextInfo) {
+    // Skip for harness sessions — they manage their own context
+    if (!isHarnessSession(session) && !session.contextInfo) {
       const contextInfo = session.loadConversationContext(msg.content)
       if (contextInfo) {
         this.sendToClient(Channel.AI, {
@@ -3193,7 +3636,9 @@ export class AgentServer {
     // Guard: if this session is already processing, steer instead of starting a second turn
     if (this.activeTurns.has(sessionId)) {
       log.warn({ sessionId }, 'Session already processing — converting message to steer')
-      session.steer(msg.content, msg.attachments)
+      if (!isHarnessSession(session)) {
+        session.steer(msg.content, msg.attachments)
+      }
       this.sendToClient(Channel.AI, {
         type: 'steer_ack',
         content: msg.content,
@@ -3351,7 +3796,7 @@ export class AgentServer {
       // Fire-and-forget: OS notification when turn finishes.
       // Desktop clients handle their own notifications via Tauri plugin,
       // so this only fires for headless / CLI-only runs (no connected GUI client).
-      if (!this.activeClient && toolCallCount > 0) {
+      if (!this.activeClient && toolCallCount > 0 && !isHarnessSession(session)) {
         const title = session.getInfo().title || 'Task completed'
         try {
           if (process.platform === 'darwin') {
@@ -3372,36 +3817,40 @@ export class AgentServer {
       }
 
       // Fire-and-forget: background memory extraction
-      session.maybeExtractMemories().catch((err) => {
-        log.warn({ err, sessionId }, 'background memory extraction failed')
-      })
+      if (!isHarnessSession(session)) {
+        session.maybeExtractMemories().catch((err: unknown) => {
+          log.warn({ err, sessionId }, 'background memory extraction failed')
+        })
+      }
 
       // Track session in project history if this is a project session
-      const sessionInfo = session.getInfo()
-      if (session.projectId && sessionInfo.title) {
-        try {
-          // Use LLM-provided summary from update_project_context tool, fallback to title
-          const sessionSummary = projectContextUpdate?.sessionSummary || sessionInfo.title
+      if (!isHarnessSession(session)) {
+        const sessionInfo = session.getInfo()
+        if (session.projectId && sessionInfo.title) {
+          try {
+            // Use LLM-provided summary from update_project_context tool, fallback to title
+            const sessionSummary = projectContextUpdate?.sessionSummary || sessionInfo.title
 
-          // Update project summary if the LLM provided one
-          if (projectContextUpdate?.projectSummary) {
-            updateProjectContext(session.projectId, 'summary', projectContextUpdate.projectSummary)
+            // Update project summary if the LLM provided one
+            if (projectContextUpdate?.projectSummary) {
+              updateProjectContext(session.projectId, 'summary', projectContextUpdate.projectSummary)
+            }
+
+            appendSessionHistory(session.projectId, {
+              sessionId: session.id,
+              title: sessionInfo.title,
+              summary: sessionSummary,
+              ts: Date.now(),
+            })
+            updateProjectStats(session.projectId)
+
+            const updatedProject = loadProject(session.projectId)
+            if (updatedProject) {
+              this.sendToClient(Channel.AI, { type: 'project_updated', project: updatedProject })
+            }
+          } catch (e) {
+            log.warn({ err: e, sessionId }, 'Failed to update project history')
           }
-
-          appendSessionHistory(session.projectId, {
-            sessionId: session.id,
-            title: sessionInfo.title,
-            summary: sessionSummary,
-            ts: Date.now(),
-          })
-          updateProjectStats(session.projectId)
-
-          const updatedProject = loadProject(session.projectId)
-          if (updatedProject) {
-            this.sendToClient(Channel.AI, { type: 'project_updated', project: updatedProject })
-          }
-        } catch (e) {
-          log.warn({ err: e, sessionId }, 'Failed to update project history')
         }
       }
     } catch (err: unknown) {
@@ -3907,8 +4356,8 @@ export class AgentServer {
   }
 
   private buildConnectorStatus(c: ConnectorConfig) {
-    const mcpStatus = this.mcpManager.getStatus().find((s) => s.id === c.id)
-    const directStatus = this.connectorManager.getStatus().find((s) => s.id === c.id)
+    const mcpStatus = this.mcpManager.getStatus().find((s: { id: string }) => s.id === c.id)
+    const directStatus = this.connectorManager.getStatus().find((s: { id: string }) => s.id === c.id)
     // OAuth connectors are "connected" when they have a stored token
     const isOAuthConnected = c.type === 'oauth' && this.oauthFlow.hasToken(c.id) && c.enabled
     const connected = mcpStatus?.connected ?? directStatus?.connected ?? isOAuthConnected
@@ -3916,7 +4365,7 @@ export class AgentServer {
     // i.e. excluding tools the user has marked 'never'.
     const rawTools = mcpStatus?.tools ?? directStatus?.tools ?? []
     const perms = c.toolPermissions ?? {}
-    const visibleTools = rawTools.filter((t) => perms[t] !== 'never')
+    const visibleTools = rawTools.filter((t: string) => perms[t] !== 'never')
     return {
       id: c.id,
       name: c.name,
@@ -4124,7 +4573,7 @@ export class AgentServer {
           this.connectorManager.deactivate(msg.id)
         }
         this.refreshAllSessionTools()
-        const status = this.connectorManager.getStatus().find((s) => s.id === msg.id)
+        const status = this.connectorManager.getStatus().find((s: { id: string }) => s.id === msg.id)
         this.sendToClient(Channel.AI, {
           type: 'connector_status',
           id: msg.id,
@@ -4156,7 +4605,7 @@ export class AgentServer {
       // Direct connectors (OAuth/API) — test via ConnectorManager
       if (this.connectorManager.isActive(msg.id)) {
         const result = await this.connectorManager.testConnection(msg.id)
-        const tools = this.connectorManager.getStatus().find((s) => s.id === msg.id)?.tools ?? []
+        const tools = this.connectorManager.getStatus().find((s: { id: string }) => s.id === msg.id)?.tools ?? []
         this.sendToClient(Channel.AI, {
           type: 'connector_test_response',
           id: msg.id,
@@ -4176,7 +4625,7 @@ export class AgentServer {
             accountDisplayName: connectorConfig?.accountLabel ?? connectorConfig?.accountEmail,
           })
           const result = await this.connectorManager.testConnection(msg.id)
-          const tools = this.connectorManager.getStatus().find((s) => s.id === msg.id)?.tools ?? []
+          const tools = this.connectorManager.getStatus().find((s: { id: string }) => s.id === msg.id)?.tools ?? []
           this.sendToClient(Channel.AI, {
             type: 'connector_test_response',
             id: msg.id,
@@ -4415,7 +4864,9 @@ export class AgentServer {
   /** Refresh connector tools on all active sessions so new connectors are available immediately. */
   private refreshAllSessionTools(): void {
     for (const session of this.sessions.values()) {
-      session.refreshConnectorTools()
+      if (!isHarnessSession(session)) {
+        session.refreshConnectorTools()
+      }
     }
     this.webhookRunner?.refreshAllSessionTools()
   }

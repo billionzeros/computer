@@ -322,6 +322,8 @@ export interface ProviderInfoPayload {
   defaultModels?: string[]
   hasApiKey: boolean
   baseUrl?: string
+  type?: 'api' | 'harness'
+  installed?: boolean
 }
 
 export interface ProvidersListResponse {
@@ -329,6 +331,44 @@ export interface ProvidersListResponse {
   providers: ProviderInfoPayload[]
   defaults: { provider: string; model: string }
   onboarding?: { completed: boolean; role?: string }
+}
+
+export interface DetectHarnessesMessage {
+  type: 'detect_harnesses'
+}
+
+export interface HarnessStatus {
+  id: string
+  name: string
+  installed: boolean
+  version?: string
+  auth?: {
+    loggedIn: boolean
+    email?: string
+    subscriptionType?: string
+  }
+}
+
+export interface DetectHarnessesResponse {
+  type: 'detect_harnesses_response'
+  harnesses: HarnessStatus[]
+}
+
+export interface HarnessSetupMessage {
+  type: 'harness_setup'
+  harnessId: string
+  action: 'install' | 'login' | 'login_code' | 'status'
+  code?: string
+}
+
+export interface HarnessSetupResponse {
+  type: 'harness_setup_response'
+  harnessId: string
+  action: 'install' | 'login' | 'login_code' | 'status'
+  success: boolean
+  step?: string
+  message?: string
+  status?: HarnessStatus
 }
 
 export interface ProviderSetKeyMessage {
@@ -1322,6 +1362,10 @@ export type AiMessage =
   | ProviderSetDefaultResponse
   | ProviderSetModelsMessage
   | ProviderSetModelsResponse
+  | DetectHarnessesMessage
+  | DetectHarnessesResponse
+  | HarnessSetupMessage
+  | HarnessSetupResponse
   // Chat
   | AiUserMessage
   | AiSteerMessage

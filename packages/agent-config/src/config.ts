@@ -21,6 +21,7 @@ export interface ProviderConfig {
   apiKey?: string
   baseUrl?: string
   models: string[]
+  type?: 'api' | 'harness'
 }
 
 export type ProvidersMap = Record<string, ProviderConfig>
@@ -321,7 +322,7 @@ function readSourceProjectTypePrompts(): Record<string, string> {
  * IMPORTANT: Model IDs must exactly match what pi SDK's getModel() expects.
  * Run `getModel(provider, modelId)` to verify — it throws on unknown IDs.
  */
-const DEFAULT_PROVIDERS: ProvidersMap = {
+export const DEFAULT_PROVIDERS: ProvidersMap = {
   anthropic: {
     apiKey: process.env.ANTHROPIC_API_KEY || '',
     models: ['claude-sonnet-4-6', 'claude-opus-4-6'],
@@ -389,6 +390,14 @@ const DEFAULT_PROVIDERS: ProvidersMap = {
       'mistral-large',
       'codestral',
     ],
+  },
+  'claude-code': {
+    models: ['claude-sonnet-4-6', 'claude-opus-4-6'],
+    type: 'harness',
+  },
+  codex: {
+    models: ['gpt-5.4', 'o3'],
+    type: 'harness',
   },
 }
 
@@ -697,6 +706,11 @@ const ENV_KEY_MAP: Record<string, string> = {
 
 /** Check if a provider has a usable API key (config file OR environment variable). */
 export function providerHasKey(provider: string, config: AgentConfig): boolean {
+  // Harness providers don't need API keys — they use the user's CLI subscription
+  const defaultType = DEFAULT_PROVIDERS[provider]?.type
+  const configType = config.providers[provider]?.type
+  if (configType === 'harness' || defaultType === 'harness') return true
+
   const p = config.providers[provider]
   if (p?.apiKey && p.apiKey.length > 0) return true
   const envVar = ENV_KEY_MAP[provider]
@@ -729,6 +743,7 @@ export function getProvidersList(config: AgentConfig) {
       defaultModels: defaults?.models || [],
       hasApiKey: providerHasKey(name, config),
       baseUrl: configEntry?.baseUrl || defaults?.baseUrl,
+      type: (configEntry?.type || defaults?.type || 'api') as 'api' | 'harness',
     }
   })
 }

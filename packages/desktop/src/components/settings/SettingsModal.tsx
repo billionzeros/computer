@@ -3,9 +3,14 @@ import {
   BarChart3,
   Check,
   ChevronRight,
+  ClipboardCopy,
   Cpu,
+  Download,
+  ExternalLink,
   Eye,
   EyeOff,
+  KeyRound,
+  Loader2,
   LogOut,
   Monitor,
   Moon,
@@ -287,6 +292,43 @@ function ProviderIcon({ provider, size = 16 }: { provider: string; size?: number
   )
 }
 
+function providerDisplayName(provider: ProviderInfo): string {
+  return provider.name === 'claude-code'
+    ? 'Claude Code'
+    : provider.name === 'codex'
+      ? 'ChatGPT Codex'
+      : provider.name.charAt(0).toUpperCase() + provider.name.slice(1)
+}
+
+/** Display metadata for each harness provider */
+const HARNESS_INFO: Record<string, { cliName: string; brandName: string; subscriptionLabel: string; installHint: string; needsAuthCode: boolean; loginPrereq?: string }> = {
+  'claude-code': {
+    cliName: 'Claude Code',
+    brandName: 'Claude',
+    subscriptionLabel: 'Claude Pro or Max',
+    installHint: 'connect your Claude subscription',
+    needsAuthCode: true, // Claude login requires pasting an auth code
+  },
+  codex: {
+    cliName: 'Codex CLI',
+    brandName: 'ChatGPT',
+    subscriptionLabel: 'ChatGPT Plus or Pro',
+    installHint: 'connect your ChatGPT subscription',
+    needsAuthCode: false, // Codex uses device-code auth (no localhost callback)
+    loginPrereq: 'First, enable device code auth in ChatGPT → Settings → Security',
+  },
+}
+
+function getHarnessInfo(providerName: string) {
+  return HARNESS_INFO[providerName] ?? {
+    cliName: providerName,
+    brandName: providerName,
+    subscriptionLabel: providerName,
+    installHint: `connect your ${providerName} subscription`,
+    needsAuthCode: false,
+  }
+}
+
 /** Well-known model prefix → group label for providers without slash-based grouping */
 const MODEL_PREFIX_GROUPS: [RegExp, string][] = [
   [/^gpt-|^o[34]/i, 'OpenAI'],
@@ -332,6 +374,154 @@ function groupModels(modelIds: string[]): { label: string | null; models: string
     label: key === '_other' ? 'Other' : hasSlash ? key.charAt(0).toUpperCase() + key.slice(1) : key,
     models,
   }))
+}
+
+function HarnessAuthCodeFlow({
+  harnessId,
+  loginMessage,
+}: { harnessId: string; loginMessage?: string }) {
+  const [authCode, setAuthCode] = useState('')
+  const [submitted, setSubmitted] = useState(false)
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault()
+    const trimmed = authCode.trim()
+    if (!trimmed) return
+    sessionStore.getState().sendHarnessSetup(harnessId, 'login_code', trimmed)
+    setSubmitted(true)
+  }
+
+  const urlMatch = loginMessage?.match(/(https?:\/\/[^\s]+)/)
+
+  return (
+    <div className="harness-auth">
+      <div className="harness-auth__step">
+        <div className="harness-auth__step-label">
+          <span className="harness-auth__step-badge">1</span>
+          Open the login page
+        </div>
+        {urlMatch ? (
+          <a
+            href={urlMatch[1]}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="harness-auth__link-btn"
+          >
+            <ExternalLink size={14} strokeWidth={1.5} />
+            Open in browser
+          </a>
+        ) : (
+          <span className="harness-auth__hint">{loginMessage}</span>
+        )}
+      </div>
+
+      <div className="harness-auth__step">
+        <div className="harness-auth__step-label">
+          <span className="harness-auth__step-badge">2</span>
+          Paste the code from your browser
+        </div>
+        {submitted ? (
+          <div className="harness-auth__verifying">
+            <Loader2 size={14} strokeWidth={1.5} className="harness-auth__spinner" />
+            Verifying...
+          </div>
+        ) : (
+          <form onSubmit={handleSubmit} className="harness-auth__code-form">
+            <input
+              type="text"
+              className="harness-auth__code-input"
+              placeholder="Paste authentication code..."
+              value={authCode}
+              onChange={(e) => setAuthCode(e.target.value)}
+              autoComplete="off"
+              spellCheck={false}
+            />
+            <button type="submit" disabled={!authCode.trim()} className="harness-auth__submit">
+              <Check size={14} strokeWidth={2} />
+            </button>
+          </form>
+        )}
+      </div>
+    </div>
+  )
+}
+
+/** Device code auth flow — user opens URL and enters the code on the website (Codex) */
+function HarnessDeviceCodeFlow({ loginMessage }: { loginMessage?: string }) {
+  const [copied, setCopied] = useState(false)
+
+  let url = ''
+  let deviceCode = ''
+  if (loginMessage) {
+    try {
+      const parsed = JSON.parse(loginMessage)
+      url = parsed.url || ''
+      deviceCode = parsed.deviceCode || ''
+    } catch {
+      // Not JSON — fallback
+      url = loginMessage
+    }
+  }
+
+  const handleCopy = () => {
+    if (!deviceCode) return
+    navigator.clipboard.writeText(deviceCode)
+    setCopied(true)
+    setTimeout(() => setCopied(false), 2000)
+  }
+
+  return (
+    <div className="harness-auth">
+      <div className="harness-auth__step">
+        <div className="harness-auth__step-label">
+          <span className="harness-auth__step-badge">1</span>
+          Open the login page
+        </div>
+        {url ? (
+          <a
+            href={url}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="harness-auth__link-btn"
+          >
+            <ExternalLink size={14} strokeWidth={1.5} />
+            Open in browser
+          </a>
+        ) : (
+          <span className="harness-auth__hint">Waiting for login URL...</span>
+        )}
+      </div>
+
+      <div className="harness-auth__step">
+        <div className="harness-auth__step-label">
+          <span className="harness-auth__step-badge">2</span>
+          Enter this code on the website
+        </div>
+        {deviceCode ? (
+          <div className="harness-auth__device-code">
+            <code className="harness-auth__device-code-value">{deviceCode}</code>
+            <button
+              type="button"
+              className="harness-auth__device-code-copy"
+              onClick={handleCopy}
+              title="Copy code"
+            >
+              {copied ? <Check size={14} strokeWidth={2} /> : <ClipboardCopy size={14} strokeWidth={1.5} />}
+            </button>
+          </div>
+        ) : (
+          <span className="harness-auth__hint">Waiting for device code...</span>
+        )}
+      </div>
+
+      <div className="harness-auth__step">
+        <div className="harness-auth__step-label">
+          <Loader2 size={13} strokeWidth={1.5} className="harness-auth__spinner" />
+          Waiting for login to complete...
+        </div>
+      </div>
+    </div>
+  )
 }
 
 function ProviderPanel({
@@ -465,38 +655,227 @@ function ProviderPanel({
     </form>
   )
 
+  const isHarness = provider.type === 'harness'
+  const harnessStatus = sessionStore((s) => s.harnessStatuses[provider.name])
+  const setupProgress = sessionStore((s) => s.harnessSetupProgress[provider.name])
+
+  const isInstalled = harnessStatus?.installed ?? false
+  const isLoggedIn = harnessStatus?.auth?.loggedIn ?? false
+  const isSettingUp =
+    setupProgress?.step === 'installing' ||
+    setupProgress?.step === 'starting' ||
+    setupProgress?.step === 'waiting'
+  const providerReady = (isHarness ? isInstalled && isLoggedIn : provider.hasApiKey) || keySaved
+
   return (
     <div className="provider-detail">
-      {/* API Key — collapsed when already configured */}
-      {provider.hasApiKey && !showKeyInput ? (
-        <div className="provider-detail__key-status">
-          <div className="provider-detail__key-status-left">
-            <Check size={14} strokeWidth={1.5} className="provider-detail__key-status-icon" />
-            <span>API key configured</span>
+      {/* Harness providers: step-by-step setup */}
+      {isHarness ? (
+        <div className="harness-setup">
+          {isInstalled && isLoggedIn ? (
+            /* ── All set ── */
+            <div className="harness-setup__ready">
+              <div className="harness-setup__ready-icon">
+                <Check size={13} strokeWidth={2.5} />
+              </div>
+              <div className="harness-setup__ready-info">
+                <span className="harness-setup__ready-title">Connected</span>
+                <span className="harness-setup__ready-detail">
+                  {harnessStatus?.auth?.email || 'Authenticated'}
+                  {harnessStatus?.auth?.subscriptionType
+                    ? ` \u00b7 ${harnessStatus.auth.subscriptionType.charAt(0).toUpperCase() + harnessStatus.auth.subscriptionType.slice(1)}`
+                    : ''}
+                </span>
+              </div>
+            </div>
+          ) : (
+            /* ── Setup steps ── */
+            <div className="harness-setup__steps">
+              {/* Step 1: Install */}
+              <div
+                className={`harness-step${isInstalled ? ' harness-step--done' : ' harness-step--active'}`}
+              >
+                <div className="harness-step__indicator">
+                  {isInstalled ? (
+                    <div className="harness-step__check">
+                      <Check size={10} strokeWidth={3} />
+                    </div>
+                  ) : setupProgress?.action === 'install' &&
+                    setupProgress?.step === 'installing' ? (
+                    <Loader2 size={13} strokeWidth={1.5} className="harness-step__spinner" />
+                  ) : (
+                    <Download size={13} strokeWidth={1.5} />
+                  )}
+                </div>
+                <div className="harness-step__body">
+                  <div className="harness-step__title">
+                    Install {getHarnessInfo(provider.name).cliName}
+                    {isInstalled && harnessStatus?.version && (
+                      <span className="harness-step__version">{harnessStatus.version}</span>
+                    )}
+                  </div>
+                  {!isInstalled && (
+                    <>
+                      <p className="harness-step__desc">
+                        Required to {getHarnessInfo(provider.name).installHint}
+                      </p>
+                      <button
+                        type="button"
+                        className="harness-step__btn"
+                        disabled={isSettingUp}
+                        onClick={() =>
+                          sessionStore.getState().sendHarnessSetup(provider.name, 'install')
+                        }
+                      >
+                        {setupProgress?.action === 'install' && setupProgress?.step === 'installing'
+                          ? 'Installing...'
+                          : 'Install CLI'}
+                      </button>
+                      {setupProgress?.action === 'install' && setupProgress?.step === 'error' && (
+                        <p className="harness-step__error">{setupProgress.message}</p>
+                      )}
+                    </>
+                  )}
+                </div>
+              </div>
+
+              {/* Connector line */}
+              <div
+                className={`harness-step__connector${isInstalled ? ' harness-step__connector--done' : ''}`}
+              />
+
+              {/* Step 2: Sign in */}
+              <div
+                className={`harness-step${isLoggedIn ? ' harness-step--done' : isInstalled ? ' harness-step--active' : ' harness-step--pending'}`}
+              >
+                <div className="harness-step__indicator">
+                  {isLoggedIn ? (
+                    <div className="harness-step__check">
+                      <Check size={10} strokeWidth={3} />
+                    </div>
+                  ) : (
+                    <KeyRound size={13} strokeWidth={1.5} />
+                  )}
+                </div>
+                <div className="harness-step__body">
+                  <div className="harness-step__title">Sign in to {getHarnessInfo(provider.name).brandName}</div>
+                  {isInstalled && !isLoggedIn && (
+                    <>
+                      {setupProgress?.action === 'login' && setupProgress?.step === 'waiting' && getHarnessInfo(provider.name).needsAuthCode ? (
+                        <HarnessAuthCodeFlow harnessId={provider.name} loginMessage={setupProgress.message} />
+                      ) : setupProgress?.action === 'login' && setupProgress?.step === 'waiting' && !getHarnessInfo(provider.name).needsAuthCode ? (
+                        <HarnessDeviceCodeFlow loginMessage={setupProgress.message} />
+                      ) : (setupProgress?.action === 'login_code' && setupProgress?.step === 'waiting') ? (
+                        <div className="harness-step__inline-status">
+                          <Loader2 size={13} strokeWidth={1.5} className="harness-step__spinner" />
+                          <span>Completing login...</span>
+                        </div>
+                      ) : (
+                        <>
+                          <p className="harness-step__desc">
+                            Authenticate with your {getHarnessInfo(provider.name).subscriptionLabel} subscription
+                          </p>
+                          {getHarnessInfo(provider.name).loginPrereq && (
+                            <p className="harness-step__prereq">
+                              {getHarnessInfo(provider.name).loginPrereq}
+                            </p>
+                          )}
+                          <button
+                            type="button"
+                            className="harness-step__btn harness-step__btn--primary"
+                            disabled={isSettingUp}
+                            onClick={() =>
+                              sessionStore.getState().sendHarnessSetup(provider.name, 'login')
+                            }
+                          >
+                            {setupProgress?.action === 'login' && setupProgress?.step === 'starting'
+                              ? 'Starting...'
+                              : `Sign in with ${getHarnessInfo(provider.name).brandName}`}
+                          </button>
+                        </>
+                      )}
+                      {setupProgress?.step === 'error' && setupProgress?.message && (
+                        <p className="harness-step__error">{setupProgress.message}</p>
+                      )}
+                    </>
+                  )}
+                  {!isInstalled && (
+                    <p className="harness-step__desc harness-step__desc--muted">
+                      Complete step 1 first
+                    </p>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+      ) : provider.hasApiKey && !showKeyInput ? (
+        <section className="provider-detail__section provider-detail__section--access">
+          <div className="provider-detail__section-header">
+            <div>
+              <div className="provider-detail__section-label">Access</div>
+              <h4 className="provider-detail__section-title">API key</h4>
+              <p className="provider-detail__section-copy">
+                Use your own {providerDisplayName(provider)} key for direct API access.
+              </p>
+            </div>
+            <span className="provider-detail__section-state">Configured</span>
           </div>
-          <button
-            type="button"
-            className="provider-detail__key-change"
-            onClick={() => setShowKeyInput(true)}
-          >
-            Change key
-          </button>
-        </div>
+          <div className="provider-detail__key-status">
+            <div className="provider-detail__key-status-left">
+              <div className="provider-detail__key-status-icon-wrap">
+                <Check size={14} strokeWidth={1.7} className="provider-detail__key-status-icon" />
+              </div>
+              <div className="provider-detail__key-status-copy">
+                <span className="provider-detail__key-status-title">API key configured</span>
+                <span className="provider-detail__key-status-subtitle">
+                  Update it any time if you want to rotate credentials or switch accounts.
+                </span>
+              </div>
+            </div>
+            <button
+              type="button"
+              className="provider-detail__key-change"
+              onClick={() => setShowKeyInput(true)}
+            >
+              Replace key
+            </button>
+          </div>
+        </section>
       ) : (
-        <div className="provider-detail__key">
-          {!provider.hasApiKey && <div className="provider-detail__key-label">API Key</div>}
-          {keyForm}
-        </div>
+        <section className="provider-detail__section provider-detail__section--access">
+          <div className="provider-detail__section-header">
+            <div>
+              <div className="provider-detail__section-label">Access</div>
+              <h4 className="provider-detail__section-title">
+                {provider.hasApiKey ? 'Replace API key' : 'Add API key'}
+              </h4>
+              <p className="provider-detail__section-copy">
+                {provider.hasApiKey
+                  ? 'Paste a new key below to replace the one currently saved for this provider.'
+                  : `Paste your ${providerDisplayName(provider)} API key to unlock model selection.`}
+              </p>
+            </div>
+          </div>
+          <div className="provider-detail__key-card">
+            {!provider.hasApiKey && <div className="provider-detail__key-label">API Key</div>}
+            {keyForm}
+          </div>
+        </section>
       )}
 
       {/* Models */}
-      {(provider.hasApiKey || keySaved) && (
-        <div className="provider-detail__models">
-          <div className="provider-detail__models-top">
-            <span className="provider-detail__models-label">
-              Select a model
-              <span className="provider-detail__models-count">{provider.models.length}</span>
-            </span>
+      {providerReady && (
+        <section className="provider-detail__section provider-detail__section--models">
+          <div className="provider-detail__section-header">
+            <div>
+              <div className="provider-detail__section-label">Models</div>
+              <h4 className="provider-detail__section-title">Choose a default model</h4>
+              <p className="provider-detail__section-copy">
+                Anton will use this provider and model by default in new chats.
+              </p>
+            </div>
+            <span className="provider-detail__models-count">{provider.models.length}</span>
           </div>
 
           <div className="provider-detail__model-groups">
@@ -513,18 +892,16 @@ function ProviderPanel({
                         className={`provider-detail__model-card${isActive ? ' provider-detail__model-card--active' : ''}`}
                         onClick={() => onSelectModel(provider.name, model)}
                       >
+                        <div className="provider-detail__model-select">
+                          {isActive && <Check size={10} strokeWidth={2.2} />}
+                        </div>
                         <div className="provider-detail__model-info">
                           <span className="provider-detail__model-name">
                             {formatModelName(model)}
                           </span>
                           <code className="provider-detail__model-id">{model}</code>
                         </div>
-                        {isActive && (
-                          <div className="provider-detail__model-active">
-                            <Check size={12} strokeWidth={2} />
-                            Active
-                          </div>
-                        )}
+                        {isActive && <div className="provider-detail__model-active">Default</div>}
                       </button>
                     )
                   })}
@@ -532,12 +909,12 @@ function ProviderPanel({
               </div>
             ))}
           </div>
-        </div>
+        </section>
       )}
 
       {/* Edit models */}
-      {(provider.hasApiKey || keySaved) && (
-        <div className="provider-detail__edit">
+      {providerReady && (
+        <section className="provider-detail__section provider-detail__section--edit">
           <button
             type="button"
             className="provider-detail__edit-toggle"
@@ -622,9 +999,81 @@ function ProviderPanel({
               </motion.div>
             )}
           </AnimatePresence>
-        </div>
+        </section>
       )}
     </div>
+  )
+}
+
+type ModelsAccessTab = 'subscription' | 'api-keys'
+
+function ProviderOverviewCard({
+  provider,
+  currentProvider,
+  onClick,
+}: {
+  provider: ProviderInfo
+  currentProvider: string
+  onClick: () => void
+}) {
+  const harnessStatus = sessionStore((s) => s.harnessStatuses[provider.name])
+  const isHarness = provider.type === 'harness'
+  const ready = Boolean(harnessStatus?.installed && harnessStatus?.auth?.loggedIn)
+  const isActive = currentProvider === provider.name
+
+  let badgeText = ''
+  let badgeClassName = 'models-provider-card__badge'
+  let metaText = ''
+  let description = ''
+
+  if (isHarness) {
+    badgeText = ready ? 'Ready' : 'Setup'
+    badgeClassName += ready
+      ? ' models-provider-card__badge--connected'
+      : ' models-provider-card__badge--setup'
+    const info = getHarnessInfo(provider.name)
+    metaText = ready
+      ? harnessStatus?.auth?.email || `${provider.models.length} models available`
+      : `Install the CLI and sign in with ${info.brandName}`
+    description = ready
+      ? `Use your ${info.brandName} subscription directly from Anton.`
+      : 'No API key required. Anton will walk you through setup.'
+  } else if (provider.hasApiKey) {
+    badgeText = 'Connected'
+    badgeClassName += ' models-provider-card__badge--connected'
+    metaText = `${provider.models.length} model${provider.models.length !== 1 ? 's' : ''} available`
+    description = 'Key added. Pick a default model or edit the list.'
+  } else {
+    badgeText = 'Add key'
+    badgeClassName += ' models-provider-card__badge--setup'
+    metaText = `${provider.models.length} model${provider.models.length !== 1 ? 's' : ''} supported`
+    description = 'Connect this provider with your own API key.'
+  }
+
+  return (
+    <button
+      type="button"
+      className={`models-provider-card${isActive ? ' models-provider-card--active' : ''}`}
+      onClick={onClick}
+    >
+      <div className="models-provider-card__icon-wrap">
+        <ProviderIcon provider={provider.name} size={18} />
+      </div>
+      <div className="models-provider-card__info">
+        <div className="models-provider-card__topline">
+          <div className="models-provider-card__name-row">
+            <div className="models-provider-card__name">
+              {providerDisplayName(provider)}
+              {isActive && <span className="models-provider-card__active-badge">Active</span>}
+            </div>
+            <span className={badgeClassName}>{badgeText}</span>
+          </div>
+          <div className="models-provider-card__count">{metaText}</div>
+        </div>
+        <div className="models-provider-card__description">{description}</div>
+      </div>
+      <ChevronRight size={14} strokeWidth={1.5} className="models-provider-card__chevron" />
+    </button>
   )
 }
 
@@ -633,6 +1082,7 @@ function ModelsPage({ onClose }: { onClose: () => void }) {
   const currentModel = sessionStore((s) => s.currentModel)
   const providers = sessionStore((s) => s.providers)
   const [selectedProvider, setSelectedProvider] = useState<string | null>(null)
+  const [activeTab, setActiveTab] = useState<ModelsAccessTab>('subscription')
 
   const handleSelect = (provider: string, model: string) => {
     const ss = sessionStore.getState()
@@ -648,6 +1098,21 @@ function ModelsPage({ onClose }: { onClose: () => void }) {
   })
 
   const selected = providers.find((p) => p.name === selectedProvider)
+  const harnesses = sortedProviders.filter((p) => p.type === 'harness')
+  const connected = sortedProviders.filter((p) => p.type !== 'harness' && p.hasApiKey)
+  const available = sortedProviders.filter((p) => p.type !== 'harness' && !p.hasApiKey)
+
+  useEffect(() => {
+    if (selectedProvider && !providers.some((p) => p.name === selectedProvider)) {
+      setSelectedProvider(null)
+    }
+  }, [providers, selectedProvider])
+
+  useEffect(() => {
+    if (harnesses.length === 0 && activeTab === 'subscription') {
+      setActiveTab('api-keys')
+    }
+  }, [activeTab, harnesses.length])
 
   // Detail view for a selected provider
   if (selected) {
@@ -659,24 +1124,36 @@ function ModelsPage({ onClose }: { onClose: () => void }) {
           onClick={() => setSelectedProvider(null)}
         >
           <ChevronRight size={14} strokeWidth={1.5} className="models-detail__back-icon" />
-          All Providers
+          {activeTab === 'subscription' ? 'Back to Subscription' : 'Back to API Keys'}
         </button>
 
         <div className="models-detail__header">
           <div className="models-detail__icon-wrap">
-            <ProviderIcon provider={selected.name} size={28} />
+            <ProviderIcon provider={selected.name} size={20} />
           </div>
           <div className="models-detail__header-info">
-            <h3 className="models-detail__title">
-              {selected.name.charAt(0).toUpperCase() + selected.name.slice(1)}
-            </h3>
+            <h3 className="models-detail__title">{providerDisplayName(selected)}</h3>
             <span className="models-detail__subtitle">
-              {selected.hasApiKey
-                ? `${selected.models.length} models available`
-                : 'Add your API key to get started'}
+              {selected.type === 'harness'
+                ? `Uses your ${getHarnessInfo(selected.name).subscriptionLabel} subscription`
+                : selected.hasApiKey
+                  ? `${selected.models.length} models available`
+                  : 'Add your API key to get started'}
             </span>
           </div>
-          {selected.hasApiKey ? (
+          {selected.type === 'harness' ? (
+            (() => {
+              const hs = sessionStore.getState().harnessStatuses[selected.name]
+              const ready = hs?.installed && hs?.auth?.loggedIn
+              return ready ? (
+                <span className="settings-modal__badge settings-modal__badge--connected">
+                  Ready
+                </span>
+              ) : (
+                <span className="settings-modal__badge settings-modal__badge--setup">Setup</span>
+              )
+            })()
+          ) : selected.hasApiKey ? (
             <span className="settings-modal__badge settings-modal__badge--connected">
               Connected
             </span>
@@ -697,83 +1174,79 @@ function ModelsPage({ onClose }: { onClose: () => void }) {
     )
   }
 
-  // Provider grid view
-  const connected = sortedProviders.filter((p) => p.hasApiKey)
-  const available = sortedProviders.filter((p) => !p.hasApiKey)
-
   return (
     <div className="models-grid-page">
-      {connected.length > 0 && (
-        <div className="models-grid-section">
-          <div className="models-grid-section__label">Connected</div>
-          <div className="models-provider-grid">
-            {connected.map((provider) => {
-              const isActive = currentProvider === provider.name
-              return (
-                <button
-                  key={provider.name}
-                  type="button"
-                  className={`models-provider-card${isActive ? ' models-provider-card--active' : ''}`}
-                  onClick={() => setSelectedProvider(provider.name)}
-                >
-                  <div className="models-provider-card__icon-wrap">
-                    <ProviderIcon provider={provider.name} size={22} />
-                  </div>
-                  <div className="models-provider-card__info">
-                    <div className="models-provider-card__name">
-                      {provider.name.charAt(0).toUpperCase() + provider.name.slice(1)}
-                      <span className="models-provider-card__dot" title="Connected" />
-                    </div>
-                    <div className="models-provider-card__count">
-                      {provider.models.length} model{provider.models.length !== 1 ? 's' : ''}
-                      {isActive && (
-                        <span className="models-provider-card__active-badge">Active</span>
-                      )}
-                    </div>
-                  </div>
-                  <ChevronRight
-                    size={14}
-                    strokeWidth={1.5}
-                    className="models-provider-card__chevron"
-                  />
-                </button>
-              )
-            })}
-          </div>
-        </div>
-      )}
+      <div className="models-access-tabs">
+        {harnesses.length > 0 && (
+          <button
+            type="button"
+            className={`models-access-tabs__tab${activeTab === 'subscription' ? ' models-access-tabs__tab--active' : ''}`}
+            onClick={() => setActiveTab('subscription')}
+          >
+            <Download size={14} strokeWidth={1.5} />
+            Subscription
+          </button>
+        )}
+        <button
+          type="button"
+          className={`models-access-tabs__tab${activeTab === 'api-keys' ? ' models-access-tabs__tab--active' : ''}`}
+          onClick={() => setActiveTab('api-keys')}
+        >
+          <KeyRound size={14} strokeWidth={1.5} />
+          API Keys
+        </button>
+      </div>
 
-      {available.length > 0 && (
-        <div className="models-grid-section">
-          <div className="models-grid-section__label">Available</div>
+      {activeTab === 'subscription' && harnesses.length > 0 && (
+        <section className="models-grid-section">
+          <div className="models-grid-section__label">Subscriptions</div>
           <div className="models-provider-grid">
-            {available.map((provider) => (
-              <button
+            {harnesses.map((provider) => (
+              <ProviderOverviewCard
                 key={provider.name}
-                type="button"
-                className="models-provider-card"
+                provider={provider}
+                currentProvider={currentProvider}
                 onClick={() => setSelectedProvider(provider.name)}
-              >
-                <div className="models-provider-card__icon-wrap">
-                  <ProviderIcon provider={provider.name} size={22} />
-                </div>
-                <div className="models-provider-card__info">
-                  <div className="models-provider-card__name">
-                    {provider.name.charAt(0).toUpperCase() + provider.name.slice(1)}
-                  </div>
-                  <div className="models-provider-card__count">
-                    {provider.models.length} model{provider.models.length !== 1 ? 's' : ''}
-                  </div>
-                </div>
-                <ChevronRight
-                  size={14}
-                  strokeWidth={1.5}
-                  className="models-provider-card__chevron"
-                />
-              </button>
+              />
             ))}
           </div>
-        </div>
+        </section>
+      )}
+
+      {activeTab === 'api-keys' && (
+        <>
+          {connected.length > 0 && (
+            <section className="models-grid-section">
+              <div className="models-grid-section__label">Connected Providers</div>
+              <div className="models-provider-grid">
+                {connected.map((provider) => (
+                  <ProviderOverviewCard
+                    key={provider.name}
+                    provider={provider}
+                    currentProvider={currentProvider}
+                    onClick={() => setSelectedProvider(provider.name)}
+                  />
+                ))}
+              </div>
+            </section>
+          )}
+
+          {available.length > 0 && (
+            <section className="models-grid-section">
+              <div className="models-grid-section__label">Available Providers</div>
+              <div className="models-provider-grid">
+                {available.map((provider) => (
+                  <ProviderOverviewCard
+                    key={provider.name}
+                    provider={provider}
+                    currentProvider={currentProvider}
+                    onClick={() => setSelectedProvider(provider.name)}
+                  />
+                ))}
+              </div>
+            </section>
+          )}
+        </>
       )}
 
       {providers.length === 0 && (

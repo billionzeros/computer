@@ -24,6 +24,8 @@ export const providerIcons: Record<string, string> = {
   meta: metaIcon,
   xai: xaiIcon,
   kimi: kimiIcon,
+  'claude-code': anthropicIcon,
+  codex: openaiIcon,
 }
 
 /** Format model ID into a clean display name: "claude-sonnet-4-6" → "Sonnet 4.6" */
