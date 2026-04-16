@@ -81,9 +81,34 @@ function getToolTypeLabel(toolName: string, toolInput?: Record<string, unknown>)
     case 'exa_find_similar':
       return 'Similar'
     default:
-      // For MCP or unknown tools, capitalize first letter
-      return toolName.charAt(0).toUpperCase() + toolName.slice(1)
+      return formatMcpToolName(toolName)
   }
+}
+
+/**
+ * Render an MCP tool name (`server:tool` or just `tool`) as a human label.
+ * Strips the server prefix (the connector source is conveyed elsewhere),
+ * splits the snake_case tool name on underscores, and title-cases each
+ * word. Falls back to a single-letter capitalize if the name has no
+ * underscore and no colon, so a bare `Memory` still looks right.
+ *
+ *   codex_apps:gmail_search_emails → "Gmail Search Emails"
+ *   anton:memory_save              → "Memory Save"
+ *   list_channels                  → "List Channels"
+ *   ping                           → "Ping"
+ */
+function formatMcpToolName(toolName: string): string {
+  const colonIdx = toolName.indexOf(':')
+  const tool = colonIdx >= 0 ? toolName.slice(colonIdx + 1) : toolName
+  if (!tool) return toolName
+  if (!tool.includes('_')) {
+    return tool.charAt(0).toUpperCase() + tool.slice(1)
+  }
+  return tool
+    .split('_')
+    .filter(Boolean)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(' ')
 }
 
 /** Get the target/description shown after the type label (in code-styled pill) */
