@@ -213,14 +213,8 @@ interface RegistryCase {
   mustNotInclude?: string[]
 }
 
-const STATIC_NAMES = [
-  'memory_save',
-  'memory_recall',
-  'memory_list',
-  'notify',
-  'database_query',
-  'publish',
-]
+// Canonical Pi SDK tool names — same definitions both backends use.
+const STATIC_NAMES = ['database', 'memory', 'notification', 'publish']
 
 const registryCases: RegistryCase[] = [
   {

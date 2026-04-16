@@ -40,6 +40,7 @@ import { executeNotification } from './tools/notification.js'
 import { executePlan } from './tools/plan.js'
 // process and network tools removed — shell handles ps/kill/ping/curl
 import { executePublish } from './tools/publish.js'
+import { buildAntonCoreTools } from './tools/factories.js'
 import { executeRead } from './tools/read.js'
 import { setForbiddenPaths } from './tools/security.js'
 import type { SharedStateHandler } from './tools/shared-state.js'
@@ -629,39 +630,7 @@ export function buildTools(
       },
     }),
 
-    // ── Publish ──────────────────────────────────────────────────────
-    defineTool({
-      name: 'publish',
-      label: 'Publish',
-      description:
-        'Publish content to a public URL accessible from the internet. ' +
-        'Converts markdown, HTML, SVG, mermaid diagrams, or code into a standalone web page. ' +
-        'Returns the public URL. Use after creating an artifact when the user wants to share it publicly.',
-      parameters: Type.Object({
-        title: Type.String({ description: 'Page title' }),
-        content: Type.String({ description: 'The content to publish' }),
-        type: Type.Union(
-          [
-            Type.Literal('html'),
-            Type.Literal('markdown'),
-            Type.Literal('svg'),
-            Type.Literal('mermaid'),
-            Type.Literal('code'),
-          ],
-          { description: 'Content type: html, markdown, svg, mermaid, or code' },
-        ),
-        language: Type.Optional(
-          Type.String({ description: 'Language for code syntax (e.g. "typescript")' }),
-        ),
-        slug: Type.Optional(
-          Type.String({ description: 'Custom URL slug (auto-generated if omitted)' }),
-        ),
-      }),
-      async execute(_toolCallId, params) {
-        const output = executePublish(params, callbacks?.domain)
-        return toolResult(output)
-      },
-    }),
+    // publish moved into buildSharedTools — see tools/factories.ts
 
     // ── Git ─────────────────────────────────────────────────────────
     defineTool({
@@ -757,72 +726,17 @@ export function buildTools(
       },
     }),
 
-    // ── Database ────────────────────────────────────────────────────
-    defineTool({
-      name: 'database',
-      label: 'Database',
-      description:
-        'SQLite database operations. Use for structured data storage, queries, and analysis. ' +
-        'Default database at ~/.anton/data.db. Can also work with any SQLite file. ' +
-        'Operations: query (SELECT), execute (INSERT/UPDATE/DELETE/CREATE), tables, schema.',
-      parameters: Type.Object({
-        operation: Type.Union(
-          [
-            Type.Literal('query'),
-            Type.Literal('execute'),
-            Type.Literal('schema'),
-            Type.Literal('tables'),
-          ],
-          { description: 'Database operation' },
-        ),
-        db_path: Type.Optional(
-          Type.String({ description: 'SQLite database path (default: ~/.anton/data.db)' }),
-        ),
-        sql: Type.Optional(
-          Type.String({ description: 'SQL statement, or table name for schema operation' }),
-        ),
-      }),
-      async execute(_toolCallId, params) {
-        const output = executeDatabase(params)
-        return toolResult(output)
-      },
-    }),
-
-    // ── Memory ──────────────────────────────────────────────────────
-    defineTool({
-      name: 'memory',
-      label: 'Memory',
-      description:
-        'Persistent memory that survives across sessions. Save facts, preferences, project context. ' +
-        'Operations: save (store a memory by key), recall (retrieve by key), list (show all, optionally filtered), forget (delete by key). ' +
-        'Scope: "conversation" (default) stores memory for this conversation only, "global" stores across all conversations. ' +
-        'Use proactively to remember user preferences and important context. ' +
-        'Use scope=global for broadly useful info (user preferences, server configs). ' +
-        'Use scope=conversation for conversation-specific facts.',
-      parameters: Type.Object({
-        operation: Type.Union(
-          [
-            Type.Literal('save'),
-            Type.Literal('recall'),
-            Type.Literal('list'),
-            Type.Literal('forget'),
-          ],
-          { description: 'Memory operation' },
-        ),
-        key: Type.Optional(Type.String({ description: 'Memory key (for save/recall/forget)' })),
-        content: Type.Optional(Type.String({ description: 'Content to store (for save)' })),
-        query: Type.Optional(Type.String({ description: 'Filter term (for list)' })),
-        scope: Type.Optional(
-          Type.Union([Type.Literal('global'), Type.Literal('conversation')], {
-            description:
-              'Memory scope: "conversation" (default) for this conversation, "global" for cross-conversation',
-          }),
-        ),
-      }),
-      async execute(_toolCallId, params) {
-        const output = executeMemory(params, callbacks?.conversationId)
-        return toolResult(output)
-      },
+    // ── Anton core tools (database, memory, notification, publish,
+    //    update_project_context, activate_workflow). Definitions live
+    //    in the per-tool files next to each impl; buildAntonCoreTools
+    //    is the single catalog both Pi SDK and the harness MCP shim
+    //    consume. DO NOT inline duplicates here — extend the relevant
+    //    per-tool file instead.
+    ...buildAntonCoreTools({
+      conversationId: callbacks?.conversationId,
+      projectId: callbacks?.projectId,
+      onActivateWorkflow: callbacks?.onActivateWorkflow,
+      domain: callbacks?.domain,
     }),
 
     // ── Todo ────────────────────────────────────────────────────────
@@ -908,23 +822,7 @@ export function buildTools(
       },
     }),
 
-    // ── Notification ────────────────────────────────────────────────
-    defineTool({
-      name: 'notification',
-      label: 'Notification',
-      description:
-        'Send a desktop notification. Use to alert the user when long tasks complete, ' +
-        'for reminders, or when something needs attention.',
-      parameters: Type.Object({
-        title: Type.String({ description: 'Notification title' }),
-        message: Type.String({ description: 'Notification body text' }),
-        sound: Type.Optional(Type.Boolean({ description: 'Play alert sound (default: true)' })),
-      }),
-      async execute(_toolCallId, params) {
-        const output = executeNotification(params)
-        return toolResult(output)
-      },
-    }),
+    // notification moved into buildSharedTools — see tools/factories.ts
 
     // ── Image ───────────────────────────────────────────────────────
     defineTool({
@@ -1047,29 +945,7 @@ export function buildTools(
     }),
   ]
 
-  // ── Workflow activation (only for project-scoped sessions with handler) ──
-  if (callbacks?.projectId && callbacks?.onActivateWorkflow) {
-    const projectId = callbacks.projectId
-    const activateHandler = callbacks.onActivateWorkflow
-    tools.push(
-      defineTool({
-        name: 'activate_workflow',
-        label: 'Activate Workflow',
-        description:
-          'Activate a workflow by creating all its agents. Call this ONLY after the user has approved the final configuration plan. ' +
-          'This creates the scheduled agents defined in the workflow manifest and starts them running.',
-        parameters: Type.Object({
-          workflow_id: Type.String({
-            description: 'The workflow ID to activate (e.g. "lead-qualification")',
-          }),
-        }),
-        async execute(_toolCallId, params) {
-          const output = await activateHandler(projectId, params.workflow_id)
-          return toolResult(output)
-        },
-      }),
-    )
-  }
+  // activate_workflow moved into buildSharedTools — see tools/factories.ts
 
   // ── Shared state (workflow agents with DB access) ──
   if (callbacks?.onSharedState && callbacks?.workflowId) {
@@ -1354,38 +1230,7 @@ export function buildTools(
     )
   }
 
-  // ── Project context update (only for project-scoped sessions) ─────
-  if (callbacks?.projectId) {
-    tools.push(
-      defineTool({
-        name: 'update_project_context',
-        label: 'Project Context',
-        description:
-          'Update the project context with a summary of what was accomplished in this session. ' +
-          'Call this once per session when meaningful work has been done (feature implemented, bug fixed, significant decision made). ' +
-          'This persists the summary so future sessions have context about past work.',
-        parameters: Type.Object({
-          session_summary: Type.String({
-            description: '1-2 sentence summary of what was accomplished in this session',
-          }),
-          project_summary: Type.Optional(
-            Type.String({
-              description:
-                'Updated overall project summary incorporating new info. Only provide if something significant changed.',
-            }),
-          ),
-        }),
-        async execute(_toolCallId, params) {
-          return toolResult(
-            JSON.stringify({
-              sessionSummary: params.session_summary,
-              projectSummary: params.project_summary,
-            }),
-          )
-        },
-      }),
-    )
-  }
+  // update_project_context moved into buildSharedTools — see tools/factories.ts
 
   // ── Routine management (only for project-scoped sessions with handler) ──
   if (callbacks?.projectId && callbacks?.onJobAction) {

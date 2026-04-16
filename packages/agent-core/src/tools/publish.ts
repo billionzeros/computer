@@ -318,3 +318,47 @@ export function executePublish(input: PublishInput, domain?: string): string {
   const url = domain ? `https://${domain}/a/${slug}` : `/a/${slug}`
   return `Published "${input.title}" → ${url}`
 }
+
+// ── Tool factory ────────────────────────────────────────────────────
+
+import type { AgentTool } from '@mariozechner/pi-agent-core'
+import { Type } from '@sinclair/typebox'
+import { defineTool, toolResult } from './_helpers.js'
+
+/**
+ * Build the `publish` tool definition. Shared between the Pi SDK agent
+ * and the harness MCP shim — do not duplicate this schema elsewhere.
+ */
+export function buildPublishTool(domain?: string): AgentTool {
+  return defineTool({
+    name: 'publish',
+    label: 'Publish',
+    description:
+      'Publish content to a public URL accessible from the internet. ' +
+      'Converts markdown, HTML, SVG, mermaid diagrams, or code into a standalone web page. ' +
+      'Returns the public URL. Use after creating an artifact when the user wants to share it publicly.',
+    parameters: Type.Object({
+      title: Type.String({ description: 'Page title' }),
+      content: Type.String({ description: 'The content to publish' }),
+      type: Type.Union(
+        [
+          Type.Literal('html'),
+          Type.Literal('markdown'),
+          Type.Literal('svg'),
+          Type.Literal('mermaid'),
+          Type.Literal('code'),
+        ],
+        { description: 'Content type: html, markdown, svg, mermaid, or code' },
+      ),
+      language: Type.Optional(
+        Type.String({ description: 'Language for code syntax (e.g. "typescript")' }),
+      ),
+      slug: Type.Optional(
+        Type.String({ description: 'Custom URL slug (auto-generated if omitted)' }),
+      ),
+    }),
+    async execute(_toolCallId, params) {
+      return toolResult(executePublish(params, domain))
+    },
+  })
+}

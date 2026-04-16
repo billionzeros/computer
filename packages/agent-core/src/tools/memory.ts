@@ -147,3 +147,50 @@ export function executeMemory(input: MemoryInput, conversationId?: string): stri
       return `Error: unknown operation "${input.operation}".`
   }
 }
+
+// ── Tool factory ────────────────────────────────────────────────────
+
+import type { AgentTool } from '@mariozechner/pi-agent-core'
+import { Type } from '@sinclair/typebox'
+import { defineTool, toolResult } from './_helpers.js'
+
+/**
+ * Build the `memory` tool definition. Shared between the Pi SDK agent
+ * and the harness MCP shim — do not duplicate this schema elsewhere.
+ */
+export function buildMemoryTool(conversationId?: string): AgentTool {
+  return defineTool({
+    name: 'memory',
+    label: 'Memory',
+    description:
+      'Persistent memory that survives across sessions. Save facts, preferences, project context. ' +
+      'Operations: save (store a memory by key), recall (retrieve by key), list (show all, optionally filtered), forget (delete by key). ' +
+      'Scope: "conversation" (default) stores memory for this conversation only, "global" stores across all conversations. ' +
+      'Use proactively to remember user preferences and important context. ' +
+      'Use scope=global for broadly useful info (user preferences, server configs). ' +
+      'Use scope=conversation for conversation-specific facts.',
+    parameters: Type.Object({
+      operation: Type.Union(
+        [
+          Type.Literal('save'),
+          Type.Literal('recall'),
+          Type.Literal('list'),
+          Type.Literal('forget'),
+        ],
+        { description: 'Memory operation' },
+      ),
+      key: Type.Optional(Type.String({ description: 'Memory key (for save/recall/forget)' })),
+      content: Type.Optional(Type.String({ description: 'Content to store (for save)' })),
+      query: Type.Optional(Type.String({ description: 'Filter term (for list)' })),
+      scope: Type.Optional(
+        Type.Union([Type.Literal('global'), Type.Literal('conversation')], {
+          description:
+            'Memory scope: "conversation" (default) for this conversation, "global" for cross-conversation',
+        }),
+      ),
+    }),
+    async execute(_toolCallId, params) {
+      return toolResult(executeMemory(params, conversationId))
+    },
+  })
+}

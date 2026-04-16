@@ -34,3 +34,31 @@ export function executeNotification(input: NotificationInput): string {
     return `Error sending notification: ${(err as Error).message}`
   }
 }
+
+// ── Tool factory ────────────────────────────────────────────────────
+
+import type { AgentTool } from '@mariozechner/pi-agent-core'
+import { Type } from '@sinclair/typebox'
+import { defineTool, toolResult } from './_helpers.js'
+
+/**
+ * Build the `notification` tool definition. Shared between the Pi SDK
+ * agent and the harness MCP shim — do not duplicate this schema elsewhere.
+ */
+export function buildNotificationTool(): AgentTool {
+  return defineTool({
+    name: 'notification',
+    label: 'Notification',
+    description:
+      'Send a desktop notification. Use to alert the user when long tasks complete, ' +
+      'for reminders, or when something needs attention.',
+    parameters: Type.Object({
+      title: Type.String({ description: 'Notification title' }),
+      message: Type.String({ description: 'Notification body text' }),
+      sound: Type.Optional(Type.Boolean({ description: 'Play alert sound (default: true)' })),
+    }),
+    async execute(_toolCallId, params) {
+      return toolResult(executeNotification(params))
+    },
+  })
+}

@@ -105,3 +105,44 @@ export function executeDatabase(input: DatabaseInput): string {
     return `Error: ${(err as Error).message}`
   }
 }
+
+// ── Tool factory ────────────────────────────────────────────────────
+
+import type { AgentTool } from '@mariozechner/pi-agent-core'
+import { Type } from '@sinclair/typebox'
+import { defineTool, toolResult } from './_helpers.js'
+
+/**
+ * Build the `database` tool definition. Shared between the Pi SDK agent
+ * and the harness MCP shim — do not duplicate this schema elsewhere.
+ */
+export function buildDatabaseTool(): AgentTool {
+  return defineTool({
+    name: 'database',
+    label: 'Database',
+    description:
+      'SQLite database operations. Use for structured data storage, queries, and analysis. ' +
+      'Default database at ~/.anton/data.db. Can also work with any SQLite file. ' +
+      'Operations: query (SELECT), execute (INSERT/UPDATE/DELETE/CREATE), tables, schema.',
+    parameters: Type.Object({
+      operation: Type.Union(
+        [
+          Type.Literal('query'),
+          Type.Literal('execute'),
+          Type.Literal('schema'),
+          Type.Literal('tables'),
+        ],
+        { description: 'Database operation' },
+      ),
+      db_path: Type.Optional(
+        Type.String({ description: 'SQLite database path (default: ~/.anton/data.db)' }),
+      ),
+      sql: Type.Optional(
+        Type.String({ description: 'SQL statement, or table name for schema operation' }),
+      ),
+    }),
+    async execute(_toolCallId, params) {
+      return toolResult(executeDatabase(params))
+    },
+  })
+}
