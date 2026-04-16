@@ -1,0 +1,4 @@
+{"type":"thread.started","thread_id":"thr-abc"}
+{"type":"turn.started"}
+{"type":"item.completed","item":{"id":"item_1","type":"agent_message","text":"Hello from Codex."}}
+{"type":"turn.completed","usage":{"input_tokens":100,"output_tokens":5,"cached_input_tokens":30}}

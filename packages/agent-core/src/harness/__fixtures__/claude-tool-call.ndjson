@@ -1,0 +1,5 @@
+{"type":"system","subtype":"init","session_id":"cli-sess-tool","tools":["Bash","Read"],"model":"claude-sonnet-4-6","cwd":"/tmp"}
+{"type":"assistant","message":{"id":"msg_10","type":"message","role":"assistant","content":[{"type":"thinking","thinking":"I should list the files."},{"type":"tool_use","id":"toolu_1","name":"Bash","input":{"command":"ls"}}],"model":"claude-sonnet-4-6","usage":{"input_tokens":130,"output_tokens":40}}}
+{"type":"user","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"toolu_1","content":"file1.txt\nfile2.txt","is_error":false}]}}
+{"type":"assistant","message":{"id":"msg_11","type":"message","role":"assistant","content":[{"type":"text","text":"Two files."}],"model":"claude-sonnet-4-6","usage":{"input_tokens":150,"output_tokens":4}}}
+{"type":"result","subtype":"success","session_id":"cli-sess-tool","is_error":false,"total_cost_usd":0.002,"duration_ms":1500,"duration_api_ms":1100,"num_turns":2,"usage":{"input_tokens":150,"output_tokens":44}}

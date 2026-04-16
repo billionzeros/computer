@@ -7,6 +7,7 @@
   "scripts": {
     "dev": "tsc --watch",
     "build": "tsc",
+    "check:harness": "tsx src/harness/__fixtures__/check.ts",
     "eval": "tsx src/evals/index.ts",
     "eval:tools": "tsx src/evals/index.ts tools",
     "eval:safety": "tsx src/evals/index.ts safety",
