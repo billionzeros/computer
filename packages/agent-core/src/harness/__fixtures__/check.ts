@@ -405,13 +405,50 @@ const identityCases: IdentityCase[] = [
       b.startsWith('\n\n<system-reminder>\n# Anton\n') ? null : 'missing <system-reminder># Anton header',
   },
   {
-    name: 'role-setting sentence present',
+    name: 'identity section present',
+    assert: (b) => (b.includes('## Identity') ? null : 'missing "## Identity" header'),
+  },
+  {
+    name: 'frames the model as Anton execution engine',
     assert: (b) =>
-      b.includes('You are running inside Anton') ? null : 'missing role-setting sentence',
+      b.includes("serving as the execution engine for **Anton**")
+        ? null
+        : 'missing "execution engine for Anton" framing',
+  },
+  {
+    name: 'keeps native model identity alongside Anton',
+    assert: (b) =>
+      b.includes('Keep your own model identity') ? null : 'missing dual-identity instruction',
+  },
+  {
+    name: 'answer script for "who are you"',
+    assert: (b) =>
+      b.includes('When asked who you are or what you are') &&
+      b.includes("Anton's execution engine")
+        ? null
+        : 'missing "who are you" answer script',
+  },
+  {
+    name: 'answer script for "what is Anton"',
+    assert: (b) =>
+      b.includes('When asked "what is Anton"') &&
+      b.includes('personal AI computer')
+        ? null
+        : 'missing "what is Anton" answer script',
+  },
+  {
+    name: 'explicit guard against "Anton is a name" hallucination',
+    assert: (b) =>
+      b.includes('Do NOT say Anton is a name')
+        ? null
+        : 'missing explicit guard against name/person hallucination',
   },
   {
     name: 'What Anton adds section',
-    assert: (b) => (b.includes('## What Anton adds') ? null : 'missing "What Anton adds" header'),
+    assert: (b) =>
+      b.includes('## What Anton adds to your native tools')
+        ? null
+        : 'missing "What Anton adds" header',
   },
   {
     name: 'Scope section (prevents over-application)',
@@ -441,8 +478,6 @@ const identityCases: IdentityCase[] = [
     name: 'identity prepended in buildHarnessContextPrompt',
     assert: () => {
       const full = _buildHarnessContextPrompt({})
-      // Identity block should land first (trimStart removes leading \n\n
-      // but the # Anton heading is still the first line).
       return full.startsWith('<system-reminder>\n# Anton\n')
         ? null
         : `expected identity block first, got: ${full.slice(0, 80)}`
