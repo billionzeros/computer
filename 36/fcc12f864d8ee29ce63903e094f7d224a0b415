@@ -1,0 +1,38 @@
+packages/agent-core/src/harness/__fixtures__/expected.ts
+  769b5b3c9cf4802b 78
+packages/agent-core/src/harness/__fixtures__/codex-tool-call.ndjson
+  769b5b3c9cf4802b 3
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.3.0",
+  "base_commit_sha": "36fcc12f864d8ee29ce63903e094f7d224a0b415",
+  "prompts": {
+    "2d5ac6b7340430d4": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "a30d512c-9d2b-4864-9d97-0a0730cb300b",
+        "model": "claude-opus-4-7"
+      },
+      "human_author": "Om Gupta",
+      "messages": [],
+      "total_additions": 134,
+      "total_deletions": 1,
+      "accepted_lines": 134,
+      "overriden_lines": 0
+    },
+    "769b5b3c9cf4802b": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "c83d38ee-8bb9-42aa-8659-18e255f70dd6",
+        "model": "claude-opus-4-7"
+      },
+      "human_author": "Om Gupta",
+      "messages": [],
+      "total_additions": 2,
+      "total_deletions": 0,
+      "accepted_lines": 2,
+      "overriden_lines": 0
+    }
+  }
+}
