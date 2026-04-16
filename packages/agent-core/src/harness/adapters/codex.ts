@@ -76,6 +76,12 @@ export class CodexAdapter implements HarnessAdapter {
         // by default.
         '-c',
         'model_reasoning_summary="detailed"',
+        // Disable Codex's hosted MCP server so it can't reach for
+        // OpenAI-side Gmail/Calendar/GitHub tools. This forces it to
+        // use Anton's MCP shim (mcp_servers.anton) — calls then route
+        // through the user's connected accounts and stay auditable.
+        '-c',
+        'mcp_servers.codex_apps.enabled=false',
       ]
 
       if (opts.model) {
@@ -107,6 +113,12 @@ export class CodexAdapter implements HarnessAdapter {
       // by default.
       '-c',
       'model_reasoning_summary="detailed"',
+      // Disable Codex's hosted MCP server so it can't reach for
+      // OpenAI-side Gmail/Calendar/GitHub tools. This forces it to
+      // use Anton's MCP shim (mcp_servers.anton) — calls then route
+      // through the user's connected accounts and stay auditable.
+      '-c',
+      'mcp_servers.codex_apps.enabled=false',
     ]
 
     if (opts.model) {
