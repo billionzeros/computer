@@ -1,0 +1,38 @@
+packages/agent-server/src/webhooks/agent-runner.ts
+  769b5b3c9cf4802b 15,19,25-30,131-143,145,179-185,202-208,337-339,348-351,365-371,640-643,652-665,694,705-730
+packages/agent-server/src/server.ts
+  769b5b3c9cf4802b 1854-1861,1866-1867,1875-1882,1908,4750-4760
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.3.0",
+  "base_commit_sha": "ef90b51c03ad12901435360be32577a90d566442",
+  "prompts": {
+    "2d5ac6b7340430d4": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "a30d512c-9d2b-4864-9d97-0a0730cb300b",
+        "model": "claude-opus-4-7"
+      },
+      "human_author": "Om Gupta",
+      "messages": [],
+      "total_additions": 0,
+      "total_deletions": 0,
+      "accepted_lines": 82,
+      "overriden_lines": 0
+    },
+    "769b5b3c9cf4802b": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "c83d38ee-8bb9-42aa-8659-18e255f70dd6",
+        "model": "claude-opus-4-7"
+      },
+      "human_author": "Om Gupta",
+      "messages": [],
+      "total_additions": 32,
+      "total_deletions": 2,
+      "accepted_lines": 125,
+      "overriden_lines": 0
+    }
+  }
+}
