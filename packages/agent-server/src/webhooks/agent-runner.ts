@@ -858,7 +858,7 @@ export class WebhookAgentRunner {
    */
   private listModelsForProvider(providerName: string): string[] {
     if (providerName === 'codex') {
-      return ['gpt-5.4', 'gpt-5.4-codex', 'gpt-5-codex', 'gpt-5']
+      return ['gpt-5.4', 'gpt-5.4-mini']
     }
     if (providerName === 'claude-code') {
       return ['claude-sonnet-4.6', 'claude-opus-4.6', 'claude-haiku-4.5']
