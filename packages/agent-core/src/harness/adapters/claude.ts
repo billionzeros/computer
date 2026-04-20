@@ -190,7 +190,8 @@ export class ClaudeAdapter implements HarnessAdapter {
           {
             type: 'tool_result',
             id: block.tool_use_id,
-            output: typeof block.content === 'string' ? block.content : JSON.stringify(block.content),
+            output:
+              typeof block.content === 'string' ? block.content : JSON.stringify(block.content),
             isError: block.is_error,
           },
         ]

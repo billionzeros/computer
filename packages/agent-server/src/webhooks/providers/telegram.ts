@@ -299,10 +299,7 @@ export class TelegramWebhookProvider implements WebhookProvider {
    * Send a stateless drill-down menu. Returns a ref so the runner can
    * editInlineMenu() the same message in response to button clicks.
    */
-  async sendInlineMenu(
-    event: CanonicalEvent,
-    opts: InlineMenuOpts,
-  ): Promise<InlineMenuRef | null> {
+  async sendInlineMenu(event: CanonicalEvent, opts: InlineMenuOpts): Promise<InlineMenuRef | null> {
     const chatId = event.context.chatId as number
     const res = await this.telegramPostWithMdFallback('sendMessage', {
       chat_id: chatId,
@@ -311,10 +308,7 @@ export class TelegramWebhookProvider implements WebhookProvider {
     })
     if (!res.ok) {
       const body = await res.text().catch(() => '<unreadable>')
-      log.warn(
-        { chatId, status: res.status, body: body.slice(0, 200) },
-        'sendInlineMenu failed',
-      )
+      log.warn({ chatId, status: res.status, body: body.slice(0, 200) }, 'sendInlineMenu failed')
       return null
     }
     const data = (await res.json()) as { ok: boolean; result?: { message_id: number } }

@@ -222,8 +222,7 @@ function loadMemoryGuidelinesFromSystemPrompt(): string {
       return ''
     }
     const nextHeaderIdx = full.indexOf('\n## ', startIdx + headerMarker.length)
-    const section =
-      nextHeaderIdx < 0 ? full.slice(startIdx) : full.slice(startIdx, nextHeaderIdx)
+    const section = nextHeaderIdx < 0 ? full.slice(startIdx) : full.slice(startIdx, nextHeaderIdx)
     // Strip the header line itself; we re-wrap the body under our own heading.
     const body = section.replace(/^## Memory guidelines\s*\n+/, '').trim()
     _memoryGuidelinesCache = body

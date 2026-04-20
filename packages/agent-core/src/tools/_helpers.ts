@@ -9,9 +9,9 @@
  * opening any single tool file has everything they need in view.
  */
 
-import type { Static, TSchema } from '@sinclair/typebox'
 import type { AgentTool, AgentToolResult } from '@mariozechner/pi-agent-core'
 import type { TextContent } from '@mariozechner/pi-ai'
+import type { Static, TSchema } from '@sinclair/typebox'
 
 export function toolResult(output: string, isError = false): AgentToolResult<unknown> {
   const content: TextContent[] = [{ type: 'text', text: output }]

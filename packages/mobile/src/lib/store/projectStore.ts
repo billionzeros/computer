@@ -2,7 +2,7 @@
  * Project domain store — projects, routines, project sessions.
  */
 
-import type { RoutineSession, Project } from '@anton/protocol'
+import type { Project, RoutineSession } from '@anton/protocol'
 import { create } from 'zustand'
 import { connection } from '../connection'
 import type { SessionMeta } from './types'
@@ -67,7 +67,8 @@ export const projectStore = create<ProjectStoreState>((set, _get) => ({
   setProjectSessions: (sessions) =>
     set({ projectSessions: sessions, projectSessionsLoading: false }),
 
-  setProjectRoutines: (routines) => set({ projectRoutines: routines, projectRoutinesLoading: false }),
+  setProjectRoutines: (routines) =>
+    set({ projectRoutines: routines, projectRoutinesLoading: false }),
 
   listProjects: () => connection.sendProjectsList(),
 

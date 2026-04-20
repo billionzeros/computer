@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { ActivityDock } from './components/ActivityDock.js'
 import { CommandPalette } from './components/CommandPalette.js'
 import { Connect } from './components/Connect.js'
+import { DesktopUpdateBanner } from './components/DesktopUpdateBanner.js'
 import { FileBrowser } from './components/FileBrowser.js'
 import { ForceUpdateGate } from './components/ForceUpdateGate.js'
 import { MachineInfoPanel } from './components/MachineInfoPanel.js'
@@ -301,6 +302,7 @@ export function App() {
         <div className="workspace-shell">
           {/* Update notification overlay */}
           <UpdateBanner />
+          <DesktopUpdateBanner />
 
           {/* Reconnecting banner */}
           {isDisconnected && !isDisconnectedForUpdate && (

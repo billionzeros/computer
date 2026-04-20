@@ -18,14 +18,14 @@
  */
 
 import { type ChildProcess, spawn } from 'node:child_process'
-import { readFileSync, existsSync, statSync } from 'node:fs'
-import { basename, extname } from 'node:path'
 import { createHash, randomUUID } from 'node:crypto'
+import { existsSync, readFileSync, statSync } from 'node:fs'
+import { basename, extname } from 'node:path'
 import { createLogger } from '@anton/logger'
 import type { ChatImageAttachmentInput } from '@anton/protocol'
 import type { SessionEvent } from '../session.js'
 import { CodexRpcClient, CodexRpcError } from './codex-rpc.js'
-import { detectCodexCli, PINNED_CLI_VERSION } from './codex-version.js'
+import { PINNED_CLI_VERSION, detectCodexCli } from './codex-version.js'
 
 const log = createLogger('codex-harness-session')
 
@@ -75,7 +75,11 @@ export class CodexHarnessSession {
   private lastActiveAt: number
   private currentTurn: TurnQueue | null = null
   private currentTurnId: string | null = null
-  private currentTurnUsage: { inputTokens: number; outputTokens: number; cacheReadTokens?: number } | null = null
+  private currentTurnUsage: {
+    inputTokens: number
+    outputTokens: number
+    cacheReadTokens?: number
+  } | null = null
 
   // Per-item tracking across the current turn.
   private openToolCalls = new Map<string, { name: string; input: Record<string, unknown> }>()
@@ -145,7 +149,10 @@ export class CodexHarnessSession {
     // already serializes via `activeTurns`, but a direct caller must not
     // silently tangle two turns on one queue.
     if (this.currentTurn) {
-      log.warn({ sessionId: this.id }, 'processMessage called while a turn is already active — rejecting')
+      log.warn(
+        { sessionId: this.id },
+        'processMessage called while a turn is already active — rejecting',
+      )
       yield { type: 'error', message: 'session busy: a turn is already in flight', code: 'runtime' }
       yield { type: 'done' }
       return
@@ -205,8 +212,10 @@ export class CodexHarnessSession {
     // `turn/started` notification — whichever lands first wins).
     try {
       const input = buildUserInput(effectiveUserMessage, attachments)
-      void this.rpc!
-        .request<{ turn: { id: string } }>('turn/start', this.buildTurnStartParams(input))
+      void this.rpc!.request<{ turn: { id: string } }>(
+        'turn/start',
+        this.buildTurnStartParams(input),
+      )
         .then((res) => {
           if (res?.turn?.id && !this.currentTurnId) this.currentTurnId = res.turn.id
         })
@@ -334,11 +343,9 @@ export class CodexHarnessSession {
   /** Send turn/interrupt; swallow & log the error. Used by cancel + steer. */
   private fireInterrupt(turnId: string): void {
     if (!this.rpc || !this.threadId) return
-    this.rpc
-      .request('turn/interrupt', { threadId: this.threadId, turnId })
-      .catch((err) => {
-        log.warn({ err: (err as Error).message, sessionId: this.id }, 'turn/interrupt failed')
-      })
+    this.rpc.request('turn/interrupt', { threadId: this.threadId, turnId }).catch((err) => {
+      log.warn({ err: (err as Error).message, sessionId: this.id }, 'turn/interrupt failed')
+    })
   }
 
   /** Interrupt + steer the named turn. Shared between live and buffered paths. */
@@ -351,7 +358,10 @@ export class CodexHarnessSession {
     try {
       await this.rpc.request('turn/interrupt', { threadId: this.threadId, turnId })
     } catch (err) {
-      log.warn({ err: (err as Error).message, sessionId: this.id }, 'turn/interrupt failed — continuing to steer')
+      log.warn(
+        { err: (err as Error).message, sessionId: this.id },
+        'turn/interrupt failed — continuing to steer',
+      )
     }
     try {
       await this.rpc.request('turn/steer', {
@@ -371,7 +381,11 @@ export class CodexHarnessSession {
    * the compiler can't see, so it narrows the field to `null`. Reading
    * through this method returns the field at its declared union type.
    */
-  private readCurrentTurnUsage(): { inputTokens: number; outputTokens: number; cacheReadTokens?: number } | null {
+  private readCurrentTurnUsage(): {
+    inputTokens: number
+    outputTokens: number
+    cacheReadTokens?: number
+  } | null {
     return this.currentTurnUsage
   }
 
@@ -748,12 +762,19 @@ export class CodexHarnessSession {
     //     tokenUsage: { total: TokenUsageBreakdown, last: …, modelContextWindow } }
     //   TokenUsageBreakdown = { totalTokens, inputTokens, cachedInputTokens,
     //                           outputTokens, reasoningOutputTokens }
-    const p = params as {
-      tokenUsage?: {
-        total?: { inputTokens?: number; outputTokens?: number; cachedInputTokens?: number; totalTokens?: number }
-        last?: { inputTokens?: number; outputTokens?: number; cachedInputTokens?: number }
-      }
-    } | undefined
+    const p = params as
+      | {
+          tokenUsage?: {
+            total?: {
+              inputTokens?: number
+              outputTokens?: number
+              cachedInputTokens?: number
+              totalTokens?: number
+            }
+            last?: { inputTokens?: number; outputTokens?: number; cachedInputTokens?: number }
+          }
+        }
+      | undefined
     const u = p?.tokenUsage?.total ?? p?.tokenUsage?.last
     if (!u) return
     const input = u.inputTokens ?? 0
@@ -937,7 +958,10 @@ export class CodexHarnessSession {
       case 'mcpToolCall': {
         if (this.openToolCalls.has(item.id)) {
           const i = item as {
-            result?: { content?: Array<{ type?: string; text?: string }>; structuredContent?: unknown }
+            result?: {
+              content?: Array<{ type?: string; text?: string }>
+              structuredContent?: unknown
+            }
             error?: string | { message?: string }
           }
           const errMsg = typeof i.error === 'string' ? i.error : i.error?.message
@@ -1002,7 +1026,10 @@ export class CodexHarnessSession {
               content,
             })
           } catch (e) {
-            log.warn({ err: (e as Error).message, path: fp }, 'fileChange: failed to read changed file')
+            log.warn(
+              { err: (e as Error).message, path: fp },
+              'fileChange: failed to read changed file',
+            )
           }
         }
         return
@@ -1041,10 +1068,7 @@ const IMG_MARKER_RE = /\[img:([^\]]+)\]/g
  * image at that position. Unreferenced attachments append after the text.
  * If there are no markers and no attachments, returns a single text item.
  */
-export function buildUserInput(
-  text: string,
-  attachments: ChatImageAttachmentInput[],
-): UserInput[] {
+export function buildUserInput(text: string, attachments: ChatImageAttachmentInput[]): UserInput[] {
   if (attachments.length === 0) {
     return [{ type: 'text', text, text_elements: [] }]
   }
@@ -1109,7 +1133,9 @@ function attachmentToDataUrl(a: ChatImageAttachmentInput): string {
  * Extract the `item` field from an item/started or item/completed
  * notification. Shape: { item, threadId, turnId }.
  */
-function pickItem(params: unknown): { id?: string; type?: string; [k: string]: unknown } | undefined {
+function pickItem(
+  params: unknown,
+): { id?: string; type?: string; [k: string]: unknown } | undefined {
   const p = params as { item?: Record<string, unknown> } | undefined
   return p?.item as { id?: string; type?: string; [k: string]: unknown } | undefined
 }
@@ -1118,9 +1144,12 @@ function delay(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms))
 }
 
-function classifyStartupError(stderr: string): 'not_installed' | 'not_authed' | 'startup_timeout' | 'runtime' {
+function classifyStartupError(
+  stderr: string,
+): 'not_installed' | 'not_authed' | 'startup_timeout' | 'runtime' {
   const s = stderr.toLowerCase()
-  if (s.includes('enoent') || s.includes('not installed') || s.includes('not found on path')) return 'not_installed'
+  if (s.includes('enoent') || s.includes('not installed') || s.includes('not found on path'))
+    return 'not_installed'
   if (
     s.includes('not logged in') ||
     s.includes('unauthorized') ||
@@ -1137,15 +1166,40 @@ function classifyStartupError(stderr: string): 'not_installed' | 'not_authed' | 
 
 function inferLanguage(ext: string): string {
   const map: Record<string, string> = {
-    ts: 'typescript', tsx: 'typescript', js: 'javascript', jsx: 'javascript',
-    py: 'python', rs: 'rust', go: 'go', java: 'java', kt: 'kotlin',
-    c: 'c', h: 'c', cpp: 'cpp', hpp: 'cpp', cc: 'cpp',
-    sh: 'bash', bash: 'bash', zsh: 'bash', fish: 'bash',
-    md: 'markdown', mdx: 'markdown',
-    html: 'html', htm: 'html', css: 'css', scss: 'scss',
-    json: 'json', toml: 'toml', yaml: 'yaml', yml: 'yaml',
-    sql: 'sql', rb: 'ruby', php: 'php', swift: 'swift',
-    xml: 'xml', txt: 'text',
+    ts: 'typescript',
+    tsx: 'typescript',
+    js: 'javascript',
+    jsx: 'javascript',
+    py: 'python',
+    rs: 'rust',
+    go: 'go',
+    java: 'java',
+    kt: 'kotlin',
+    c: 'c',
+    h: 'c',
+    cpp: 'cpp',
+    hpp: 'cpp',
+    cc: 'cpp',
+    sh: 'bash',
+    bash: 'bash',
+    zsh: 'bash',
+    fish: 'bash',
+    md: 'markdown',
+    mdx: 'markdown',
+    html: 'html',
+    htm: 'html',
+    css: 'css',
+    scss: 'scss',
+    json: 'json',
+    toml: 'toml',
+    yaml: 'yaml',
+    yml: 'yaml',
+    sql: 'sql',
+    rb: 'ruby',
+    php: 'php',
+    swift: 'swift',
+    xml: 'xml',
+    txt: 'text',
   }
   return map[ext] ?? 'text'
 }

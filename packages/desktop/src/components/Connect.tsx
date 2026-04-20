@@ -125,13 +125,7 @@ function ParticleNetwork() {
     }
   }, [])
 
-  return (
-    <canvas
-      ref={canvasRef}
-      className="connect-canvas"
-      aria-hidden
-    />
-  )
+  return <canvas ref={canvasRef} className="connect-canvas" aria-hidden />
 }
 
 export function Connect({ onConnected }: { onConnected: () => void }) {
@@ -229,6 +223,7 @@ export function Connect({ onConnected }: { onConnected: () => void }) {
 
   // Auto-connect: if saved machines exist, connect to last used one
   const autoConnectAttempted = useRef(false)
+  // biome-ignore lint/correctness/useExhaustiveDependencies: connectSaved is a stable closure; adding it would re-run auto-connect
   useEffect(() => {
     if (autoConnectAttempted.current) return
 
@@ -414,8 +409,11 @@ export function Connect({ onConnected }: { onConnected: () => void }) {
               {mode === 'username' || !isDev ? (
                 <>
                   <div className="connect-field">
-                    <label className="connect-label">Username</label>
+                    <label className="connect-label" htmlFor="connect-username">
+                      Username
+                    </label>
                     <input
+                      id="connect-username"
                       className="connect-input"
                       placeholder="your-name"
                       value={username}
@@ -426,8 +424,11 @@ export function Connect({ onConnected }: { onConnected: () => void }) {
                     />
                   </div>
                   <div className="connect-field">
-                    <label className="connect-label">Password</label>
+                    <label className="connect-label" htmlFor="connect-password">
+                      Password
+                    </label>
                     <input
+                      id="connect-password"
                       type="password"
                       className="connect-input"
                       placeholder="Enter your password"
@@ -440,8 +441,11 @@ export function Connect({ onConnected }: { onConnected: () => void }) {
               ) : (
                 <>
                   <div className="connect-field">
-                    <label className="connect-label">Server address</label>
+                    <label className="connect-label" htmlFor="connect-host">
+                      Server address
+                    </label>
                     <input
+                      id="connect-host"
                       className="connect-input"
                       placeholder="192.168.1.100"
                       value={host}
@@ -449,8 +453,11 @@ export function Connect({ onConnected }: { onConnected: () => void }) {
                     />
                   </div>
                   <div className="connect-field">
-                    <label className="connect-label">Access token</label>
+                    <label className="connect-label" htmlFor="connect-token">
+                      Access token
+                    </label>
                     <input
+                      id="connect-token"
                       type="password"
                       className="connect-input"
                       placeholder="Enter your token"

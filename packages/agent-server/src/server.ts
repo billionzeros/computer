@@ -84,30 +84,30 @@ import {
   updateConnector as updateConnectorConfig,
 } from '@anton/agent-config'
 import {
+  AntonToolRegistry,
+  ClaudeAdapter,
+  CodexAdapter,
+  CodexHarnessSession,
+  HarnessSession,
   McpManager,
   type McpServerConfig,
   type Session,
   type SubAgentEventHandler,
-  createSession,
-  executePublish,
-  hashPromptVersion,
-  resumeSession,
-  HarnessSession,
-  CodexHarnessSession,
-  isHarnessSession,
-  ClaudeAdapter,
-  CodexAdapter,
-  AntonToolRegistry,
-  createMcpIpcServer,
-  buildHarnessContextPrompt,
-  assembleConversationContext,
-  ensureHarnessSessionInit,
-  synthesizeHarnessTurn,
   appendHarnessTurn,
-  readHarnessHistory,
+  assembleConversationContext,
+  buildHarnessContextPrompt,
   buildReplaySeed,
+  createMcpIpcServer,
+  createSession,
+  ensureHarnessSessionInit,
+  executePublish,
   extractHarnessMemoriesFromMirror,
+  hashPromptVersion,
+  isHarnessSession,
+  readHarnessHistory,
   resolveModel,
+  resumeSession,
+  synthesizeHarnessTurn,
 } from '@anton/agent-core'
 import { CONNECTOR_FACTORIES, ConnectorManager } from '@anton/connectors'
 import { createLogger } from '@anton/logger'
@@ -281,7 +281,10 @@ export class AgentServer {
   private ptys: Map<string, PtyHandle> = new Map()
   private activeWorkspacePath: string | null = null
   private mcpIpcServer: import('@anton/agent-core').McpIpcServer | null = null
-  private harnessSessionContexts = new Map<string, import('@anton/agent-core').HarnessSessionContext>()
+  private harnessSessionContexts = new Map<
+    string,
+    import('@anton/agent-core').HarnessSessionContext
+  >()
   /**
    * Per-harness-session cursor into the mirror for memory extraction.
    * Advanced after each successful extraction; the same index is passed
@@ -363,7 +366,7 @@ export class AgentServer {
       this.ptys.delete(id)
     }
     // Shutdown harness sessions and IPC server
-    for (const [id, session] of this.sessions) {
+    for (const [, session] of this.sessions) {
       if (isHarnessSession(session)) {
         try {
           await session.shutdown()
@@ -1555,7 +1558,11 @@ export class AgentServer {
       case 'steer': {
         const steerSessionId = msg.sessionId || DEFAULT_SESSION_ID
         const steerSession = this.sessions.get(steerSessionId)
-        if (steerSession && !isHarnessSession(steerSession) && this.activeTurns.has(steerSessionId)) {
+        if (
+          steerSession &&
+          !isHarnessSession(steerSession) &&
+          this.activeTurns.has(steerSessionId)
+        ) {
           steerSession.steer(msg.content, msg.attachments)
           this.sendToClient(Channel.AI, {
             type: 'steer_ack',
@@ -1838,7 +1845,6 @@ export class AgentServer {
           }
         }
       }
-
     } catch (err: unknown) {
       this.sendToClient(Channel.AI, {
         type: 'error',
@@ -1896,7 +1902,16 @@ export class AgentServer {
     // don't touch this variable — so we only build it for non-codex.
     const adapter = providerName === 'codex' ? null : new ClaudeAdapter()
     const socketPath = join(getAntonDir(), 'harness.sock')
-    const shimPath = join(getAntonDir(), '..', 'node_modules', '@anton', 'agent-core', 'dist', 'harness', 'anton-mcp-shim.js')
+    const shimPath = join(
+      getAntonDir(),
+      '..',
+      'node_modules',
+      '@anton',
+      'agent-core',
+      'dist',
+      'harness',
+      'anton-mcp-shim.js',
+    )
 
     // Resolve workspace path from the project (if any)
     let cwd: string | undefined
@@ -1910,7 +1925,10 @@ export class AgentServer {
     if (this.mcpIpcServer) {
       this.mcpIpcServer.registerSession(id, authToken)
     } else {
-      log.error({ sessionId: id }, 'MCP IPC server not initialized — harness session cannot authenticate')
+      log.error(
+        { sessionId: id },
+        'MCP IPC server not initialized — harness session cannot authenticate',
+      )
     }
 
     // Register the tool-registry session context so project-scoped
@@ -1937,7 +1955,9 @@ export class AgentServer {
     // so harness turns see the same Anton-owned state. Memory loads on
     // the first turn using the user's first message for keyword
     // matching; subsequent turns reuse the cache.
-    let cachedMemoryData: Awaited<ReturnType<typeof assembleConversationContext>>['memoryData'] | undefined
+    let cachedMemoryData:
+      | Awaited<ReturnType<typeof assembleConversationContext>>['memoryData']
+      | undefined
     let cachedContextInfoSent = false
     let replaySeedConsumed = false
     const buildSystemPrompt = async (userMessage: string, turnIndex: number): Promise<string> => {
@@ -1965,7 +1985,7 @@ export class AgentServer {
       let projectContextBlock: string | undefined
       if (project) {
         const lines: string[] = [
-          `You are running inside Anton, a personal AI computer.`,
+          'You are running inside Anton, a personal AI computer.',
           `Project: ${project.name}`,
         ]
         if (project.description) lines.push(`Description: ${project.description}`)
@@ -2000,16 +2020,23 @@ export class AgentServer {
         model,
       })
     } catch (err) {
-      log.warn({ err, sessionId: id }, 'failed to initialize harness session on disk — mirror will be incomplete')
+      log.warn(
+        { err, sessionId: id },
+        'failed to initialize harness session on disk — mirror will be incomplete',
+      )
     }
 
     const mirrorProjectId = harnessProjectId
     const onTurnEnd = async (turn: {
       userMessage: string
-      events: Parameters<NonNullable<ConstructorParameters<typeof HarnessSession>[0]['onTurnEnd']>>[0]['events']
+      events: Parameters<
+        NonNullable<ConstructorParameters<typeof HarnessSession>[0]['onTurnEnd']>
+      >[0]['events']
     }) => {
       const messages = synthesizeHarnessTurn(turn.userMessage, turn.events)
-      const firstText = turn.events.find((e) => e.type === 'text') as { content: string } | undefined
+      const firstText = turn.events.find((e) => e.type === 'text') as
+        | { content: string }
+        | undefined
       appendHarnessTurn({
         sessionId: id,
         projectId: mirrorProjectId,
@@ -2026,11 +2053,15 @@ export class AgentServer {
         } else if (ev.type === 'tool_result') {
           if (pendingToolNames.get(ev.id) === 'update_project_context') {
             try {
-              const parsed = JSON.parse(ev.output) as { sessionSummary?: unknown; projectSummary?: unknown }
+              const parsed = JSON.parse(ev.output) as {
+                sessionSummary?: unknown
+                projectSummary?: unknown
+              }
               if (typeof parsed.sessionSummary === 'string') {
                 projectContextUpdate = {
                   sessionSummary: parsed.sessionSummary,
-                  projectSummary: typeof parsed.projectSummary === 'string' ? parsed.projectSummary : undefined,
+                  projectSummary:
+                    typeof parsed.projectSummary === 'string' ? parsed.projectSummary : undefined,
                 }
               }
             } catch {
@@ -2060,7 +2091,10 @@ export class AgentServer {
             this.sendToClient(Channel.AI, { type: 'project_updated', project: updatedProject })
           }
         } catch (err) {
-          log.warn({ err, sessionId: id, projectId: mirrorProjectId }, 'harness project-history update failed')
+          log.warn(
+            { err, sessionId: id, projectId: mirrorProjectId },
+            'harness project-history update failed',
+          )
         }
       }
 
@@ -2107,7 +2141,13 @@ export class AgentServer {
     })
 
     log.info(
-      { sessionId: id, provider: providerName, model, type: 'harness', switched: Boolean(replaySeedForFirstTurn) },
+      {
+        sessionId: id,
+        provider: providerName,
+        model,
+        type: 'harness',
+        switched: Boolean(replaySeedForFirstTurn),
+      },
       'Harness session created',
     )
 
@@ -2148,8 +2188,7 @@ export class AgentServer {
     // Validate the requested provider is a harness type — refusing here
     // prevents the caller from silently dead-ending into an incompatible
     // Pi SDK flow.
-    const newProviderConfig =
-      this.config.providers[msg.provider] || DEFAULT_PROVIDERS[msg.provider]
+    const newProviderConfig = this.config.providers[msg.provider] || DEFAULT_PROVIDERS[msg.provider]
     if (newProviderConfig?.type !== 'harness') {
       this.sendToClient(Channel.AI, {
         type: 'error',
@@ -2167,7 +2206,10 @@ export class AgentServer {
     try {
       await existing.shutdown()
     } catch (err) {
-      log.warn({ err, sessionId: msg.id }, 'harness shutdown errored during provider switch — continuing')
+      log.warn(
+        { err, sessionId: msg.id },
+        'harness shutdown errored during provider switch — continuing',
+      )
     }
     if (this.mcpIpcServer) {
       this.mcpIpcServer.unregisterSession(msg.id)
@@ -2183,7 +2225,10 @@ export class AgentServer {
       const seed = buildReplaySeed({ sessionId: msg.id, projectId })
       if (seed) replaySeed = seed
     } catch (err) {
-      log.warn({ err, sessionId: msg.id }, 'failed to build replay seed — continuing without history replay')
+      log.warn(
+        { err, sessionId: msg.id },
+        'failed to build replay seed — continuing without history replay',
+      )
     }
 
     // Rebuild. createHarnessSession writes meta.json via
@@ -2207,7 +2252,12 @@ export class AgentServer {
       model: msg.model,
     })
     log.info(
-      { sessionId: msg.id, provider: msg.provider, model: msg.model, hadReplaySeed: Boolean(replaySeed) },
+      {
+        sessionId: msg.id,
+        provider: msg.provider,
+        model: msg.model,
+        hadReplaySeed: Boolean(replaySeed),
+      },
       'Harness session provider switched',
     )
   }
@@ -2225,10 +2275,7 @@ export class AgentServer {
   private runHarnessMemoryExtraction(sessionId: string, projectId: string | undefined): void {
     // Find any configured Pi SDK provider that has an API key set.
     // Prefer the config's default provider; fall back to any match.
-    const tryProviders = [
-      this.config.defaults.provider,
-      ...Object.keys(this.config.providers),
-    ]
+    const tryProviders = [this.config.defaults.provider, ...Object.keys(this.config.providers)]
     let chosenProvider: string | undefined
     let apiKey: string | undefined
     for (const name of tryProviders) {
@@ -2250,8 +2297,7 @@ export class AgentServer {
 
     // Resolve a Pi SDK model for the extractor's fallback. Use the
     // provider's first configured model, else its default.
-    const provCfg =
-      this.config.providers[chosenProvider] || DEFAULT_PROVIDERS[chosenProvider]
+    const provCfg = this.config.providers[chosenProvider] || DEFAULT_PROVIDERS[chosenProvider]
     const modelId = provCfg?.models?.[0]
     if (!modelId) return
     const fallbackModel = resolveModel(chosenProvider, modelId)
@@ -2571,7 +2617,9 @@ export class AgentServer {
   private handleSessionDestroy(msg: { id: string }) {
     // Extract projectId before deleting so we can update stats
     const session = this.sessions.get(msg.id)
-    const projectId = (session && !isHarnessSession(session) ? session.contextInfo?.projectId : undefined) ?? this.extractProjectId(msg.id)
+    const projectId =
+      (session && !isHarnessSession(session) ? session.contextInfo?.projectId : undefined) ??
+      this.extractProjectId(msg.id)
     const wasHarness = session ? isHarnessSession(session) : false
 
     try {
@@ -2633,7 +2681,13 @@ export class AgentServer {
       // reject harness-only models (e.g. "gpt-5.4" for Codex). Reading
       // our mirror directly also avoids re-hydrating a Session we
       // don't need — harness history is the jsonl file, nothing else.
-      const harnessHit = this.tryReadHarnessHistory(msg.id, projectIdHint, msg.before, limit, isFirstPage)
+      const harnessHit = this.tryReadHarnessHistory(
+        msg.id,
+        projectIdHint,
+        msg.before,
+        limit,
+        isFirstPage,
+      )
       if (harnessHit) return
 
       // Pi SDK PATH — check if already in memory, else revive from disk.
@@ -2642,7 +2696,10 @@ export class AgentServer {
       // above (shouldn't happen — meta.json is authoritative), fall
       // back to reading its mirror so we never silently return empty.
       if (session && isHarnessSession(session)) {
-        const entries = readHarnessHistory(msg.id, this.harnessSessionContexts.get(msg.id)?.projectId)
+        const entries = readHarnessHistory(
+          msg.id,
+          this.harnessSessionContexts.get(msg.id)?.projectId,
+        )
         this.sendHarnessHistoryPage(msg.id, entries, msg.before, limit, isFirstPage)
         return
       }
@@ -2661,7 +2718,11 @@ export class AgentServer {
 
         if (!session) {
           log.warn(
-            { sessionId: msg.id, projectId: projectIdHint, extracted: this.extractProjectId(msg.id) },
+            {
+              sessionId: msg.id,
+              projectId: projectIdHint,
+              extracted: this.extractProjectId(msg.id),
+            },
             'Session not found on disk',
           )
           this.sendToClient(Channel.AI, {
@@ -2672,7 +2733,10 @@ export class AgentServer {
           })
           return
         }
-        log.info({ sessionId: msg.id, projectId: projectIdHint }, 'Resumed session from disk for history')
+        log.info(
+          { sessionId: msg.id, projectId: projectIdHint },
+          'Resumed session from disk for history',
+        )
         this.wireSessionConfirmHandler(session)
         this.wirePlanConfirmHandler(session)
         this.wireAskUserHandler(session)
@@ -2701,7 +2765,8 @@ export class AgentServer {
       )
 
       // On first page, include artifacts extracted from full history
-      const artifacts = isFirstPage && !isHarnessSession(session) ? session.getArtifacts() : undefined
+      const artifacts =
+        isFirstPage && !isHarnessSession(session) ? session.getArtifacts() : undefined
 
       this.sendToClient(Channel.AI, {
         type: 'session_history_response',
@@ -2855,7 +2920,12 @@ export class AgentServer {
   private async handleHarnessSetup(msg: { harnessId: string; action: string }) {
     const { harnessId, action } = msg
 
-    const adapter = harnessId === 'codex' ? new CodexAdapter() : harnessId === 'claude-code' ? new ClaudeAdapter() : null
+    const adapter =
+      harnessId === 'codex'
+        ? new CodexAdapter()
+        : harnessId === 'claude-code'
+          ? new ClaudeAdapter()
+          : null
 
     if (!adapter) {
       this.sendToClient(Channel.AI, {
@@ -2908,13 +2978,18 @@ export class AgentServer {
           const npmPackage = harnessId === 'codex' ? '@openai/codex' : '@anthropic-ai/claude-code'
 
           await new Promise<void>((resolve, reject) => {
-            execFileCb('sudo', ['npm', 'install', '-g', npmPackage], { timeout: 120_000 }, (err, _stdout, stderr) => {
-              if (err) {
-                reject(new Error(stderr?.trim() || err.message))
-              } else {
-                resolve()
-              }
-            })
+            execFileCb(
+              'sudo',
+              ['npm', 'install', '-g', npmPackage],
+              { timeout: 120_000 },
+              (err, _stdout, stderr) => {
+                if (err) {
+                  reject(new Error(stderr?.trim() || err.message))
+                } else {
+                  resolve()
+                }
+              },
+            )
           })
 
           // Re-detect after install
@@ -3007,10 +3082,11 @@ export class AgentServer {
 
             const handleLine = (line: string) => {
               // Strip ANSI escape codes (Codex outputs colored text)
+              // biome-ignore lint/suspicious/noControlCharactersInRegex: ESC is intentional — stripping ANSI
               const clean = line.trim().replace(/\x1b\[[0-9;]*m/g, '')
               if (!clean) return
 
-              output += clean + '\n'
+              output += `${clean}\n`
               log.info({ line: clean, harnessId }, 'harness auth login output')
 
               const urlMatch = clean.match(/(https?:\/\/[^\s]+)/)
@@ -3141,7 +3217,7 @@ export class AgentServer {
 
         log.info('Writing auth code to claude login process via PTY')
         // Send \r (carriage return) not \n — Ink uses raw mode where Enter = \r
-        this.pendingLoginProc.stdin.write(code.trim() + '\r')
+        this.pendingLoginProc.stdin.write(`${code.trim()}\r`)
         this.sendToClient(Channel.AI, {
           type: 'harness_setup_response',
           harnessId,
@@ -3456,14 +3532,23 @@ export class AgentServer {
       // Get full history — for run-specific sessions, return everything (no time filtering needed)
       if (isHarnessSession(session)) return
       const fullHistory = session.getHistory()
-      const logs = fullHistory.map((entry: { ts: number; role: string; content: unknown; toolName?: string; toolInput?: unknown; isError?: boolean }) => ({
-        ts: entry.ts,
-        role: entry.role as 'user' | 'assistant' | 'tool_call' | 'tool_result',
-        content: typeof entry.content === 'string' ? entry.content.slice(0, 2000) : '',
-        toolName: entry.toolName,
-        toolInput: entry.toolInput ? JSON.stringify(entry.toolInput).slice(0, 500) : undefined,
-        isError: entry.isError,
-      }))
+      const logs = fullHistory.map(
+        (entry: {
+          ts: number
+          role: string
+          content: unknown
+          toolName?: string
+          toolInput?: unknown
+          isError?: boolean
+        }) => ({
+          ts: entry.ts,
+          role: entry.role as 'user' | 'assistant' | 'tool_call' | 'tool_result',
+          content: typeof entry.content === 'string' ? entry.content.slice(0, 2000) : '',
+          toolName: entry.toolName,
+          toolInput: entry.toolInput ? JSON.stringify(entry.toolInput).slice(0, 500) : undefined,
+          isError: entry.isError,
+        }),
+      )
 
       this.sendToClient(Channel.AI, {
         type: 'routine_run_logs_response',
@@ -4024,7 +4109,11 @@ export class AgentServer {
     const prefix = `proj_${msg.projectId}_sess_`
     let inMemoryCount = 0
     for (const [id, session] of this.sessions) {
-      if (id.startsWith(prefix) && !persisted.some((s) => s.id === id) && !isHarnessSession(session)) {
+      if (
+        id.startsWith(prefix) &&
+        !persisted.some((s) => s.id === id) &&
+        !isHarnessSession(session)
+      ) {
         const info = session.getInfo()
         sessions.push({
           id: info.id,
@@ -4404,10 +4493,14 @@ export class AgentServer {
         try {
           if (process.platform === 'darwin') {
             // Use spawn (non-blocking) + pass args as array (no shell escaping needed)
-            spawn('osascript', [
-              '-e',
-              `display notification ${JSON.stringify(title.replace(/\\/g, '\\\\').replace(/"/g, '\\"'))} with title "Anton" sound name "Glass"`,
-            ], { stdio: 'ignore', detached: true }).unref()
+            spawn(
+              'osascript',
+              [
+                '-e',
+                `display notification ${JSON.stringify(title.replace(/\\/g, '\\\\').replace(/"/g, '\\"'))} with title "Anton" sound name "Glass"`,
+              ],
+              { stdio: 'ignore', detached: true },
+            ).unref()
           } else {
             spawn('notify-send', ['Anton', title], {
               stdio: 'ignore',
@@ -4436,7 +4529,11 @@ export class AgentServer {
 
             // Update project summary if the LLM provided one
             if (projectContextUpdate?.projectSummary) {
-              updateProjectContext(session.projectId, 'summary', projectContextUpdate.projectSummary)
+              updateProjectContext(
+                session.projectId,
+                'summary',
+                projectContextUpdate.projectSummary,
+              )
             }
 
             appendSessionHistory(session.projectId, {
@@ -5014,7 +5111,9 @@ export class AgentServer {
 
   private buildConnectorStatus(c: ConnectorConfig) {
     const mcpStatus = this.mcpManager.getStatus().find((s: { id: string }) => s.id === c.id)
-    const directStatus = this.connectorManager.getStatus().find((s: { id: string }) => s.id === c.id)
+    const directStatus = this.connectorManager
+      .getStatus()
+      .find((s: { id: string }) => s.id === c.id)
     // OAuth connectors are "connected" when they have a stored token
     const isOAuthConnected = c.type === 'oauth' && this.oauthFlow.hasToken(c.id) && c.enabled
     const connected = mcpStatus?.connected ?? directStatus?.connected ?? isOAuthConnected
@@ -5230,7 +5329,9 @@ export class AgentServer {
           this.connectorManager.deactivate(msg.id)
         }
         this.refreshAllSessionTools()
-        const status = this.connectorManager.getStatus().find((s: { id: string }) => s.id === msg.id)
+        const status = this.connectorManager
+          .getStatus()
+          .find((s: { id: string }) => s.id === msg.id)
         this.sendToClient(Channel.AI, {
           type: 'connector_status',
           id: msg.id,
@@ -5262,7 +5363,9 @@ export class AgentServer {
       // Direct connectors (OAuth/API) — test via ConnectorManager
       if (this.connectorManager.isActive(msg.id)) {
         const result = await this.connectorManager.testConnection(msg.id)
-        const tools = this.connectorManager.getStatus().find((s: { id: string }) => s.id === msg.id)?.tools ?? []
+        const tools =
+          this.connectorManager.getStatus().find((s: { id: string }) => s.id === msg.id)?.tools ??
+          []
         this.sendToClient(Channel.AI, {
           type: 'connector_test_response',
           id: msg.id,
@@ -5282,7 +5385,9 @@ export class AgentServer {
             accountDisplayName: connectorConfig?.accountLabel ?? connectorConfig?.accountEmail,
           })
           const result = await this.connectorManager.testConnection(msg.id)
-          const tools = this.connectorManager.getStatus().find((s: { id: string }) => s.id === msg.id)?.tools ?? []
+          const tools =
+            this.connectorManager.getStatus().find((s: { id: string }) => s.id === msg.id)?.tools ??
+            []
           this.sendToClient(Channel.AI, {
             type: 'connector_test_response',
             id: msg.id,

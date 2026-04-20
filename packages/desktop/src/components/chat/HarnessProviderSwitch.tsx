@@ -67,11 +67,7 @@ export function HarnessProviderSwitch() {
   }
 
   return (
-    <div
-      ref={rootRef}
-      className="harness-provider-switch"
-      style={{ position: 'relative' }}
-    >
+    <div ref={rootRef} className="harness-provider-switch" style={{ position: 'relative' }}>
       <button
         type="button"
         className="model-selector__trigger"
@@ -85,8 +81,10 @@ export function HarnessProviderSwitch() {
         <ChevronDown size={14} strokeWidth={1.5} className="model-selector__chevron" />
       </button>
       {open && (
+        // biome-ignore lint/a11y/useSemanticElements: custom-styled listbox; native <select> can't match design
         <div
           role="listbox"
+          tabIndex={-1}
           className="harness-provider-switch__menu"
           style={{
             position: 'absolute',
@@ -102,13 +100,13 @@ export function HarnessProviderSwitch() {
           }}
         >
           {harnessProviders.map((p) => {
-            const defaultModel =
-              p.defaultModels?.[0] ?? p.models[0] ?? currentModel ?? ''
+            const defaultModel = p.defaultModels?.[0] ?? p.models[0] ?? currentModel ?? ''
             const isCurrent = p.name === currentProvider
             return (
               <button
                 key={p.name}
                 type="button"
+                // biome-ignore lint/a11y/useSemanticElements: custom listbox pattern — native <option> only valid inside <select>
                 role="option"
                 aria-selected={isCurrent}
                 className="harness-provider-switch__item"
@@ -128,18 +126,12 @@ export function HarnessProviderSwitch() {
                   textAlign: 'left',
                   fontSize: 13,
                 }}
-                title={
-                  p.installed
-                    ? undefined
-                    : `${p.name} CLI not installed on this machine`
-                }
+                title={p.installed ? undefined : `${p.name} CLI not installed on this machine`}
               >
                 <ProviderIcon provider={p.name} size={14} />
                 <span style={{ flex: 1 }}>{p.name}</span>
                 {isCurrent && (
-                  <span style={{ fontSize: 11, color: 'var(--text-muted, #999)' }}>
-                    current
-                  </span>
+                  <span style={{ fontSize: 11, color: 'var(--text-muted, #999)' }}>current</span>
                 )}
               </button>
             )

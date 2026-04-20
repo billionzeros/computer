@@ -151,133 +151,133 @@ export function NewProjectView() {
 
   return (
     <div className="np-main">
-        <div className="np-topbar">
-          <button type="button" className="np-back" onClick={goBack}>
-            <ArrowLeft size={13} strokeWidth={1.5} />
-            Projects
+      <div className="np-topbar">
+        <button type="button" className="np-back" onClick={goBack}>
+          <ArrowLeft size={13} strokeWidth={1.5} />
+          Projects
+        </button>
+        <div className="np-actions">
+          <span className="np-shortcut">
+            <kbd>Esc</kbd> cancel
+          </span>
+          <span className="np-shortcut">
+            <kbd>⌘</kbd>
+            <kbd>
+              <CornerDownLeft size={10} strokeWidth={2} />
+            </kbd>
+            create
+          </span>
+          <button
+            type="button"
+            className="pr-btn pr-btn--primary"
+            onClick={handleCreate}
+            disabled={!canCreate}
+          >
+            {creating ? 'Creating…' : 'Create project'}
           </button>
-          <div className="np-actions">
-            <span className="np-shortcut">
-              <kbd>Esc</kbd> cancel
-            </span>
-            <span className="np-shortcut">
-              <kbd>⌘</kbd>
-              <kbd>
-                <CornerDownLeft size={10} strokeWidth={2} />
-              </kbd>
-              create
-            </span>
-            <button
-              type="button"
-              className="pr-btn pr-btn--primary"
-              onClick={handleCreate}
-              disabled={!canCreate}
-            >
-              {creating ? 'Creating…' : 'Create project'}
-            </button>
-          </div>
-        </div>
-
-        <div>
-          <h1 className="np-head__title">New project</h1>
-          <p className="np-head__sub">
-            A named workspace with its own instructions, files, and task history.
-          </p>
-        </div>
-
-        <div className="np-layout">
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
-            <div className="np-section">
-              <div className="np-section__label">Start from</div>
-              <div className="np-templates">
-                {TEMPLATES.map((t) => {
-                  const Icon = t.icon
-                  const selected = t.id === templateId
-                  return (
-                    <button
-                      key={t.id}
-                      type="button"
-                      className={`np-template${selected ? ' selected' : ''}`}
-                      onClick={() => pickTemplate(t.id)}
-                    >
-                      <div className="np-template__icon">
-                        <Icon size={14} strokeWidth={1.5} />
-                      </div>
-                      <div className="np-template__name">{t.name}</div>
-                      <div className="np-template__sub">{t.sub}</div>
-                    </button>
-                  )
-                })}
-              </div>
-            </div>
-
-            <div className="np-section">
-              <div className="np-section__label">Name</div>
-              <div className="np-name">
-                <input
-                  type="text"
-                  className="np-input"
-                  placeholder="e.g. Essay, Telegram Bots, Home ops"
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                  // biome-ignore lint/a11y/noAutofocus: new-project view expects the name field focused
-                  autoFocus
-                />
-                <button type="button" className="np-suggest" onClick={suggestName}>
-                  <Sparkles size={11} strokeWidth={1.5} />
-                  Suggest
-                </button>
-              </div>
-            </div>
-
-            <div className="np-section">
-              <div className="np-section__label">
-                Instructions
-                <span className="np-section__hint">How Anton should behave in this project</span>
-              </div>
-              <textarea
-                className="np-textarea"
-                placeholder="Describe the purpose of this project and how Anton should approach it..."
-                value={instructions}
-                onChange={(e) => setInstructions(e.target.value)}
-              />
-            </div>
-
-            <div className="np-section">
-              <div className="np-section__label">
-                Files & context
-                <span className="np-section__hint">Anything Anton should always have on hand</span>
-              </div>
-              <div className="np-dropzone">
-                <Upload size={16} strokeWidth={1.5} />
-                <span>
-                  Drop files here, or{' '}
-                  <span className="np-dropzone__link">pick from your computer</span>
-                </span>
-              </div>
-            </div>
-          </div>
-
-          <aside className="np-preview">
-            <div className="np-section__label">Preview</div>
-            <div className="np-preview-card">
-              <div className="np-preview-card__head">
-                <div className="np-preview-card__icon">
-                  <FolderOpen size={14} strokeWidth={1.5} />
-                </div>
-                <div className="np-preview-card__files">0 files</div>
-              </div>
-              <div className="np-preview-card__name">{name.trim() || 'Untitled project'}</div>
-              <div className="np-preview-card__blurb">
-                {firstLine || 'Add instructions to describe how Anton should behave here.'}
-              </div>
-              <div className="np-preview-card__meta">Last used Just now</div>
-            </div>
-            <div className="np-preview__note">
-              This is how your project will appear in the grid. You can change anything later.
-            </div>
-          </aside>
         </div>
       </div>
+
+      <div>
+        <h1 className="np-head__title">New project</h1>
+        <p className="np-head__sub">
+          A named workspace with its own instructions, files, and task history.
+        </p>
+      </div>
+
+      <div className="np-layout">
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+          <div className="np-section">
+            <div className="np-section__label">Start from</div>
+            <div className="np-templates">
+              {TEMPLATES.map((t) => {
+                const Icon = t.icon
+                const selected = t.id === templateId
+                return (
+                  <button
+                    key={t.id}
+                    type="button"
+                    className={`np-template${selected ? ' selected' : ''}`}
+                    onClick={() => pickTemplate(t.id)}
+                  >
+                    <div className="np-template__icon">
+                      <Icon size={14} strokeWidth={1.5} />
+                    </div>
+                    <div className="np-template__name">{t.name}</div>
+                    <div className="np-template__sub">{t.sub}</div>
+                  </button>
+                )
+              })}
+            </div>
+          </div>
+
+          <div className="np-section">
+            <div className="np-section__label">Name</div>
+            <div className="np-name">
+              <input
+                type="text"
+                className="np-input"
+                placeholder="e.g. Essay, Telegram Bots, Home ops"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                // biome-ignore lint/a11y/noAutofocus: new-project view expects the name field focused
+                autoFocus
+              />
+              <button type="button" className="np-suggest" onClick={suggestName}>
+                <Sparkles size={11} strokeWidth={1.5} />
+                Suggest
+              </button>
+            </div>
+          </div>
+
+          <div className="np-section">
+            <div className="np-section__label">
+              Instructions
+              <span className="np-section__hint">How Anton should behave in this project</span>
+            </div>
+            <textarea
+              className="np-textarea"
+              placeholder="Describe the purpose of this project and how Anton should approach it..."
+              value={instructions}
+              onChange={(e) => setInstructions(e.target.value)}
+            />
+          </div>
+
+          <div className="np-section">
+            <div className="np-section__label">
+              Files & context
+              <span className="np-section__hint">Anything Anton should always have on hand</span>
+            </div>
+            <div className="np-dropzone">
+              <Upload size={16} strokeWidth={1.5} />
+              <span>
+                Drop files here, or{' '}
+                <span className="np-dropzone__link">pick from your computer</span>
+              </span>
+            </div>
+          </div>
+        </div>
+
+        <aside className="np-preview">
+          <div className="np-section__label">Preview</div>
+          <div className="np-preview-card">
+            <div className="np-preview-card__head">
+              <div className="np-preview-card__icon">
+                <FolderOpen size={14} strokeWidth={1.5} />
+              </div>
+              <div className="np-preview-card__files">0 files</div>
+            </div>
+            <div className="np-preview-card__name">{name.trim() || 'Untitled project'}</div>
+            <div className="np-preview-card__blurb">
+              {firstLine || 'Add instructions to describe how Anton should behave here.'}
+            </div>
+            <div className="np-preview-card__meta">Last used Just now</div>
+          </div>
+          <div className="np-preview__note">
+            This is how your project will appear in the grid. You can change anything later.
+          </div>
+        </aside>
+      </div>
+    </div>
   )
 }

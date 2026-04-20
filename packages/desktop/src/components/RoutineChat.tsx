@@ -6,7 +6,6 @@ import { useStore } from '../lib/store.js'
 import { connectionStore } from '../lib/store/connectionStore.js'
 import { projectStore } from '../lib/store/projectStore.js'
 import { sessionStore, useSessionState } from '../lib/store/sessionStore.js'
-import { uiStore } from '../lib/store/uiStore.js'
 import { ChatInput } from './chat/ChatInput.js'
 import { ConfirmDialog } from './chat/ConfirmDialog.js'
 import { ContextIndicator } from './chat/ContextIndicator.js'
@@ -29,12 +28,10 @@ export function RoutineChat() {
 
   // Extract stable identity props so the effect doesn't re-run on every message change
   const activeConvId = activeConv?.id
-  const activeConvProjectId = activeConv?.projectId
 
   // On mount: resume existing conversation's session, or create a new one
   // When used inside ProjectView, the active conversation will have a projectId —
   // in that case we should NOT switch away from it (the project view manages its own sessions).
-  const activeView = uiStore((s) => s.activeView)
   const initReady = connectionStore((s) => s.initPhase === 'ready')
   useEffect(() => {
     // Don't create sessions until the init state machine has completed.
@@ -79,7 +76,7 @@ export function RoutineChat() {
     // of its project. Previously this effect force-swapped project conversations
     // out of chat view, which broke clicking a Recent task from a non-default
     // project (it would bounce you to an unrelated default-project chat).
-  }, [activeConvId, activeConvProjectId, activeView, initReady])
+  }, [activeConvId, initReady])
 
   const handleSend = useCallback(
     async (text: string, attachments: ChatImageAttachment[] = []) => {

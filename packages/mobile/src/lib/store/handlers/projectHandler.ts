@@ -2,7 +2,7 @@
  * AI channel: project, routine, workflow, connector, provider, skill messages.
  */
 
-import type { RoutineSession, AiMessage, Project } from '@anton/protocol'
+import type { AiMessage, Project, RoutineSession } from '@anton/protocol'
 import { connectionStore } from '../connectionStore'
 import { projectStore } from '../projectStore'
 import { sessionStore } from '../sessionStore'

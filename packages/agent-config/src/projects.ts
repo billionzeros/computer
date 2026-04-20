@@ -20,11 +20,11 @@ import {
 } from 'node:fs'
 import { dirname, join } from 'node:path'
 import type {
-  RoutineMetadata,
-  RoutineSession,
   Project,
   ProjectSource,
   ProjectType,
+  RoutineMetadata,
+  RoutineSession,
 } from '@anton/protocol'
 import { type SessionMeta, ensureWorkspaceRoot, getAntonDir } from './config.js'
 import type { AgentConfig } from './config.js'

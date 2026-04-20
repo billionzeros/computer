@@ -322,6 +322,7 @@ export function CommandPalette({ open, onClose, onOpenSettings, onNewProject }: 
       .map((x) => x.item)
   }, [items, q])
 
+  // biome-ignore lint/correctness/useExhaustiveDependencies: reset cursor when query changes
   useEffect(() => {
     setCur(0)
   }, [q])
@@ -357,6 +358,7 @@ export function CommandPalette({ open, onClose, onOpenSettings, onNewProject }: 
     return () => document.removeEventListener('keydown', onKey)
   }, [open, filtered, cur, run, onClose])
 
+  // biome-ignore lint/correctness/useExhaustiveDependencies: re-scroll when selection or list changes
   useEffect(() => {
     if (!listRef.current) return
     const el = listRef.current.querySelector('.cp-row.on') as HTMLElement | null
@@ -366,20 +368,22 @@ export function CommandPalette({ open, onClose, onOpenSettings, onNewProject }: 
   if (!open) return null
 
   const groups: Partial<Record<ItemKind, Item[]>> = {}
-  filtered.forEach((it) => {
+  for (const it of filtered) {
     const arr = groups[it.kind] ?? []
     arr.push(it)
     groups[it.kind] = arr
-  })
+  }
 
   const flat: Item[] = []
-  GROUP_ORDER.forEach((g) => {
+  for (const g of GROUP_ORDER) {
     const arr = groups[g]
     if (arr) flat.push(...arr)
-  })
+  }
 
   return (
+    // biome-ignore lint/a11y/useKeyWithClickEvents: click-outside dismiss; Escape handled in doc keydown
     <div className="cp-overlay" onClick={onClose}>
+      {/* biome-ignore lint/a11y/useKeyWithClickEvents: absorbs bubbled clicks to preserve backdrop pattern */}
       <div className="cp" onClick={(e) => e.stopPropagation()}>
         <div className="cp__search">
           <Search size={14} strokeWidth={1.5} />

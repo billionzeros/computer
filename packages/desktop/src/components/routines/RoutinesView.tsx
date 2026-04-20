@@ -7,8 +7,8 @@ import { WorkflowPipelineView } from '../workflows/WorkflowPipelineView.js'
 import { RoutineCreateForm, type RoutineDraft, type RoutineTemplate } from './RoutineCreateForm.js'
 import { RoutineDetailView } from './RoutineDetailView.js'
 import { RoutineListView } from './RoutineListView.js'
-import { RoutinesIntro } from './RoutinesIntro.js'
 import { RoutineRunView } from './RoutineRunView.js'
+import { RoutinesIntro } from './RoutinesIntro.js'
 import { cronForPreset } from './schedulePresets.js'
 
 type RightPanel = { view: 'home' } | { view: 'run'; run: RoutineRunRecord }
@@ -133,22 +133,19 @@ export function RoutinesView() {
     setSelectedRoutineId(null)
   }, [])
 
-  const handleCreateSave = useCallback(
-    (draft: RoutineDraft) => {
-      const projectId = projectStore.getState().activeProjectId
-      if (!projectId) return
-      const schedule = cronForPreset(draft.presetId)
-      projectStore.getState().createRoutine(projectId, {
-        name: draft.name.trim() || 'Untitled routine',
-        description: draft.description.trim() || undefined,
-        instructions: draft.instructions.trim(),
-        schedule: schedule ?? undefined,
-      })
-      setCreating(null)
-      setToast('Routine created')
-    },
-    [],
-  )
+  const handleCreateSave = useCallback((draft: RoutineDraft) => {
+    const projectId = projectStore.getState().activeProjectId
+    if (!projectId) return
+    const schedule = cronForPreset(draft.presetId)
+    projectStore.getState().createRoutine(projectId, {
+      name: draft.name.trim() || 'Untitled routine',
+      description: draft.description.trim() || undefined,
+      instructions: draft.instructions.trim(),
+      schedule: schedule ?? undefined,
+    })
+    setCreating(null)
+    setToast('Routine created')
+  }, [])
 
   const handleEditSave = useCallback(
     (draft: RoutineDraft) => {

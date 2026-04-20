@@ -21,7 +21,7 @@
 import type { AgentTool } from '@mariozechner/pi-agent-core'
 import { Type } from '@mariozechner/pi-ai'
 import { defineTool, toolResult } from './_helpers.js'
-import { executeTaskTracker, type TaskTrackerInput } from './task-tracker.js'
+import { type TaskTrackerInput, executeTaskTracker } from './task-tracker.js'
 
 export function buildTaskTrackerTool(): AgentTool {
   return defineTool({

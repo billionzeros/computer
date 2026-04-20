@@ -9,9 +9,12 @@ function formatLastUsed(ts: number): string {
   if (!ts) return 'Never used'
   const diff = Date.now() - ts
   if (diff < 60_000) return 'Just now'
-  if (diff < 3600_000) return `${Math.floor(diff / 60_000)} minute${Math.floor(diff / 60_000) === 1 ? '' : 's'} ago`
-  if (diff < 86400_000) return `${Math.floor(diff / 3600_000)} hour${Math.floor(diff / 3600_000) === 1 ? '' : 's'} ago`
-  if (diff < 604800_000) return `${Math.floor(diff / 86400_000)} day${Math.floor(diff / 86400_000) === 1 ? '' : 's'} ago`
+  if (diff < 3600_000)
+    return `${Math.floor(diff / 60_000)} minute${Math.floor(diff / 60_000) === 1 ? '' : 's'} ago`
+  if (diff < 86400_000)
+    return `${Math.floor(diff / 3600_000)} hour${Math.floor(diff / 3600_000) === 1 ? '' : 's'} ago`
+  if (diff < 604800_000)
+    return `${Math.floor(diff / 86400_000)} day${Math.floor(diff / 86400_000) === 1 ? '' : 's'} ago`
   return new Date(ts).toLocaleDateString()
 }
 
@@ -98,9 +101,7 @@ export function ProjectList() {
               </div>
               <div>
                 <div className="pr-card__name">{project.name}</div>
-                {project.description && (
-                  <div className="pr-card__blurb">{project.description}</div>
-                )}
+                {project.description && <div className="pr-card__blurb">{project.description}</div>}
               </div>
               <div className="pr-card__foot">
                 <span>Last used {formatLastUsed(project.stats.lastActive)}</span>

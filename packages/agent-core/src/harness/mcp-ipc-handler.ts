@@ -12,9 +12,9 @@
  * different `_antonSession` is rejected.
  */
 
+import { existsSync, unlinkSync } from 'node:fs'
 import * as net from 'node:net'
 import { createInterface } from 'node:readline'
-import { existsSync, unlinkSync } from 'node:fs'
 import { createLogger } from '@anton/logger'
 
 const log = createLogger('mcp-ipc')
@@ -199,7 +199,7 @@ export function createMcpIpcServer(socketPath: string, provider: IpcToolProvider
                       method: 'progress',
                       params: { _progressToken: progressToken, message, progress },
                     })
-                    conn.write(frame + '\n')
+                    conn.write(`${frame}\n`)
                   } catch (err) {
                     log.debug(
                       { err: (err as Error).message, sessionId },
@@ -262,10 +262,10 @@ export function createMcpIpcServer(socketPath: string, provider: IpcToolProvider
 
 function sendResponse(conn: net.Socket, id: string | number | null, result: unknown) {
   const msg = JSON.stringify({ jsonrpc: '2.0', id, result })
-  conn.write(msg + '\n')
+  conn.write(`${msg}\n`)
 }
 
 function sendError(conn: net.Socket, id: string | number | null, code: number, message: string) {
   const msg = JSON.stringify({ jsonrpc: '2.0', id, error: { code, message } })
-  conn.write(msg + '\n')
+  conn.write(`${msg}\n`)
 }

@@ -12,7 +12,7 @@
 
 import type { ChildProcess } from 'node:child_process'
 import { EventEmitter } from 'node:events'
-import { createInterface, type Interface as ReadlineInterface } from 'node:readline'
+import { type Interface as ReadlineInterface, createInterface } from 'node:readline'
 import { createLogger } from '@anton/logger'
 
 const log = createLogger('codex-rpc')
@@ -83,7 +83,11 @@ export class CodexRpcClient extends EventEmitter {
         const pend = this.pending.get(id)
         if (pend) {
           this.pending.delete(id)
-          reject(new Error(`[${this.label}] codex-rpc: timeout (${timeoutMs ?? this.defaultTimeoutMs}ms) waiting for ${method}`))
+          reject(
+            new Error(
+              `[${this.label}] codex-rpc: timeout (${timeoutMs ?? this.defaultTimeoutMs}ms) waiting for ${method}`,
+            ),
+          )
         }
       }, timeoutMs ?? this.defaultTimeoutMs)
 
@@ -165,7 +169,10 @@ export class CodexRpcClient extends EventEmitter {
       this.close('no-stdout')
       return
     }
-    this.readline = createInterface({ input: this.proc.stdout, crlfDelay: Number.POSITIVE_INFINITY })
+    this.readline = createInterface({
+      input: this.proc.stdout,
+      crlfDelay: Number.POSITIVE_INFINITY,
+    })
     this.readline.on('line', (line) => this.onLine(line))
     this.proc.on('exit', (code, signal) => {
       this.close(`exit(code=${code}, signal=${signal})`)
@@ -217,11 +224,17 @@ export class CodexRpcClient extends EventEmitter {
           const r = h(params)
           if (r && typeof (r as Promise<unknown>).then === 'function') {
             ;(r as Promise<unknown>).catch((err) => {
-              log.warn({ label: this.label, method, err: (err as Error).message }, 'codex-rpc: notification handler threw')
+              log.warn(
+                { label: this.label, method, err: (err as Error).message },
+                'codex-rpc: notification handler threw',
+              )
             })
           }
         } catch (err) {
-          log.warn({ label: this.label, method, err: (err as Error).message }, 'codex-rpc: notification handler threw')
+          log.warn(
+            { label: this.label, method, err: (err as Error).message },
+            'codex-rpc: notification handler threw',
+          )
         }
       }
     }
@@ -229,7 +242,10 @@ export class CodexRpcClient extends EventEmitter {
       try {
         h(params)
       } catch (err) {
-        log.warn({ label: this.label, method, err: (err as Error).message }, 'codex-rpc: any-handler threw')
+        log.warn(
+          { label: this.label, method, err: (err as Error).message },
+          'codex-rpc: any-handler threw',
+        )
       }
     }
   }

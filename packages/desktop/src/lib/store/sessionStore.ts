@@ -15,7 +15,7 @@ import type {
 } from '@anton/protocol'
 import { create } from 'zustand'
 import { connection } from '../connection.js'
-import type { RoutineStatus, RoutineStep, ProviderInfo, SessionMeta } from './types.js'
+import type { ProviderInfo, RoutineStatus, RoutineStep, SessionMeta } from './types.js'
 
 // ── Consolidated per-session state ────────────────────────────────
 
@@ -213,11 +213,35 @@ interface SessionStoreState {
   sendProviderSetModels: (provider: string, models: string[]) => void
   sendProviderSetDefault: (provider: string, model: string) => void
   sendDetectHarnesses: () => void
-  sendHarnessSetup: (harnessId: string, action: 'install' | 'login' | 'login_code' | 'status', code?: string) => void
-  harnessStatuses: Record<string, { installed: boolean; version?: string; auth?: { loggedIn: boolean; email?: string; subscriptionType?: string } }>
-  harnessSetupProgress: Record<string, { action: string; step?: string; message?: string; success?: boolean }>
-  setHarnessStatus: (id: string, status: { installed: boolean; version?: string; auth?: { loggedIn: boolean; email?: string; subscriptionType?: string } }) => void
-  setHarnessSetupProgress: (id: string, progress: { action: string; step?: string; message?: string; success?: boolean }) => void
+  sendHarnessSetup: (
+    harnessId: string,
+    action: 'install' | 'login' | 'login_code' | 'status',
+    code?: string,
+  ) => void
+  harnessStatuses: Record<
+    string,
+    {
+      installed: boolean
+      version?: string
+      auth?: { loggedIn: boolean; email?: string; subscriptionType?: string }
+    }
+  >
+  harnessSetupProgress: Record<
+    string,
+    { action: string; step?: string; message?: string; success?: boolean }
+  >
+  setHarnessStatus: (
+    id: string,
+    status: {
+      installed: boolean
+      version?: string
+      auth?: { loggedIn: boolean; email?: string; subscriptionType?: string }
+    },
+  ) => void
+  setHarnessSetupProgress: (
+    id: string,
+    progress: { action: string; step?: string; message?: string; success?: boolean },
+  ) => void
   sendAiMessage: (text: string, attachments?: ChatImageAttachmentInput[]) => void
   sendAiMessageToSession: (
     text: string,
@@ -453,7 +477,8 @@ export const sessionStore = create<SessionStoreState>((set, get) => {
     sendProviderSetModels: (provider, models) => connection.sendProviderSetModels(provider, models),
     sendProviderSetDefault: (provider, model) => connection.sendProviderSetDefault(provider, model),
     sendDetectHarnesses: () => connection.sendDetectHarnesses(),
-    sendHarnessSetup: (harnessId, action, code) => connection.sendHarnessSetup(harnessId, action, code),
+    sendHarnessSetup: (harnessId, action, code) =>
+      connection.sendHarnessSetup(harnessId, action, code),
     harnessStatuses: {},
     harnessSetupProgress: {},
     setHarnessStatus: (id, status) =>

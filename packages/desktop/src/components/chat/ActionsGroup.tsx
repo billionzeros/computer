@@ -316,12 +316,7 @@ function ActionChip({ action }: ActionChipProps) {
 
   return (
     <div className={classes}>
-      <button
-        type="button"
-        className="conv-chip__row"
-        onClick={toggle}
-        disabled={!hasResult}
-      >
+      <button type="button" className="conv-chip__row" onClick={toggle} disabled={!hasResult}>
         {faviconUrl ? (
           <img
             src={faviconUrl}
@@ -339,6 +334,7 @@ function ActionChip({ action }: ActionChipProps) {
         )}
         <span className="conv-chip__label">{label}</span>
         {artifact && (
+          // biome-ignore lint/a11y/useSemanticElements: nested inside parent <button>; native button would be invalid HTML
           <span
             role="button"
             tabIndex={0}
@@ -361,9 +357,7 @@ function ActionChip({ action }: ActionChipProps) {
             <PanelRight size={12} strokeWidth={1.5} />
           </span>
         )}
-        {hasResult && (
-          <ChevronRight size={12} strokeWidth={1.5} className="conv-chip__chev" />
-        )}
+        {hasResult && <ChevronRight size={12} strokeWidth={1.5} className="conv-chip__chev" />}
       </button>
       {hasResult && open && (
         <div className="conv-chip__children">

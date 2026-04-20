@@ -3,9 +3,9 @@
  */
 
 import type {
-  RoutineSession,
   InstalledWorkflow,
   Project,
+  RoutineSession,
   WorkflowRegistryEntry,
 } from '@anton/protocol'
 import { create } from 'zustand'
@@ -245,7 +245,8 @@ export const projectStore = create<ProjectState>((set, get) => ({
     console.log(`[ProjectSync] setProjectSessions: ${sessions.length} session(s), loading=false`)
     set({ projectSessions: sessions, projectSessionsLoading: false })
   },
-  setProjectRoutines: (routines) => set({ projectRoutines: routines, projectRoutinesLoading: false }),
+  setProjectRoutines: (routines) =>
+    set({ projectRoutines: routines, projectRoutinesLoading: false }),
   setSelectedRoutine: (id) => set({ selectedRoutineId: id }),
   setActiveProjectSession: (sessionId) => set({ activeProjectSessionId: sessionId }),
   setProjectInstructions: (content) =>

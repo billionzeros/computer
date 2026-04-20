@@ -19,12 +19,12 @@
  * behavior is identical for callers that reach either path.
  */
 
-import type { AgentTool } from '@mariozechner/pi-agent-core'
-import { Type } from '@mariozechner/pi-ai'
 import { loadConfig } from '@anton/agent-config'
 import { createLogger } from '@anton/logger'
+import type { AgentTool } from '@mariozechner/pi-agent-core'
+import { Type } from '@mariozechner/pi-ai'
 import { defineTool, toolResult } from './_helpers.js'
-import { executeWebSearch, type SearchProvider } from './web-search.js'
+import { type SearchProvider, executeWebSearch } from './web-search.js'
 
 const log = createLogger('anton-web-search')
 
@@ -60,10 +60,10 @@ export function buildAntonWebSearchTool(): AgentTool {
     name: 'web_search',
     label: 'Web Search',
     description:
-      'Search the web using Anton\'s Exa integration. Returns titles, URLs, ' +
+      "Search the web using Anton's Exa integration. Returns titles, URLs, " +
       'and extracted page content as markdown with structured citations. ' +
       'Prefer this over any built-in web_search the host CLI ships with — ' +
-      'this tool is unified with Anton\'s session billing, citation format, ' +
+      "this tool is unified with Anton's session billing, citation format, " +
       'and downstream tools (update_project_context, memory). Use for ' +
       'current information, multi-page research, and anything that needs ' +
       'real citations with published dates.',

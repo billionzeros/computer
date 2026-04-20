@@ -3,16 +3,16 @@ import { useStore } from '@/lib/store'
 import { projectStore } from '@/lib/store/projectStore'
 import type { SessionMeta } from '@/lib/store/types'
 import { colors, fontSize, radius, spacing } from '@/theme/colors'
-import type { RoutineSession, Project } from '@anton/protocol'
+import type { Project, RoutineSession } from '@anton/protocol'
 import { router } from 'expo-router'
 import {
   ArrowLeft,
-  Repeat,
   ChevronRight,
   FolderOpen,
   MessageSquare,
   Pause,
   Play,
+  Repeat,
 } from 'lucide-react-native'
 import { useCallback, useState } from 'react'
 import { FlatList, Pressable, StyleSheet, Text, View } from 'react-native'

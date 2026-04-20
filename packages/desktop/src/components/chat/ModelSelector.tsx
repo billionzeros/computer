@@ -191,6 +191,7 @@ function ModelPopover({
   if (!pos) return null
 
   const popover = (
+    // biome-ignore lint/a11y/useKeyWithClickEvents: absorbs bubbled clicks to preserve popover dismiss pattern
     <div
       className={`mdl-pop mdl-pop--${pos.placement}`}
       ref={ref}
@@ -208,7 +209,7 @@ function ModelPopover({
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           placeholder="Search models…"
-          /* eslint-disable-next-line jsx-a11y/no-autofocus */
+          // biome-ignore lint/a11y/noAutofocus: search input in modal popover — focus on open is expected UX
           autoFocus
         />
       </div>
@@ -255,13 +256,9 @@ function ModelPopover({
                         disabled={locked}
                       >
                         <span className="mdl-row__name">{formatModelName(m)}</span>
-                        {tag && (
-                          <span className={`mdl-row__tag mdl-row__tag--${tag}`}>{tag}</span>
-                        )}
+                        {tag && <span className={`mdl-row__tag mdl-row__tag--${tag}`}>{tag}</span>}
                         <span className="mdl-row__note">{note}</span>
-                        {selected && (
-                          <Check size={12} strokeWidth={2} className="mdl-row__check" />
-                        )}
+                        {selected && <Check size={12} strokeWidth={2} className="mdl-row__check" />}
                       </button>
                     )
                   })}
@@ -270,9 +267,7 @@ function ModelPopover({
             ))}
           </div>
         ))}
-        {sections.length === 0 && (
-          <div className="mdl-empty">No models match "{query}"</div>
-        )}
+        {sections.length === 0 && <div className="mdl-empty">No models match "{query}"</div>}
       </div>
       <button type="button" className="mdl-pop__foot" onClick={onManage}>
         <Settings size={12} strokeWidth={1.8} />

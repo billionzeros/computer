@@ -1,11 +1,11 @@
 import {
   ArrowRight,
-  Repeat,
   Briefcase,
   Check,
   GraduationCap,
   Link2,
   Megaphone,
+  Repeat,
   Rocket,
   Settings,
   User,

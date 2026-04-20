@@ -12,7 +12,7 @@
 import type { AgentTool } from '@mariozechner/pi-agent-core'
 import { Type } from '@mariozechner/pi-ai'
 import { defineTool, toolResult } from './_helpers.js'
-import { executeImage, type ImageInput } from './image.js'
+import { type ImageInput, executeImage } from './image.js'
 
 export function buildImageTool(): AgentTool {
   return defineTool({

@@ -60,11 +60,13 @@ const isTauri = !!(window as unknown as { __TAURI__?: unknown }).__TAURI__
 // ── Cached Tauri API references ──────────────────────────────────────
 
 let tauriSendNotification: ((options: { title: string; body: string }) => void) | null = null
-let tauriGetCurrentWindow: (() => {
-  isFocused: () => Promise<boolean>
-  requestUserAttention: (type: number) => Promise<void>
-  setFocus: () => Promise<void>
-}) | null = null
+let tauriGetCurrentWindow:
+  | (() => {
+      isFocused: () => Promise<boolean>
+      requestUserAttention: (type: number) => Promise<void>
+      setFocus: () => Promise<void>
+    })
+  | null = null
 
 // ── Permission state ─────────────────────────────────────────────────
 
@@ -90,7 +92,7 @@ export function setNavigationHandler(handler: (sessionId: string) => void) {
 
 const THROTTLE_WINDOW_MS = 3_000
 let throttleTimer: ReturnType<typeof setTimeout> | null = null
-let pendingEvents: NotifyEvent[] = []
+const pendingEvents: NotifyEvent[] = []
 let lastFlushedAt = 0
 
 // ── Init ─────────────────────────────────────────────────────────────
@@ -139,10 +141,7 @@ function requestWebPermission() {
 }
 
 function handleWindowFocus() {
-  if (
-    pendingNavigationSessionId &&
-    Date.now() - pendingNavigationTs < NAVIGATE_WINDOW_MS
-  ) {
+  if (pendingNavigationSessionId && Date.now() - pendingNavigationTs < NAVIGATE_WINDOW_MS) {
     const sid = pendingNavigationSessionId
     pendingNavigationSessionId = null
     onNavigateToSession?.(sid)
@@ -195,20 +194,18 @@ function flushNotifications() {
   } else {
     // Group: "3 updates from Anton"
     const doneCount = events.filter((e) => e.type === 'done').length
-    const attentionCount = events.filter((e) =>
-      e.type === 'confirm' || e.type === 'ask_user' || e.type === 'plan_confirm',
+    const attentionCount = events.filter(
+      (e) => e.type === 'confirm' || e.type === 'ask_user' || e.type === 'plan_confirm',
     ).length
     const errorCount = events.filter((e) => e.type === 'error').length
 
     const parts: string[] = []
     if (doneCount > 0) parts.push(`${doneCount} completed`)
-    if (attentionCount > 0) parts.push(`${attentionCount} need${attentionCount === 1 ? 's' : ''} attention`)
+    if (attentionCount > 0)
+      parts.push(`${attentionCount} need${attentionCount === 1 ? 's' : ''} attention`)
     if (errorCount > 0) parts.push(`${errorCount} error${errorCount !== 1 ? 's' : ''}`)
 
-    fireNotification(
-      `${events.length} updates from Anton`,
-      parts.join(', '),
-    )
+    fireNotification(`${events.length} updates from Anton`, parts.join(', '))
   }
 
   // Dock bounce
@@ -258,7 +255,9 @@ function fireNotification(title: string, body: string) {
 function bounceDock() {
   if (!tauriGetCurrentWindow) return
   try {
-    tauriGetCurrentWindow().requestUserAttention(2).catch(() => {}) // Informational = single bounce
+    tauriGetCurrentWindow()
+      .requestUserAttention(2)
+      .catch(() => {}) // Informational = single bounce
   } catch {
     // Non-critical
   }

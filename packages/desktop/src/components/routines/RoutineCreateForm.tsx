@@ -56,7 +56,14 @@ function seedFromInitial(
   }
 }
 
-export function RoutineCreateForm({ mode, initial, isFirst, folderLabel, onCancel, onSave }: Props) {
+export function RoutineCreateForm({
+  mode,
+  initial,
+  isFirst,
+  folderLabel,
+  onCancel,
+  onSave,
+}: Props) {
   const [draft, setDraft] = useState<RoutineDraft>(() => seedFromInitial(mode, initial))
   const nameRef = useRef<HTMLInputElement>(null)
   const isFromTemplate = mode === 'create' && initial && !('sessionId' in initial)
@@ -158,12 +165,7 @@ export function RoutineCreateForm({ mode, initial, isFirst, folderLabel, onCance
         <button type="button" className="btn" onClick={onCancel}>
           Cancel
         </button>
-        <button
-          type="button"
-          className="btn btn--primary"
-          disabled={!canSave}
-          onClick={handleSave}
-        >
+        <button type="button" className="btn btn--primary" disabled={!canSave} onClick={handleSave}>
           {saveLabel}
         </button>
       </div>

@@ -256,7 +256,11 @@ export class Connection {
     this.send(Channel.AI, { type: 'detect_harnesses' })
   }
 
-  sendHarnessSetup(harnessId: string, action: 'install' | 'login' | 'login_code' | 'status', code?: string) {
+  sendHarnessSetup(
+    harnessId: string,
+    action: 'install' | 'login' | 'login_code' | 'status',
+    code?: string,
+  ) {
     this.send(Channel.AI, { type: 'harness_setup', harnessId, action, code })
   }
 

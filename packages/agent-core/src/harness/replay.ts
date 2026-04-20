@@ -49,7 +49,9 @@ export function buildReplaySeed(opts: BuildReplaySeedOpts): string {
   const toolResultMax = opts.toolResultMaxChars ?? 400
   const maxChars = opts.maxChars ?? 12_000
 
-  const dir = projectId ? join(getProjectSessionsDir(projectId), sessionId) : getConversationDir(sessionId)
+  const dir = projectId
+    ? join(getProjectSessionsDir(projectId), sessionId)
+    : getConversationDir(sessionId)
   const msgsPath = join(dir, 'messages.jsonl')
   if (!existsSync(msgsPath)) return ''
 
@@ -112,9 +114,10 @@ export function buildReplaySeed(opts: BuildReplaySeedOpts): string {
     combined = working.join('\n\n')
   }
 
-  const header = omitted > 0
-    ? `This session has prior history from an earlier provider. ${omitted} older turn(s) omitted for length; most recent turns follow.`
-    : 'This session has prior history from an earlier provider. All prior turns follow.'
+  const header =
+    omitted > 0
+      ? `This session has prior history from an earlier provider. ${omitted} older turn(s) omitted for length; most recent turns follow.`
+      : 'This session has prior history from an earlier provider. All prior turns follow.'
 
   const body = `${header}\n\n${combined}\n\nContinue the conversation from here. Anton's memory, project context, and connected services are the same as before — the mirror preserves them across providers.`
 
@@ -140,7 +143,11 @@ interface ContentBlock {
   is_error?: boolean
 }
 
-function renderTurn(turn: { user?: Msg; assistantAndTools: Msg[] }, index: number, toolResultMax: number): string {
+function renderTurn(
+  turn: { user?: Msg; assistantAndTools: Msg[] },
+  index: number,
+  toolResultMax: number,
+): string {
   const parts: string[] = [`<turn index="${index}">`]
 
   if (turn.user) {
@@ -190,7 +197,10 @@ function extractText(content: unknown): string {
   if (typeof content === 'string') return content
   const blocks = asBlocks(content)
   return blocks
-    .filter((b): b is ContentBlock & { type: 'text'; text: string } => b.type === 'text' && typeof b.text === 'string')
+    .filter(
+      (b): b is ContentBlock & { type: 'text'; text: string } =>
+        b.type === 'text' && typeof b.text === 'string',
+    )
     .map((b) => b.text)
     .join('\n')
 }

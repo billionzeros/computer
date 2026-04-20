@@ -145,15 +145,8 @@ export function TasksListView() {
           rows.map((r) => {
             const working = r.status === 'working'
             return (
-              <div
-                key={r.id}
-                className={`tasks-row${working ? ' tasks-row--working' : ''}`}
-              >
-                <button
-                  type="button"
-                  className="tasks-row__main"
-                  onClick={() => handleOpen(r.id)}
-                >
+              <div key={r.id} className={`tasks-row${working ? ' tasks-row--working' : ''}`}>
+                <button type="button" className="tasks-row__main" onClick={() => handleOpen(r.id)}>
                   <span className={`tasks-row__dot tasks-row__dot--${r.status}`} aria-hidden />
                   <span className="tasks-row__title">{r.title}</span>
                   {working && (

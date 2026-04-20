@@ -18,11 +18,7 @@
 import type { AgentTool } from '@mariozechner/pi-agent-core'
 import { Type } from '@mariozechner/pi-ai'
 import { defineTool, toolResult } from './_helpers.js'
-import {
-  type BrowserCallbacks,
-  type BrowserToolInput,
-  executeBrowser,
-} from './browser.js'
+import { type BrowserCallbacks, type BrowserToolInput, executeBrowser } from './browser.js'
 
 export function buildBrowserTool(callbacks?: BrowserCallbacks): AgentTool {
   return defineTool({
@@ -68,12 +64,7 @@ export function buildBrowserTool(callbacks?: BrowserCallbacks): AgentTool {
       amount: Type.Optional(Type.Number({ description: 'Scroll amount in pixels' })),
       property: Type.Optional(
         Type.Union(
-          [
-            Type.Literal('text'),
-            Type.Literal('url'),
-            Type.Literal('title'),
-            Type.Literal('html'),
-          ],
+          [Type.Literal('text'), Type.Literal('url'), Type.Literal('title'), Type.Literal('html')],
           { description: 'Property for get operation' },
         ),
       ),

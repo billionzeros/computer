@@ -17,18 +17,18 @@
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import type { SessionEvent } from '../../session.js'
+import type { HarnessAdapter } from '../adapter.js'
 import { ClaudeAdapter } from '../adapters/claude.js'
 import { CodexAdapter } from '../adapters/codex.js'
-import type { HarnessAdapter } from '../adapter.js'
-import type { SessionEvent } from '../../session.js'
 import {
+  claudeErrorExpected,
   claudeSimpleExpected,
   claudeToolCallExpected,
-  claudeErrorExpected,
-  codexSimpleExpected,
-  codexToolCallExpected,
   codexErrorExpected,
   codexMcpRealExpected,
+  codexSimpleExpected,
+  codexToolCallExpected,
 } from './expected.js'
 
 const __dirname = fileURLToPath(new URL('.', import.meta.url))
@@ -44,16 +44,51 @@ const claude = new ClaudeAdapter()
 const codex = new CodexAdapter()
 
 const cases: Case[] = [
-  { name: 'claude-simple', adapter: claude, fixture: 'claude-simple.ndjson', expected: claudeSimpleExpected },
-  { name: 'claude-tool-call', adapter: claude, fixture: 'claude-tool-call.ndjson', expected: claudeToolCallExpected },
-  { name: 'claude-error', adapter: claude, fixture: 'claude-error.ndjson', expected: claudeErrorExpected },
-  { name: 'codex-simple', adapter: codex, fixture: 'codex-simple.ndjson', expected: codexSimpleExpected },
-  { name: 'codex-tool-call', adapter: codex, fixture: 'codex-tool-call.ndjson', expected: codexToolCallExpected },
-  { name: 'codex-error', adapter: codex, fixture: 'codex-error.ndjson', expected: codexErrorExpected },
+  {
+    name: 'claude-simple',
+    adapter: claude,
+    fixture: 'claude-simple.ndjson',
+    expected: claudeSimpleExpected,
+  },
+  {
+    name: 'claude-tool-call',
+    adapter: claude,
+    fixture: 'claude-tool-call.ndjson',
+    expected: claudeToolCallExpected,
+  },
+  {
+    name: 'claude-error',
+    adapter: claude,
+    fixture: 'claude-error.ndjson',
+    expected: claudeErrorExpected,
+  },
+  {
+    name: 'codex-simple',
+    adapter: codex,
+    fixture: 'codex-simple.ndjson',
+    expected: codexSimpleExpected,
+  },
+  {
+    name: 'codex-tool-call',
+    adapter: codex,
+    fixture: 'codex-tool-call.ndjson',
+    expected: codexToolCallExpected,
+  },
+  {
+    name: 'codex-error',
+    adapter: codex,
+    fixture: 'codex-error.ndjson',
+    expected: codexErrorExpected,
+  },
   // Real stdout captured from Codex CLI in production (Apr 2026). If
   // this fails, Codex changed its mcp_tool_call item shape again and
   // the adapter needs to be updated to match.
-  { name: 'codex-mcp-real', adapter: codex, fixture: 'codex-mcp-real.ndjson', expected: codexMcpRealExpected },
+  {
+    name: 'codex-mcp-real',
+    adapter: codex,
+    fixture: 'codex-mcp-real.ndjson',
+    expected: codexMcpRealExpected,
+  },
 ]
 
 function runFixture(c: Case): SessionEvent[] {
@@ -127,7 +162,12 @@ const layerCases: LayerCase[] = [
       projectId: 'proj_1',
       workspacePath: '/tmp/foo',
     },
-    mustInclude: ['# Current Context', 'Project: foo', '- Workspace: /tmp/foo/', '# Project Memory Instructions'],
+    mustInclude: [
+      '# Current Context',
+      'Project: foo',
+      '- Workspace: /tmp/foo/',
+      '# Project Memory Instructions',
+    ],
   },
   {
     name: 'memory-block-emitted',
@@ -138,13 +178,22 @@ const layerCases: LayerCase[] = [
         crossConversationMemories: [],
       },
     },
-    mustInclude: ['# Memory', '## Global Memory', '### prefer_short_replies', 'Keep answers brief.'],
+    mustInclude: [
+      '# Memory',
+      '## Global Memory',
+      '### prefer_short_replies',
+      'Keep answers brief.',
+    ],
   },
   {
     name: 'workflow-catalog-emitted',
     opts: {
       availableWorkflows: [
-        { name: 'triage-slack', description: 'Summarize unread Slack DMs.', whenToUse: 'user asks about slack' },
+        {
+          name: 'triage-slack',
+          description: 'Summarize unread Slack DMs.',
+          whenToUse: 'user asks about slack',
+        },
       ],
     },
     mustInclude: ['# Available Workflows', '### triage-slack', 'Summarize unread Slack DMs.'],
@@ -155,7 +204,12 @@ const layerCases: LayerCase[] = [
       agentInstructions: 'Run the daily lead scan.',
       agentMemory: 'Last run: 2026-04-15, found 3 leads.',
     },
-    mustInclude: ['# Agent Context', '## Standing Instructions', 'Run the daily lead scan.', '## Run History'],
+    mustInclude: [
+      '# Agent Context',
+      '## Standing Instructions',
+      'Run the daily lead scan.',
+      '## Run History',
+    ],
   },
 ]
 
@@ -193,9 +247,9 @@ console.log(`All ${layerCases.length} prompt-layer checks passed`)
 // projectId + handler, connector tools flow through the AgentTool→MCP
 // adapter.
 
-import { AntonToolRegistry } from '../tool-registry.js'
-import { Type } from '@sinclair/typebox'
 import type { AgentTool } from '@mariozechner/pi-agent-core'
+import { Type } from '@sinclair/typebox'
+import { AntonToolRegistry } from '../tool-registry.js'
 
 // Fake connector tool built with the same shape Pi SDK connectors use.
 const fakeConnectorTool: AgentTool = {
@@ -300,14 +354,14 @@ console.log(`All ${registryCases.length} registry checks passed`)
 // this fails loudly before a Pi SDK prompt regression ships.
 
 import {
-  buildMemoryLayer as _buildMemoryLayer,
-  buildWorkflowsLayer as _buildWorkflowsLayer,
   buildAgentContextLayer as _buildAgentContextLayer,
+  buildHarnessContextPrompt as _buildHarnessContextPrompt,
+  buildHarnessIdentityBlock as _buildHarnessIdentityBlock,
+  buildMemoryGuidelinesLayer as _buildMemoryGuidelinesLayer,
+  buildMemoryLayer as _buildMemoryLayer,
   buildProjectMemoryInstructionsLayer as _buildProjectMemoryInstructionsLayer,
   buildSurfaceLayer as _buildSurfaceLayer,
-  buildHarnessIdentityBlock as _buildHarnessIdentityBlock,
-  buildHarnessContextPrompt as _buildHarnessContextPrompt,
-  buildMemoryGuidelinesLayer as _buildMemoryGuidelinesLayer,
+  buildWorkflowsLayer as _buildWorkflowsLayer,
 } from '../../prompt-layers.js'
 
 interface LayerSnapshot {
@@ -357,7 +411,7 @@ const layerSnapshots: LayerSnapshot[] = [
       'Do NOT re-create scripts or tooling that you have already built in previous runs. Re-use existing work.\n' +
       'If something is broken, fix it. If everything works, just run it.\n\n' +
       'Run the daily lead scan.\n\n' +
-      '## Run History\nThis is your memory from previous runs. Use it to know what you\'ve already built, where scripts are, and what happened last time. Do NOT rebuild things that already exist.\n\n' +
+      "## Run History\nThis is your memory from previous runs. Use it to know what you've already built, where scripts are, and what happened last time. Do NOT rebuild things that already exist.\n\n" +
       'Last run: 2026-04-15, 3 leads.\n</system-reminder>',
   },
   {
@@ -411,7 +465,9 @@ const identityCases: IdentityCase[] = [
   {
     name: 'wrapped in <system-reminder> with Anton heading',
     assert: (b) =>
-      b.startsWith('\n\n<system-reminder>\n# Anton\n') ? null : 'missing <system-reminder># Anton header',
+      b.startsWith('\n\n<system-reminder>\n# Anton\n')
+        ? null
+        : 'missing <system-reminder># Anton header',
   },
   {
     name: 'identity section present',
@@ -420,7 +476,7 @@ const identityCases: IdentityCase[] = [
   {
     name: 'frames the model as Anton execution engine',
     assert: (b) =>
-      b.includes("serving as the execution engine for **Anton**")
+      b.includes('serving as the execution engine for **Anton**')
         ? null
         : 'missing "execution engine for Anton" framing',
   },
@@ -432,16 +488,14 @@ const identityCases: IdentityCase[] = [
   {
     name: 'answer script for "who are you"',
     assert: (b) =>
-      b.includes('When asked who you are or what you are') &&
-      b.includes("Anton's execution engine")
+      b.includes('When asked who you are or what you are') && b.includes("Anton's execution engine")
         ? null
         : 'missing "who are you" answer script',
   },
   {
     name: 'answer script for "what is Anton"',
     assert: (b) =>
-      b.includes('When asked "what is Anton"') &&
-      b.includes('personal AI computer')
+      b.includes('When asked "what is Anton"') && b.includes('personal AI computer')
         ? null
         : 'missing "what is Anton" answer script',
   },
@@ -480,7 +534,7 @@ const identityCases: IdentityCase[] = [
   {
     name: 'guard against sending user to a vendor auth flow',
     assert: (b) =>
-      b.includes('Settings → Connectors') && b.includes("Do NOT ask the user to install")
+      b.includes('Settings → Connectors') && b.includes('Do NOT ask the user to install')
         ? null
         : 'missing guidance to redirect users to Anton Settings instead of vendor auth',
   },
@@ -501,8 +555,7 @@ const identityCases: IdentityCase[] = [
   },
   {
     name: 'tools/list discovery hint',
-    assert: (b) =>
-      b.includes('`tools/list`') ? null : 'missing tools/list discovery hint',
+    assert: (b) => (b.includes('`tools/list`') ? null : 'missing tools/list discovery hint'),
   },
   {
     name: 'identity prepended in buildHarnessContextPrompt',
@@ -744,11 +797,11 @@ console.log(`All ${mirrorCases.length} mirror checks passed`)
 // role/content/tool-name wiring. Guards against drift between the
 // mirror write-side shape and the history read-side parser.
 
-import { readHarnessHistory as _readHarnessHistory } from '../mirror.js'
-import { buildReplaySeed as _buildReplaySeed } from '../replay.js'
-import { mkdirSync, writeFileSync, rmSync } from 'node:fs'
+import { mkdirSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join as pathJoin } from 'node:path'
+import { readHarnessHistory as _readHarnessHistory } from '../mirror.js'
+import { buildReplaySeed as _buildReplaySeed } from '../replay.js'
 
 function writeMessagesJsonl(dir: string, msgs: SessionEvent[], userMsg: string): void {
   const synthesized = synthesizeHarnessTurn(userMsg, msgs, 1000)
@@ -765,12 +818,7 @@ function withTempSession<T>(fn: (sessionId: string, dir: string) => T): T {
   // projectId. Use a unique id under the real conversations dir so
   // the path matches the reader's expectation, then clean up.
   const sessionId = `test-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
-  const base = pathJoin(
-    process.env.HOME ?? tmpdir(),
-    '.anton',
-    'conversations',
-    sessionId,
-  )
+  const base = pathJoin(process.env.HOME ?? tmpdir(), '.anton', 'conversations', sessionId)
   try {
     return fn(sessionId, base)
   } finally {
@@ -815,7 +863,8 @@ const roundTripCases: RoundTripCase[] = [
       const result = entries.find((e) => e.role === 'tool_result')
       if (!call || call.toolName !== 'Bash') return 'tool_call missing toolName=Bash'
       if (!result || result.toolId !== 't1') return 'tool_result missing toolId'
-      if (!result.toolName || result.toolName !== 'Bash') return 'tool_result missing cross-linked toolName'
+      if (!result.toolName || result.toolName !== 'Bash')
+        return 'tool_result missing cross-linked toolName'
       return null
     },
   },
@@ -883,12 +932,7 @@ try {
       { type: 'tool_result', id: 'r', output: 'ok' },
       { type: 'text', content: 'saved' },
     ]
-    const dir = pathJoin(
-      process.env.HOME ?? tmpdir(),
-      '.anton',
-      'conversations',
-      sessionId,
-    )
+    const dir = pathJoin(process.env.HOME ?? tmpdir(), '.anton', 'conversations', sessionId)
     mkdirSync(dir, { recursive: true })
     const m1 = synthesizeHarnessTurn('hi', events1)
     const m2 = synthesizeHarnessTurn('save x', events2)

@@ -9,9 +9,9 @@
  * handler and forwards questions to it.
  */
 
+import type { AskUserQuestion } from '@anton/protocol'
 import type { AgentTool } from '@mariozechner/pi-agent-core'
 import { Type } from '@mariozechner/pi-ai'
-import type { AskUserQuestion } from '@anton/protocol'
 import type { AskUserHandler } from '../agent.js'
 import { defineTool, toolResult } from './_helpers.js'
 

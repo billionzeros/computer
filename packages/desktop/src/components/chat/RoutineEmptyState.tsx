@@ -124,7 +124,9 @@ function RunEntry({ run, onViewLogs }: { run: RoutineRunRecord; onViewLogs: () =
         {run.durationMs != null && (
           <span className="routine-run-entry__duration">{formatDuration(run.durationMs)}</span>
         )}
-        {hasLogs && <Terminal size={10} strokeWidth={1.5} className="routine-run-entry__logs-icon" />}
+        {hasLogs && (
+          <Terminal size={10} strokeWidth={1.5} className="routine-run-entry__logs-icon" />
+        )}
       </button>
       {expanded && run.error && <div className="routine-run-entry__error">{run.error}</div>}
     </div>
@@ -180,7 +182,9 @@ export function RoutineEmptyState({ agent }: Props) {
             />
             <h2 className="routine-empty-state__name">{meta.name}</h2>
           </div>
-          {meta.description && <p className="routine-empty-state__description">{meta.description}</p>}
+          {meta.description && (
+            <p className="routine-empty-state__description">{meta.description}</p>
+          )}
           {meta.schedule?.cron && (
             <span className="routine-empty-state__schedule">
               <Calendar size={12} strokeWidth={1.5} />

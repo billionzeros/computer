@@ -9,8 +9,8 @@ import { connection } from '../connection'
 import { saveSelectedModel } from '../storage'
 import {
   type AgentStatus,
-  type RoutineStep,
   type ProviderInfo,
+  type RoutineStep,
   type SessionMeta,
   type SessionState,
   createSessionState,

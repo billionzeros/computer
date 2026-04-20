@@ -750,10 +750,7 @@ export class SlackWebhookProvider implements WebhookProvider {
    * Send a stateless drill-down menu via Block Kit. Returns a ref the
    * runner can hand to editInlineMenu when buttons are clicked.
    */
-  async sendInlineMenu(
-    event: CanonicalEvent,
-    opts: InlineMenuOpts,
-  ): Promise<InlineMenuRef | null> {
+  async sendInlineMenu(event: CanonicalEvent, opts: InlineMenuOpts): Promise<InlineMenuRef | null> {
     const token = await this.opts.getBotToken()
     if (!token) return null
     const channel = event.context.channel as string

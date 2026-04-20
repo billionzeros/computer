@@ -23,19 +23,19 @@
  *     long-form synthesis than GPT-5.4 in our evals).
  */
 
-import type { AgentTool, AgentToolResult } from '@mariozechner/pi-agent-core'
-import { Type } from '@mariozechner/pi-ai'
 import { loadConfig } from '@anton/agent-config'
 import { createLogger } from '@anton/logger'
+import type { AgentTool, AgentToolResult } from '@mariozechner/pi-agent-core'
+import { Type } from '@mariozechner/pi-ai'
+import type { ProgressCallback } from '../harness/mcp-ipc-handler.js'
+import type { StreamingCapable } from '../harness/tool-registry.js'
+import { type SessionEvent, createSession } from '../session.js'
+import { defineTool, toolResult } from './_helpers.js'
 import {
   SUB_AGENT_BUDGETS,
   SUB_AGENT_TYPE_PREFIXES,
   type SubAgentType,
 } from './sub-agent-config.js'
-import { createSession, type SessionEvent } from '../session.js'
-import type { ProgressCallback } from '../harness/mcp-ipc-handler.js'
-import type { StreamingCapable } from '../harness/tool-registry.js'
-import { defineTool, toolResult } from './_helpers.js'
 
 const log = createLogger('spawn-sub-agent')
 
@@ -54,7 +54,7 @@ const DESCRIPTION =
   '\n' +
   'The child is a fresh Anton Pi SDK session (Anthropic). It has its own tool set, its own token budget, ' +
   'and no access to your conversation history. Pass the full context the child needs in the `task` string. ' +
-  'The tool returns the child\'s final report as a single text result.'
+  "The tool returns the child's final report as a single text result."
 
 export interface SpawnSubAgentParams {
   task: string
@@ -88,11 +88,7 @@ export function buildSpawnSubAgentTool(
           'list the specific checks to run.',
       }),
       type: Type.Union(
-        [
-          Type.Literal('research'),
-          Type.Literal('execute'),
-          Type.Literal('verify'),
-        ],
+        [Type.Literal('research'), Type.Literal('execute'), Type.Literal('verify')],
         { description: 'Specialization. Required — pick one.' },
       ),
     }),
@@ -141,7 +137,7 @@ async function runSubAgent(
     return { text: `spawn_sub_agent: unsupported type "${type}"`, hadError: true }
   }
 
-  let config
+  let config: ReturnType<typeof loadConfig>
   try {
     config = loadConfig()
   } catch (err) {

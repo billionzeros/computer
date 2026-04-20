@@ -7,7 +7,7 @@
 import type { AgentTool } from '@mariozechner/pi-agent-core'
 import { Type } from '@mariozechner/pi-ai'
 import { defineTool, toolResult } from './_helpers.js'
-import { executeClipboard, type ClipboardInput } from './clipboard.js'
+import { type ClipboardInput, executeClipboard } from './clipboard.js'
 
 export function buildClipboardTool(): AgentTool {
   return defineTool({
@@ -21,9 +21,7 @@ export function buildClipboardTool(): AgentTool {
       operation: Type.Union([Type.Literal('read'), Type.Literal('write')], {
         description: 'Clipboard operation',
       }),
-      content: Type.Optional(
-        Type.String({ description: 'Text to copy to clipboard (for write)' }),
-      ),
+      content: Type.Optional(Type.String({ description: 'Text to copy to clipboard (for write)' })),
     }),
     async execute(_toolCallId, params) {
       const output = executeClipboard(params as ClipboardInput)

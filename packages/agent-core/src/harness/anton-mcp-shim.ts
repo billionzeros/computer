@@ -21,7 +21,9 @@ const ANTON_SESSION = process.env.ANTON_SESSION
 const ANTON_AUTH = process.env.ANTON_AUTH
 
 if (!ANTON_SOCK || !ANTON_SESSION || !ANTON_AUTH) {
-  process.stderr.write('anton-mcp-shim: ANTON_SOCK, ANTON_SESSION and ANTON_AUTH env vars required\n')
+  process.stderr.write(
+    'anton-mcp-shim: ANTON_SOCK, ANTON_SESSION and ANTON_AUTH env vars required\n',
+  )
   process.exit(1)
 }
 
@@ -45,7 +47,7 @@ function connectToAnton(): Promise<net.Socket> {
         method: 'auth',
         params: { token: ANTON_AUTH, sessionId: ANTON_SESSION },
       })
-      sock.write(authMsg + '\n')
+      sock.write(`${authMsg}\n`)
       authTimer = setTimeout(() => {
         if (!authed) {
           process.stderr.write('anton-mcp-shim: auth handshake timed out\n')
@@ -111,7 +113,7 @@ function connectToAnton(): Promise<net.Socket> {
                 ? { progressToken: token, progress, message }
                 : { progressToken: token, message },
           })
-          process.stdout.write(notif + '\n')
+          process.stdout.write(`${notif}\n`)
         }
         return
       }
@@ -149,7 +151,7 @@ async function sendToAnton(
 
   return new Promise((resolve, reject) => {
     pendingRequests.set(id, resolve)
-    socket!.write(request + '\n', (err) => {
+    socket!.write(`${request}\n`, (err) => {
       if (err) {
         pendingRequests.delete(id)
         reject(err)
@@ -169,7 +171,7 @@ async function sendToAnton(
 
 function sendResponse(id: string | number | null, result: unknown) {
   const response = JSON.stringify({ jsonrpc: '2.0', id, result })
-  process.stdout.write(response + '\n')
+  process.stdout.write(`${response}\n`)
 }
 
 function sendError(id: string | number | null, code: number, message: string) {
@@ -178,7 +180,7 @@ function sendError(id: string | number | null, code: number, message: string) {
     id,
     error: { code, message },
   })
-  process.stdout.write(response + '\n')
+  process.stdout.write(`${response}\n`)
 }
 
 async function handleRequest(msg: {

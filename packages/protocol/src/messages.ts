@@ -1,4 +1,4 @@
-import type { RoutineSession, Project } from './projects.js'
+import type { Project, RoutineSession } from './projects.js'
 
 // ── Control Channel (0x00) ──────────────────────────────────────────
 

@@ -7,11 +7,11 @@
  */
 
 import { type ChildProcess, spawn } from 'node:child_process'
-import { createInterface } from 'node:readline'
-import { mkdirSync, unlinkSync, writeFileSync } from 'node:fs'
-import { join } from 'node:path'
-import { tmpdir } from 'node:os'
 import { randomUUID } from 'node:crypto'
+import { mkdirSync, unlinkSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { createInterface } from 'node:readline'
 import { createLogger } from '@anton/logger'
 import type { ChatImageAttachmentInput } from '@anton/protocol'
 import type { SessionEvent } from '../session.js'
@@ -70,7 +70,10 @@ export class HarnessSession {
   private cwd?: string
   private systemPrompt?: string
   private buildSystemPromptFn?: (userMessage: string, turnIndex: number) => Promise<string>
-  private onTurnEnd?: (turn: { userMessage: string; events: SessionEvent[] }) => void | Promise<void>
+  private onTurnEnd?: (turn: {
+    userMessage: string
+    events: SessionEvent[]
+  }) => void | Promise<void>
   private turnIndex = 0
   private maxBudgetUsd?: number
   private proc: ChildProcess | null = null
@@ -136,7 +139,10 @@ export class HarnessSession {
       try {
         systemPromptForTurn = await this.buildSystemPromptFn(userMessage, this.turnIndex)
       } catch (err) {
-        log.warn({ err, sessionId: this.id }, 'buildSystemPrompt threw — falling back to static systemPrompt')
+        log.warn(
+          { err, sessionId: this.id },
+          'buildSystemPrompt threw — falling back to static systemPrompt',
+        )
         systemPromptForTurn = this.systemPrompt
       }
     } else {
@@ -192,7 +198,7 @@ export class HarnessSession {
       })
 
       // Read stdout line-by-line (NDJSON)
-      const rl = createInterface({ input: proc.stdout!, crlfDelay: Infinity })
+      const rl = createInterface({ input: proc.stdout!, crlfDelay: Number.POSITIVE_INFINITY })
 
       // Use an async queue pattern to bridge readline events to the generator
       const eventQueue: SessionEvent[] = []
@@ -225,7 +231,10 @@ export class HarnessSession {
         try {
           parsed = JSON.parse(trimmed)
         } catch {
-          log.warn({ sessionId: this.id, line: trimmed.slice(0, 200) }, 'Non-JSON line from CLI, skipping')
+          log.warn(
+            { sessionId: this.id, line: trimmed.slice(0, 200) },
+            'Non-JSON line from CLI, skipping',
+          )
           return
         }
 
@@ -257,8 +266,13 @@ export class HarnessSession {
       let receivedFirstEvent = false
       const startupTimeout = setTimeout(() => {
         if (!receivedFirstEvent && !done) {
-          const errMsg = stderrChunks.trim() || 'CLI did not produce any output within 30 seconds. Check that the provider is logged in and configured correctly.'
-          log.error({ sessionId: this.id, stderr: stderrChunks.slice(0, 500) }, 'Harness CLI startup timeout')
+          const errMsg =
+            stderrChunks.trim() ||
+            'CLI did not produce any output within 30 seconds. Check that the provider is logged in and configured correctly.'
+          log.error(
+            { sessionId: this.id, stderr: stderrChunks.slice(0, 500) },
+            'Harness CLI startup timeout',
+          )
           eventQueue.push({
             type: 'error',
             message: errMsg,
@@ -458,8 +472,7 @@ export function isHarnessSession(
   s: unknown,
 ): s is HarnessSession | import('./codex-harness-session.js').CodexHarnessSession {
   return (
-    s instanceof HarnessSession ||
-    (s != null && (s as { isHarness?: boolean }).isHarness === true)
+    s instanceof HarnessSession || (s != null && (s as { isHarness?: boolean }).isHarness === true)
   )
 }
 

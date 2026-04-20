@@ -46,7 +46,7 @@ export class CodexAdapter implements HarnessAdapter {
           resolve({ loggedIn: false })
           return
         }
-        const output = (stdout.trim() || stderr.trim())
+        const output = stdout.trim() || stderr.trim()
         // Output is like "Logged in using ChatGPT" or "Logged in using API key"
         const loggedIn = output.toLowerCase().includes('logged in')
         resolve({
@@ -295,7 +295,13 @@ export class CodexAdapter implements HarnessAdapter {
     if (Array.isArray(result.content) && result.content.length > 0) {
       const chunks: string[] = []
       for (const c of result.content) {
-        if (c && typeof c === 'object' && 'type' in c && c.type === 'text' && typeof (c as { text?: unknown }).text === 'string') {
+        if (
+          c &&
+          typeof c === 'object' &&
+          'type' in c &&
+          c.type === 'text' &&
+          typeof (c as { text?: unknown }).text === 'string'
+        ) {
           chunks.push((c as { text: string }).text)
         }
       }

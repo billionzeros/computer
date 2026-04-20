@@ -23,12 +23,7 @@ import type {
   Session,
   SurfaceInfo,
 } from '@anton/agent-core'
-import {
-  createSession,
-  executeCommand,
-  isHarnessSession,
-  resumeSession,
-} from '@anton/agent-core'
+import { createSession, executeCommand, isHarnessSession, resumeSession } from '@anton/agent-core'
 import type { ConnectorManager } from '@anton/connectors'
 import { createLogger } from '@anton/logger'
 import type { TaskItem } from '@anton/protocol'
@@ -723,7 +718,10 @@ export class WebhookAgentRunner {
     provider: WebhookProvider,
   ): Promise<void> {
     if (!provider.editInlineMenu) {
-      log.warn({ provider: provider.slug }, 'menu action received but provider has no editInlineMenu')
+      log.warn(
+        { provider: provider.slug },
+        'menu action received but provider has no editInlineMenu',
+      )
       return
     }
     let next: InlineMenuOpts

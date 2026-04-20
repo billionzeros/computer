@@ -374,7 +374,13 @@ export function RoutineRunView({ agentSessionId, projectId, run, onBack }: Props
     projectStore.setState({ routineRunLogs: null, routineRunLogsLoading: true })
     projectStore
       .getState()
-      .getRoutineRunLogs(projectId, agentSessionId, run.startedAt, run.completedAt, run.runSessionId)
+      .getRoutineRunLogs(
+        projectId,
+        agentSessionId,
+        run.startedAt,
+        run.completedAt,
+        run.runSessionId,
+      )
   }, [projectId, agentSessionId, run.startedAt, run.completedAt, run.runSessionId])
 
   const grouped = useMemo(() => {

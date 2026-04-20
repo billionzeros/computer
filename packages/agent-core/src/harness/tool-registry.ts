@@ -85,9 +85,10 @@ export function agentToolToMcpDefinition(tool: MaybeStreamingTool): ToolDefiniti
     },
     async execute(args, _sessionId, onProgress) {
       const toolCallId = `mcp-${tool.name}-${Date.now().toString(36)}`
-      const result = streaming && onProgress
-        ? await tool.executeStreaming!(toolCallId, args as never, onProgress)
-        : await tool.execute(toolCallId, args as never, undefined, undefined)
+      const result =
+        streaming && onProgress
+          ? await tool.executeStreaming!(toolCallId, args as never, onProgress)
+          : await tool.execute(toolCallId, args as never, undefined, undefined)
       const chunks: string[] = []
       for (const c of result.content) {
         if (c.type === 'text') {
@@ -96,9 +97,7 @@ export function agentToolToMcpDefinition(tool: MaybeStreamingTool): ToolDefiniti
           chunks.push(`[image: ${c.mimeType ?? 'unknown'}, ${c.data.length} bytes]`)
         }
       }
-      const isError = Boolean(
-        (result.details as { isError?: boolean } | undefined)?.isError,
-      )
+      const isError = Boolean((result.details as { isError?: boolean } | undefined)?.isError)
       return textResult(chunks.join('\n'), isError)
     },
   }
@@ -217,10 +216,7 @@ export class AntonToolRegistry implements IpcToolProvider {
           }
           map.set(def.schema.name, def)
         } catch (err) {
-          log.warn(
-            { err, name: tool.name, sessionId },
-            'failed to adapt connector tool — skipping',
-          )
+          log.warn({ err, name: tool.name, sessionId }, 'failed to adapt connector tool — skipping')
         }
       }
     }

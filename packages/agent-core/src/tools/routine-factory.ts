@@ -12,8 +12,8 @@
 import type { AgentTool } from '@mariozechner/pi-agent-core'
 import { Type } from '@mariozechner/pi-ai'
 import type { AskUserHandler } from '../agent.js'
-import { humanizeCron } from './cron-humanize.js'
 import { defineTool, toolResult } from './_helpers.js'
+import { humanizeCron } from './cron-humanize.js'
 import type { JobActionHandler, JobToolInput } from './job.js'
 
 export interface RoutineToolDeps {
@@ -56,8 +56,7 @@ export function buildRoutineTool(deps: RoutineToolDeps): AgentTool {
       ),
       prompt: Type.Optional(
         Type.String({
-          description:
-            'Instructions for the routine — what it should do on each run. Be specific.',
+          description: 'Instructions for the routine — what it should do on each run. Be specific.',
         }),
       ),
       schedule: Type.Optional(

@@ -22,8 +22,8 @@ import {
   Zap,
 } from 'lucide-react'
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { sanitizeTitle } from '../lib/conversations.js'
 import { formatRelativeTime } from '../lib/agent-utils.js'
+import { sanitizeTitle } from '../lib/conversations.js'
 import { loadMachines, useStore } from '../lib/store.js'
 import { projectStore } from '../lib/store/projectStore.js'
 import { sessionStore } from '../lib/store/sessionStore.js'
@@ -121,7 +121,8 @@ export function Sidebar({ onViewChange, onOpenSettings }: Props) {
 
   const projectTaskCount = (projectId: string) =>
     taskCountByProject.get(projectId) ??
-    (projects.find((p) => p.id === projectId)?.stats.sessionCount ?? 0)
+    projects.find((p) => p.id === projectId)?.stats.sessionCount ??
+    0
 
   const projectLastActive = (projectId: string) => {
     const p = projects.find((proj) => proj.id === projectId)

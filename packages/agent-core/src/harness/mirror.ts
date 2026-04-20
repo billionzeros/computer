@@ -280,10 +280,7 @@ export function appendHarnessTurn(opts: AppendHarnessTurnOpts): boolean {
  * Returns an empty array if the mirror doesn't exist yet (fresh
  * session with no turns recorded).
  */
-export function readHarnessHistory(
-  sessionId: string,
-  projectId?: string,
-): SessionHistoryEntry[] {
+export function readHarnessHistory(sessionId: string, projectId?: string): SessionHistoryEntry[] {
   const dir = resolveSessionDir(sessionId, projectId)
   const msgsPath = join(dir, 'messages.jsonl')
   if (!existsSync(msgsPath)) return []
@@ -345,9 +342,11 @@ export function readHarnessHistory(
       } else if (role === 'assistant' && type === 'tool_use') {
         const id = typeof b.id === 'string' ? b.id : `t-${seq}`
         const name = typeof b.name === 'string' ? b.name : 'tool'
-        const input = (typeof b.input === 'object' && b.input !== null
-          ? (b.input as Record<string, unknown>)
-          : {}) as Record<string, unknown>
+        const input = (
+          typeof b.input === 'object' && b.input !== null
+            ? (b.input as Record<string, unknown>)
+            : {}
+        ) as Record<string, unknown>
         toolCallIdToName.set(id, name)
         toolCallIdToInput.set(id, input)
         entries.push({
@@ -361,7 +360,8 @@ export function readHarnessHistory(
         })
       } else if (role === 'tool' && type === 'tool_result') {
         const toolId = typeof b.tool_use_id === 'string' ? b.tool_use_id : undefined
-        const resultText = typeof b.content === 'string' ? b.content : JSON.stringify(b.content ?? '')
+        const resultText =
+          typeof b.content === 'string' ? b.content : JSON.stringify(b.content ?? '')
         const isError = b.is_error === true
         entries.push({
           seq: seq++,
@@ -369,8 +369,12 @@ export function readHarnessHistory(
           content: resultText,
           ts,
           ...(toolId ? { toolId } : {}),
-          ...(toolId && toolCallIdToName.has(toolId) ? { toolName: toolCallIdToName.get(toolId) } : {}),
-          ...(toolId && toolCallIdToInput.has(toolId) ? { toolInput: toolCallIdToInput.get(toolId) } : {}),
+          ...(toolId && toolCallIdToName.has(toolId)
+            ? { toolName: toolCallIdToName.get(toolId) }
+            : {}),
+          ...(toolId && toolCallIdToInput.has(toolId)
+            ? { toolInput: toolCallIdToInput.get(toolId) }
+            : {}),
           ...(isError ? { isError: true } : {}),
         })
       }
