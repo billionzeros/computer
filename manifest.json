@@ -1,12 +1,12 @@
 {
-  "version": "2.0.0",
-  "gitHash": "f49ea24",
+  "version": "2.0.1",
+  "gitHash": "",
   "releaseUrl": "https://github.com/billionzeros/computer/releases",
-  "changelog": "Fixes:\n- biome issue",
-  "publishedAt": "2026-04-20T09:36:46.736Z",
-  "cli": "https://github.com/billionzeros/computer/releases/download/v2.0.0/anton-cli.mjs",
+  "changelog": "Fixes:\n- unblock codex harness turns and hot-swap models mid-session (#1)",
+  "publishedAt": "2026-04-20T12:12:18.350Z",
+  "cli": "https://github.com/billionzeros/computer/releases/download/v2.0.1/anton-cli.mjs",
   "sidecar": {
-    "linux-arm64": "https://github.com/billionzeros/computer/releases/download/v2.0.0/anton-sidecar-linux-arm64",
-    "linux-amd64": "https://github.com/billionzeros/computer/releases/download/v2.0.0/anton-sidecar-linux-amd64"
+    "linux-arm64": "https://github.com/billionzeros/computer/releases/download/v2.0.1/anton-sidecar-linux-arm64",
+    "linux-amd64": "https://github.com/billionzeros/computer/releases/download/v2.0.1/anton-sidecar-linux-amd64"
   }
 }
