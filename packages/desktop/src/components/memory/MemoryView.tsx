@@ -1,19 +1,23 @@
 import {
   BookOpen,
-  ChevronDown,
-  ChevronRight,
+  Brain,
   Globe,
   Loader2,
   MessageSquare,
+  Pencil,
   Plus,
   Save,
+  Search,
+  Sparkles,
   Trash2,
+  X,
 } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 import { projectStore } from '../../lib/store/projectStore.js'
 import { sessionStore } from '../../lib/store/sessionStore.js'
 
 type MemoryScope = 'global' | 'conversation' | 'project'
+type Tab = 'instructions' | 'preferences' | 'memories'
 
 interface ParsedMemory {
   name: string
@@ -21,12 +25,6 @@ interface ParsedMemory {
   content: string
   scope: MemoryScope
   savedAt?: string
-}
-
-const SCOPE_LABELS: Record<MemoryScope, string> = {
-  global: 'Global',
-  conversation: 'Conversation',
-  project: 'Project',
 }
 
 function parseMemoryFile(raw: { name: string; content: string; scope: MemoryScope }): ParsedMemory {
@@ -62,24 +60,24 @@ export function MemoryView() {
   const activeProjectId = projectStore((s) => s.activeProjectId)
   const projects = projectStore((s) => s.projects)
   const projectInstructions = projectStore((s) => s.projectInstructions)
-  projectStore((s) => s.projectInstructionsLoading)
   const projectPreferences = projectStore((s) => s.projectPreferences)
-
-  const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set())
-  const [filterScope, setFilterScope] = useState<MemoryScope | 'all'>('all')
-
-  // Instructions editing
-  const [editingInstructions, setEditingInstructions] = useState(false)
-  const [instructionsDraft, setInstructionsDraft] = useState('')
-
-  // Preference adding
-  const [addingPreference, setAddingPreference] = useState(false)
-  const [newPrefTitle, setNewPrefTitle] = useState('')
-  const [newPrefContent, setNewPrefContent] = useState('')
 
   const activeProject = projects.find((p) => p.id === activeProjectId)
 
-  // Fetch data on mount and project change
+  const [tab, setTab] = useState<Tab>('instructions')
+
+  // Instructions
+  const [editingInstructions, setEditingInstructions] = useState(false)
+  const [instructionsDraft, setInstructionsDraft] = useState('')
+
+  // Preferences
+  const [addingPref, setAddingPref] = useState(false)
+  const [prefTitleDraft, setPrefTitleDraft] = useState('')
+  const [prefContentDraft, setPrefContentDraft] = useState('')
+
+  // Memories filters
+  const [query, setQuery] = useState('')
+
   useEffect(() => {
     if (!activeProjectId) return
     projectStore.setState({
@@ -92,7 +90,6 @@ export function MemoryView() {
     projectStore.getState().getProjectPreferences(activeProjectId)
   }, [activeProjectId])
 
-  // Sync draft when instructions load
   useEffect(() => {
     if (!editingInstructions) {
       setInstructionsDraft(projectInstructions)
@@ -100,19 +97,13 @@ export function MemoryView() {
   }, [projectInstructions, editingInstructions])
 
   const parsed = useMemo(() => memories.map(parseMemoryFile), [memories])
-  const filtered = useMemo(
-    () => (filterScope === 'all' ? parsed : parsed.filter((m) => m.scope === filterScope)),
-    [parsed, filterScope],
-  )
-
-  const toggleExpand = (id: string) => {
-    setExpandedIds((prev) => {
-      const next = new Set(prev)
-      if (next.has(id)) next.delete(id)
-      else next.add(id)
-      return next
-    })
-  }
+  const filteredMemories = useMemo(() => {
+    const q = query.trim().toLowerCase()
+    if (!q) return parsed
+    return parsed.filter(
+      (m) => m.title.toLowerCase().includes(q) || m.content.toLowerCase().includes(q),
+    )
+  }, [parsed, query])
 
   const handleSaveInstructions = () => {
     if (!activeProjectId) return
@@ -121,13 +112,13 @@ export function MemoryView() {
   }
 
   const handleAddPreference = () => {
-    if (!activeProjectId || !newPrefTitle.trim() || !newPrefContent.trim()) return
+    if (!activeProjectId || !prefTitleDraft.trim() || !prefContentDraft.trim()) return
     projectStore
       .getState()
-      .addProjectPreference(activeProjectId, newPrefTitle.trim(), newPrefContent.trim())
-    setNewPrefTitle('')
-    setNewPrefContent('')
-    setAddingPreference(false)
+      .addProjectPreference(activeProjectId, prefTitleDraft.trim(), prefContentDraft.trim())
+    setPrefTitleDraft('')
+    setPrefContentDraft('')
+    setAddingPref(false)
   }
 
   const handleDeletePreference = (prefId: string) => {
@@ -135,262 +126,283 @@ export function MemoryView() {
     projectStore.getState().deleteProjectPreference(activeProjectId, prefId)
   }
 
-  const scopeCounts = useMemo(() => {
-    const counts: Record<string, number> = { all: parsed.length }
-    for (const m of parsed) {
-      counts[m.scope] = (counts[m.scope] || 0) + 1
-    }
-    return counts
-  }, [parsed])
-
   return (
-    <div className="memory-view">
-      <div className="memory-view__inner">
-        {/* ── Instructions Section ── */}
-        <div className="memory-section-card">
-          <div className="memory-section__header">
-            <h3 className="memory-section__title">Instructions</h3>
-            {!editingInstructions && (
-              <button
-                type="button"
-                className="memory-section__add-btn"
-                onClick={() => {
-                  setInstructionsDraft(projectInstructions)
-                  setEditingInstructions(true)
-                }}
-              >
-                {projectInstructions ? 'Edit' : 'Add'}
-              </button>
-            )}
-          </div>
-          <p className="memory-section__desc">
-            Rules that guide the AI in <strong>{activeProject?.name || 'this project'}</strong>.
-            Applied to every task.
-          </p>
-
-          {editingInstructions ? (
-            <div className="instructions-editor">
-              <textarea
-                className="instructions-editor__textarea"
-                value={instructionsDraft}
-                onChange={(e) => setInstructionsDraft(e.target.value)}
-                placeholder="e.g. Always use Python 3.12. Output as CSV. Be concise."
-                rows={6}
-                // biome-ignore lint/a11y/noAutofocus: editing context requires immediate focus
-                autoFocus
-              />
-              <div className="instructions-editor__actions">
-                <button
-                  type="button"
-                  className="button button--sm button--primary"
-                  onClick={handleSaveInstructions}
-                >
-                  <Save size={13} strokeWidth={1.5} />
-                  Save
-                </button>
-                <button
-                  type="button"
-                  className="button button--sm button--ghost"
-                  onClick={() => setEditingInstructions(false)}
-                >
-                  Cancel
-                </button>
-              </div>
-            </div>
-          ) : projectInstructions ? (
-            <div
-              className="instructions-preview"
-              onClick={() => {
-                setInstructionsDraft(projectInstructions)
-                setEditingInstructions(true)
-              }}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') {
-                  setInstructionsDraft(projectInstructions)
-                  setEditingInstructions(true)
-                }
-              }}
-            >
-              {projectInstructions}
-            </div>
-          ) : (
-            <div className="memory-section__empty">
-              <BookOpen size={24} strokeWidth={1.5} />
-              <span>No instructions yet. Add rules to guide the AI in this project.</span>
-            </div>
-          )}
+    <div className="mem-main">
+      <div className="mem-header">
+        <h1 className="mem-header__title">
+          <Brain size={20} strokeWidth={1.5} />
+          Memory
+        </h1>
+        <div className="mem-header__sub">
+          What Anton knows about{' '}
+          <strong style={{ color: 'var(--text-2)' }}>
+            {activeProject?.name ?? 'this workspace'}
+          </strong>
+          .
         </div>
+      </div>
 
-        {/* ── Preferences Section ── */}
-        <div className="memory-section-card">
-          <div className="memory-section__header">
-            <h3 className="memory-section__title">Preferences</h3>
-            <button
-              type="button"
-              className="memory-section__add-btn"
-              onClick={() => setAddingPreference(true)}
-            >
-              <Plus size={14} strokeWidth={1.5} />
-              Add
-            </button>
-          </div>
-          <p className="memory-section__desc">
-            Custom preferences that guide how the AI works with you.
-          </p>
+      <div className="mem-tabs">
+        <button
+          type="button"
+          className={`mem-tab${tab === 'instructions' ? ' active' : ''}`}
+          onClick={() => setTab('instructions')}
+        >
+          <span>Instructions</span>
+        </button>
+        <button
+          type="button"
+          className={`mem-tab${tab === 'preferences' ? ' active' : ''}`}
+          onClick={() => setTab('preferences')}
+        >
+          <span>Preferences</span>
+          <span className="mem-tab__n">{projectPreferences.length}</span>
+        </button>
+        <button
+          type="button"
+          className={`mem-tab${tab === 'memories' ? ' active' : ''}`}
+          onClick={() => setTab('memories')}
+        >
+          <span>Memories</span>
+          <span className="mem-tab__n">{parsed.length}</span>
+        </button>
+      </div>
 
-          <div className="memory-section__list">
-            {projectPreferences.map((pref) => (
-              <div key={pref.id} className="memory-card">
-                {/* biome-ignore lint/a11y/useKeyWithClickEvents: expandable card header */}
-                <div className="memory-card__header" onClick={() => toggleExpand(pref.id)}>
-                  <span className="memory-card__chevron">
-                    {expandedIds.has(pref.id) ? (
-                      <ChevronDown size={14} strokeWidth={1.5} />
-                    ) : (
-                      <ChevronRight size={14} strokeWidth={1.5} />
-                    )}
-                  </span>
-                  <span className="memory-card__title">{pref.title}</span>
+      <div className="mem-body">
+        {tab === 'instructions' && (
+          <div className="mem-section">
+            <div className="mem-section__head">
+              <div>
+                <div className="mem-section__name">Project instructions</div>
+                <div className="mem-section__hint">
+                  Rules Anton follows on every task in this project. Keep them short and concrete.
+                </div>
+              </div>
+              {!editingInstructions && (
+                <div className="mem-section__actions">
                   <button
                     type="button"
-                    className="memory-card__delete"
-                    onClick={(e) => {
-                      e.stopPropagation()
-                      handleDeletePreference(pref.id)
+                    className="mem-btn"
+                    onClick={() => {
+                      setInstructionsDraft(projectInstructions)
+                      setEditingInstructions(true)
                     }}
                   >
-                    <Trash2 size={14} strokeWidth={1.5} />
+                    <Pencil size={13} strokeWidth={1.5} />
+                    {projectInstructions ? 'Edit' : 'Add'}
                   </button>
                 </div>
-                {expandedIds.has(pref.id) && (
-                  <div className="memory-card__body">{pref.content}</div>
-                )}
-              </div>
-            ))}
+              )}
+            </div>
 
-            {addingPreference && (
-              <div className="memory-card memory-card--adding">
-                <input
-                  type="text"
-                  className="memory-card__input"
-                  placeholder="Preference title..."
-                  value={newPrefTitle}
-                  onChange={(e) => setNewPrefTitle(e.target.value)}
-                  // biome-ignore lint/a11y/noAutofocus: form field needs immediate focus
-                  autoFocus
-                />
+            {editingInstructions ? (
+              <>
                 <textarea
-                  className="memory-card__textarea"
-                  placeholder="Describe the preference..."
-                  value={newPrefContent}
-                  onChange={(e) => setNewPrefContent(e.target.value)}
-                  rows={3}
+                  className="mem-textarea"
+                  value={instructionsDraft}
+                  onChange={(e) => setInstructionsDraft(e.target.value)}
+                  placeholder="e.g. Always use Python 3.12. Output as CSV. Be concise."
+                  rows={10}
                 />
-                <div className="memory-card__add-actions">
+                <div className="mem-actions">
                   <button
                     type="button"
-                    className="memory-card__save-btn"
-                    onClick={handleAddPreference}
-                  >
-                    Save
-                  </button>
-                  <button
-                    type="button"
-                    className="memory-card__cancel-btn"
-                    onClick={() => {
-                      setAddingPreference(false)
-                      setNewPrefTitle('')
-                      setNewPrefContent('')
-                    }}
+                    className="mem-btn mem-btn--ghost"
+                    onClick={() => setEditingInstructions(false)}
                   >
                     Cancel
                   </button>
+                  <button
+                    type="button"
+                    className="mem-btn mem-btn--primary"
+                    onClick={handleSaveInstructions}
+                  >
+                    <Save size={13} strokeWidth={1.5} />
+                    Save
+                  </button>
+                </div>
+              </>
+            ) : projectInstructions ? (
+              <div className="mem-prose">{projectInstructions}</div>
+            ) : (
+              <div className="mem-empty">
+                <BookOpen size={20} strokeWidth={1.5} />
+                <div>No instructions yet. Add rules to guide Anton in this project.</div>
+              </div>
+            )}
+          </div>
+        )}
+
+        {tab === 'preferences' && (
+          <div className="mem-section">
+            <div className="mem-section__head">
+              <div>
+                <div className="mem-section__name">Preferences</div>
+                <div className="mem-section__hint">
+                  Named rules you can name, edit and remove. Less strict than instructions.
                 </div>
               </div>
-            )}
-
-            {projectPreferences.length === 0 && !addingPreference && (
-              <div className="memory-section__empty">
-                <BookOpen size={24} strokeWidth={1.5} />
-                <span>No preferences yet</span>
-              </div>
-            )}
-          </div>
-        </div>
-
-        {/* ── Chat Memories Section ── */}
-        <div className="memory-section-card">
-          <div className="memory-section__header">
-            <h3 className="memory-section__title">Chat Memories</h3>
-            <span className="memory-section__count">{parsed.length}</span>
-          </div>
-          <p className="memory-section__desc">Auto-generated from your conversations over time.</p>
-
-          {parsed.length > 0 && (
-            <div className="memory-filter-tabs">
-              {(['all', 'global', 'conversation'] as const).map((scope) => (
+              <div className="mem-section__actions">
                 <button
-                  key={scope}
                   type="button"
-                  className={`memory-filter-tab${filterScope === scope ? ' memory-filter-tab--active' : ''}`}
-                  onClick={() => setFilterScope(scope)}
+                  className="mem-btn mem-btn--primary"
+                  onClick={() => {
+                    setAddingPref(true)
+                    setPrefTitleDraft('')
+                    setPrefContentDraft('')
+                  }}
                 >
-                  {scope === 'all' ? 'All' : SCOPE_LABELS[scope]}
-                  {scopeCounts[scope] ? ` (${scopeCounts[scope]})` : ''}
+                  <Plus size={13} strokeWidth={1.5} />
+                  Add
                 </button>
-              ))}
+              </div>
             </div>
-          )}
 
-          <div className="memory-section__list">
-            {memoriesLoading && parsed.length === 0 && (
-              <div className="memory-section__empty">
-                <Loader2 size={24} strokeWidth={1.5} className="spin" />
-                <span>Loading memories...</span>
-              </div>
-            )}
-
-            {!memoriesLoading && filtered.length === 0 && (
-              <div className="memory-section__empty">
-                <BookOpen size={24} strokeWidth={1.5} />
-                <span>No memories yet</span>
-              </div>
-            )}
-
-            {filtered.map((mem) => {
-              const ScopeIcon = mem.scope === 'global' ? Globe : MessageSquare
-              return (
-                <div key={`${mem.scope}-${mem.name}`} className="memory-card">
-                  {/* biome-ignore lint/a11y/useKeyWithClickEvents: expandable card header */}
-                  <div className="memory-card__header" onClick={() => toggleExpand(mem.name)}>
-                    <span className="memory-card__chevron">
-                      {expandedIds.has(mem.name) ? (
-                        <ChevronDown size={14} strokeWidth={1.5} />
-                      ) : (
-                        <ChevronRight size={14} strokeWidth={1.5} />
-                      )}
-                    </span>
-                    <span className={`memory-card__badge memory-card__badge--${mem.scope}`}>
-                      <ScopeIcon size={10} strokeWidth={1.5} />
-                      {SCOPE_LABELS[mem.scope]}
-                    </span>
-                    <span className="memory-card__title">{mem.title}</span>
+            <div className="mem-cards">
+              {addingPref && (
+                <div className="mem-card mem-card--editing">
+                  <input
+                    type="text"
+                    className="mem-card__title-input"
+                    placeholder="Preference title…"
+                    value={prefTitleDraft}
+                    onChange={(e) => setPrefTitleDraft(e.target.value)}
+                  />
+                  <textarea
+                    className="mem-card__body-input"
+                    placeholder="Describe the preference…"
+                    value={prefContentDraft}
+                    onChange={(e) => setPrefContentDraft(e.target.value)}
+                    rows={3}
+                  />
+                  <div className="mem-actions">
+                    <button
+                      type="button"
+                      className="mem-btn mem-btn--ghost"
+                      onClick={() => setAddingPref(false)}
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="button"
+                      className="mem-btn mem-btn--primary"
+                      onClick={handleAddPreference}
+                      disabled={!prefTitleDraft.trim() || !prefContentDraft.trim()}
+                    >
+                      Save
+                    </button>
                   </div>
-                  {expandedIds.has(mem.name) && (
-                    <div className="memory-card__body">
-                      {mem.content || <em style={{ color: 'var(--text-muted)' }}>No content</em>}
-                      {mem.savedAt && (
-                        <div className="memory-card__meta">
-                          Saved: {new Date(mem.savedAt).toLocaleDateString()}
-                        </div>
-                      )}
+                </div>
+              )}
+
+              {projectPreferences.map((pref) => {
+                return (
+                  <div key={pref.id} className="mem-card">
+                    <div className="mem-card__head">
+                      <span className="mem-card__title">{pref.title}</span>
+                      <div className="mem-card__actions">
+                        <button
+                          type="button"
+                          className="mem-iconbtn mem-iconbtn--danger"
+                          aria-label="Delete"
+                          onClick={() => handleDeletePreference(pref.id)}
+                        >
+                          <Trash2 size={13} strokeWidth={1.5} />
+                        </button>
+                      </div>
                     </div>
+                    <div className="mem-card__body">{pref.content}</div>
+                  </div>
+                )
+              })}
+
+              {projectPreferences.length === 0 && !addingPref && (
+                <div className="mem-empty">
+                  <Sparkles size={20} strokeWidth={1.5} />
+                  <div>No preferences yet. Add one with the Add button above.</div>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {tab === 'memories' && (
+          <div className="mem-section">
+            <div className="mem-section__head">
+              <div>
+                <div className="mem-section__name">Chat memories</div>
+                <div className="mem-section__hint">
+                  Auto-captured snippets from past conversations. Read-only.
+                </div>
+              </div>
+              <div className="mem-section__actions">
+                <div className="mem-search">
+                  <Search size={13} strokeWidth={1.5} />
+                  <input
+                    type="text"
+                    placeholder="Search…"
+                    value={query}
+                    onChange={(e) => setQuery(e.target.value)}
+                  />
+                  {query && (
+                    <button
+                      type="button"
+                      className="mem-iconbtn"
+                      aria-label="Clear search"
+                      onClick={() => setQuery('')}
+                    >
+                      <X size={12} strokeWidth={1.5} />
+                    </button>
                   )}
                 </div>
-              )
-            })}
+              </div>
+            </div>
+
+            {memoriesLoading && parsed.length === 0 ? (
+              <div className="mem-empty">
+                <Loader2 size={20} strokeWidth={1.5} className="spin" />
+                <div>Loading memories…</div>
+              </div>
+            ) : filteredMemories.length === 0 ? (
+              <div className="mem-empty">
+                <MessageSquare size={20} strokeWidth={1.5} />
+                <div>
+                  {query
+                    ? `No memories match "${query}".`
+                    : 'No memories yet — Anton will note things as you chat.'}
+                </div>
+              </div>
+            ) : (
+              <div className="mem-cards">
+                {filteredMemories.map((mem) => (
+                  <div key={`${mem.scope}-${mem.name}`} className="mem-card">
+                    <div className="mem-card__head">
+                      <span className="mem-card__title">{mem.title}</span>
+                      <span
+                        className={`mem-badge${mem.scope === 'global' ? ' mem-badge--global' : ''}`}
+                      >
+                        {mem.scope === 'global' ? (
+                          <Globe size={9} strokeWidth={1.5} />
+                        ) : (
+                          <MessageSquare size={9} strokeWidth={1.5} />
+                        )}
+                        {mem.scope}
+                      </span>
+                    </div>
+                    <div className="mem-card__body">
+                      {mem.content || <em style={{ color: 'var(--text-4)' }}>No content</em>}
+                    </div>
+                    {mem.savedAt && (
+                      <div className="mem-card__meta">
+                        Saved {new Date(mem.savedAt).toLocaleDateString()}
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
-        </div>
+        )}
       </div>
     </div>
   )

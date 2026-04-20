@@ -1,5 +1,5 @@
 import type { AskUserQuestion } from '@anton/protocol'
-import { Brain, ListChecks, Plus, Send, Square } from 'lucide-react'
+import { Brain, Plus, Send, Square } from 'lucide-react'
 import type React from 'react'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { Skill } from '../../lib/skills.js'
@@ -18,8 +18,8 @@ interface Props {
   onSteer?: (text: string, attachments?: ChatImageAttachment[]) => void
   onCancelTurn?: () => void
   onSkillSelect: (skill: Skill) => void
-  /** @deprecated variant is no longer used — all inputs render identically */
-  variant?: string
+  /** 'hero' is centered + larger (home/empty state); 'inline' is the docked composer. */
+  variant?: 'hero' | 'inline'
   /** When true, always render as idle (for hero inputs that create new tasks) */
   ignoreWorkingState?: boolean
   initialValue?: string
@@ -62,6 +62,7 @@ export function ChatInput({
   onAskUserSubmit,
   ignoreWorkingState,
   conversationId,
+  variant = 'inline',
 }: Props) {
   const clearDraftInput = useStore((s) => s.clearDraftInput)
   const [input, setInput] = useState('')
@@ -69,7 +70,6 @@ export function ChatInput({
   const [slashFilter, setSlashFilter] = useState('')
   const [imageCount, setImageCount] = useState(0)
   const [attachmentError, setAttachmentError] = useState<string | null>(null)
-  const [planFirst, setPlanFirst] = useState(false)
   const thinkingEnabled = sessionStore((s) => s.thinkingEnabled)
   const richInputRef = useRef<RichInputHandle>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -191,8 +191,7 @@ export function ChatInput({
       }
     }
 
-    let text = parts.join('').trim()
-    if (planFirst && text) text = `[plan first] ${text}`
+    const text = parts.join('').trim()
 
     // If agent is working and no attachments, steer with text only
     if (isCurrentSessionWorking && attachments.length === 0) {
@@ -216,16 +215,11 @@ export function ChatInput({
     setShowSlashMenu(false)
     if (conversationId) clearDraftInput(conversationId)
     handle.focus()
-  }, [isCurrentSessionWorking, onSend, onSteer, planFirst, conversationId, clearDraftInput])
+  }, [isCurrentSessionWorking, onSend, onSteer, conversationId, clearDraftInput])
 
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent) => {
       if (showSlashMenu) return
-      if (e.key === 'Tab' && e.shiftKey) {
-        e.preventDefault()
-        setPlanFirst((v) => !v)
-        return
-      }
       if (e.key === 'Enter' && !e.shiftKey) {
         e.preventDefault()
         handleSend()
@@ -268,9 +262,11 @@ export function ChatInput({
 
   const hasContent = input.trim().length > 0 || imageCount > 0
 
+  const rootClass = `composer composer--${variant}`
+
   if (pendingAskUser && onAskUserSubmit) {
     return (
-      <div className="composer composer--hero">
+      <div className={rootClass}>
         <div className="composer__anchor">
           <div className="composer__box composer__box--ask-user">
             <AskUserInline questions={pendingAskUser.questions} onSubmit={onAskUserSubmit} />
@@ -281,7 +277,7 @@ export function ChatInput({
   }
 
   return (
-    <div className="composer composer--hero">
+    <div className={rootClass}>
       <div className="composer__anchor">
         <SlashCommandMenu
           filter={slashFilter}
@@ -315,34 +311,23 @@ export function ChatInput({
             <div className="composer__toolbar-left">
               <button
                 type="button"
-                className="composer__btn"
+                className="composer__pill composer__pill--icon"
                 aria-label="Attach images"
                 data-tooltip="Attach images"
                 onClick={() => fileInputRef.current?.click()}
               >
-                <Plus size={18} strokeWidth={1.5} />
+                <Plus size={12} strokeWidth={1.8} />
               </button>
               <ConnectorPill />
               <button
                 type="button"
-                className={`composer__thinking-toggle${thinkingEnabled ? ' composer__thinking-toggle--active' : ''}`}
+                className={`composer__pill composer__pill--thinking${thinkingEnabled ? ' composer__pill--on' : ''}`}
                 aria-label={thinkingEnabled ? 'Thinking on' : 'Thinking off'}
                 data-tooltip={thinkingEnabled ? 'Thinking on' : 'Thinking off'}
                 onClick={() => sessionStore.getState().setThinkingEnabled(!thinkingEnabled)}
               >
-                <Brain size={14} strokeWidth={1.5} />
-                <span className="composer__thinking-label">
-                  <span>Thinking</span>
-                </span>
-              </button>
-              <button
-                type="button"
-                className={`composer__btn composer__btn--toggle${planFirst ? ' composer__btn--toggle-active' : ''}`}
-                aria-label={planFirst ? 'Plan mode on' : 'Enter plan mode'}
-                data-tooltip={planFirst ? 'Plan mode on' : 'Enter plan mode'}
-                onClick={() => setPlanFirst(!planFirst)}
-              >
-                <ListChecks size={18} strokeWidth={1.5} />
+                <Brain size={12} strokeWidth={1.8} />
+                <span>Thinking</span>
               </button>
             </div>
             <div className="composer__toolbar-right">
@@ -353,33 +338,33 @@ export function ChatInput({
                     <button
                       type="button"
                       onClick={handleSend}
-                      className="composer__btn composer__btn--send"
+                      className="composer__send"
                       aria-label="Send"
                       data-tooltip="Send"
                     >
-                      <Send size={18} strokeWidth={1.5} />
+                      <Send size={14} strokeWidth={1.8} />
                     </button>
                   ) : (
                     input.trim() && (
                       <button
                         type="button"
                         onClick={handleSend}
-                        className="composer__btn composer__btn--steer"
+                        className="composer__send composer__send--steer"
                         aria-label="Send while working"
                         data-tooltip="Steer"
                       >
-                        <Send size={16} strokeWidth={1.5} />
+                        <Send size={14} strokeWidth={1.8} />
                       </button>
                     )
                   )}
                   <button
                     type="button"
-                    className="composer__btn composer__btn--stop"
+                    className="composer__send composer__send--stop"
                     aria-label="Stop"
                     data-tooltip="Stop"
                     onClick={onCancelTurn}
                   >
-                    <Square size={18} strokeWidth={1.5} />
+                    <Square size={12} strokeWidth={1.8} />
                   </button>
                 </>
               ) : (
@@ -387,11 +372,11 @@ export function ChatInput({
                   type="button"
                   onClick={handleSend}
                   disabled={!hasContent}
-                  className="composer__btn composer__btn--send"
+                  className={`composer__send${!hasContent ? ' composer__send--disabled' : ''}`}
                   aria-label="Send"
                   data-tooltip="Send"
                 >
-                  <Send size={18} strokeWidth={1.5} />
+                  <Send size={14} strokeWidth={1.8} />
                 </button>
               )}
             </div>

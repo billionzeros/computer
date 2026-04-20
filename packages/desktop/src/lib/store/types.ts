@@ -132,17 +132,20 @@ export type SidebarTab = 'history'
 
 export type ActiveView =
   | 'home'
+  | 'tasks'
   | 'chat'
   | 'memory'
   | 'routines'
   | 'terminal'
   | 'files'
   | 'connectors'
+  | 'customize'
   | 'developer'
   | 'skills'
   | 'workflows'
   | 'pages'
   | 'projects'
+  | 'new-project'
 
 export type ActiveMode = 'chat' | 'computer'
 

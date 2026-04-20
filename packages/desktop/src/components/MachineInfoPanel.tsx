@@ -1,7 +1,8 @@
-import { Cpu, HardDrive, MemoryStick, MonitorCog, Timer, X } from 'lucide-react'
+import { Cpu, HardDrive, MemoryStick, MonitorCog, Timer } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { connection } from '../lib/connection.js'
 import { updateStore } from '../lib/store/updateStore.js'
+import { AntonModal } from './ui/AntonModal.js'
 
 interface SystemStatus {
   status: string
@@ -42,7 +43,6 @@ export function MachineInfoPanel({ onClose }: { onClose: () => void }) {
 
     const fetchStatus = async () => {
       try {
-        // Build status URL based on connection type
         const statusUrl = isDomain
           ? `https://${config.host}/_anton/status`
           : `http://${config.host}:9878/status`
@@ -67,116 +67,148 @@ export function MachineInfoPanel({ onClose }: { onClose: () => void }) {
   }, [config, isDomain])
 
   return (
-    <div className="machine-info-overlay" onClick={onClose} onKeyDown={undefined}>
+    <AntonModal
+      open
+      onClose={onClose}
+      title={machineName}
+      subtitle={config?.host ?? ''}
+      icon={<MonitorCog size={16} strokeWidth={1.5} />}
+      size="md"
+    >
       <div
-        className="machine-info-panel"
-        onClick={(e) => e.stopPropagation()}
-        onKeyDown={undefined}
+        style={{
+          display: 'grid',
+          gridTemplateColumns: 'auto 1fr',
+          gap: '6px 14px',
+          fontSize: 12.5,
+        }}
       >
-        {/* Header */}
-        <div className="machine-info-panel__header">
-          <div className="machine-info-panel__title-row">
-            <MonitorCog size={18} strokeWidth={1.5} />
-            <h3 className="machine-info-panel__title">{machineName}</h3>
-          </div>
-          <button
-            type="button"
-            onClick={onClose}
-            className="machine-info-panel__close"
-            aria-label="Close"
-          >
-            <X size={16} strokeWidth={1.5} />
-          </button>
-        </div>
-
-        {/* Connection info */}
-        <div className="machine-info-panel__section">
-          <div className="machine-info-panel__row">
-            <span className="machine-info-panel__label">Host</span>
-            <span className="machine-info-panel__value">{config?.host}</span>
-          </div>
-          <div className="machine-info-panel__row">
-            <span className="machine-info-panel__label">Port</span>
-            <span className="machine-info-panel__value">{config?.port}</span>
-          </div>
-          <div className="machine-info-panel__row">
-            <span className="machine-info-panel__label">TLS</span>
-            <span className="machine-info-panel__value">{config?.useTLS ? 'Yes' : 'No'}</span>
-          </div>
-          {agentVersion && (
-            <div className="machine-info-panel__row">
-              <span className="machine-info-panel__label">Agent</span>
-              <span className="machine-info-panel__value">{agentVersion}</span>
-            </div>
-          )}
-        </div>
-
-        {/* System stats */}
-        {loading && (
-          <div className="machine-info-panel__section machine-info-panel__loading">
-            Loading system info...
-          </div>
-        )}
-
-        {error && !status && (
-          <div className="machine-info-panel__section machine-info-panel__error">{error}</div>
-        )}
-
-        {status && (
-          <div className="machine-info-panel__section">
-            <div className="machine-info-panel__stats">
-              <div className="machine-info-panel__stat">
-                <Cpu size={14} strokeWidth={1.5} />
-                <span className="machine-info-panel__stat-label">CPU</span>
-                <span className="machine-info-panel__stat-value">
-                  {status.system.cpuPercent.toFixed(0)}%
-                </span>
-              </div>
-
-              <div className="machine-info-panel__stat">
-                <MemoryStick size={14} strokeWidth={1.5} />
-                <span className="machine-info-panel__stat-label">Memory</span>
-                <span className="machine-info-panel__stat-value">
-                  {(status.system.memUsedMB / 1024).toFixed(1)} /{' '}
-                  {(status.system.memTotalMB / 1024).toFixed(1)} GB
-                </span>
-              </div>
-
-              <div className="machine-info-panel__stat">
-                <HardDrive size={14} strokeWidth={1.5} />
-                <span className="machine-info-panel__stat-label">Disk</span>
-                <span className="machine-info-panel__stat-value">
-                  {status.system.diskUsedGB.toFixed(1)} / {status.system.diskTotalGB.toFixed(1)} GB
-                </span>
-              </div>
-
-              <div className="machine-info-panel__stat">
-                <Timer size={14} strokeWidth={1.5} />
-                <span className="machine-info-panel__stat-label">Uptime</span>
-                <span className="machine-info-panel__stat-value">
-                  {formatUptime(status.system.uptimeSeconds)}
-                </span>
-              </div>
-            </div>
-
-            {/* Service status */}
-            <div className="machine-info-panel__services">
-              <div className="machine-info-panel__service">
-                <span
-                  className={`machine-info-panel__dot ${status.agent.healthy ? 'machine-info-panel__dot--ok' : 'machine-info-panel__dot--err'}`}
-                />
-                <span>Agent</span>
-              </div>
-              <div className="machine-info-panel__service">
-                <span
-                  className={`machine-info-panel__dot ${status.caddy.running ? 'machine-info-panel__dot--ok' : 'machine-info-panel__dot--err'}`}
-                />
-                <span>Caddy</span>
-              </div>
-            </div>
-          </div>
+        <span style={{ color: 'var(--text-4)' }}>Host</span>
+        <span style={{ color: 'var(--text)', fontFamily: 'var(--font-mono)' }}>
+          {config?.host ?? '—'}
+        </span>
+        <span style={{ color: 'var(--text-4)' }}>Port</span>
+        <span style={{ color: 'var(--text)', fontFamily: 'var(--font-mono)' }}>
+          {config?.port ?? '—'}
+        </span>
+        <span style={{ color: 'var(--text-4)' }}>TLS</span>
+        <span style={{ color: 'var(--text)' }}>{config?.useTLS ? 'Yes' : 'No'}</span>
+        {agentVersion && (
+          <>
+            <span style={{ color: 'var(--text-4)' }}>Agent</span>
+            <span style={{ color: 'var(--text)', fontFamily: 'var(--font-mono)' }}>
+              {agentVersion}
+            </span>
+          </>
         )}
       </div>
+
+      {loading && (
+        <div style={{ color: 'var(--text-3)', fontSize: 12.5 }}>Loading system info…</div>
+      )}
+
+      {error && !status && <div style={{ color: 'var(--danger)', fontSize: 12.5 }}>{error}</div>}
+
+      {status && (
+        <>
+          <div
+            style={{
+              display: 'grid',
+              gridTemplateColumns: 'repeat(2, 1fr)',
+              gap: 10,
+            }}
+          >
+            <Stat icon={<Cpu size={13} strokeWidth={1.5} />} label="CPU">
+              {status.system.cpuPercent.toFixed(0)}%
+            </Stat>
+            <Stat icon={<MemoryStick size={13} strokeWidth={1.5} />} label="Memory">
+              {(status.system.memUsedMB / 1024).toFixed(1)} /{' '}
+              {(status.system.memTotalMB / 1024).toFixed(1)} GB
+            </Stat>
+            <Stat icon={<HardDrive size={13} strokeWidth={1.5} />} label="Disk">
+              {status.system.diskUsedGB.toFixed(1)} / {status.system.diskTotalGB.toFixed(1)} GB
+            </Stat>
+            <Stat icon={<Timer size={13} strokeWidth={1.5} />} label="Uptime">
+              {formatUptime(status.system.uptimeSeconds)}
+            </Stat>
+          </div>
+
+          <div style={{ display: 'flex', gap: 14, fontSize: 12, color: 'var(--text-3)' }}>
+            <ServiceDot ok={status.agent.healthy} label="Agent" />
+            <ServiceDot ok={status.caddy.running} label="Caddy" />
+          </div>
+        </>
+      )}
+    </AntonModal>
+  )
+}
+
+function Stat({
+  icon,
+  label,
+  children,
+}: {
+  icon: React.ReactNode
+  label: string
+  children: React.ReactNode
+}) {
+  return (
+    <div
+      style={{
+        padding: '12px 14px',
+        background: 'var(--bg)',
+        border: '1px solid var(--border)',
+        borderRadius: 8,
+        display: 'flex',
+        flexDirection: 'column',
+        gap: 4,
+      }}
+    >
+      <div
+        style={{
+          display: 'inline-flex',
+          alignItems: 'center',
+          gap: 6,
+          color: 'var(--text-4)',
+          fontSize: 10.5,
+          textTransform: 'uppercase',
+          letterSpacing: '0.06em',
+          fontFamily: 'var(--font-mono)',
+        }}
+      >
+        {icon}
+        {label}
+      </div>
+      <div
+        style={{
+          fontSize: 14,
+          color: 'var(--text)',
+          fontVariantNumeric: 'tabular-nums',
+          fontWeight: 500,
+        }}
+      >
+        {children}
+      </div>
     </div>
+  )
+}
+
+function ServiceDot({ ok, label }: { ok: boolean; label: string }) {
+  return (
+    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+      <span
+        aria-hidden
+        style={{
+          width: 8,
+          height: 8,
+          borderRadius: '50%',
+          background: ok ? 'var(--success)' : 'var(--danger)',
+          boxShadow: ok
+            ? '0 0 0 2px color-mix(in oklch, var(--success) 22%, transparent)'
+            : '0 0 0 2px color-mix(in oklch, var(--danger) 22%, transparent)',
+        }}
+      />
+      <span>{label}</span>
+    </span>
   )
 }

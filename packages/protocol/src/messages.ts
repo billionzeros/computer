@@ -353,7 +353,12 @@ export interface ProvidersListResponse {
   type: 'providers_list_response'
   providers: ProviderInfoPayload[]
   defaults: { provider: string; model: string }
-  onboarding?: { completed: boolean; role?: string }
+  onboarding?: {
+    completed: boolean
+    role?: string
+    tourCompleted?: boolean
+    tourCompletedAt?: string
+  }
 }
 
 export interface DetectHarnessesMessage {
@@ -944,6 +949,18 @@ export interface RoutineActionMessage {
   action: 'start' | 'stop' | 'delete' | 'pause' | 'resume'
 }
 
+export interface RoutineUpdateMessage {
+  type: 'routine_update'
+  projectId: string
+  sessionId: string
+  patch: {
+    name?: string
+    description?: string
+    instructions?: string
+    schedule?: string | null // cron expression, or null to clear (manual-only)
+  }
+}
+
 // Server → Client
 export interface RoutineCreatedMessage {
   type: 'routine_created'
@@ -1458,6 +1475,7 @@ export type AiMessage =
   | RoutinesListMessage
   | RoutinesListResponse
   | RoutineActionMessage
+  | RoutineUpdateMessage
   | RoutineUpdatedMessage
   | RoutineDeletedMessage
   | RoutineResultDeliveredMessage

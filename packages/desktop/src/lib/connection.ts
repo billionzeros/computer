@@ -363,6 +363,19 @@ export class Connection {
     this.send(Channel.AI, { type: 'routine_action', projectId, sessionId, action })
   }
 
+  sendRoutineUpdate(
+    projectId: string,
+    sessionId: string,
+    patch: {
+      name?: string
+      description?: string
+      instructions?: string
+      schedule?: string | null
+    },
+  ) {
+    this.send(Channel.AI, { type: 'routine_update', projectId, sessionId, patch })
+  }
+
   sendRoutineRunLogs(
     projectId: string,
     sessionId: string,

@@ -93,6 +93,7 @@ import {
   hashPromptVersion,
   resumeSession,
   HarnessSession,
+  CodexHarnessSession,
   isHarnessSession,
   ClaudeAdapter,
   CodexAdapter,
@@ -257,7 +258,7 @@ function spawnFallback(shell: string, cols: number, rows: number, cwd: string): 
 export class AgentServer {
   private wss: WebSocketServer | null = null
   private config: AgentConfig
-  private sessions: Map<string, Session | HarnessSession> = new Map()
+  private sessions: Map<string, Session | HarnessSession | CodexHarnessSession> = new Map()
   private activeTurns: Set<string> = new Set() // sessions currently processing a turn
   private activeClient: WebSocket | null = null
   // Track pending interactive prompts so they can be re-sent on client reconnect
@@ -888,7 +889,12 @@ export class AgentServer {
           saveConfig(this.config)
           break
         case 'onboarding':
-          this.config.onboarding = value as typeof this.config.onboarding
+          // Merge rather than overwrite so partial updates (e.g. just tourCompleted)
+          // don't drop previously-saved fields like `role` or `completed`.
+          this.config.onboarding = {
+            ...this.config.onboarding,
+            ...(value as NonNullable<typeof this.config.onboarding>),
+          }
           saveConfig(this.config)
           break
         default:
@@ -1467,6 +1473,10 @@ export class AgentServer {
       case 'routine_action':
         this.handleRoutineAction(msg)
         break
+
+      case 'routine_update':
+        this.handleRoutineUpdate(msg)
+        break
       case 'routine_run_logs':
         this.handleRoutineRunLogs(msg)
         break
@@ -1871,7 +1881,7 @@ export class AgentServer {
      * subsequent turns the CLI's own resume tape carries history.
      */
     replaySeedForFirstTurn?: string
-  }): HarnessSession {
+  }): HarnessSession | CodexHarnessSession {
     const {
       id,
       providerName,
@@ -1881,7 +1891,10 @@ export class AgentServer {
       replaySeedForFirstTurn,
     } = opts
 
-    const adapter = providerName === 'codex' ? new CodexAdapter() : new ClaudeAdapter()
+    // Legacy HarnessSession (Claude Code) still needs a spawn adapter.
+    // Codex sessions construct CodexHarnessSession directly below and
+    // don't touch this variable — so we only build it for non-codex.
+    const adapter = providerName === 'codex' ? null : new ClaudeAdapter()
     const socketPath = join(getAntonDir(), 'harness.sock')
     const shimPath = join(getAntonDir(), '..', 'node_modules', '@anton', 'agent-core', 'dist', 'harness', 'anton-mcp-shim.js')
 
@@ -1905,8 +1918,19 @@ export class AgentServer {
     // filtered connector tools resolve correctly for this session.
     this.harnessSessionContexts.set(id, {
       projectId: harnessProjectId,
+      workspacePath: cwd,
       surface: surfaceLabel,
       onActivateWorkflow: harnessProjectId ? this.buildActivateWorkflowHandler() : undefined,
+      onAskUser: this.buildHarnessAskUserHandler(id),
+      // Routine management (`routine` MCP tool). Same handler Pi SDK
+      // uses inline via agent.ts; only meaningful when the session is
+      // attached to a project.
+      onJobAction: harnessProjectId ? this.buildAgentActionHandler(id) : undefined,
+      // Browser-state callbacks for the `browser` MCP tool. Late-binds
+      // through `this.sessions.get(id)` because the session itself is
+      // created a few lines below — callbacks fire only after the
+      // session exists.
+      browserCallbacks: this.buildHarnessBrowserCallbacks(id),
     })
 
     // Per-turn system-prompt builder — mirrors Pi SDK's layer assembly
@@ -2046,18 +2070,33 @@ export class AgentServer {
       this.runHarnessMemoryExtraction(id, mirrorProjectId)
     }
 
-    const session = new HarnessSession({
-      id,
-      provider: providerName,
-      model,
-      adapter,
-      socketPath,
-      shimPath,
-      authToken,
-      cwd,
-      buildSystemPrompt,
-      onTurnEnd,
-    })
+    const session: HarnessSession | CodexHarnessSession =
+      providerName === 'codex'
+        ? new CodexHarnessSession({
+            id,
+            provider: providerName,
+            model,
+            socketPath,
+            shimPath,
+            authToken,
+            cwd,
+            buildSystemPrompt,
+            onTurnEnd,
+          })
+        : new HarnessSession({
+            id,
+            provider: providerName,
+            model,
+            // Non-codex branch: adapter is guaranteed non-null by
+            // construction above (only the codex branch sets it to null).
+            adapter: adapter ?? new ClaudeAdapter(),
+            socketPath,
+            shimPath,
+            authToken,
+            cwd,
+            buildSystemPrompt,
+            onTurnEnd,
+          })
     this.sessions.set(id, session)
 
     this.sendToClient(Channel.AI, {
@@ -3353,6 +3392,35 @@ export class AgentServer {
     }
   }
 
+  private handleRoutineUpdate(msg: {
+    projectId: string
+    sessionId: string
+    patch: {
+      name?: string
+      description?: string
+      instructions?: string
+      schedule?: string | null
+    }
+  }) {
+    if (!this.agentManager) {
+      this.sendToClient(Channel.AI, { type: 'error', message: 'Routine manager not initialized' })
+      return
+    }
+    try {
+      const routine = this.agentManager.updateAgent(msg.sessionId, msg.patch)
+      if (!routine) {
+        this.sendToClient(Channel.AI, {
+          type: 'error',
+          message: `Routine not found: ${msg.sessionId}`,
+        })
+        return
+      }
+      this.sendToClient(Channel.AI, { type: 'routine_updated', routine })
+    } catch (err: unknown) {
+      this.sendToClient(Channel.AI, { type: 'error', message: (err as Error).message })
+    }
+  }
+
   private handleRoutineRunLogs(msg: {
     projectId: string
     sessionId: string
@@ -4166,7 +4234,14 @@ export class AgentServer {
       log.warn({ sessionId }, 'Session already processing — converting message to steer')
       if (!isHarnessSession(session)) {
         session.steer(msg.content, msg.attachments)
+      } else if (session instanceof CodexHarnessSession) {
+        // Codex app-server: real interrupt + sendUserMessage. Fire-and-forget;
+        // failures are logged inside steer() and don't block the ack.
+        session.steer(msg.content).catch((err) => {
+          log.warn({ err: (err as Error).message, sessionId }, 'codex steer failed')
+        })
       }
+      // Claude Code harness (legacy HarnessSession) still has no steer path.
       this.sendToClient(Channel.AI, {
         type: 'steer_ack',
         content: msg.content,
@@ -4537,7 +4612,50 @@ export class AgentServer {
   }
 
   private wireAskUserHandler(session: Session) {
-    session.setAskUserHandler(async (questions) => {
+    session.setAskUserHandler(this.buildAskUserHandlerForSession(session.id))
+  }
+
+  /**
+   * Harness-side counterpart to `wireAskUserHandler`. The codex / claude
+   * harness can't call `setAskUserHandler` (no Pi SDK Session), so the
+   * tool-registry instead pulls this off `HarnessSessionContext.onAskUser`
+   * when constructing the `ask_user` MCP tool. Same Channel.AI round-trip,
+   * same pendingPrompts/promptResolvers wiring as Pi SDK sessions.
+   */
+  private buildHarnessAskUserHandler(
+    sessionId: string,
+  ): import('@anton/agent-core').AskUserHandler {
+    return this.buildAskUserHandlerForSession(sessionId)
+  }
+
+  /**
+   * Browser-state callbacks for the harness `browser` MCP tool. Same
+   * shape Pi SDK uses (`onBrowserState` / `onBrowserClose`). Late-binds
+   * via `this.sessions.get(sessionId)` so the callback handles the
+   * race where the context is set before the session itself is
+   * constructed. No-op if the session has gone away by the time the
+   * tool fires.
+   */
+  private buildHarnessBrowserCallbacks(
+    sessionId: string,
+  ): import('@anton/agent-core').HarnessSessionContext['browserCallbacks'] {
+    return {
+      onBrowserState: (state) => {
+        const session = this.sessions.get(sessionId)
+        if (session && isHarnessSession(session)) session.emitBrowserState(state)
+      },
+      onBrowserClose: () => {
+        const session = this.sessions.get(sessionId)
+        if (session && isHarnessSession(session)) session.emitBrowserClose()
+      },
+    }
+  }
+
+  /** Shared core: produce an AskUserHandler bound to `sessionId`. */
+  private buildAskUserHandlerForSession(
+    sessionId: string,
+  ): import('@anton/agent-core').AskUserHandler {
+    return async (questions) => {
       if (!this.activeClient) return {}
 
       return new Promise((resolve) => {
@@ -4547,7 +4665,7 @@ export class AgentServer {
           type: 'ask_user' as const,
           id: askId,
           questions,
-          sessionId: session.id,
+          sessionId,
         }
         this.sendToClient(Channel.AI, payload)
         // Track so we can re-send on reconnect
@@ -4570,7 +4688,7 @@ export class AgentServer {
           }
         })
       })
-    })
+    }
   }
 
   // ── MCP Connectors ────────────────────────────────────────────────

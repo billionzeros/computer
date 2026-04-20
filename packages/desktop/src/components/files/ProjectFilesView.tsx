@@ -11,7 +11,6 @@ import {
   Home,
   Image,
   Loader2,
-  MoreHorizontal,
   Search,
   Trash2,
   Upload,
@@ -19,6 +18,7 @@ import {
 } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { connection } from '../../lib/connection.js'
+import { artifactStore } from '../../lib/store/artifactStore.js'
 import { projectStore } from '../../lib/store/projectStore.js'
 import { uiStore } from '../../lib/store/uiStore.js'
 
@@ -67,7 +67,7 @@ const IMAGE_EXTS = new Set([
   'heif',
 ])
 
-function getCategory(name: string): string {
+function getCategory(name: string): 'code' | 'data' | 'text' | 'image' | 'other' {
   const ext = name.split('.').pop()?.toLowerCase() || ''
   if (CODE_EXTS.has(ext)) return 'code'
   if (DATA_EXTS.has(ext)) return 'data'
@@ -77,13 +77,12 @@ function getCategory(name: string): string {
 }
 
 function isPreviewable(name: string): boolean {
-  const ext = name.split('.').pop()?.toLowerCase() || ''
-  return CODE_EXTS.has(ext) || DATA_EXTS.has(ext) || TEXT_EXTS.has(ext) || IMAGE_EXTS.has(ext)
+  const cat = getCategory(name)
+  return cat !== 'other'
 }
 
 function isImageFile(name: string): boolean {
-  const ext = name.split('.').pop()?.toLowerCase() || ''
-  return IMAGE_EXTS.has(ext)
+  return getCategory(name) === 'image'
 }
 
 function getMimeType(name: string): string {
@@ -104,22 +103,32 @@ function getMimeType(name: string): string {
   return mimes[ext] || 'application/octet-stream'
 }
 
-function getFileIcon(entry: FileEntry) {
-  if (entry.type === 'dir') return <Folder size={18} strokeWidth={1.5} />
+function iconFor(entry: { name: string; type: 'file' | 'dir' | 'link' }) {
+  if (entry.type === 'dir') return <Folder size={15} strokeWidth={1.5} />
   const cat = getCategory(entry.name)
   switch (cat) {
     case 'code':
-      return <FileCode size={18} strokeWidth={1.5} />
+      return <FileCode size={15} strokeWidth={1.5} />
     case 'data':
-      return <FileSpreadsheet size={18} strokeWidth={1.5} />
+      return <FileSpreadsheet size={15} strokeWidth={1.5} />
     case 'text':
-      return <FileText size={18} strokeWidth={1.5} />
+      return <FileText size={15} strokeWidth={1.5} />
     case 'image':
-      return <Image size={18} strokeWidth={1.5} />
+      return <Image size={15} strokeWidth={1.5} />
     default:
-      return <File size={18} strokeWidth={1.5} />
+      return <File size={15} strokeWidth={1.5} />
   }
 }
+
+function kindLabel(entry: FileEntry): string {
+  if (entry.type === 'dir') return 'Folder'
+  const ext = entry.name.split('.').pop()?.toLowerCase() || ''
+  if (!ext) return 'File'
+  const cat = getCategory(entry.name)
+  return `${ext.toUpperCase()} ${cat === 'other' ? 'file' : cat}`
+}
+
+type SortKey = 'name' | 'kind' | 'size' | 'mod'
 
 export function ProjectFilesView() {
   const activeProjectId = projectStore((s) => s.activeProjectId)
@@ -131,60 +140,47 @@ export function ProjectFilesView() {
   const [entries, setEntries] = useState<FileEntry[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const [showHidden, setShowHidden] = useState(false)
+  const [showHidden, _setShowHidden] = useState(false)
   const [search, setSearch] = useState('')
   const [dragging, setDragging] = useState(false)
+  const [sortKey, setSortKey] = useState<SortKey>('name')
+  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc')
 
   // Modals / overlays
   const [deleteTarget, setDeleteTarget] = useState<{ name: string; path: string } | null>(null)
   const [newFolderOpen, setNewFolderOpen] = useState(false)
   const [newFolderName, setNewFolderName] = useState('')
 
-  // File viewer (right panel)
-  const [viewingFile, setViewingFile] = useState<{ name: string; path: string } | null>(null)
-  const [viewContent, setViewContent] = useState<string | null>(null)
-  const [viewLoading, setViewLoading] = useState(false)
-  const [viewError, setViewError] = useState<string | null>(null)
-  const [viewIsImage, setViewIsImage] = useState(false)
-
-  // Context menu
-  const [contextMenu, setContextMenu] = useState<{
-    entry: FileEntry
-    x: number
-    y: number
-  } | null>(null)
-
-  // Draggable divider
-  const [leftWidth, setLeftWidth] = useState(() =>
-    Math.max(360, Math.floor(window.innerWidth * 0.35)),
-  )
-  const dragRef = useRef<{ startX: number; startW: number } | null>(null)
-  const [isDividerDragging, setIsDividerDragging] = useState(false)
+  // Preview pane state
+  const [selected, setSelected] = useState<FileEntry | null>(null)
+  const [preview, setPreview] = useState<string | null>(null)
+  const [previewLoading, setPreviewLoading] = useState(false)
+  const [previewError, setPreviewError] = useState<string | null>(null)
+  const [previewIsImage, setPreviewIsImage] = useState(false)
 
   const fileInputRef = useRef<HTMLInputElement>(null)
   const newFolderInputRef = useRef<HTMLInputElement>(null)
 
-  // Breadcrumb segments
+  // Breadcrumbs
   const breadcrumbs = useMemo(() => {
-    const label = activeProject?.name || 'Files'
-    if (cwd === startDir) return [{ label, path: startDir }]
-    if (cwd.startsWith(`${startDir}/`)) {
+    const rootLabel = activeProject?.name || 'Files'
+    const crumbs: { label: string; path: string }[] = [{ label: rootLabel, path: startDir }]
+    if (cwd !== startDir && cwd.startsWith(`${startDir}/`)) {
       const rel = cwd.slice(startDir.length + 1)
       const parts = rel.split('/').filter(Boolean)
-      const crumbs = [{ label, path: startDir }]
       let acc = startDir
       for (const p of parts) {
         acc = `${acc}/${p}`
         crumbs.push({ label: p, path: acc })
       }
-      return crumbs
-    }
-    const segs = cwd.split('/').filter(Boolean)
-    const crumbs = [{ label: '/', path: '/' }]
-    let acc = ''
-    for (const s of segs) {
-      acc = `${acc}/${s}`
-      crumbs.push({ label: s, path: acc })
+    } else if (cwd !== startDir) {
+      // Fallback: outside start dir — use raw segments.
+      const segs = cwd.split('/').filter(Boolean)
+      let acc = ''
+      for (const s of segs) {
+        acc = `${acc}/${s}`
+        crumbs.push({ label: s, path: acc })
+      }
     }
     return crumbs
   }, [cwd, startDir, activeProject?.name])
@@ -196,20 +192,17 @@ export function ProjectFilesView() {
       setEntries([])
       setCwd(path)
       setSearch('')
-      setContextMenu(null)
       uiStore.getState().sendFilesystemList(path, showHidden)
     },
     [showHidden],
   )
 
-  // Re-list current dir (e.g. after create/delete)
   const refresh = useCallback(() => {
     setLoading(true)
     setError(null)
     uiStore.getState().sendFilesystemList(cwd, showHidden)
   }, [cwd, showHidden])
 
-  // Listen for fs_list responses
   useEffect(() => {
     const unsub = connection.onFilesystemResponse((newEntries, err) => {
       if (err) {
@@ -224,61 +217,74 @@ export function ProjectFilesView() {
     return unsub
   }, [])
 
-  // Listen for fs_read (file viewer)
+  // Auto-refresh when a harness session (Codex, Claude Code) or Pi SDK
+  // tool writes a file inside the currently-viewed directory. We track
+  // the artifact count so a zustand subscription triggers exactly on
+  // new additions (not on unrelated field updates to existing
+  // artifacts, e.g. publish status).
+  useEffect(() => {
+    let prevCount = artifactStore.getState().artifacts.length
+    const unsub = artifactStore.subscribe((state) => {
+      const artifacts = state.artifacts
+      if (artifacts.length <= prevCount) {
+        prevCount = artifacts.length
+        return
+      }
+      const newest = artifacts[artifacts.length - 1]
+      prevCount = artifacts.length
+      const fp = newest?.filepath
+      if (!fp || typeof fp !== 'string') return
+      // Refresh only if the new file lives inside the currently-viewed
+      // directory (exact match, or direct child). Artifacts in unrelated
+      // dirs won't be visible here anyway.
+      if (fp === cwd || fp.startsWith(`${cwd}/`)) {
+        uiStore.getState().sendFilesystemList(cwd, showHidden)
+      }
+    })
+    return unsub
+  }, [cwd, showHidden])
+
   useEffect(() => {
     const unsub = connection.onFilesystemReadResponse((_path, content, _trunc, err) => {
       if (err) {
-        setViewError(err)
-        setViewLoading(false)
+        setPreviewError(err)
+        setPreviewLoading(false)
       } else {
-        setViewContent(content)
-        setViewLoading(false)
-        setViewError(null)
+        setPreview(content)
+        setPreviewLoading(false)
+        setPreviewError(null)
       }
     })
     return unsub
   }, [])
 
-  // Listen for mkdir response
   useEffect(() => {
     const unsub = connection.onFilesystemMkdirResponse((_path, success, err) => {
-      if (success) {
-        refresh()
-      } else {
-        setError(`Failed to create folder: ${err}`)
-      }
+      if (success) refresh()
+      else setError(`Failed to create folder: ${err}`)
       setNewFolderOpen(false)
       setNewFolderName('')
     })
     return unsub
   }, [refresh])
 
-  // Listen for delete response
   useEffect(() => {
     const unsub = connection.onFilesystemDeleteResponse((_path, success, err) => {
-      if (success) {
-        refresh()
-      } else {
-        setError(`Failed to delete: ${err}`)
-      }
+      if (success) refresh()
+      else setError(`Failed to delete: ${err}`)
       setDeleteTarget(null)
     })
     return unsub
   }, [refresh])
 
-  // Listen for fs_write response (upload)
   useEffect(() => {
     const unsub = connection.onFilesystemWriteResponse((_path, success, err) => {
-      if (success) {
-        refresh()
-      } else {
-        setError(`Upload failed: ${err}`)
-      }
+      if (success) refresh()
+      else setError(`Upload failed: ${err}`)
     })
     return unsub
   }, [refresh])
 
-  // Timeout
   useEffect(() => {
     if (!loading) return
     const timer = setTimeout(() => {
@@ -293,109 +299,76 @@ export function ProjectFilesView() {
     return () => clearTimeout(timer)
   }, [loading])
 
-  // Load on mount / project switch
   useEffect(() => {
     listDir(startDir)
   }, [listDir, startDir])
 
-  // Re-fetch when showHidden changes
   useEffect(() => {
     refresh()
   }, [refresh])
-
-  // Close context menu on click anywhere
-  useEffect(() => {
-    if (!contextMenu) return
-    const close = () => setContextMenu(null)
-    window.addEventListener('click', close)
-    return () => window.removeEventListener('click', close)
-  }, [contextMenu])
-
-  // Divider drag logic
-  const handleDividerStart = useCallback(
-    (e: React.MouseEvent) => {
-      e.preventDefault()
-      dragRef.current = { startX: e.clientX, startW: leftWidth }
-      setIsDividerDragging(true)
-    },
-    [leftWidth],
-  )
-
-  useEffect(() => {
-    if (!isDividerDragging) return
-    const onMove = (e: MouseEvent) => {
-      if (!dragRef.current) return
-      const delta = e.clientX - dragRef.current.startX
-      const minW = Math.max(300, Math.floor(window.innerWidth * 0.2))
-      const maxW = Math.floor(window.innerWidth * 0.6)
-      setLeftWidth(Math.min(maxW, Math.max(minW, dragRef.current.startW + delta)))
-    }
-    const onUp = () => {
-      setIsDividerDragging(false)
-      dragRef.current = null
-    }
-    document.addEventListener('mousemove', onMove)
-    document.addEventListener('mouseup', onUp)
-    document.body.style.cursor = 'col-resize'
-    document.body.style.userSelect = 'none'
-    return () => {
-      document.removeEventListener('mousemove', onMove)
-      document.removeEventListener('mouseup', onUp)
-      document.body.style.cursor = ''
-      document.body.style.userSelect = ''
-    }
-  }, [isDividerDragging])
-
-  // Filter, search, sort
-  const visibleEntries = useMemo(() => {
-    let filtered = entries
-    if (!showHidden) {
-      filtered = filtered.filter((e) => !HIDDEN_NAMES.has(e.name))
-    }
-    if (search.trim()) {
-      const q = search.toLowerCase()
-      filtered = filtered.filter((e) => e.name.toLowerCase().includes(q))
-    }
-    return [...filtered].sort((a, b) => {
-      if (a.type === 'dir' && b.type !== 'dir') return -1
-      if (a.type !== 'dir' && b.type === 'dir') return 1
-      return a.name.localeCompare(b.name)
-    })
-  }, [entries, showHidden, search])
 
   const resolvePath = useCallback(
     (name: string) => (cwd === '/' ? `/${name}` : `${cwd}/${name}`),
     [cwd],
   )
 
-  const handleEntryClick = (entry: FileEntry) => {
+  const visibleEntries = useMemo(() => {
+    let filtered = entries
+    if (!showHidden) filtered = filtered.filter((e) => !HIDDEN_NAMES.has(e.name))
+    if (search.trim()) {
+      const q = search.toLowerCase()
+      filtered = filtered.filter((e) => e.name.toLowerCase().includes(q))
+    }
+    const sorted = [...filtered].sort((a, b) => {
+      if (a.type === 'dir' && b.type !== 'dir') return -1
+      if (a.type !== 'dir' && b.type === 'dir') return 1
+      const dir = sortDir === 'asc' ? 1 : -1
+      switch (sortKey) {
+        case 'kind':
+          return kindLabel(a).localeCompare(kindLabel(b)) * dir
+        case 'size':
+          return (a.size || '').localeCompare(b.size || '') * dir
+        case 'mod':
+          return a.name.localeCompare(b.name) * dir
+        default:
+          return a.name.localeCompare(b.name) * dir
+      }
+    })
+    return sorted
+  }, [entries, showHidden, search, sortKey, sortDir])
+
+  const handleRowClick = (entry: FileEntry) => {
     if (entry.type === 'dir') {
       listDir(resolvePath(entry.name))
-    } else {
-      openFileViewer(entry)
+      setSelected(null)
+      return
     }
-  }
-
-  const openFileViewer = (entry: FileEntry) => {
-    const path = resolvePath(entry.name)
+    setSelected(entry)
     if (isPreviewable(entry.name)) {
+      const path = resolvePath(entry.name)
       const image = isImageFile(entry.name)
-      setViewingFile({ name: entry.name, path })
-      setViewContent(null)
-      setViewLoading(true)
-      setViewError(null)
-      setViewIsImage(image)
+      setPreview(null)
+      setPreviewLoading(true)
+      setPreviewError(null)
+      setPreviewIsImage(image)
       connection.sendFilesystemRead(path, image ? 'base64' : undefined)
+    } else {
+      setPreview(null)
+      setPreviewLoading(false)
+      setPreviewError(null)
+      setPreviewIsImage(false)
     }
   }
 
-  const handleContextMenu = (e: React.MouseEvent, entry: FileEntry) => {
-    e.preventDefault()
-    e.stopPropagation()
-    setContextMenu({ entry, x: e.clientX, y: e.clientY })
+  const handleSort = (key: SortKey) => {
+    if (sortKey === key) {
+      setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'))
+    } else {
+      setSortKey(key)
+      setSortDir('asc')
+    }
   }
 
-  // New Folder — inline row in file list (Finder-style)
   const handleNewFolder = () => {
     setNewFolderOpen(true)
     setNewFolderName('')
@@ -413,18 +386,18 @@ export function ProjectFilesView() {
     setNewFolderName('')
   }
 
-  // Delete (uses FILESYNC fs_delete for absolute path)
-  const handleDelete = (name: string) => {
-    const path = resolvePath(name)
-    setDeleteTarget({ name, path })
+  const handleDelete = () => {
+    if (!selected) return
+    setDeleteTarget({ name: selected.name, path: resolvePath(selected.name) })
   }
 
   const confirmDelete = () => {
     if (!deleteTarget) return
     connection.sendFilesystemDelete(deleteTarget.path)
+    setSelected(null)
+    setPreview(null)
   }
 
-  // Upload — writes to current directory via FILESYNC fs_write
   const handleUpload = useCallback(
     (files: FileList) => {
       for (const file of Array.from(files)) {
@@ -454,301 +427,349 @@ export function ProjectFilesView() {
   )
 
   const canGoUp = cwd !== startDir
-  const hasFileOpen = !!viewingFile
 
   return (
     <div
-      className={`fv${dragging ? ' fv--dragging' : ''}`}
+      className={`fl-main${dragging ? ' fl-main--dragging' : ''}`}
       onDragOver={handleDragOver}
       onDragLeave={handleDragLeave}
       onDrop={handleDrop}
     >
-      {/* Left panel — file tree */}
-      <div
-        className="fv-left"
-        style={{
-          width: hasFileOpen ? leftWidth : '100%',
-          maxWidth: hasFileOpen ? leftWidth : 720,
-          margin: hasFileOpen ? undefined : '0 auto',
-          flexShrink: hasFileOpen ? 0 : 1,
-        }}
-      >
-        {/* Breadcrumb bar */}
-        <div className="fv-bar">
-          <div className="fv-crumbs">
-            <button type="button" className="fv-crumbs__home" onClick={() => listDir(startDir)}>
-              <Home size={14} strokeWidth={1.8} />
-            </button>
-            {breadcrumbs.map((crumb, i) => (
-              <span key={`${crumb.path}-${i}`} className="fv-crumbs__item">
-                <ChevronRight size={13} strokeWidth={1.8} className="fv-crumbs__sep" />
-                <button
-                  type="button"
-                  className={`fv-crumbs__btn${i === breadcrumbs.length - 1 ? ' fv-crumbs__btn--active' : ''}`}
-                  onClick={() => listDir(crumb.path)}
-                >
-                  {crumb.label}
-                </button>
+      {/* Toolbar */}
+      <div className="fl-toolbar">
+        <div className="fl-crumbs">
+          <button
+            type="button"
+            className="fl-crumb"
+            onClick={() => listDir(startDir)}
+            aria-label="Home"
+            title="Home"
+          >
+            <Home size={14} strokeWidth={1.5} />
+          </button>
+          {breadcrumbs.map((c, i) => {
+            const isLast = i === breadcrumbs.length - 1
+            return (
+              <span
+                key={`${c.path}-${i}`}
+                style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}
+              >
+                <ChevronRight size={12} strokeWidth={1.5} className="fl-crumb-sep" />
+                {isLast ? (
+                  <span className="fl-crumb-current">{c.label}</span>
+                ) : (
+                  <button type="button" className="fl-crumb-link" onClick={() => listDir(c.path)}>
+                    {c.label}
+                  </button>
+                )}
               </span>
-            ))}
-          </div>
-
-          <div className="fv-bar__actions">
-            <span className="fv-bar__label">Show hidden</span>
-            <button
-              type="button"
-              className={`fv-toggle${showHidden ? ' fv-toggle--on' : ''}`}
-              onClick={() => setShowHidden(!showHidden)}
-            >
-              <span className="fv-toggle__thumb" />
-            </button>
-            <button
-              type="button"
-              className="fv-bar__btn"
-              onClick={() => fileInputRef.current?.click()}
-            >
-              <Upload size={14} strokeWidth={1.8} />
-              Upload
-            </button>
-            <input
-              ref={fileInputRef}
-              type="file"
-              multiple
-              style={{ display: 'none' }}
-              onChange={(e) => {
-                if (e.target.files) handleUpload(e.target.files)
-                e.target.value = ''
-              }}
-            />
-            <button type="button" className="fv-bar__btn" onClick={handleNewFolder}>
-              <FolderPlus size={14} strokeWidth={1.8} />
-              New Folder
-            </button>
-          </div>
+            )
+          })}
         </div>
 
-        {/* Search */}
-        <div className="fv-search">
-          <Search size={15} strokeWidth={1.8} className="fv-search__icon" />
+        <div className="fl-search">
+          <Search size={13} strokeWidth={1.5} />
           <input
             type="text"
-            className="fv-search__input"
-            placeholder="Search files by name..."
+            placeholder="Search files by name…"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
           />
         </div>
 
-        {/* File list */}
-        <div className="fv-list">
-          {loading && (
-            <div className="fv-empty">
-              <Loader2 size={24} strokeWidth={1.5} className="spin" />
-            </div>
-          )}
-
-          {error && (
-            <div className="fv-empty">
-              <p className="fv-empty__error">{error}</p>
-            </div>
-          )}
-
-          {/* Go up row */}
-          {canGoUp && !loading && (
-            <button
-              type="button"
-              className="fv-row fv-row--dir fv-row--parent"
-              onClick={() => {
-                const parent = cwd.split('/').slice(0, -1).join('/') || '/'
-                listDir(parent)
-              }}
-            >
-              <span className="fv-row__icon fv-row__icon--dir">
-                <Folder size={18} strokeWidth={1.5} />
-              </span>
-              <span className="fv-row__name fv-row__name--muted">..</span>
-            </button>
-          )}
-
-          {/* Inline new folder row */}
-          {newFolderOpen && (
-            <div className="fv-row fv-row--dir fv-row--new">
-              <span className="fv-row__icon fv-row__icon--dir">
-                <FolderPlus size={18} strokeWidth={1.5} />
-              </span>
-              <input
-                ref={newFolderInputRef}
-                type="text"
-                className="fv-row__inline-input"
-                placeholder="Folder name…"
-                value={newFolderName}
-                onChange={(e) => setNewFolderName(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') submitNewFolder()
-                  if (e.key === 'Escape') cancelNewFolder()
-                }}
-                onBlur={() => {
-                  if (!newFolderName.trim()) cancelNewFolder()
-                }}
-              />
-              <button type="button" className="fv-row__inline-cancel" onClick={cancelNewFolder}>
-                <X size={14} strokeWidth={1.8} />
-              </button>
-            </div>
-          )}
-
-          {!loading && !error && visibleEntries.length === 0 && !newFolderOpen && (
-            <div className="fv-empty">
-              <FolderOpen size={40} strokeWidth={0.8} />
-              <p>{search ? 'No files match your search' : 'This folder is empty'}</p>
-            </div>
-          )}
-
-          {visibleEntries.map((entry) => (
-            <button
-              type="button"
-              key={entry.name}
-              className={`fv-row${entry.type === 'dir' ? ' fv-row--dir' : ''}${viewingFile?.name === entry.name && entry.type === 'file' ? ' fv-row--active' : ''}`}
-              onClick={() => handleEntryClick(entry)}
-              onContextMenu={(e) => handleContextMenu(e, entry)}
-            >
-              <span
-                className={`fv-row__icon fv-row__icon--${entry.type === 'dir' ? 'dir' : getCategory(entry.name)}`}
-              >
-                {getFileIcon(entry)}
-              </span>
-              <span className="fv-row__name">{entry.name}</span>
-              {entry.type === 'file' && entry.size && (
-                <span className="fv-row__size">{entry.size}</span>
-              )}
-              {entry.type === 'dir' && (
-                <ChevronRight size={14} strokeWidth={1.5} className="fv-row__chevron" />
-              )}
-              <button
-                type="button"
-                className="fv-row__more"
-                onClick={(e) => {
-                  e.stopPropagation()
-                  handleContextMenu(e, entry)
-                }}
-              >
-                <MoreHorizontal size={15} strokeWidth={1.5} />
-              </button>
-            </button>
-          ))}
+        <div className="fl-toolbar__actions">
+          <button type="button" className="fl-btn" onClick={() => fileInputRef.current?.click()}>
+            <Upload size={12} strokeWidth={1.5} />
+            Upload
+          </button>
+          <input
+            ref={fileInputRef}
+            type="file"
+            multiple
+            style={{ display: 'none' }}
+            onChange={(e) => {
+              if (e.target.files) handleUpload(e.target.files)
+              e.target.value = ''
+            }}
+          />
+          <button type="button" className="fl-btn" onClick={handleNewFolder}>
+            <FolderPlus size={12} strokeWidth={1.5} />
+            New folder
+          </button>
         </div>
       </div>
 
-      {/* Divider */}
-      {hasFileOpen && (
-        <div
-          className={`fv-divider${isDividerDragging ? ' fv-divider--active' : ''}`}
-          onMouseDown={handleDividerStart}
-        />
-      )}
+      {/* Split: list + preview */}
+      <div className="fl-split">
+        <div className="fl-list-wrap">
+          <div className="fl-colhead">
+            <button
+              type="button"
+              className={`fl-colhead__col${sortKey === 'name' ? ' active' : ''}`}
+              onClick={() => handleSort('name')}
+            >
+              Name
+            </button>
+            <button
+              type="button"
+              className={`fl-colhead__col${sortKey === 'kind' ? ' active' : ''}`}
+              onClick={() => handleSort('kind')}
+            >
+              Kind
+            </button>
+            <button
+              type="button"
+              className={`fl-colhead__col fl-col-size${sortKey === 'size' ? ' active' : ''}`}
+              onClick={() => handleSort('size')}
+            >
+              Size
+            </button>
+            <button
+              type="button"
+              className={`fl-colhead__col fl-col-mod${sortKey === 'mod' ? ' active' : ''}`}
+              onClick={() => handleSort('mod')}
+            >
+              Modified
+            </button>
+          </div>
 
-      {/* Right panel — file viewer */}
-      {hasFileOpen && (
-        <div className="fv-right">
-          <div className="fv-viewer">
-            <div className="fv-viewer__header">
-              <div className="fv-viewer__title-row">
-                <span
-                  className={`fv-row__icon fv-row__icon--${getCategory(viewingFile.name)}`}
-                  style={{ marginRight: 8 }}
-                >
-                  {getFileIcon({ name: viewingFile.name, type: 'file', size: '' })}
-                </span>
-                <span className="fv-viewer__title">{viewingFile.name}</span>
+          <div className="fl-list">
+            {loading && (
+              <div className="fl-empty">
+                <Loader2 size={20} strokeWidth={1.5} className="spin" />
               </div>
+            )}
+            {error && <div className="fl-empty">{error}</div>}
+
+            {canGoUp && !loading && !error && (
               <button
                 type="button"
-                className="fv-viewer__close"
-                onClick={() => setViewingFile(null)}
+                className="fl-row is-folder fl-row--parent"
+                onClick={() => {
+                  const parent = cwd.split('/').slice(0, -1).join('/') || '/'
+                  listDir(parent)
+                }}
               >
-                <X size={16} strokeWidth={1.8} />
+                <span className="fl-col-name">
+                  <span className="fl-row__icon">
+                    <Folder size={15} strokeWidth={1.5} />
+                  </span>
+                  <span className="fl-row__name">..</span>
+                </span>
+                <span className="fl-col-kind">Folder</span>
+                <span className="fl-col-size">—</span>
+                <span className="fl-col-mod">—</span>
               </button>
-            </div>
-            <div className="fv-viewer__body">
-              {viewLoading && (
-                <div className="fv-viewer__status">
-                  <Loader2 size={20} strokeWidth={1.5} className="spin" />
+            )}
+
+            {newFolderOpen && (
+              <div className="fl-row is-folder">
+                <span className="fl-col-name">
+                  <span className="fl-row__icon">
+                    <FolderPlus size={15} strokeWidth={1.5} />
+                  </span>
+                  <input
+                    ref={newFolderInputRef}
+                    type="text"
+                    value={newFolderName}
+                    placeholder="Folder name…"
+                    onChange={(e) => setNewFolderName(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') submitNewFolder()
+                      if (e.key === 'Escape') cancelNewFolder()
+                    }}
+                    onBlur={() => {
+                      if (!newFolderName.trim()) cancelNewFolder()
+                    }}
+                    style={{
+                      background: 'transparent',
+                      border: 0,
+                      outline: 'none',
+                      color: 'var(--text)',
+                      font: 'inherit',
+                      flex: 1,
+                      minWidth: 0,
+                    }}
+                  />
+                  <button
+                    type="button"
+                    className="fl-iconbtn"
+                    onClick={cancelNewFolder}
+                    aria-label="Cancel"
+                  >
+                    <X size={12} strokeWidth={1.5} />
+                  </button>
+                </span>
+                <span className="fl-col-kind">Folder</span>
+                <span className="fl-col-size">—</span>
+                <span className="fl-col-mod">—</span>
+              </div>
+            )}
+
+            {!loading && !error && visibleEntries.length === 0 && !newFolderOpen && !canGoUp && (
+              <div className="fl-empty">
+                <FolderOpen size={32} strokeWidth={1} />
+                <div style={{ marginTop: 10 }}>
+                  {search ? 'No files match your search.' : 'This folder is empty.'}
                 </div>
-              )}
-              {viewError && (
-                <div className="fv-viewer__status fv-viewer__status--error">{viewError}</div>
-              )}
-              {!viewLoading &&
-                !viewError &&
-                viewContent !== null &&
-                (viewIsImage ? (
-                  <div className="fv-viewer__image-wrap">
-                    <img
-                      src={`data:${getMimeType(viewingFile.name)};base64,${viewContent}`}
-                      alt={viewingFile.name}
-                      className="fv-viewer__image"
-                    />
-                  </div>
-                ) : (
-                  <pre className="fv-viewer__code">{viewContent}</pre>
-                ))}
-            </div>
+              </div>
+            )}
+
+            {visibleEntries.map((entry) => {
+              const isSelected = selected?.name === entry.name && entry.type === 'file'
+              const isFolder = entry.type === 'dir'
+              return (
+                <button
+                  type="button"
+                  key={entry.name}
+                  className={`fl-row${isFolder ? ' is-folder' : ''}${isSelected ? ' selected' : ''}`}
+                  onClick={() => handleRowClick(entry)}
+                >
+                  <span className="fl-col-name">
+                    <span className="fl-row__icon">{iconFor(entry)}</span>
+                    <span className="fl-row__name">{entry.name}</span>
+                    {isFolder && (
+                      <ChevronRight size={12} strokeWidth={1.5} className="fl-row__chev" />
+                    )}
+                  </span>
+                  <span className="fl-col-kind">{kindLabel(entry)}</span>
+                  <span className="fl-col-size">{entry.size || '—'}</span>
+                  <span className="fl-col-mod">—</span>
+                </button>
+              )
+            })}
+          </div>
+
+          <div className="fl-statusbar">
+            <span>
+              {visibleEntries.length} item{visibleEntries.length === 1 ? '' : 's'}
+            </span>
+            {search && (
+              <>
+                <span className="fl-statusbar__sep">·</span>
+                <span>filter: "{search}"</span>
+              </>
+            )}
+            <span className="fl-statusbar__spacer" />
+            <span>{cwd}</span>
           </div>
         </div>
-      )}
 
-      {/* Context menu */}
-      {contextMenu && (
-        <div className="fv-ctx" style={{ top: contextMenu.y, left: contextMenu.x }}>
-          {contextMenu.entry.type === 'file' && isPreviewable(contextMenu.entry.name) && (
-            <button
-              type="button"
-              className="fv-ctx__item"
-              onClick={() => {
-                openFileViewer(contextMenu.entry)
-                setContextMenu(null)
-              }}
-            >
-              <Eye size={14} strokeWidth={1.5} />
-              View
-            </button>
+        {/* Preview pane */}
+        <aside className="fl-preview">
+          {!selected ? (
+            <div className="fl-preview__empty">
+              <Eye size={20} strokeWidth={1.2} />
+              <div style={{ marginTop: 10 }}>Select a file to preview.</div>
+            </div>
+          ) : (
+            <>
+              <div className="fl-preview__thumb">
+                {previewLoading ? (
+                  <Loader2 size={20} strokeWidth={1.5} className="spin" />
+                ) : previewError ? (
+                  <div
+                    style={{
+                      color: 'var(--danger)',
+                      fontSize: 12,
+                      textAlign: 'center',
+                      padding: 20,
+                    }}
+                  >
+                    {previewError}
+                  </div>
+                ) : preview !== null ? (
+                  previewIsImage ? (
+                    <img
+                      src={`data:${getMimeType(selected.name)};base64,${preview}`}
+                      alt={selected.name}
+                      style={{
+                        maxWidth: '100%',
+                        maxHeight: 260,
+                        objectFit: 'contain',
+                        borderRadius: 6,
+                      }}
+                    />
+                  ) : (
+                    <pre
+                      style={{
+                        fontFamily: 'var(--font-mono)',
+                        fontSize: 9.5,
+                        lineHeight: 1.5,
+                        color: 'var(--text-3)',
+                        maxHeight: 260,
+                        overflow: 'hidden',
+                        width: '100%',
+                        margin: 0,
+                        whiteSpace: 'pre',
+                      }}
+                    >
+                      {preview.slice(0, 2000)}
+                    </pre>
+                  )
+                ) : (
+                  iconFor(selected)
+                )}
+              </div>
+              <div className="fl-preview__info">
+                <div className="fl-preview__name">{selected.name}</div>
+                <div className="fl-preview__kind">
+                  {iconFor(selected)}
+                  <span>{kindLabel(selected)}</span>
+                  {selected.size && (
+                    <>
+                      <span className="fl-preview__sep">·</span>
+                      <span>{selected.size}</span>
+                    </>
+                  )}
+                </div>
+                <dl className="fl-preview__meta">
+                  <dt>Path</dt>
+                  <dd>{resolvePath(selected.name)}</dd>
+                </dl>
+                <div className="fl-preview__actions">
+                  {isPreviewable(selected.name) && (
+                    <button
+                      type="button"
+                      className="fl-btn"
+                      onClick={() => handleRowClick(selected)}
+                    >
+                      <Eye size={12} strokeWidth={1.5} />
+                      Reload preview
+                    </button>
+                  )}
+                  <button type="button" className="fl-btn" onClick={handleDelete}>
+                    <Trash2 size={12} strokeWidth={1.5} />
+                    Delete
+                  </button>
+                </div>
+              </div>
+            </>
           )}
-          {contextMenu.entry.type === 'dir' && (
-            <button
-              type="button"
-              className="fv-ctx__item"
-              onClick={() => {
-                listDir(resolvePath(contextMenu.entry.name))
-                setContextMenu(null)
-              }}
-            >
-              <FolderOpen size={14} strokeWidth={1.5} />
-              Open
-            </button>
-          )}
-          <button
-            type="button"
-            className="fv-ctx__item fv-ctx__item--danger"
-            onClick={() => {
-              handleDelete(contextMenu.entry.name)
-              setContextMenu(null)
-            }}
-          >
-            <Trash2 size={14} strokeWidth={1.5} />
-            Delete
-          </button>
-        </div>
-      )}
+        </aside>
+      </div>
 
-      {/* Drag overlay */}
       {dragging && (
-        <div className="fv-drop">
+        <div
+          style={{
+            position: 'absolute',
+            inset: 0,
+            background: 'color-mix(in oklch, var(--accent) 10%, transparent)',
+            border: '2px dashed var(--accent)',
+            display: 'grid',
+            placeItems: 'center',
+            pointerEvents: 'none',
+            color: 'var(--accent)',
+            fontSize: 14,
+            fontWeight: 500,
+            zIndex: 50,
+          }}
+        >
           <Upload size={24} strokeWidth={1.5} />
           <span>Drop to upload</span>
         </div>
       )}
 
-      {/* Delete confirmation */}
       {deleteTarget && (
         <div
           className="modal-overlay"
@@ -764,7 +785,7 @@ export function ProjectFilesView() {
           >
             <div className="modal-card__body">
               <h3>Delete &ldquo;{deleteTarget.name}&rdquo;?</h3>
-              <p style={{ color: 'var(--text-muted)', marginTop: '8px' }}>
+              <p style={{ color: 'var(--text-3)', marginTop: 8 }}>
                 This will permanently remove it from your project.
               </p>
             </div>

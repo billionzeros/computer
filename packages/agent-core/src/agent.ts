@@ -19,27 +19,23 @@ import { createLogger } from '@anton/logger'
 import type { AskUserQuestion } from '@anton/protocol'
 
 const log = createLogger('tools')
-import type { AgentTool, AgentToolResult } from '@mariozechner/pi-agent-core'
+import type { AgentTool } from '@mariozechner/pi-agent-core'
 import { Type } from '@mariozechner/pi-ai'
-import type { Static, TSchema, TextContent } from '@mariozechner/pi-ai'
 import type { ActivateWorkflowHandler } from './tools/activate-workflow.js'
 import { executeArtifact } from './tools/artifact.js'
 import { executeBrowser } from './tools/browser.js'
 import { executeClipboard } from './tools/clipboard.js'
 import { executeCodeSearch } from './tools/code-search.js'
-import { executeDatabase } from './tools/database.js'
 import type { DeliverResultHandler } from './tools/deliver-result.js'
 import { executeEdit } from './tools/edit.js'
 import { executeGit } from './tools/git.js'
 import { executeGlob, executeList, executeTree } from './tools/glob.js'
 import { executeHttpApi } from './tools/http-api.js'
 import { executeImage } from './tools/image.js'
+import { humanizeCron } from './tools/cron-humanize.js'
 import type { JobActionHandler, JobToolInput } from './tools/job.js'
-import { executeMemory } from './tools/memory.js'
-import { executeNotification } from './tools/notification.js'
 import { executePlan } from './tools/plan.js'
 // process and network tools removed — shell handles ps/kill/ping/curl
-import { executePublish } from './tools/publish.js'
 import { buildAntonCoreTools } from './tools/factories.js'
 import { defineTool, toolResult } from './tools/_helpers.js'
 import { executeRead } from './tools/read.js'
@@ -48,7 +44,6 @@ import type { SharedStateHandler } from './tools/shared-state.js'
 import { executeShell } from './tools/shell.js'
 import { type TasksUpdateCallback, executeTaskTracker } from './tools/task-tracker.js'
 import { executeTodo } from './tools/todo.js'
-import { executeWebSearch } from './tools/web-search.js'
 import { executeWrite } from './tools/write.js'
 
 // ── Tool name constants ────────────────────────────────────────────
@@ -69,131 +64,22 @@ export { needsConfirmation } from './tools/shell.js'
 
 // ── Sub-agent type specializations ──────────────────────────────
 
-export type SubAgentType = 'research' | 'execute' | 'verify'
-
-/** Tools that each sub-agent type IS allowed to use (whitelist). */
-const SUB_AGENT_ALLOWED_TOOLS: Record<SubAgentType, Set<string>> = {
-  research: new Set([
-    'web_search',
-    'browser',
-    'read',
-    'grep',
-    'glob',
-    'list',
-    'http_api',
-    'memory',
-    'git',
-  ]),
-  execute: new Set([
-    'shell',
-    'read',
-    'write',
-    'edit',
-    'glob',
-    'list',
-    'grep',
-    'git',
-    'http_api',
-    'web_search',
-    'browser',
-    'memory',
-    'task',
-  ]),
-  verify: new Set([
-    'shell',
-    'read',
-    'glob',
-    'list',
-    'grep',
-    'git',
-    'http_api',
-    'web_search',
-    'browser',
-    'memory',
-  ]),
-}
-
-/** Budget configuration per sub-agent type. */
-const SUB_AGENT_BUDGETS: Record<SubAgentType, { maxTokenBudget: number; maxTurns: number }> = {
-  research: { maxTokenBudget: 100_000, maxTurns: 30 },
-  execute: { maxTokenBudget: 200_000, maxTurns: 50 },
-  verify: { maxTokenBudget: 100_000, maxTurns: 30 },
-}
-
-const SUB_AGENT_TYPE_PREFIXES: Record<SubAgentType, string> = {
-  research: `You are a research sub-agent. You are NOT the main agent.
-
-STRATEGY: search → scan results → fetch 2-3 most relevant pages → synthesize.
-
-RULES (non-negotiable):
-1. Do NOT spawn sub-agents. You ARE the sub-agent — execute directly using your tools.
-2. Do NOT emit text between tool calls. Use tools silently, then report once at the end.
-3. Do NOT converse, ask questions, or suggest next steps.
-4. Focus on FINDING and ORGANIZING information, not on making changes.
-5. ALWAYS start with web_search. Never open browser as your first action.
-6. Only use browser on URLs you found in search results — never guess URLs.
-7. Each browser call costs ~10k tokens. You have a HARD LIMIT of 5 browser calls — the system will block further calls. Plan accordingly: pick the 2-3 best URLs from search results.
-8. Use ${READ_TOOL_NAME}, ${GREP_TOOL_NAME}, ${GLOB_TOOL_NAME}, and ${HTTP_API_TOOL_NAME} for local/API data gathering.
-9. Do NOT create, modify, or delete files unless the task explicitly asks you to save results somewhere.
-10. If you find conflicting information, note the discrepancy rather than silently picking one.
-11. Stay strictly within the task scope. If you discover related topics outside scope, mention them in one sentence at most.
-12. Keep your report under 300 words unless the task specifies otherwise.
-
-Output format (plain text labels, not markdown headers):
-  Scope: <echo back your assigned scope in one sentence>
-  Result: <the answer or key findings, limited to the scope above>
-  Key files: <relevant file paths — include for code research tasks>
-  Sources: <list of URLs or references used>
-  Issues: <list — include only if there are issues to flag>
-
-Task:
-`,
-  execute: `You are an execution sub-agent. You are NOT the main agent.
-
-RULES (non-negotiable):
-1. Do NOT spawn sub-agents. You ARE the sub-agent — execute directly using your tools.
-2. Do NOT emit text between tool calls. Use tools silently, then report once at the end.
-3. Do NOT converse, ask questions, or suggest next steps.
-4. Execute the task precisely as described. Do not expand scope beyond what is asked.
-5. Verify your work: run the code, check the output, test the endpoint, read back the file. Never assume success.
-6. If you encounter an error, diagnose and fix it. Retry up to 3 times before reporting failure.
-7. Do NOT ask the user for clarification — work with what you have. Make reasonable assumptions and note them.
-8. Stay strictly within the task scope.
-9. Keep your report under 500 words unless the task specifies otherwise.
-
-Output format (plain text labels, not markdown headers):
-  Scope: <echo back your assigned scope in one sentence>
-  Result: <what you did and the outcome>
-  Files changed: <list of modified files>
-  Issues: <list — include only if there are issues to flag>
-
-Task:
-`,
-  verify: `You are a verification sub-agent. You are NOT the main agent.
-
-RULES (non-negotiable):
-1. Do NOT spawn sub-agents. You ARE the sub-agent — execute directly using your tools.
-2. Do NOT emit text between tool calls. Use tools silently, then report once at the end.
-3. Do NOT converse, ask questions, or suggest next steps.
-4. Run concrete checks: execute tests, build commands, linters, curl endpoints, read logs. Do not just review code by eye.
-5. Do NOT fix problems. Report them clearly so the parent agent can decide what to do.
-6. If the task does not specify what to check, look for: test suites, build scripts, linter configs, and verify each one.
-7. Stay strictly within the task scope.
-
-For each check, report:
-  Check: <what you tested>
-  Command: <exact command you ran>
-  Output: <actual terminal output — copy-paste, not paraphrased>
-  Result: PASS or FAIL (with Expected vs Actual)
-
-End with exactly one of:
-  VERDICT: PASS
-  VERDICT: FAIL
-  VERDICT: PARTIAL (for environmental limitations only — not for uncertainty)
-
-Task:
-`,
-}
+// Sub-agent constants (type, allowlists, budgets, role prompts) live in
+// a dedicated module so both the inline `sub_agent` Pi SDK tool here and
+// the harness-facing `spawn_sub_agent` tool can import them without
+// producing a circular dependency through tools/factories.ts.
+export {
+  SUB_AGENT_ALLOWED_TOOLS,
+  SUB_AGENT_BUDGETS,
+  SUB_AGENT_TYPE_PREFIXES,
+  type SubAgentType,
+} from './tools/sub-agent-config.js'
+import {
+  SUB_AGENT_ALLOWED_TOOLS,
+  SUB_AGENT_BUDGETS,
+  SUB_AGENT_TYPE_PREFIXES,
+  type SubAgentType,
+} from './tools/sub-agent-config.js'
 
 // ── Fork sub-agent mechanism ──────────────────────────────────
 // When sub_agent is called without a type, we create a "fork" that inherits
@@ -265,43 +151,8 @@ export interface ParentForkContext {
   thinkingLevel?: 'off' | 'minimal' | 'low' | 'medium' | 'high'
 }
 
-/** Turn a 5-field cron expression into a short human-readable string. */
-function humanizeCron(expr: string): string {
-  const parts = expr.trim().split(/\s+/)
-  if (parts.length !== 5) return expr
-  const [min, hour, dom, mon, dow] = parts
-
-  // Every N minutes
-  if (min.startsWith('*/') && hour === '*' && dom === '*' && mon === '*' && dow === '*') {
-    const n = Number(min.slice(2))
-    return n === 1 ? 'every minute' : `every ${n} minutes`
-  }
-  // Every N hours
-  if (min !== '*' && hour.startsWith('*/') && dom === '*' && mon === '*' && dow === '*') {
-    const n = Number(hour.slice(2))
-    return n === 1 ? 'every hour' : `every ${n} hours`
-  }
-  // Daily at HH:MM
-  if (
-    min !== '*' &&
-    hour !== '*' &&
-    !hour.includes('/') &&
-    dom === '*' &&
-    mon === '*' &&
-    dow === '*'
-  ) {
-    const h = Number(hour)
-    const m = String(min).padStart(2, '0')
-    const ampm = h >= 12 ? 'PM' : 'AM'
-    const h12 = h === 0 ? 12 : h > 12 ? h - 12 : h
-    return `daily at ${h12}:${m} ${ampm}`
-  }
-  // Weekdays
-  if (dow === '1-5' && dom === '*' && mon === '*') {
-    return `weekdays at ${hour}:${String(min).padStart(2, '0')}`
-  }
-  return expr
-}
+// humanizeCron lives in tools/cron-humanize.ts so the harness
+// `routine-factory` can share the exact same logic.
 
 export type AskUserHandler = (questions: AskUserQuestion[]) => Promise<Record<string, string>>
 
@@ -1371,68 +1222,11 @@ export function buildTools(
     )
   }
 
-  // ── Web search (Exa via CF worker proxy) ──────────────────────────
-  // Skip registration when exa_search is already available via MCP connector
-  // (avoids a useless stub that just says "use exa_search instead").
-  // Still register when nothing is configured so the user gets setup instructions.
-  {
-    const exa = config.connectors.find(
-      (c) => c.id === 'exa-search' && c.enabled && c.baseUrl && c.apiKey,
-    )
-    const provider: import('./tools/web-search.js').SearchProvider | null =
-      exa?.baseUrl && exa?.apiKey ? { baseUrl: exa.baseUrl, token: exa.apiKey } : null
-
-    const hasExaConnector =
-      !provider && connectorManager?.getAllTools().some((t) => t.name === 'exa_search')
-
-    if (!hasExaConnector) {
-      tools.push(
-        defineTool({
-          name: 'web_search',
-          label: 'Web Search',
-          description:
-            'Search the web using Exa semantic search. Returns titles, URLs, and full page content as markdown. ' +
-            'Use for researching topics, discovering resources, and answering questions that need up-to-date data. ' +
-            'Results include extracted page content, not just snippets.',
-          parameters: Type.Object({
-            query: Type.String({ description: 'Search query' }),
-            numResults: Type.Optional(
-              Type.Number({ description: 'Number of results (default: 10, max: 30)' }),
-            ),
-            category: Type.Optional(
-              Type.String({
-                description:
-                  'Focus area: "news", "research paper", "company", "personal site", "financial report", "people"',
-              }),
-            ),
-            startPublishedDate: Type.Optional(
-              Type.String({
-                description:
-                  'Filter results published after this ISO date (e.g. "2025-01-01T00:00:00.000Z")',
-              }),
-            ),
-            endPublishedDate: Type.Optional(
-              Type.String({ description: 'Filter results published before this ISO date' }),
-            ),
-          }),
-          async execute(_toolCallId, params) {
-            if (!provider) {
-              return toolResult(
-                'Web search is not configured. To enable it:\n\n' +
-                  '1. Go to Settings → Connectors\n' +
-                  '2. Find "Web Search (Exa)" and click Connect\n' +
-                  '3. Enter your Exa API key\n\n' +
-                  'In the meantime, you can use the browser tool to fetch specific URLs if you have them.',
-                true,
-              )
-            }
-            const output = await executeWebSearch(params, provider)
-            return toolResult(output)
-          },
-        }),
-      )
-    }
-  }
+  // ── Web search — registered via buildAntonCoreTools above.
+  //    `buildAntonWebSearchTool()` self-loads the Exa connector and
+  //    returns a setup message when nothing is configured, so there's
+  //    no conditional block here anymore. Single source of truth for
+  //    both Pi SDK and the harness MCP shim.
 
   // ── MCP tools (from connected connectors) ─────────────────────────
   if (mcpManager) {

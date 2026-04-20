@@ -231,19 +231,7 @@ export const useStore = create<AppState>((set, get) => {
       if (view === 'chat') {
         const state = get()
         const activeConv = state.conversations.find((c) => c.id === state.activeConversationId)
-        if (activeConv?.projectId) {
-          // Active conversation belongs to a project — switch to a chat conversation
-          const defaultProject = projectStore.getState().projects.find((p) => p.isDefault)
-          const chatConv = state.conversations.find(
-            (c) => !c.projectId || c.projectId === defaultProject?.id,
-          )
-          if (chatConv) {
-            state.switchConversation(chatConv.id)
-          } else {
-            localStorage.removeItem(ACTIVE_CONV_KEY)
-            set({ activeConversationId: null })
-          }
-        } else if (activeConv && !sessionStore.getState().currentSessionId) {
+        if (activeConv && !sessionStore.getState().currentSessionId) {
           // Active conversation exists but sessionStore was never initialized
           // (e.g. init skipped switchConversation in Home view) — sync it now
           state.switchConversation(activeConv.id)
@@ -313,12 +301,23 @@ export const useStore = create<AppState>((set, get) => {
       // Close artifact panel when switching conversations
       artifactStore.setState({ artifactPanelOpen: false })
 
-      // If this session completed a turn in the background, fetch fresh history
-      if (conv?.sessionId && ss.getSessionState(conv.sessionId).needsHistoryRefresh) {
-        ss.updateSessionState(conv.sessionId, {
-          needsHistoryRefresh: false,
-        })
-        get().requestSessionHistory(conv.sessionId)
+      // Fetch history when:
+      //   (a) the session completed a turn in the background (needsHistoryRefresh), or
+      //   (b) we have no messages locally yet (conversations are persisted with empty
+      //       messages, so every conversation needs hydration on first visit after reload).
+      // Skip for pendingCreation sessions — the server has nothing yet, and the empty
+      // reply would race with addMessage and wipe the user's freshly-typed message.
+      if (conv?.sessionId && !conv.pendingCreation) {
+        const sessState = ss.getSessionState(conv.sessionId)
+        const noMessagesLoaded = (conv.messages?.length ?? 0) === 0
+        const shouldFetch =
+          sessState.needsHistoryRefresh || (noMessagesLoaded && !sessState.isSyncing)
+        if (shouldFetch) {
+          if (sessState.needsHistoryRefresh) {
+            ss.updateSessionState(conv.sessionId, { needsHistoryRefresh: false })
+          }
+          get().requestSessionHistory(conv.sessionId)
+        }
       }
 
       set(updates)

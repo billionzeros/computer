@@ -1,4 +1,10 @@
-export { CORE_SYSTEM_PROMPT, buildTools, needsConfirmation, type ToolCallbacks } from './agent.js'
+export {
+  CORE_SYSTEM_PROMPT,
+  buildTools,
+  needsConfirmation,
+  type AskUserHandler,
+  type ToolCallbacks,
+} from './agent.js'
 export type { ActivateWorkflowHandler } from './tools/activate-workflow.js'
 export type { SharedStateHandler } from './tools/shared-state.js'
 export type { JobActionHandler, JobToolInput } from './tools/job.js'
@@ -64,6 +70,8 @@ export {
   ClaudeAdapter,
   CodexAdapter,
   HarnessSession,
+  CodexHarnessSession,
+  type CodexHarnessSessionOpts,
   isHarnessSession,
   type HarnessSessionOpts,
   createMcpIpcServer,

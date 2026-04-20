@@ -5,6 +5,12 @@ export type { ClaudeStreamEvent } from './claude-events.js'
 export type { CodexStreamEvent } from './codex-events.js'
 export { HarnessSession, isHarnessSession, type HarnessSessionOpts } from './harness-session.js'
 export {
+  CodexHarnessSession,
+  type CodexHarnessSessionOpts,
+} from './codex-harness-session.js'
+export type { CodexRpcClient, CodexRpcError } from './codex-rpc.js'
+export { PINNED_CLI_VERSION, MIN_SUPPORTED_CLI_VERSION, detectCodexCli } from './codex-version.js'
+export {
   createMcpIpcServer,
   type IpcToolProvider,
   type McpIpcServer,

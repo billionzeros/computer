@@ -21,6 +21,20 @@ export function handleProviderMessage(msg: AiMessage): boolean {
           onboardingRole: msg.onboarding?.role ?? null,
         })
       }
+      // Server is authoritative for tour completion; mirror to localStorage so
+      // legacy callers of hasSeenTour() agree with the hydrated state.
+      if (typeof msg.onboarding?.tourCompleted === 'boolean') {
+        uiStore.setState({ tourCompleted: msg.onboarding.tourCompleted })
+        try {
+          if (msg.onboarding.tourCompleted) {
+            localStorage.setItem('anton.tourSeen.v1', '1')
+          } else {
+            localStorage.removeItem('anton.tourSeen.v1')
+          }
+        } catch {
+          // ignore
+        }
+      }
       return true
     }
 

@@ -30,12 +30,23 @@ export interface McpToolResult {
   isError?: boolean
 }
 
+/**
+ * Callback passed into `executeTool` when the MCP caller requested
+ * progress updates (MCP's `_meta.progressToken` → our IPC
+ * `_progressToken`). Tools call it zero or more times during
+ * execution to surface intermediate status; the handler forwards each
+ * call back over the IPC connection as a `method: "progress"` frame,
+ * which the shim then emits as `notifications/progress` to the caller.
+ */
+export type ProgressCallback = (message: string, progress?: number) => void
+
 export interface IpcToolProvider {
   getTools(sessionId: string): McpToolSchema[]
   executeTool(
     sessionId: string,
     name: string,
     args: Record<string, unknown>,
+    onProgress?: ProgressCallback,
   ): Promise<McpToolResult>
 }
 
@@ -169,13 +180,36 @@ export function createMcpIpcServer(socketPath: string, provider: IpcToolProvider
           case 'tools/call': {
             const toolName = request.params?.name as string
             const toolArgs = (request.params?.arguments || {}) as Record<string, unknown>
+            const progressToken = request.params?._progressToken as string | number | undefined
 
             if (!toolName) {
               sendError(conn, request.id, -32602, 'Missing tool name')
               return
             }
 
-            const toolResult = await provider.executeTool(sessionId, toolName, toolArgs)
+            // Build the progress callback only if the caller opted in.
+            // Streaming tools call this during execution; non-streaming
+            // tools ignore it. Failures to write are swallowed — the
+            // final response still gets sent over the same connection.
+            const onProgress: ProgressCallback | undefined = progressToken
+              ? (message: string, progress?: number) => {
+                  try {
+                    const frame = JSON.stringify({
+                      jsonrpc: '2.0',
+                      method: 'progress',
+                      params: { _progressToken: progressToken, message, progress },
+                    })
+                    conn.write(frame + '\n')
+                  } catch (err) {
+                    log.debug(
+                      { err: (err as Error).message, sessionId },
+                      'progress write failed — continuing',
+                    )
+                  }
+                }
+              : undefined
+
+            const toolResult = await provider.executeTool(sessionId, toolName, toolArgs, onProgress)
             result = toolResult
             break
           }

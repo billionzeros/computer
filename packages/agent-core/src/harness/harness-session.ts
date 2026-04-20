@@ -76,6 +76,13 @@ export class HarnessSession {
   private proc: ChildProcess | null = null
   private title = ''
   private lastActiveAt: number
+  /**
+   * Late-bound pusher into the active per-turn event queue. Set inside
+   * `processMessage`, cleared when the turn ends. Out-of-band events
+   * (browser screenshots from MCP tool execution) call this so they
+   * land in the same generator stream the adapter's CLI events do.
+   */
+  private pushEvent: ((event: SessionEvent) => void) | null = null
 
   /** Claude Code's internal session ID, used for --resume */
   private cliSessionId: string | null = null
@@ -191,6 +198,17 @@ export class HarnessSession {
       const eventQueue: SessionEvent[] = []
       let resolveWait: (() => void) | null = null
       let done = false
+
+      // Wire the late-bound pusher so out-of-band events (browser
+      // callbacks from MCP tool execution) can land in the same queue
+      // and surface through the generator.
+      this.pushEvent = (event) => {
+        eventQueue.push(event)
+        if (resolveWait) {
+          resolveWait()
+          resolveWait = null
+        }
+      }
 
       rl.on('line', (line) => {
         const trimmed = line.trim()
@@ -335,7 +353,29 @@ export class HarnessSession {
       // Clean up temp MCP config
       this.cleanupFile(mcpConfigPath)
       this.proc = null
+      this.pushEvent = null
     }
+  }
+
+  /**
+   * Push a `browser_state` event into the live turn stream. Called by
+   * the harness MCP browser tool when the user-visible browser changes
+   * (navigation, click, screenshot, etc.). No-op outside of an active
+   * turn so out-of-turn callbacks don't leak.
+   */
+  emitBrowserState(state: {
+    url: string
+    title: string
+    screenshot?: string
+    lastAction: import('@anton/protocol').BrowserAction
+    elementCount?: number
+  }) {
+    this.pushEvent?.({ type: 'browser_state', ...state })
+  }
+
+  /** Push a `browser_close` event. See `emitBrowserState`. */
+  emitBrowserClose() {
+    this.pushEvent?.({ type: 'browser_close' })
   }
 
   /** Send SIGINT to the CLI process (Claude Code handles it gracefully) */
@@ -406,9 +446,21 @@ export class HarnessSession {
   }
 }
 
-/** Type guard to distinguish HarnessSession from Session */
-export function isHarnessSession(s: unknown): s is HarnessSession {
-  return s instanceof HarnessSession || (s != null && (s as HarnessSession).isHarness === true)
+/**
+ * Type guard to distinguish a harness-backed session (Claude Code or
+ * Codex app-server) from a Pi SDK Session. Both concrete classes carry
+ * `readonly isHarness = true as const` so we detect either via sentinel.
+ *
+ * The refined type is the union of both implementations so the compiler
+ * knows which methods are safe to call above the guard.
+ */
+export function isHarnessSession(
+  s: unknown,
+): s is HarnessSession | import('./codex-harness-session.js').CodexHarnessSession {
+  return (
+    s instanceof HarnessSession ||
+    (s != null && (s as { isHarness?: boolean }).isHarness === true)
+  )
 }
 
 /**

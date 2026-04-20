@@ -1,4 +1,4 @@
-import { Plug, Plus, Unplug, X } from 'lucide-react'
+import { AtSign, ChevronDown, Plug, Plus, Unplug, X } from 'lucide-react'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { useStore } from '../../lib/store.js'
@@ -164,41 +164,34 @@ export function ConnectorPill() {
       )
     : null
 
+  const shown = enabledOnes.slice(0, 3)
+  const extra = enabledOnes.length - shown.length
+
   return (
     <div className="connector-pill-wrap">
-      {/* Connected icons pill */}
-      {enabledOnes.length > 0 && (
-        <button
-          ref={triggerRef}
-          type="button"
-          className="connector-pill"
-          onClick={handleTriggerClick}
-          aria-label="Connected tools"
-        >
-          {enabledOnes.slice(0, 4).map((c) => (
-            <span key={c.id} className="connector-pill__icon">
-              <ConnectorIcon id={c.id} size={16} />
-            </span>
-          ))}
-          {enabledOnes.length > 4 && (
-            <span className="connector-pill__more">+{enabledOnes.length - 4}</span>
-          )}
-        </button>
-      )}
-
-      {/* Connect apps icon — only when no connectors are enabled */}
-      {enabledOnes.length === 0 && (
-        <button
-          ref={triggerRef}
-          type="button"
-          className="composer__btn"
-          aria-label="Connect apps"
-          data-tooltip="Connect apps"
-          onClick={handleTriggerClick}
-        >
-          <Unplug size={18} strokeWidth={1.5} />
-        </button>
-      )}
+      <button
+        ref={triggerRef}
+        type="button"
+        className="composer__pill composer__pill--connectors"
+        onClick={handleTriggerClick}
+        aria-label="Tools"
+        data-tooltip="Tools"
+      >
+        <AtSign size={12} strokeWidth={1.8} />
+        {enabledOnes.length === 0 ? (
+          <span className="composer__pill-label">tools</span>
+        ) : (
+          <span className="conn-stack">
+            {shown.map((c) => (
+              <span key={c.id} className="conn-stack__av">
+                <ConnectorIcon id={c.id} size={14} />
+              </span>
+            ))}
+            {extra > 0 && <span className="conn-stack__count">+{extra}</span>}
+          </span>
+        )}
+        <ChevronDown size={10} strokeWidth={1.8} className="composer__pill-chevron" />
+      </button>
 
       {dropdown}
     </div>

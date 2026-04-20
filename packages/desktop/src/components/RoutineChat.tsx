@@ -7,14 +7,13 @@ import { connectionStore } from '../lib/store/connectionStore.js'
 import { projectStore } from '../lib/store/projectStore.js'
 import { sessionStore, useSessionState } from '../lib/store/sessionStore.js'
 import { uiStore } from '../lib/store/uiStore.js'
-import { RoutineChatHeader } from './chat/RoutineChatHeader.js'
-import { RoutineEmptyState } from './chat/RoutineEmptyState.js'
 import { ChatInput } from './chat/ChatInput.js'
 import { ConfirmDialog } from './chat/ConfirmDialog.js'
 import { ContextIndicator } from './chat/ContextIndicator.js'
-import { EmptyState } from './chat/EmptyState.js'
 import { MessageList } from './chat/MessageList.js'
 import { PlanReviewOverlay } from './chat/PlanReviewOverlay.js'
+import { RoutineChatHeader } from './chat/RoutineChatHeader.js'
+import { RoutineEmptyState } from './chat/RoutineEmptyState.js'
 import { SkillDetail } from './skills/SkillDetail.js'
 
 export function RoutineChat() {
@@ -75,29 +74,11 @@ export function RoutineChat() {
         model: ss.currentModel,
         projectId,
       })
-    } else if (activeConvProjectId && activeView === 'chat') {
-      // Active conversation belongs to a non-default project but we're in chat mode —
-      // switch to a default-project conversation. Only do this in chat mode;
-      // in projects mode, ProjectView manages the active conversation.
-      const defaultProject = ps.projects.find((p) => p.isDefault)
-      const chatConvs = store.conversations.filter(
-        (c) => !c.projectId || c.projectId === defaultProject?.id,
-      )
-      if (chatConvs.length > 0) {
-        store.switchConversation(chatConvs[0].id)
-      } else {
-        const sessionId = `sess_${Date.now().toString(36)}`
-        const projectId = defaultProject?.id ?? ps.activeProjectId ?? undefined
-        store.newConversation(undefined, sessionId, projectId)
-        store.registerPendingSession(sessionId)
-        const ss2 = sessionStore.getState()
-        sessionStore.getState().createSession(sessionId, {
-          provider: ss2.currentProvider,
-          model: ss2.currentModel,
-          projectId,
-        })
-      }
     }
+    // Chat view shows whichever conversation the user has selected, regardless
+    // of its project. Previously this effect force-swapped project conversations
+    // out of chat view, which broke clicking a Recent task from a non-default
+    // project (it would bounce you to an unrelated default-project chat).
   }, [activeConvId, activeConvProjectId, activeView, initReady])
 
   const handleSend = useCallback(
@@ -271,8 +252,6 @@ export function RoutineChat() {
         </div>
       ) : messages.length === 0 && agentSession ? (
         <RoutineEmptyState agent={agentSession} />
-      ) : messages.length === 0 ? (
-        <EmptyState onSend={handleSend} onSkillSelect={setSelectedSkill} />
       ) : (
         /* Show existing messages while syncing in background — replaced seamlessly when server responds */
         <>
@@ -295,15 +274,20 @@ export function RoutineChat() {
       <PlanReviewOverlay />
 
       {(messages.length > 0 || agentSession) && (
-        <ChatInput
-          onSend={handleSend}
-          onSteer={handleSteer}
-          onCancelTurn={handleCancelTurn}
-          onSkillSelect={setSelectedSkill}
-          variant="hero"
-          pendingAskUser={pendingAskUser}
-          onAskUserSubmit={handleAskUserSubmit}
-        />
+        <div className="conv-dock">
+          <div className="conv-dock__inner">
+            <ChatInput
+              onSend={handleSend}
+              onSteer={handleSteer}
+              onCancelTurn={handleCancelTurn}
+              onSkillSelect={setSelectedSkill}
+              variant="inline"
+              pendingAskUser={pendingAskUser}
+              onAskUserSubmit={handleAskUserSubmit}
+              conversationId={activeConv?.id}
+            />
+          </div>
+        </div>
       )}
 
       <SkillDetail skill={selectedSkill} onClose={() => setSelectedSkill(null)} />

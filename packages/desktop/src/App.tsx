@@ -1,32 +1,38 @@
 import { AnimatePresence } from 'framer-motion'
-import { Code, FolderOpen, MoreHorizontal, Ticket, X } from 'lucide-react'
-import { useEffect, useState } from 'react'
-import { RoutineChat } from './components/RoutineChat.js'
+import { Code, MoreHorizontal, Ticket } from 'lucide-react'
+import { useCallback, useEffect, useState } from 'react'
+import { ActivityDock } from './components/ActivityDock.js'
+import { CommandPalette } from './components/CommandPalette.js'
 import { Connect } from './components/Connect.js'
 import { FileBrowser } from './components/FileBrowser.js'
 import { ForceUpdateGate } from './components/ForceUpdateGate.js'
 import { MachineInfoPanel } from './components/MachineInfoPanel.js'
+import { RoutineChat } from './components/RoutineChat.js'
 import { SidePanel } from './components/SidePanel.js'
 import { Sidebar } from './components/Sidebar.js'
 import { Terminal } from './components/Terminal.js'
 import { UpdateBanner } from './components/UpdateBanner.js'
 import { WelcomeModal } from './components/WelcomeModal.js'
-import { RoutinesView } from './components/routines/RoutinesView.js'
 import { DebugOverlay } from './components/chat/DebugOverlay.js'
+import { WaitingBadge } from './components/chat/WaitingBadge.js'
 import { ConnectorsView } from './components/connectors/ConnectorsView.js'
+import { CustomizeView } from './components/customize/CustomizeView.js'
 import { DeveloperView } from './components/developer/DeveloperView.js'
 import { ProjectFilesView } from './components/files/ProjectFilesView.js'
-import { HomeView } from './components/home/HomeView.js'
+import { StreamHome } from './components/home/StreamHome.js'
+import { TasksListView } from './components/home/TasksListView.js'
 import { MemoryView } from './components/memory/MemoryView.js'
 import { PagesView } from './components/pages/PagesView.js'
-import { CreateProjectModal } from './components/projects/CreateProjectModal.js'
+import { NewProjectView } from './components/projects/NewProjectView.js'
 import { ProjectList } from './components/projects/ProjectList.js'
+import { RoutinesView } from './components/routines/RoutinesView.js'
 import { SettingsModal } from './components/settings/SettingsModal.js'
+import { UsageModal } from './components/settings/UsageModal.js'
 import { SkillsPanel } from './components/skills/SkillsPanel.js'
 import { WorkflowsPage } from './components/workflows/WorkflowsPage.js'
 import { connection } from './lib/connection.js'
-import { initNotifications, setNavigationHandler } from './lib/notifications.js'
 import { sanitizeTitle } from './lib/conversations.js'
+import { initNotifications, setNavigationHandler } from './lib/notifications.js'
 import { useConnectionStatus, useStore } from './lib/store.js'
 import { artifactStore } from './lib/store/artifactStore.js'
 import { connectionStore } from './lib/store/connectionStore.js'
@@ -39,10 +45,12 @@ export function App() {
   const [connected, setConnected] = useState(false)
   const [showMachineInfo, setShowMachineInfo] = useState(false)
   const [showSettings, setShowSettings] = useState(false)
-  const [settingsPage, setSettingsPage] = useState<'general' | 'models' | 'usage'>('general')
-  const [showCreateProject, setShowCreateProject] = useState(false)
+  const [settingsPage, setSettingsPage] = useState<'general' | 'models'>('general')
+  const [showUsage, setShowUsage] = useState(false)
+  const [paletteOpen, setPaletteOpen] = useState(false)
   const status = useConnectionStatus()
   const activeView = uiStore((s) => s.activeView)
+  const viewSubCrumb = uiStore((s) => s.viewSubCrumb)
   // Subscribe to reactive state for re-renders
   uiStore((s) => s.activeMode)
   const setActiveView = uiStore((s) => s.setActiveView)
@@ -55,6 +63,7 @@ export function App() {
   const updateStage = updateStore((s) => s.updateStage)
   const sidePanelOpen = artifactPanelOpen
   const projects = projectStore((s) => s.projects)
+  const activeProjectId = projectStore((s) => s.activeProjectId)
   const theme = uiStore((s) => s.theme)
   const devMode = uiStore((s) => s.devMode)
   const onboardingLoaded = uiStore((s) => s.onboardingLoaded)
@@ -65,6 +74,10 @@ export function App() {
   const tasksHidden = uiStore((s) => s.tasksHidden)
   const toggleTasksHidden = uiStore((s) => s.toggleTasksHidden)
   const currentTasks = useActiveSessionState((s) => s.tasks)
+  const pendingConfirm = useActiveSessionState((s) => s.pendingConfirm)
+  const pendingAskUser = useActiveSessionState((s) => s.pendingAskUser)
+  const pendingPlan = useActiveSessionState((s) => s.pendingPlan)
+  const hasPendingInteraction = Boolean(pendingConfirm || pendingAskUser || pendingPlan)
   const showWelcome = onboardingLoaded && !onboardingCompleted
 
   // Apply theme on mount + listen for system preference changes
@@ -88,6 +101,22 @@ export function App() {
     }
   }, [theme])
 
+  // Global keyboard shortcuts — ⌘K palette
+  useEffect(() => {
+    if (!connected) return
+    const onKey = (e: KeyboardEvent) => {
+      const mod = e.metaKey || e.ctrlKey
+      if (mod && e.key.toLowerCase() === 'k') {
+        e.preventDefault()
+        setPaletteOpen((o) => !o)
+      }
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [connected])
+
+  const handleNewProject = useCallback(() => uiStore.getState().setActiveView('new-project'), [])
+
   // Request notification permission + wire click-to-navigate on mount
   useEffect(() => {
     initNotifications()
@@ -101,17 +130,11 @@ export function App() {
     })
   }, [])
 
-  // If the active conversation belongs to a project, find the project
-  const activeConvProjectId = activeConv?.projectId
-  const activeConvProject = activeConvProjectId
-    ? projects.find((p) => p.id === activeConvProjectId)
-    : null
-
-  // All projects (including non-default) use the same HomeView for consistency
+  // All projects (including non-default) land on Home (StreamHome or RoutineChat).
 
   // Global listener for "New project" from sidebar (works on any view)
   useEffect(() => {
-    const handler = () => setShowCreateProject(true)
+    const handler = () => uiStore.getState().setActiveView('new-project')
     window.addEventListener('anton:create-project', handler)
     return () => window.removeEventListener('anton:create-project', handler)
   }, [])
@@ -196,7 +219,11 @@ export function App() {
         }
         return
       }
-      setSettingsPage(detail?.tab ?? 'general')
+      if (detail?.tab === 'usage') {
+        setShowUsage(true)
+        return
+      }
+      setSettingsPage(detail?.tab === 'models' ? 'models' : 'general')
       setShowSettings(true)
     }
     window.addEventListener('open-settings', handler)
@@ -234,6 +261,25 @@ export function App() {
 
   const showTopbar = activeView !== 'home' && activeView !== 'developer'
 
+  const activeProject = activeProjectId
+    ? (projects.find((p) => p.id === activeProjectId) ?? null)
+    : null
+  const projectCrumb = activeProject?.name ?? 'My Computer'
+  const viewLabels: Record<string, string> = {
+    chat: hasMessages ? sanitizeTitle(activeConv?.title || 'New conversation') : 'New conversation',
+    memory: 'Memory',
+    routines: 'Routines',
+    terminal: 'Terminal',
+    files: 'Files',
+    workflows: 'Workflows',
+    skills: 'Skills',
+    connectors: 'Connectors',
+    customize: 'Customize',
+    pages: 'Pages',
+    projects: 'Projects',
+  }
+  const viewCrumb = viewLabels[activeView] ?? ''
+
   return (
     <ForceUpdateGate>
       <div className="app-shell">
@@ -242,7 +288,11 @@ export function App() {
           activeView={sidebarView}
           onViewChange={handleSidebarViewChange}
           onOpenSettings={(page) => {
-            setSettingsPage(page ?? 'general')
+            if (page === 'usage') {
+              setShowUsage(true)
+              return
+            }
+            setSettingsPage(page === 'models' ? 'models' : 'general')
             setShowSettings(true)
           }}
           onOpenMachineInfo={() => setShowMachineInfo(true)}
@@ -263,10 +313,39 @@ export function App() {
             </div>
           )}
 
-          {/* Top bar — flat toolbar */}
+          {/* Top bar — breadcrumbs + connection pulse */}
           {showTopbar && (
             <header className="workspace-topbar" data-tauri-drag-region>
-              <div className="workspace-topbar__left">
+              <div className="workspace-topbar__crumbs">
+                <span className="workspace-topbar__crumb">{projectCrumb}</span>
+                <span className="workspace-topbar__sep">/</span>
+                <span
+                  className={`workspace-topbar__crumb${viewSubCrumb ? '' : ' workspace-topbar__crumb--active'}`}
+                >
+                  {viewCrumb}
+                </span>
+                {viewSubCrumb && (
+                  <>
+                    <span className="workspace-topbar__sep">/</span>
+                    <span className="workspace-topbar__crumb workspace-topbar__crumb--active">
+                      {viewSubCrumb}
+                    </span>
+                  </>
+                )}
+              </div>
+
+              <div className="workspace-topbar__spacer" data-tauri-drag-region />
+
+              <div className="workspace-topbar__actions">
+                {hasPendingInteraction && (
+                  <WaitingBadge
+                    onClick={() => {
+                      // Scroll the message list to the bottom where the pending block lives.
+                      const el = document.querySelector('.message-list')
+                      if (el) el.scrollTop = el.scrollHeight
+                    }}
+                  />
+                )}
                 {activeView === 'chat' && hasMessages && currentTasks.length > 0 && (
                   <button
                     type="button"
@@ -275,38 +354,6 @@ export function App() {
                   >
                     {tasksHidden ? 'Show Tasks' : 'Hide Tasks'}
                   </button>
-                )}
-                <h2 className="workspace-topbar__title">
-                  {activeView === 'chat'
-                    ? hasMessages
-                      ? sanitizeTitle(activeConv?.title || 'New conversation')
-                      : 'New conversation'
-                    : activeView === 'memory'
-                      ? 'Memory'
-                      : activeView === 'routines'
-                        ? 'Routines'
-                        : activeView === 'terminal'
-                          ? 'Terminal'
-                          : activeView === 'files'
-                            ? 'Files'
-                            : activeView === 'workflows'
-                              ? 'Workflows'
-                              : activeView === 'skills'
-                                ? 'Skills'
-                                : activeView === 'pages'
-                                  ? 'Pages'
-                                  : ''}
-                </h2>
-              </div>
-
-              <div className="workspace-topbar__center" data-tauri-drag-region />
-
-              <div className="workspace-topbar__actions">
-                {activeView === 'chat' && activeConvProject && (
-                  <span className="workspace-topbar__project-pill">
-                    <FolderOpen size={14} strokeWidth={1.5} />
-                    {activeConvProject.name}
-                  </span>
                 )}
                 {devMode && activeView === 'chat' && (
                   <button
@@ -327,12 +374,7 @@ export function App() {
                       <button
                         type="button"
                         className="workspace-topbar__action-btn workspace-topbar__action-btn--with-label"
-                        onClick={() => {
-                          const event = new CustomEvent('open-settings', {
-                            detail: { tab: 'usage' },
-                          })
-                          window.dispatchEvent(event)
-                        }}
+                        onClick={() => setShowUsage(true)}
                         aria-label="Usage"
                       >
                         <Ticket size={18} strokeWidth={1.5} />
@@ -349,22 +391,21 @@ export function App() {
                     </button>
                   </>
                 )}
-                {activeView === 'chat' && (
-                  <button
-                    type="button"
-                    className="workspace-topbar__action-btn"
-                    onClick={() => setActiveView('home')}
-                    aria-label="Close conversation"
-                  >
-                    <X size={18} strokeWidth={1.5} />
-                  </button>
-                )}
+                <div
+                  className={`workspace-topbar__status${status === 'connected' ? '' : ' workspace-topbar__status--idle'}`}
+                  title={status}
+                >
+                  <span className="workspace-topbar__pulse" aria-hidden />
+                  <span>{status === 'connected' ? 'Connected' : 'Reconnecting'}</span>
+                </div>
               </div>
             </header>
           )}
 
           <div className="workspace-body">
-            {activeView === 'home' && <HomeView />}
+            {activeView === 'home' &&
+              (hasMessages ? <RoutineChat /> : <StreamHome onSkillSelect={() => {}} />)}
+            {activeView === 'tasks' && <TasksListView />}
             {activeView === 'chat' && <RoutineChat />}
             {activeView === 'memory' && <MemoryView />}
             {activeView === 'routines' && <RoutinesView />}
@@ -378,9 +419,11 @@ export function App() {
             {activeView === 'files' && <ProjectFilesView />}
             {activeView === 'connectors' && <ConnectorsView />}
             {activeView === 'skills' && <SkillsPanel />}
+            {activeView === 'customize' && <CustomizeView />}
             {activeView === 'workflows' && <WorkflowsPage />}
             {activeView === 'pages' && <PagesView />}
             {activeView === 'projects' && <ProjectList />}
+            {activeView === 'new-project' && <NewProjectView />}
 
             <AnimatePresence>
               {(activeView === 'chat' || activeView === 'home') && sidePanelOpen && <SidePanel />}
@@ -389,13 +432,17 @@ export function App() {
         </div>
 
         {showMachineInfo && <MachineInfoPanel onClose={() => setShowMachineInfo(false)} />}
-        {showCreateProject && <CreateProjectModal onClose={() => setShowCreateProject(false)} />}
         <SettingsModal
           open={showSettings}
           onClose={() => setShowSettings(false)}
           onDisconnect={handleDisconnect}
           initialPage={settingsPage}
+          onOpenUsage={() => {
+            setShowSettings(false)
+            setShowUsage(true)
+          }}
         />
+        <UsageModal open={showUsage} onClose={() => setShowUsage(false)} />
         <DebugOverlay />
         <WelcomeModal
           open={showWelcome}
@@ -406,6 +453,26 @@ export function App() {
             setShowSettings(true)
           }}
         />
+        <CommandPalette
+          open={paletteOpen}
+          onClose={() => setPaletteOpen(false)}
+          onOpenSettings={(page) => {
+            setPaletteOpen(false)
+            if (page === 'usage') {
+              setShowUsage(true)
+              return
+            }
+            setSettingsPage(page === 'models' ? 'models' : 'general')
+            setShowSettings(true)
+          }}
+          onNewProject={() => {
+            setPaletteOpen(false)
+            handleNewProject()
+          }}
+        />
+        {activeView !== 'home' && activeView !== 'chat' && (
+          <ActivityDock onCompose={() => setActiveView('home')} />
+        )}
       </div>
     </ForceUpdateGate>
   )

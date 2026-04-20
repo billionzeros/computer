@@ -207,8 +207,35 @@ export type PlanConfirmHandler = (
 export type ArtifactRenderType = 'code' | 'markdown' | 'html' | 'svg' | 'mermaid'
 
 export type SessionEvent =
-  | { type: 'thinking'; text: string }
-  | { type: 'text'; content: string }
+  | {
+      type: 'thinking'
+      text: string
+      /**
+       * Optional block identifier for grouping a stream of thinking
+       * deltas into one UI block. Codex app-server populates this from
+       * the underlying Reasoning item.id; Pi SDK leaves it undefined
+       * and consumers treat each event independently.
+       */
+      blockId?: string
+      /**
+       * Kind of reasoning payload — "summary" for model-generated
+       * reasoning summaries, "raw" for the raw chain-of-thought. Codex
+       * populates both; Pi SDK leaves undefined.
+       */
+      kind?: 'raw' | 'summary'
+    }
+  | {
+      type: 'text'
+      content: string
+      /**
+       * Optional phase tag from Codex's `AgentMessage.phase` — lets the
+       * UI render "commentary" (pre-amble before real answer) distinctly
+       * from "final_answer". Pi SDK leaves undefined.
+       */
+      phase?: 'commentary' | 'final_answer'
+      /** Parent AgentMessage item.id so deltas can be grouped by block. */
+      blockId?: string
+    }
   | { type: 'tool_call'; id: string; name: string; input: Record<string, unknown> }
   | { type: 'tool_result'; id: string; output: string; isError?: boolean }
   | {

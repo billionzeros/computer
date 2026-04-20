@@ -159,6 +159,45 @@ export class AgentManager {
     return true
   }
 
+  updateAgent(
+    sessionId: string,
+    patch: {
+      name?: string
+      description?: string
+      instructions?: string
+      schedule?: string | null
+    },
+  ): RoutineSession | undefined {
+    const entry = this.agents.get(sessionId)
+    if (!entry) return undefined
+
+    if (patch.name !== undefined) entry.agent.name = patch.name
+    if (patch.description !== undefined) entry.agent.description = patch.description
+    if (patch.instructions !== undefined) entry.agent.instructions = patch.instructions
+
+    if (patch.schedule !== undefined) {
+      if (patch.schedule === null || patch.schedule === '') {
+        entry.agent.schedule = undefined
+        entry.agent.nextRunAt = null
+      } else {
+        if (!isValidCron(patch.schedule)) {
+          throw new Error(`Invalid cron expression: ${patch.schedule}`)
+        }
+        entry.agent.schedule = { cron: patch.schedule }
+        if (entry.agent.status !== 'paused') {
+          const next = getNextCronTime(patch.schedule)
+          entry.agent.nextRunAt = next ? next.getTime() : null
+        }
+      }
+    }
+
+    if (patch.name !== undefined) entry.title = patch.name
+
+    saveAgentMetadata(entry.projectId, sessionId, entry.agent)
+    this.emitUpdate(entry)
+    return entry
+  }
+
   getAgent(sessionId: string): RoutineSession | undefined {
     return this.agents.get(sessionId)
   }

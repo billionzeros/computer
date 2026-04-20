@@ -21,21 +21,19 @@ const VIBES = [
   'Channeling',
 ]
 
-/** Pick a random vibe, avoiding the previous one. */
 function pickVibe(prev: string): string {
   const pool = VIBES.filter((v) => v !== prev)
   return pool[Math.floor(Math.random() * pool.length)]
 }
 
-/** 6-pointed star SVG that spins. */
-function SparkStar({ size = 14 }: { size?: number }) {
+function SparkStar({ size = 13 }: { size?: number }) {
   return (
     <svg
       width={size}
       height={size}
       viewBox="0 0 16 16"
       fill="currentColor"
-      className="thinking-indicator__star"
+      className="thinking-ind__star"
       aria-hidden="true"
     >
       <path d="M8 0l1.8 5.2L16 8l-6.2 2.8L8 16l-1.8-5.2L0 8l6.2-2.8z" />
@@ -58,13 +56,11 @@ function formatTokens(n: number): string {
 
 export function ThinkingIndicator() {
   const agentStatus = useActiveSessionState((s) => s.status)
-  const _agentStatusDetail = useActiveSessionState((s) => s.statusDetail)
   const workingStartedAt = useActiveSessionState((s) => s.workingStartedAt)
   const turnUsage = useActiveSessionState((s) => s.turnUsage)
   const [elapsed, setElapsed] = useState(0)
   const [vibe, setVibe] = useState(() => pickVibe(''))
 
-  // Timer
   useEffect(() => {
     if (agentStatus !== 'working' || !workingStartedAt) return
     setElapsed(Date.now() - workingStartedAt)
@@ -74,7 +70,6 @@ export function ThinkingIndicator() {
     return () => clearInterval(interval)
   }, [agentStatus, workingStartedAt])
 
-  // Always rotate vibe words every 3s — task-specific info lives in the checklist
   useEffect(() => {
     if (agentStatus !== 'working') return
     const interval = setInterval(() => {
@@ -83,7 +78,6 @@ export function ThinkingIndicator() {
     return () => clearInterval(interval)
   }, [agentStatus])
 
-  // Reset vibe when agent starts working
   useEffect(() => {
     if (agentStatus === 'working') {
       setVibe(pickVibe(''))
@@ -92,40 +86,35 @@ export function ThinkingIndicator() {
 
   if (agentStatus !== 'working') return null
 
-  const statusText = `${vibe}...`
+  const statusText = `${vibe}…`
   const tokenCount = turnUsage?.outputTokens || 0
+  const timeStr = formatElapsed(elapsed)
 
   return (
-    <AnimatePresence>
-      <motion.div
-        initial={{ opacity: 0, y: 4 }}
-        animate={{ opacity: 1, y: 0 }}
-        exit={{ opacity: 0, y: -4 }}
-        transition={{ duration: 0.15 }}
-        className="thinking-indicator thinking-indicator--vibe"
-      >
-        <div className="thinking-indicator__left">
-          <SparkStar size={14} />
-          <AnimatePresence mode="wait">
-            <motion.span
-              key={statusText}
-              initial={{ opacity: 0, y: 4 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -4 }}
-              transition={{ duration: 0.2 }}
-              className="thinking-indicator__status"
-            >
-              {statusText}
-            </motion.span>
-          </AnimatePresence>
-        </div>
-        <div className="thinking-indicator__right">
-          <span className="thinking-indicator__meta">
-            {formatElapsed(elapsed)}
-            {tokenCount > 0 && ` · ↓${formatTokens(tokenCount)} tokens`}
-          </span>
-        </div>
-      </motion.div>
-    </AnimatePresence>
+    <motion.div
+      initial={{ opacity: 0, y: 4 }}
+      animate={{ opacity: 1, y: 0 }}
+      exit={{ opacity: 0, y: -4 }}
+      transition={{ duration: 0.15 }}
+      className="thinking-ind"
+    >
+      <SparkStar size={13} />
+      <AnimatePresence mode="wait">
+        <motion.span
+          key={statusText}
+          initial={{ opacity: 0, y: 3 }}
+          animate={{ opacity: 1, y: 0 }}
+          exit={{ opacity: 0, y: -3 }}
+          transition={{ duration: 0.2 }}
+          className="thinking-ind__status"
+        >
+          {statusText}
+        </motion.span>
+      </AnimatePresence>
+      <span className="thinking-ind__meta">
+        {timeStr}
+        {tokenCount > 0 && ` · ${formatTokens(tokenCount)}`}
+      </span>
+    </motion.div>
   )
 }

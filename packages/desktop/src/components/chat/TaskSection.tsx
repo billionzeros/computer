@@ -1,8 +1,8 @@
-import { AnimatePresence, motion } from 'framer-motion'
-import { ChevronDown, ChevronRight } from 'lucide-react'
-import { useMemo, useState } from 'react'
+import { motion } from 'framer-motion'
+import { ListTree } from 'lucide-react'
+import { useMemo } from 'react'
 import { artifactStore } from '../../lib/store/artifactStore.js'
-import { ToolTreeItem } from './ActionsGroup.js'
+import { ActionChip, GroupChip } from './ActionsGroup.js'
 import { ArtifactCard } from './ArtifactCard.js'
 import type { ToolAction } from './groupMessages.js'
 
@@ -14,7 +14,6 @@ interface Props {
 }
 
 export function TaskSection({ title, actions, defaultExpanded = false }: Props) {
-  const [expanded, setExpanded] = useState(defaultExpanded)
   const artifacts = artifactStore((s) => s.artifacts)
 
   const actionCallIds = useMemo(() => new Set(actions.map((a) => a.call.id)), [actions])
@@ -28,44 +27,18 @@ export function TaskSection({ title, actions, defaultExpanded = false }: Props) 
       initial={{ opacity: 0, y: 4 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.15 }}
-      className="tool-tree"
+      className="conv-actions"
     >
-      {/* Section header */}
-      <button type="button" className="tool-tree__header" onClick={() => setExpanded(!expanded)}>
-        {expanded ? (
-          <ChevronDown size={14} strokeWidth={1.5} className="tool-tree__chevron" />
-        ) : (
-          <ChevronRight size={14} strokeWidth={1.5} className="tool-tree__chevron" />
-        )}
-        <span className="tool-tree__header-text">{title}</span>
-      </button>
+      <GroupChip label={title} icon={ListTree} defaultOpen={defaultExpanded}>
+        {actions.map((action) => (
+          <div key={action.call.id} className="conv-chip__child">
+            <ActionChip action={action} />
+          </div>
+        ))}
+      </GroupChip>
 
-      {/* Nested tool actions */}
-      <AnimatePresence>
-        {expanded && actions.length > 0 && (
-          <motion.div
-            initial={{ height: 0 }}
-            animate={{ height: 'auto' }}
-            exit={{ height: 0 }}
-            transition={{ duration: 0.15 }}
-            style={{ overflow: 'hidden' }}
-          >
-            <div className="tool-tree__items">
-              {actions.map((action, i) => (
-                <ToolTreeItem
-                  key={action.call.id}
-                  action={action}
-                  isLast={i === actions.length - 1}
-                />
-              ))}
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
-
-      {/* Inline artifact cards */}
       {groupArtifacts.length > 0 && (
-        <div className="tool-tree__artifacts">
+        <div className="conv-artifacts">
           {groupArtifacts.map((artifact) => (
             <ArtifactCard key={artifact.id} artifact={artifact} />
           ))}

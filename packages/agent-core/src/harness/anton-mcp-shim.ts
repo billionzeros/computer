@@ -64,7 +64,13 @@ function connectToAnton(): Promise<net.Socket> {
     // Read responses from Anton server (newline-delimited JSON)
     const rl = readline.createInterface({ input: sock })
     rl.on('line', (line) => {
-      let msg: { id?: string | number; result?: { ok?: boolean }; error?: { message?: string } }
+      let msg: {
+        id?: string | number
+        method?: string
+        result?: { ok?: boolean }
+        error?: { message?: string }
+        params?: { _progressToken?: string | number; message?: string; progress?: number }
+      }
       try {
         msg = JSON.parse(line)
       } catch {
@@ -87,6 +93,29 @@ function connectToAnton(): Promise<net.Socket> {
         return
       }
 
+      // Progress frames from Anton — forward as MCP notifications/progress
+      // to whatever client is driving the shim (Codex / Claude Code).
+      // These frames have no `id` (they are notifications on the Anton side
+      // too); the caller receives them with the original progressToken so
+      // it can associate the update with the original tools/call.
+      if (msg.method === 'progress' && msg.params) {
+        const token = msg.params._progressToken
+        const message = msg.params.message ?? ''
+        const progress = msg.params.progress
+        if (token !== undefined) {
+          const notif = JSON.stringify({
+            jsonrpc: '2.0',
+            method: 'notifications/progress',
+            params:
+              progress !== undefined
+                ? { progressToken: token, progress, message }
+                : { progressToken: token, message },
+          })
+          process.stdout.write(notif + '\n')
+        }
+        return
+      }
+
       if (msg.id !== undefined && msg.id !== null) {
         const resolver = pendingRequests.get(msg.id)
         if (resolver) {
@@ -100,18 +129,23 @@ function connectToAnton(): Promise<net.Socket> {
 
 let requestId = 1
 
-async function sendToAnton(method: string, params: Record<string, unknown>): Promise<unknown> {
+async function sendToAnton(
+  method: string,
+  params: Record<string, unknown>,
+  progressToken?: string | number,
+  timeoutMs = 30_000,
+): Promise<unknown> {
   if (!socket) {
     await connectToAnton()
   }
 
   const id = requestId++
-  const request = JSON.stringify({
-    jsonrpc: '2.0',
-    id,
-    method,
-    params: { ...params, _antonSession: ANTON_SESSION },
-  })
+  const forwarded: Record<string, unknown> = { ...params, _antonSession: ANTON_SESSION }
+  // Progress token is echoed back inside each `method:"progress"` frame
+  // from Anton, so we don't need to map it by request id — the server
+  // passes it through and we forward it 1:1 to the caller.
+  if (progressToken !== undefined) forwarded._progressToken = progressToken
+  const request = JSON.stringify({ jsonrpc: '2.0', id, method, params: forwarded })
 
   return new Promise((resolve, reject) => {
     pendingRequests.set(id, resolve)
@@ -122,13 +156,12 @@ async function sendToAnton(method: string, params: Record<string, unknown>): Pro
       }
     })
 
-    // Timeout after 30s
     setTimeout(() => {
       if (pendingRequests.has(id)) {
         pendingRequests.delete(id)
         reject(new Error('Request timed out'))
       }
-    }, 30_000)
+    }, timeoutMs)
   })
 }
 
@@ -184,7 +217,17 @@ async function handleRequest(msg: {
 
     case 'tools/call': {
       try {
-        const result = await sendToAnton('tools/call', params || {})
+        // MCP spec: callers request streaming progress by setting
+        // `_meta.progressToken` on the tools/call request. We forward
+        // the token to Anton as `_progressToken` on the IPC request so
+        // the server-side handler can emit progress frames bound to it.
+        // Streaming tool calls get a 30-minute budget since a research
+        // sub-agent can legitimately run many minutes; non-streaming
+        // stays at the default 30s.
+        const meta = params?._meta as { progressToken?: string | number } | undefined
+        const progressToken = meta?.progressToken
+        const timeoutMs = progressToken !== undefined ? 30 * 60_000 : 30_000
+        const result = await sendToAnton('tools/call', params || {}, progressToken, timeoutMs)
         sendResponse(id ?? null, result)
       } catch (err) {
         sendError(id ?? null, -32000, `Failed to call tool: ${(err as Error).message}`)

@@ -262,13 +262,16 @@ export function handleSessionMessage(msg: AiMessage): boolean {
         for (const conv of store.conversations) {
           const serverMeta = serverById.get(conv.sessionId)
           if (serverMeta) {
-            // Server has this session — update metadata (server wins)
+            // Server has this session — update metadata (server wins).
+            // Also clear pendingCreation: if the session is on the server, it
+            // was created successfully (even if session_created was missed).
             reconciled.push({
               ...conv,
               title: serverMeta.title || conv.title,
               updatedAt: serverMeta.lastActiveAt,
               provider: serverMeta.provider,
               model: serverMeta.model,
+              pendingCreation: false,
             })
             serverById.delete(conv.sessionId)
           } else if (!conv.sessionId.startsWith('sess_') || conv.pendingCreation) {

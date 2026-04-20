@@ -14,6 +14,7 @@
 
 import { type AgentConfig, DEFAULT_PROVIDERS } from '@anton/agent-config'
 import type {
+  CodexHarnessSession,
   CommandContext,
   CommandResult,
   HarnessSession,
@@ -142,10 +143,10 @@ export type HarnessSessionFactory = (opts: {
   model: string
   projectId?: string
   surface: string
-}) => HarnessSession
+}) => HarnessSession | CodexHarnessSession
 
 export class WebhookAgentRunner {
-  private sessions = new Map<string, Session | HarnessSession>()
+  private sessions = new Map<string, Session | HarnessSession | CodexHarnessSession>()
   /**
    * Per-sessionId promise chain. The `tail` is the most-recently queued
    * promise; new events `.then()` off it so they run strictly after every
@@ -890,7 +891,7 @@ export class WebhookAgentRunner {
   private getOrCreateSession(
     sessionId: string,
     surface?: SurfaceInfo,
-  ): { session: Session | HarnessSession; isNew: boolean } {
+  ): { session: Session | HarnessSession | CodexHarnessSession; isNew: boolean } {
     const existing = this.sessions.get(sessionId)
     if (existing) return { session: existing, isNew: false }
 

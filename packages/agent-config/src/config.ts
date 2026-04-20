@@ -191,6 +191,8 @@ export interface AgentConfig {
   onboarding?: {
     completed: boolean
     role?: string // user-selected role from onboarding flow
+    tourCompleted?: boolean // true once the 6-step desktop tour has been dismissed or finished
+    tourCompletedAt?: string // ISO timestamp of tour completion
   }
 }
 

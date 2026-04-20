@@ -309,6 +309,31 @@ Anton extends your native tools (filesystem, shell, code editing) with persisten
 - **Connector tools** (names vary: \`slack_*\`, \`github_*\`, \`linear_*\`, \`gmail_*\`, etc.) — reach the user's connected services. Anton handles OAuth; never ask the user for tokens or API keys for these.
 - **\`update_project_context\`** — when a project is attached AND meaningful work was done this session, call this exactly once near the end with a short \`session_summary\`.
 - **\`activate_workflow\`** — after the user explicitly approves a workflow suggestion from the "Available Workflows" block below.
+- **\`web_search\`** — Anton's Exa-backed web search. See the "Web search" section below.
+
+## Sub-agents
+
+Anton exposes a typed sub-agent spawner as \`anton:spawn_sub_agent\`. Use it to delegate multi-step sub-tasks to a fresh child session whose work stays out of your own context window. Three specializations:
+
+- \`type:"research"\` — information gathering, returns a single synthesized summary. Use when a question needs 5+ pages of reading.
+- \`type:"execute"\` — changes/builds with verification. Full write access on the child.
+- \`type:"verify"\` — runs tests/linters and reports PASS/FAIL. Read-only.
+
+Prefer spawning over doing the work inline when:
+- A research question would otherwise require many back-to-back \`web_search\` calls — offload it and keep your own context clean.
+- You want to run a verification pass after making changes — \`verify\` returns a clear verdict.
+- Two sub-tasks are independent — spawn both in one response; they run concurrently.
+
+The child is a fresh Anton session. It does NOT see your conversation history — pass the full context it needs in the \`task\` string.
+
+## Web search
+
+Anton exposes web search as \`anton:web_search\` (Exa, with structured citations and published dates). If your runtime also has a built-in \`web_search\` tool of its own, **prefer \`anton:web_search\`**:
+
+- Anton's results are unified with the rest of this session — citations land in the same format \`update_project_context\` and memory expect.
+- Anton's search is billed and cached under the user's Anton account, not your host's quota.
+- If the user explicitly asks for your built-in search, use it. Otherwise default to \`anton:web_search\`.
+- If \`anton:web_search\` returns a "not configured" error, tell the user to connect Exa in Anton → Settings → Connectors rather than silently falling back to your native search.
 
 ## MCP server preference (IMPORTANT)
 

@@ -1,5 +1,6 @@
 import { AnimatePresence, motion } from 'framer-motion'
-import { ChevronDown, ChevronRight, PanelRight } from 'lucide-react'
+import { Brain, ChevronRight, Code, PanelRight, Workflow } from 'lucide-react'
+import type { ReactNode } from 'react'
 import { useEffect, useMemo, useState } from 'react'
 import { artifactStore } from '../../lib/store/artifactStore.js'
 import { ArtifactCard } from './ArtifactCard.js'
@@ -9,11 +10,9 @@ import type { ToolAction } from './groupMessages.js'
 
 /** Get a favicon URL for tools that interact with external URLs (free, no API key) */
 function getToolFavicon(toolName: string, toolInput?: Record<string, unknown>): string | null {
-  // Exa search tools get exa.ai favicon
   if (toolName === 'exa_search' || toolName === 'exa_find_similar') {
     return 'https://www.google.com/s2/favicons?domain=exa.ai&sz=16'
   }
-  // Web search gets a generic search icon via Google favicon
   if (toolName === 'web_search') {
     return 'https://www.google.com/s2/favicons?domain=google.com&sz=16'
   }
@@ -85,18 +84,6 @@ function getToolTypeLabel(toolName: string, toolInput?: Record<string, unknown>)
   }
 }
 
-/**
- * Render an MCP tool name (`server:tool` or just `tool`) as a human label.
- * Strips the server prefix (the connector source is conveyed elsewhere),
- * splits the snake_case tool name on underscores, and title-cases each
- * word. Falls back to a single-letter capitalize if the name has no
- * underscore and no colon, so a bare `Memory` still looks right.
- *
- *   codex_apps:gmail_search_emails → "Gmail Search Emails"
- *   anton:memory_save              → "Memory Save"
- *   list_channels                  → "List Channels"
- *   ping                           → "Ping"
- */
 function formatMcpToolName(toolName: string): string {
   const colonIdx = toolName.indexOf(':')
   const tool = colonIdx >= 0 ? toolName.slice(colonIdx + 1) : toolName
@@ -117,7 +104,6 @@ function getToolTarget(toolName: string, toolInput?: Record<string, unknown>): s
   switch (toolName) {
     case 'shell': {
       const cmd = (toolInput.command as string) || ''
-      // Show the command, truncated
       return cmd.length > 80 ? `${cmd.slice(0, 77)}...` : cmd
     }
     case 'filesystem': {
@@ -246,7 +232,6 @@ function getToolMeta(
     case 'web_search':
     case 'exa_search':
     case 'exa_find_similar': {
-      // Try to count results from the output
       const resultMatches = resultContent.match(/\burl\b/gi)
       if (resultMatches && resultMatches.length > 0) {
         const count = resultMatches.length
@@ -261,22 +246,19 @@ function getToolMeta(
   }
 }
 
-/** Generate a descriptive header for a group of actions */
-function getGroupHeader(actions: ToolAction[]): string {
-  if (actions.length === 1) {
-    const action = actions[0]
-    const toolName = action.call.toolName || 'unknown'
-    const label = getToolTypeLabel(toolName, action.call.toolInput as Record<string, unknown>)
-    const target = getToolTarget(toolName, action.call.toolInput as Record<string, unknown>)
-    if (target) {
-      // For single actions, combine: "Read config.ts" or "Shell npm test"
-      const shortTarget = target.length > 60 ? `${target.slice(0, 57)}...` : target
-      return `${label} ${shortTarget}`
-    }
-    return label
-  }
+/** Compose the single-chip label: "Type target" or just "Type" */
+function getActionLabel(action: ToolAction): string {
+  const toolName = action.call.toolName || 'unknown'
+  const input = action.call.toolInput as Record<string, unknown> | undefined
+  const type = getToolTypeLabel(toolName, input)
+  const target = getToolTarget(toolName, input)
+  if (!target) return type
+  const short = target.length > 70 ? `${target.slice(0, 67)}...` : target
+  return `${type} ${short}`
+}
 
-  // Multiple actions — group by type and summarize
+function getGroupHeader(actions: ToolAction[]): string {
+  if (actions.length === 1) return getActionLabel(actions[0])
   const types = new Map<string, number>()
   for (const a of actions) {
     const label = getToolTypeLabel(
@@ -285,106 +267,117 @@ function getGroupHeader(actions: ToolAction[]): string {
     )
     types.set(label, (types.get(label) || 0) + 1)
   }
-
   const parts: string[] = []
   for (const [type, count] of types) {
-    parts.push(count > 1 ? `${type} · ${count} tool calls` : type)
+    parts.push(count > 1 ? `${type} · ${count}` : type)
   }
-  return parts.join(', ')
+  return parts.join(' · ')
 }
 
-// ── Shared tree item renderer ──────────────────────────────────────
+// ── Single action as a conv-chip ──────────────────────────────────
 
-interface ToolTreeItemProps {
+interface ActionChipProps {
   action: ToolAction
-  isLast: boolean
 }
 
-function ToolTreeItem({ action, isLast }: ToolTreeItemProps) {
-  const [showResult, setShowResult] = useState(false)
+function ActionChip({ action }: ActionChipProps) {
+  const [open, setOpen] = useState(false)
   const artifacts = artifactStore((s) => s.artifacts)
   const setActiveArtifact = artifactStore((s) => s.setActiveArtifact)
   const setArtifactPanelOpen = artifactStore((s) => s.setArtifactPanelOpen)
 
   const toolName = action.call.toolName || 'unknown'
   const input = action.call.toolInput as Record<string, unknown> | undefined
-  const typeLabel = getToolTypeLabel(toolName, input)
-  const target = getToolTarget(toolName, input)
   const isError = action.result?.isError
+  const label = getActionLabel(action)
   const meta = getToolMeta(toolName, input, action.result?.content, isError)
   const faviconUrl = getToolFavicon(toolName, input)
   const artifact = artifacts.find((a) => a.toolCallId === action.call.id)
 
-  // For long results, show "Show more" toggle
   const resultContent = action.result?.content || ''
+  const hasResult = Boolean(resultContent)
   const resultLines = resultContent.split('\n')
   const isLongResult = resultLines.length > 6
   const [showFullResult, setShowFullResult] = useState(false)
   const displayedResult = showFullResult ? resultContent : resultLines.slice(0, 6).join('\n')
 
+  const toggle = () => {
+    if (hasResult) setOpen((o) => !o)
+  }
+
+  const classes = [
+    'conv-chip',
+    open ? 'open' : '',
+    hasResult ? 'has-children' : '',
+    isError ? 'conv-chip--error' : '',
+  ]
+    .filter(Boolean)
+    .join(' ')
+
   return (
-    <div className={`tool-tree__item${isLast ? ' tool-tree__item--last' : ''}`}>
-      <div
-        className={`tool-tree__item-row${isError ? ' tool-tree__item-row--error' : ''}`}
-        onClick={() => action.result && setShowResult(!showResult)}
-        role={action.result ? 'button' : undefined}
-        tabIndex={action.result ? 0 : undefined}
-        onKeyDown={(e) => {
-          if (action.result && (e.key === 'Enter' || e.key === ' ')) {
-            e.preventDefault()
-            setShowResult(!showResult)
-          }
-        }}
+    <div className={classes}>
+      <button
+        type="button"
+        className="conv-chip__row"
+        onClick={toggle}
+        disabled={!hasResult}
       >
-        {faviconUrl && (
+        {faviconUrl ? (
           <img
             src={faviconUrl}
             alt=""
-            className="tool-tree__favicon"
-            width={14}
-            height={14}
+            width={13}
+            height={13}
+            className="conv-chip__favicon"
             loading="lazy"
             onError={(e) => {
               ;(e.target as HTMLImageElement).style.display = 'none'
             }}
           />
+        ) : (
+          <Code size={13} strokeWidth={1.5} className="conv-chip__icon" />
         )}
-        <span className="tool-tree__type">{typeLabel}</span>
-        {target && <span className="tool-tree__target">{target}</span>}
+        <span className="conv-chip__label">{label}</span>
         {artifact && (
-          <button
-            type="button"
-            className="tool-tree__panel-btn"
+          <span
+            role="button"
+            tabIndex={0}
+            className="conv-chip__panel-btn"
             onClick={(e) => {
               e.stopPropagation()
               setActiveArtifact(artifact.id)
               setArtifactPanelOpen(true)
             }}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault()
+                e.stopPropagation()
+                setActiveArtifact(artifact.id)
+                setArtifactPanelOpen(true)
+              }
+            }}
             aria-label="Open in panel"
           >
-            <PanelRight size={13} strokeWidth={1.5} />
-          </button>
+            <PanelRight size={12} strokeWidth={1.5} />
+          </span>
         )}
-      </div>
-      {meta && (
-        <div className={`tool-tree__meta${isError ? ' tool-tree__meta--error' : ''}`}>{meta}</div>
-      )}
-
-      {/* Expanded result */}
-      <AnimatePresence>
-        {showResult && action.result && (
-          <motion.div
-            initial={{ height: 0, opacity: 0 }}
-            animate={{ height: 'auto', opacity: 1 }}
-            exit={{ height: 0, opacity: 0 }}
-            transition={{ duration: 0.12 }}
-            style={{ overflow: 'hidden' }}
-          >
-            <pre className="tool-tree__result">{displayedResult}</pre>
+        {hasResult && (
+          <ChevronRight size={12} strokeWidth={1.5} className="conv-chip__chev" />
+        )}
+      </button>
+      {hasResult && open && (
+        <div className="conv-chip__children">
+          <div className="conv-chip__child">
+            {meta && (
+              <div className={`conv-chip__meta${isError ? ' conv-chip__meta--error' : ''}`}>
+                {meta}
+              </div>
+            )}
+            <pre className="conv-chip__result">{displayedResult}</pre>
             {isLongResult && (
               <button
                 type="button"
-                className="tool-tree__show-more"
+                className="conv-chip__more"
                 onClick={(e) => {
                   e.stopPropagation()
                   setShowFullResult(!showFullResult)
@@ -393,6 +386,52 @@ function ToolTreeItem({ action, isLast }: ToolTreeItemProps) {
                 {showFullResult ? 'Show less' : 'Show more'}
               </button>
             )}
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ── Group chip (Running tasks in parallel) ─────────────────────────
+
+interface GroupChipProps {
+  label: string
+  icon?: typeof ChevronRight
+  children: ReactNode
+  defaultOpen?: boolean
+  errorCount?: number
+}
+
+function GroupChip({
+  label,
+  icon: IconComp = Workflow,
+  children,
+  defaultOpen = false,
+  errorCount = 0,
+}: GroupChipProps) {
+  const [open, setOpen] = useState(defaultOpen)
+  useEffect(() => {
+    if (defaultOpen) setOpen(true)
+  }, [defaultOpen])
+  return (
+    <div className={`conv-chip has-children${open ? ' open' : ''}`}>
+      <button type="button" className="conv-chip__row" onClick={() => setOpen((o) => !o)}>
+        <IconComp size={13} strokeWidth={1.5} className="conv-chip__icon" />
+        <span className="conv-chip__label">{label}</span>
+        {errorCount > 0 && <span className="conv-chip__error-badge">{errorCount} failed</span>}
+        <ChevronRight size={12} strokeWidth={1.5} className="conv-chip__chev" />
+      </button>
+      <AnimatePresence>
+        {open && (
+          <motion.div
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: 'auto', opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            transition={{ duration: 0.12 }}
+            style={{ overflow: 'hidden' }}
+          >
+            <div className="conv-chip__children">{children}</div>
           </motion.div>
         )}
       </AnimatePresence>
@@ -408,8 +447,6 @@ interface Props {
 }
 
 export function ActionsGroup({ actions, defaultExpanded = false }: Props) {
-  const [expanded, setExpanded] = useState(defaultExpanded)
-  const [showAllItems, setShowAllItems] = useState(false)
   const artifacts = artifactStore((s) => s.artifacts)
 
   const actionCallIds = useMemo(() => new Set(actions.map((a) => a.call.id)), [actions])
@@ -418,101 +455,34 @@ export function ActionsGroup({ actions, defaultExpanded = false }: Props) {
     [artifacts, actionCallIds],
   )
 
-  useEffect(() => {
-    if (defaultExpanded) setExpanded(true)
-  }, [defaultExpanded])
-
   const errorCount = actions.filter((a) => a.result?.isError).length
 
-  const headerText = getGroupHeader(actions)
-
-  // Show favicon in header for single-action groups that fetch URLs
-  const headerFavicon = useMemo(() => {
-    if (actions.length !== 1) return null
-    const input = actions[0].call.toolInput as Record<string, unknown> | undefined
-    return getToolFavicon(actions[0].call.toolName || '', input)
-  }, [actions])
+  if (actions.length === 0 && groupArtifacts.length === 0) return null
 
   return (
     <motion.div
       initial={{ opacity: 0, y: 4 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.15 }}
-      className="tool-tree"
+      className="conv-actions"
     >
-      {/* Header */}
-      <button type="button" className="tool-tree__header" onClick={() => setExpanded(!expanded)}>
-        {expanded ? (
-          <ChevronDown size={14} strokeWidth={1.5} className="tool-tree__chevron" />
-        ) : (
-          <ChevronRight size={14} strokeWidth={1.5} className="tool-tree__chevron" />
-        )}
-        {headerFavicon && (
-          <img
-            src={headerFavicon}
-            alt=""
-            className="tool-tree__favicon"
-            width={14}
-            height={14}
-            loading="lazy"
-            onError={(e) => {
-              ;(e.target as HTMLImageElement).style.display = 'none'
-            }}
-          />
-        )}
-        <span className="tool-tree__header-text">{headerText}</span>
-        {errorCount > 0 && <span className="tool-tree__error-badge">{errorCount} failed</span>}
-      </button>
-
-      {/* Tree items */}
-      <AnimatePresence>
-        {expanded && (
-          <motion.div
-            initial={{ height: 0 }}
-            animate={{ height: 'auto' }}
-            exit={{ height: 0 }}
-            transition={{ duration: 0.15 }}
-            style={{ overflow: 'hidden' }}
-          >
-            <div className="tool-tree__items">
-              {actions.length > 4 && !showAllItems ? (
-                <>
-                  {actions.slice(0, 2).map((action) => (
-                    <ToolTreeItem key={action.call.id} action={action} isLast={false} />
-                  ))}
-                  <button
-                    type="button"
-                    className="tool-tree__show-more-items"
-                    onClick={(e) => {
-                      e.stopPropagation()
-                      setShowAllItems(true)
-                    }}
-                  >
-                    Show {actions.length - 3} more
-                  </button>
-                  <ToolTreeItem
-                    key={actions[actions.length - 1].call.id}
-                    action={actions[actions.length - 1]}
-                    isLast={true}
-                  />
-                </>
-              ) : (
-                actions.map((action, i) => (
-                  <ToolTreeItem
-                    key={action.call.id}
-                    action={action}
-                    isLast={i === actions.length - 1}
-                  />
-                ))
-              )}
+      {actions.length === 1 && <ActionChip action={actions[0]} />}
+      {actions.length > 1 && (
+        <GroupChip
+          label="Running tasks in parallel"
+          defaultOpen={defaultExpanded}
+          errorCount={errorCount}
+        >
+          {actions.map((action) => (
+            <div key={action.call.id} className="conv-chip__child">
+              <ActionChip action={action} />
             </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
+          ))}
+        </GroupChip>
+      )}
 
-      {/* Inline artifact cards */}
       {groupArtifacts.length > 0 && (
-        <div className="tool-tree__artifacts">
+        <div className="conv-artifacts">
           {groupArtifacts.map((artifact) => (
             <ArtifactCard key={artifact.id} artifact={artifact} />
           ))}
@@ -522,5 +492,18 @@ export function ActionsGroup({ actions, defaultExpanded = false }: Props) {
   )
 }
 
-// Re-export helpers for SubAgentGroup and TaskSection
-export { getToolTypeLabel, getToolTarget, getToolMeta, getGroupHeader, ToolTreeItem }
+export {
+  getToolTypeLabel,
+  getToolTarget,
+  getToolMeta,
+  getGroupHeader,
+  getActionLabel,
+  ActionChip,
+  GroupChip,
+}
+
+// Back-compat alias so any stragglers importing ToolTreeItem still compile
+export { ActionChip as ToolTreeItem }
+
+// Re-export the thinking-chip icon for callers
+export { Brain as ThinkingIcon }

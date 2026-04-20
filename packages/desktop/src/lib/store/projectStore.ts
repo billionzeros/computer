@@ -90,10 +90,20 @@ interface ProjectState {
     projectId: string,
     config: {
       name: string
+      description?: string
       instructions: string
       schedule?: string
-      model?: string
-      provider?: string
+      originConversationId?: string
+    },
+  ) => void
+  updateRoutine: (
+    projectId: string,
+    sessionId: string,
+    patch: {
+      name?: string
+      description?: string
+      instructions?: string
+      schedule?: string | null
     },
   ) => void
   routineAction: (
@@ -256,6 +266,8 @@ export const projectStore = create<ProjectState>((set, get) => ({
   listProjectSessions: (projectId) => connection.sendProjectSessionsList(projectId),
   listRoutines: (projectId) => connection.sendRoutinesList(projectId),
   createRoutine: (projectId, config) => connection.sendRoutineCreate(projectId, config),
+  updateRoutine: (projectId, sessionId, patch) =>
+    connection.sendRoutineUpdate(projectId, sessionId, patch),
   routineAction: (projectId, routineId, action) =>
     connection.sendRoutineAction(projectId, routineId, action),
   getRoutineRunLogs: (projectId, sessionId, startedAt, completedAt, runSessionId) =>

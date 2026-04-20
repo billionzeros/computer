@@ -23,6 +23,8 @@ interface ArtifactState {
   artifactSearchQuery: string
   artifactFilterType: ArtifactRenderType | 'all'
   artifactViewMode: 'list' | 'detail'
+  /** Ordered list of artifact IDs currently open as tabs in the side panel. */
+  artifactTabs: string[]
 
   // Browser viewer
   browserState: BrowserState | null
@@ -36,6 +38,7 @@ interface ArtifactState {
   setArtifactFilterType: (type: ArtifactRenderType | 'all') => void
   setArtifactViewMode: (mode: 'list' | 'detail') => void
   updateArtifactPublishStatus: (artifactId: string, url: string, slug: string) => void
+  closeArtifactTab: (id: string) => void
 
   // Browser viewer actions
   setBrowserState: (state: {
@@ -76,6 +79,7 @@ export const artifactStore = create<ArtifactState>((set, get) => ({
   artifactSearchQuery: '',
   artifactFilterType: 'all',
   artifactViewMode: 'list',
+  artifactTabs: [],
   browserState: null,
   publishModalOpen: false,
   publishModalArtifactId: null,
@@ -93,13 +97,37 @@ export const artifactStore = create<ArtifactState>((set, get) => ({
       } else {
         artifacts = [...state.artifacts, artifact]
       }
-      return { artifacts, activeArtifactId: artifact.id }
+      const tabs = state.artifactTabs.includes(artifact.id)
+        ? state.artifactTabs
+        : [...state.artifactTabs, artifact.id]
+      return { artifacts, activeArtifactId: artifact.id, artifactTabs: tabs }
     }),
 
-  setActiveArtifact: (id) => set({ activeArtifactId: id }),
+  setActiveArtifact: (id) =>
+    set((state) => {
+      if (id === null) return { activeArtifactId: null }
+      const tabs = state.artifactTabs.includes(id)
+        ? state.artifactTabs
+        : [...state.artifactTabs, id]
+      return { activeArtifactId: id, artifactTabs: tabs }
+    }),
   setArtifactPanelOpen: (open) => set({ artifactPanelOpen: open }),
 
-  clearArtifacts: () => set({ artifacts: [], activeArtifactId: null, artifactPanelOpen: false }),
+  clearArtifacts: () =>
+    set({ artifacts: [], activeArtifactId: null, artifactPanelOpen: false, artifactTabs: [] }),
+
+  closeArtifactTab: (id) =>
+    set((state) => {
+      const idx = state.artifactTabs.indexOf(id)
+      if (idx === -1) return {}
+      const tabs = state.artifactTabs.filter((t) => t !== id)
+      let activeArtifactId = state.activeArtifactId
+      if (state.activeArtifactId === id) {
+        // Pick the neighbor to the right, else left, else null.
+        activeArtifactId = tabs[idx] ?? tabs[idx - 1] ?? null
+      }
+      return { artifactTabs: tabs, activeArtifactId }
+    }),
 
   setArtifactSearchQuery: (query) => set({ artifactSearchQuery: query }),
   setArtifactFilterType: (type) => set({ artifactFilterType: type }),
@@ -157,6 +185,7 @@ export const artifactStore = create<ArtifactState>((set, get) => ({
       artifactSearchQuery: '',
       artifactFilterType: 'all',
       artifactViewMode: 'list',
+      artifactTabs: [],
       browserState: null,
       publishModalOpen: false,
       publishModalArtifactId: null,

@@ -1,9 +1,9 @@
 import { AnimatePresence, motion } from 'framer-motion'
-import { ChevronDown, ChevronRight } from 'lucide-react'
-import { useEffect, useMemo, useState } from 'react'
+import { Bot } from 'lucide-react'
+import { useMemo } from 'react'
 import type { ChatMessage } from '../../lib/store.js'
 import { artifactStore } from '../../lib/store/artifactStore.js'
-import { ToolTreeItem, getGroupHeader } from './ActionsGroup.js'
+import { ActionChip, GroupChip } from './ActionsGroup.js'
 import { ArtifactCard } from './ArtifactCard.js'
 import type { ToolAction } from './groupMessages.js'
 
@@ -31,7 +31,6 @@ export function SubAgentGroup({
   result,
   defaultExpanded = false,
 }: Props) {
-  const [expanded, setExpanded] = useState(defaultExpanded)
   const artifacts = artifactStore((s) => s.artifacts)
 
   const actionCallIds = useMemo(() => new Set(actions.map((a) => a.call.id)), [actions])
@@ -41,75 +40,44 @@ export function SubAgentGroup({
   )
 
   const isPending = !result
-  const _isError = result?.isError
   const errorCount = actions.filter((a) => a.result?.isError).length
-
-  useEffect(() => {
-    if (defaultExpanded || isPending) setExpanded(true)
-  }, [defaultExpanded, isPending])
-
   const taskPreview = task.length > 80 ? `${task.slice(0, 77)}...` : task
-
-  // Build summary like "Read · Shell · 4 tool calls"
-  const actionsSummary = actions.length > 0 ? getGroupHeader(actions) : null
+  const label = `${agentType ? AGENT_TYPE_LABELS[agentType] : 'Agent'}: ${taskPreview}`
 
   return (
     <motion.div
       initial={{ opacity: 0, y: 4 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.15 }}
-      className="tool-tree tool-tree--sub-agent"
+      className="conv-actions"
     >
-      {/* Header */}
-      <button type="button" className="tool-tree__header" onClick={() => setExpanded(!expanded)}>
-        {expanded ? (
-          <ChevronDown size={14} strokeWidth={1.5} className="tool-tree__chevron" />
-        ) : (
-          <ChevronRight size={14} strokeWidth={1.5} className="tool-tree__chevron" />
-        )}
-        <span className="sub-agent__label">
-          {agentType ? AGENT_TYPE_LABELS[agentType] : 'Agent'}
-        </span>
-        <span className="sub-agent__task">{taskPreview}</span>
-      </button>
+      <GroupChip
+        label={label}
+        icon={Bot}
+        defaultOpen={defaultExpanded || isPending}
+        errorCount={errorCount}
+      >
+        {actions.map((action) => (
+          <div key={action.call.id} className="conv-chip__child">
+            <ActionChip action={action} />
+          </div>
+        ))}
+        <AnimatePresence>
+          {progressContent && (
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              transition={{ duration: 0.2 }}
+              className="conv-chip__child conv-chip__child--progress"
+            >
+              {progressContent}
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </GroupChip>
 
-      {/* Summary line: tool names · N tool calls */}
-      {(actionsSummary || errorCount > 0) && (
-        <div className="sub-agent__summary">
-          {actionsSummary && <span className="sub-agent__tools">{actionsSummary}</span>}
-          {errorCount > 0 && <span className="tool-tree__error-badge">{errorCount} failed</span>}
-        </div>
-      )}
-
-      {/* Nested tool call tree */}
-      <AnimatePresence>
-        {expanded && actions.length > 0 && (
-          <motion.div
-            initial={{ height: 0 }}
-            animate={{ height: 'auto' }}
-            exit={{ height: 0 }}
-            transition={{ duration: 0.15 }}
-            style={{ overflow: 'hidden' }}
-          >
-            <div className="tool-tree__items">
-              {actions.map((action, i) => (
-                <ToolTreeItem
-                  key={action.call.id}
-                  action={action}
-                  isLast={i === actions.length - 1}
-                />
-              ))}
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
-
-      {/* Sub-agent streaming text content */}
-      {expanded && progressContent && <div className="sub-agent__progress">{progressContent}</div>}
-
-      {/* Inline artifact cards */}
       {groupArtifacts.length > 0 && (
-        <div className="tool-tree__artifacts">
+        <div className="conv-artifacts">
           {groupArtifacts.map((artifact) => (
             <ArtifactCard key={artifact.id} artifact={artifact} />
           ))}

@@ -11,28 +11,29 @@ interface Props {
 export function ConfirmDialog({ command, reason, onApprove, onDeny }: Props) {
   return (
     <motion.div
-      initial={{ opacity: 0, y: 8 }}
+      initial={{ opacity: 0, y: 6 }}
       animate={{ opacity: 1, y: 0 }}
-      className="confirm-dialog"
+      className="ix ix--accent"
     >
-      <div className="confirm-dialog__surface">
-        <div className="confirm-dialog__header">
-          <ShieldAlert className="confirm-dialog__icon" />
-          <span className="confirm-dialog__title">Approval required</span>
+      <div className="ix__head">
+        <div className="ix__head-left">
+          <div className="ix__glyph ix__glyph--danger">
+            <ShieldAlert size={14} strokeWidth={1.5} />
+          </div>
+          <div className="ix__head-text">
+            <div className="ix__title">Approval required</div>
+            <div className="ix__sub">{reason}</div>
+          </div>
         </div>
-
-        <p className="confirm-dialog__reason">{reason}</p>
-
-        <code className="confirm-dialog__command">{command}</code>
-
-        <div className="confirm-dialog__actions">
-          <button type="button" onClick={onDeny} className="button button--secondary">
-            Cancel
-          </button>
-          <button type="button" onClick={onApprove} className="button button--primary">
-            Approve
-          </button>
-        </div>
+      </div>
+      <pre className="ix__command">{command}</pre>
+      <div className="ix__actions">
+        <button type="button" className="ix-btn ix-btn--ghost" onClick={onDeny}>
+          Cancel
+        </button>
+        <button type="button" className="ix-btn ix-btn--primary" onClick={onApprove}>
+          Approve
+        </button>
       </div>
     </motion.div>
   )

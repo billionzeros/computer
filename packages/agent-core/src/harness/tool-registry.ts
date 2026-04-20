@@ -16,14 +16,48 @@
 
 import { createLogger } from '@anton/logger'
 import type { AgentTool } from '@mariozechner/pi-agent-core'
+import type { AskUserHandler } from '../agent.js'
+import type { BrowserCallbacks } from '../tools/browser.js'
+import type { DeliverResultHandler } from '../tools/deliver-result.js'
 import { buildAntonCoreTools } from '../tools/factories.js'
-import type { IpcToolProvider, McpToolResult, McpToolSchema } from './mcp-ipc-handler.js'
+import type { JobActionHandler } from '../tools/job.js'
+import type {
+  IpcToolProvider,
+  McpToolResult,
+  McpToolSchema,
+  ProgressCallback,
+} from './mcp-ipc-handler.js'
 
 const log = createLogger('tool-registry')
 
+/**
+ * Anton-side extension on top of Pi SDK's `AgentTool`: when a tool
+ * defines `executeStreaming`, the registry routes MCP calls through it
+ * and passes the progress callback so the tool can emit live updates
+ * to the MCP caller. Tools without this method fall back to the
+ * request/response `execute` path.
+ *
+ * This is additive — nothing in the Pi SDK path uses it; Pi SDK always
+ * calls `execute`. Streaming is only meaningful over the harness MCP
+ * bridge.
+ */
+export interface StreamingCapable {
+  executeStreaming(
+    toolCallId: string,
+    params: unknown,
+    onProgress: ProgressCallback,
+  ): Promise<import('@mariozechner/pi-agent-core').AgentToolResult<unknown>>
+}
+
+export type MaybeStreamingTool = AgentTool & Partial<StreamingCapable>
+
 interface ToolDefinition {
   schema: McpToolSchema
-  execute(args: Record<string, unknown>, sessionId: string): Promise<McpToolResult>
+  execute(
+    args: Record<string, unknown>,
+    sessionId: string,
+    onProgress?: ProgressCallback,
+  ): Promise<McpToolResult>
 }
 
 function textResult(text: string, isError = false): McpToolResult {
@@ -41,16 +75,19 @@ function textResult(text: string, isError = false): McpToolResult {
  * simpler text-only result shape; image content is stringified as a
  * placeholder so we never silently drop data.
  */
-export function agentToolToMcpDefinition(tool: AgentTool): ToolDefinition {
+export function agentToolToMcpDefinition(tool: MaybeStreamingTool): ToolDefinition {
+  const streaming = typeof tool.executeStreaming === 'function'
   return {
     schema: {
       name: tool.name,
       description: tool.description,
       inputSchema: tool.parameters as unknown as Record<string, unknown>,
     },
-    async execute(args) {
+    async execute(args, _sessionId, onProgress) {
       const toolCallId = `mcp-${tool.name}-${Date.now().toString(36)}`
-      const result = await tool.execute(toolCallId, args as never, undefined, undefined)
+      const result = streaming && onProgress
+        ? await tool.executeStreaming!(toolCallId, args as never, onProgress)
+        : await tool.execute(toolCallId, args as never, undefined, undefined)
       const chunks: string[] = []
       for (const c of result.content) {
         if (c.type === 'text') {
@@ -72,12 +109,45 @@ export function agentToolToMcpDefinition(tool: AgentTool): ToolDefinition {
 export interface HarnessSessionContext {
   /** Project attached to this session (if any). Gates project-scoped tools. */
   projectId?: string
+  /**
+   * Project workspace dir. Inherited by child sessions spawned via
+   * `spawn_sub_agent` so local tools land inside the right cwd.
+   */
+  workspacePath?: string
   /** Surface label used to filter connector tools (slack, telegram, desktop). */
   surface?: string
   /** Handler for the activate_workflow tool. Leave undefined to hide the tool. */
   onActivateWorkflow?: (projectId: string, workflowId: string) => Promise<string>
+  /**
+   * Handler for the `ask_user` tool. The server wires this so the
+   * harness session displays interactive multi-choice questions through
+   * the same Channel.AI flow Pi SDK sessions use. Undefined → no
+   * ask_user tool exposed.
+   */
+  onAskUser?: AskUserHandler
   /** Domain used by the publish tool to build the public URL. */
   domain?: string
+  /**
+   * Browser-state callbacks for the `browser` tool. Server wires per-
+   * session callbacks that push browser state events to the desktop
+   * sidebar. Without this, `fetch` / `extract` still work but the
+   * full-browser path produces no live updates.
+   */
+  browserCallbacks?: BrowserCallbacks
+  /**
+   * Handler that delivers an agent's final result back to the
+   * conversation that spawned it. The server only sets this for
+   * scheduled / sub-agent harness sessions; live user-driven sessions
+   * leave it undefined so the `deliver_result` tool stays hidden.
+   */
+  onDeliverResult?: DeliverResultHandler
+  /**
+   * Job-action handler used by the project-scoped `routine` tool.
+   * Server wires `buildAgentActionHandler(sessionId)` here so harness
+   * sessions can create / list / start / stop / delete routines the
+   * same way Pi SDK can.
+   */
+  onJobAction?: JobActionHandler
 }
 
 export interface AntonToolRegistryOpts {
@@ -118,8 +188,15 @@ export class AntonToolRegistry implements IpcToolProvider {
     const coreTools = buildAntonCoreTools({
       conversationId: sessionId,
       projectId: ctx?.projectId,
+      workspacePath: ctx?.workspacePath,
       onActivateWorkflow: ctx?.onActivateWorkflow,
+      onAskUser: ctx?.onAskUser,
+      onDeliverResult: ctx?.onDeliverResult,
+      onJobAction: ctx?.onJobAction,
+      browserCallbacks: ctx?.browserCallbacks,
       domain: ctx?.domain,
+      // Harness path gets spawn_sub_agent with live MCP progress.
+      includeHarnessMcpTools: true,
     })
 
     const map = new Map<string, ToolDefinition>()
@@ -160,6 +237,7 @@ export class AntonToolRegistry implements IpcToolProvider {
     sessionId: string,
     name: string,
     args: Record<string, unknown>,
+    onProgress?: ProgressCallback,
   ): Promise<McpToolResult> {
     const map = this.buildToolMap(sessionId)
     const tool = map.get(name)
@@ -168,10 +246,10 @@ export class AntonToolRegistry implements IpcToolProvider {
       return textResult(`Unknown tool: ${name}`, true)
     }
 
-    log.info({ tool: name, sessionId }, 'Executing MCP tool')
+    log.info({ tool: name, sessionId, streaming: Boolean(onProgress) }, 'Executing MCP tool')
 
     try {
-      return await tool.execute(args, sessionId)
+      return await tool.execute(args, sessionId, onProgress)
     } catch (err) {
       log.error({ err, tool: name, sessionId }, 'Tool execution failed')
       return textResult(`Tool error: ${(err as Error).message}`, true)

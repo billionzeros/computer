@@ -212,7 +212,7 @@ function RoutineDeleteCard({
         This will permanently remove the routine and its conversation history.
       </p>
 
-      {meta.agentId && meta.agentId !== meta.name && (
+      {meta.routineId && meta.routineId !== meta.name && (
         <div className="routine-confirm__fields">
           <div className="routine-confirm__field">
             <span className="routine-confirm__field-icon">
@@ -220,7 +220,7 @@ function RoutineDeleteCard({
             </span>
             <span className="routine-confirm__field-label">ID</span>
             <span className="routine-confirm__field-value routine-confirm__field-value--mono">
-              {meta.agentId}
+              {meta.routineId}
             </span>
           </div>
         </div>
@@ -317,66 +317,133 @@ export function AskUserInline({ questions, onSubmit }: Props) {
     checkAutoSubmit(newAnswers, newCustom)
   }
 
+  const answeredCount = questions.filter(
+    (q) => answers[q.question] || customInputs[q.question]?.trim(),
+  ).length
+
   return (
-    <div className="ask-inline">
-      <div className="ask-inline__card">
+    <div className="ix ix--bordered">
+      <div className="ix__head">
+        <div className="ix__head-left">
+          <div className="ix__glyph">?</div>
+          <div className="ix__head-text">
+            <div className="ix__title">
+              {questions.length > 1 ? 'A few quick questions' : 'One quick question'}
+            </div>
+            <div className="ix__sub">I'll use your answers to keep going.</div>
+          </div>
+        </div>
         {questions.length > 1 && (
-          <div className="ask-inline__intro">Let me clarify a few things:</div>
+          <div className="ix__progress">
+            {questions.map((q, i) => (
+              <span
+                key={q.question}
+                className={`ix__dot${i < answeredCount ? ' ix__dot--done' : i === answeredCount ? ' ix__dot--cur' : ''}`}
+              />
+            ))}
+            <span className="ix__progress-count">
+              {Math.min(answeredCount + 1, questions.length)}/{questions.length}
+            </span>
+          </div>
         )}
+      </div>
+
+      <div className="ix__body">
         {questions.map((q, qi) => {
           const options = (q.options ?? []).map(normalizeOption)
           const selected = answers[q.question]
           const isCustom = showCustom[q.question]
+          const isAnswered = !!(selected || customInputs[q.question]?.trim())
+
+          if (isAnswered) return null
 
           return (
-            <div key={q.question} className="ask-inline__question">
-              <div className="ask-inline__question-header">
-                <span className="ask-inline__question-number">{qi + 1}</span>
-                <span className="ask-inline__question-text">{q.question}</span>
+            <div key={q.question}>
+              <div className="ix__q">
+                <div className="ix__q-num">Q{qi + 1}</div>
+                <div className="ix__q-text">{q.question}</div>
               </div>
-              <div className="ask-inline__pills">
-                {options.map((opt: { label: string; description?: string }) => (
+
+              <div className="ix__opts">
+                {options.map((opt, i) => (
                   <button
                     key={opt.label}
                     type="button"
-                    className={`ask-inline__pill${selected === opt.label ? ' ask-inline__pill--selected' : ''}`}
+                    className="ix__opt"
                     onClick={() => handleSelectAndCheck(q.question, opt.label)}
                   >
-                    {opt.label}
+                    <span className="ix__opt-kbd">{i + 1}</span>
+                    <span className="ix__opt-text">{opt.label}</span>
+                    {opt.description && <span className="ix__opt-desc">{opt.description}</span>}
                   </button>
                 ))}
-                {q.allowFreeText !== false && (
-                  <button
-                    type="button"
-                    className={`ask-inline__pill ask-inline__pill--other${isCustom ? ' ask-inline__pill--selected' : ''}`}
-                    onClick={() => handleCustom(q.question)}
-                  >
-                    Other
-                  </button>
-                )}
               </div>
-              {isCustom && (
-                <input
-                  type="text"
-                  className="ask-inline__custom-input"
-                  placeholder="Type your answer..."
-                  value={customInputs[q.question] || ''}
-                  onChange={(e) => {
-                    setCustomInputs((prev) => ({ ...prev, [q.question]: e.target.value }))
-                  }}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter' && customInputs[q.question]?.trim()) {
-                      const newCustom = { ...customInputs }
-                      checkAutoSubmit(answers, newCustom)
-                    }
-                  }}
-                  // biome-ignore lint/a11y/noAutofocus: UX requires focus on custom input
-                  autoFocus
-                />
+
+              {q.allowFreeText !== false && (
+                <div className="ix__custom">
+                  <div className="ix__custom-label">
+                    {isCustom ? 'Your answer' : 'Or write your own answer'}
+                  </div>
+                  <div className="ix__custom-row">
+                    <input
+                      type="text"
+                      className="ix__custom-input"
+                      placeholder="Type a different answer…"
+                      value={customInputs[q.question] || ''}
+                      onFocus={() => handleCustom(q.question)}
+                      onChange={(e) => {
+                        setCustomInputs((prev) => ({ ...prev, [q.question]: e.target.value }))
+                      }}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' && customInputs[q.question]?.trim()) {
+                          checkAutoSubmit(answers, customInputs)
+                        }
+                      }}
+                    />
+                    <button
+                      type="button"
+                      aria-label="Submit custom answer"
+                      className={`ix__custom-send${customInputs[q.question]?.trim() ? '' : ' ix__custom-send--off'}`}
+                      onClick={() => checkAutoSubmit(answers, customInputs)}
+                      disabled={!customInputs[q.question]?.trim()}
+                    >
+                      <svg
+                        width="12"
+                        height="12"
+                        viewBox="0 0 16 16"
+                        fill="none"
+                        aria-hidden="true"
+                      >
+                        <path
+                          d="M3 8h10M9 4l4 4-4 4"
+                          stroke="currentColor"
+                          strokeWidth="1.6"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                        />
+                      </svg>
+                    </button>
+                  </div>
+                </div>
               )}
             </div>
           )
         })}
+
+        {answeredCount === questions.length && (
+          <div className="ix__done">
+            <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+              <path
+                d="M3 8.5l3 3 7-7"
+                stroke="currentColor"
+                strokeWidth="1.8"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
+            </svg>
+            Got it — thanks. Continuing…
+          </div>
+        )}
       </div>
     </div>
   )

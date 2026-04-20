@@ -1,20 +1,16 @@
 import type { RoutineRunLogEntry, RoutineRunRecord, RoutineSession } from '@anton/protocol'
 import {
   AlertCircle,
-  ArrowLeft,
-  Calendar,
   CheckCircle2,
-  ChevronDown,
-  ChevronUp,
-  Clock,
-  Hash,
+  ChevronLeft,
+  Edit3,
+  Folder,
   Loader2,
-  MoreHorizontal,
   Play,
   Square,
   Terminal,
+  Trash2,
   X,
-  Zap,
 } from 'lucide-react'
 import { useCallback, useState } from 'react'
 import {
@@ -23,12 +19,7 @@ import {
   formatDuration,
   formatRelativeTime,
 } from '../../lib/agent-utils.js'
-import type { Skill } from '../../lib/skills.js'
-import type { ChatImageAttachment } from '../../lib/store.js'
-import { useStore } from '../../lib/store.js'
 import { projectStore } from '../../lib/store/projectStore.js'
-import { sessionStore } from '../../lib/store/sessionStore.js'
-import { ChatInput } from '../chat/ChatInput.js'
 
 // ── Run Logs Modal ─────────────────────────────────────────────────
 
@@ -89,77 +80,23 @@ function RunLogsModal({
   )
 }
 
-// ── Run Entry Row ──────────────────────────────────────────────────
-
-function RunEntry({
-  run,
-  onViewLogs,
-}: {
-  run: RoutineRunRecord
-  onViewLogs: () => void
-}) {
-  const [expanded, setExpanded] = useState(false)
-  const isErr = run.status === 'error'
-  const hasLogs = run.completedAt != null && run.durationMs != null && run.durationMs > 100
-
-  return (
-    <div className={`routine-run-entry${isErr ? ' routine-run-entry--error' : ''}`}>
-      <button
-        type="button"
-        className="routine-run-entry__row"
-        onClick={() => {
-          if (hasLogs) {
-            onViewLogs()
-          } else if (isErr && run.error) {
-            setExpanded(!expanded)
-          }
-        }}
-        disabled={!hasLogs && (!isErr || !run.error)}
-      >
-        {isErr ? (
-          <AlertCircle
-            size={12}
-            strokeWidth={1.5}
-            className="routine-run-entry__icon routine-run-entry__icon--error"
-          />
-        ) : (
-          <CheckCircle2
-            size={12}
-            strokeWidth={1.5}
-            className="routine-run-entry__icon routine-run-entry__icon--success"
-          />
-        )}
-        <span className="routine-run-entry__time">{formatAbsoluteTime(run.startedAt)}</span>
-        <span className={`routine-run-entry__trigger routine-run-entry__trigger--${run.trigger}`}>
-          {run.trigger}
-        </span>
-        {run.durationMs != null && (
-          <span className="routine-run-entry__duration">{formatDuration(run.durationMs)}</span>
-        )}
-        {hasLogs && <Terminal size={10} strokeWidth={1.5} className="routine-run-entry__logs-icon" />}
-      </button>
-      {expanded && run.error && <div className="routine-run-entry__error">{run.error}</div>}
-    </div>
-  )
-}
-
-// ── Agent Detail View ──────────────────────────────────────────────
+// ── Routine Detail View ────────────────────────────────────────────
 
 interface Props {
   agentId: string
   onBack: () => void
   onViewRun?: (run: RoutineRunRecord) => void
+  onEdit?: () => void
+  onToast?: (msg: string) => void
 }
 
-export function RoutineDetailView({ agentId, onBack, onViewRun }: Props) {
+export function RoutineDetailView({ agentId, onBack, onViewRun, onEdit, onToast }: Props) {
   const projectAgents = projectStore((s) => s.projectRoutines)
   const agentRunLogs = projectStore((s) => s.routineRunLogs)
   const agentRunLogsLoading = projectStore((s) => s.routineRunLogsLoading)
-  const addMessage = useStore((s) => s.addMessage)
 
-  const [showInstructions, setShowInstructions] = useState(false)
-  const [showHistory, setShowHistory] = useState(true)
   const [showLogsModal, setShowLogsModal] = useState(false)
+  const [confirmDel, setConfirmDel] = useState(false)
 
   const agent = projectAgents.find((a: RoutineSession) => a.sessionId === agentId)
 
@@ -185,210 +122,219 @@ export function RoutineDetailView({ agentId, onBack, onViewRun }: Props) {
     [agent, onViewRun],
   )
 
-  const handleRunStop = useCallback(() => {
+  const handleRunNow = useCallback(() => {
     if (!agent) return
-    if (agent.agent.status === 'running') {
-      projectStore.getState().routineAction(agent.projectId, agent.sessionId, 'stop')
-    } else {
-      projectStore.getState().routineAction(agent.projectId, agent.sessionId, 'start')
-    }
+    projectStore.getState().routineAction(agent.projectId, agent.sessionId, 'start')
   }, [agent])
 
-  const handleSend = useCallback(
-    async (text: string, attachments: ChatImageAttachment[] = []) => {
-      if (!agent) return
-      const outboundAttachments = attachments.flatMap((a) =>
-        a.data
-          ? [{ id: a.id, name: a.name, mimeType: a.mimeType, data: a.data, sizeBytes: a.sizeBytes }]
-          : [],
-      )
-      addMessage({
-        id: `user_${Date.now()}`,
-        role: 'user',
-        content: text,
-        attachments: attachments.length > 0 ? attachments : undefined,
-        timestamp: Date.now(),
-      })
-      sessionStore.getState().sendAiMessageToSession(text, agent.sessionId, outboundAttachments)
-    },
-    [agent, addMessage],
-  )
+  const handleStop = useCallback(() => {
+    if (!agent) return
+    projectStore.getState().routineAction(agent.projectId, agent.sessionId, 'stop')
+  }, [agent])
 
-  const handleSkillSelect = (_skill: Skill) => {}
+  const handleTogglePause = useCallback(() => {
+    if (!agent) return
+    const action = agent.agent.status === 'paused' ? 'resume' : 'pause'
+    projectStore.getState().routineAction(agent.projectId, agent.sessionId, action)
+  }, [agent])
+
+  const handleDelete = useCallback(() => {
+    if (!agent) return
+    projectStore.getState().routineAction(agent.projectId, agent.sessionId, 'delete')
+    onToast?.('Routine deleted')
+    onBack()
+  }, [agent, onBack, onToast])
 
   if (!agent) {
     return (
-      <div className="conv-panel">
-        <div className="conv-panel__topbar">
-          <button type="button" className="conv-panel__back" onClick={onBack}>
-            <ArrowLeft size={16} strokeWidth={1.5} />
-          </button>
-          <div className="conv-panel__title">Routine not found</div>
-        </div>
+      <div className="rt-detail">
+        <button type="button" className="conv-back" onClick={onBack}>
+          <ChevronLeft size={14} strokeWidth={1.5} /> All routines
+        </button>
+        <div className="rt-head__title">Routine not found</div>
       </div>
     )
   }
 
   const meta = agent.agent
   const isRunning = meta.status === 'running'
-  const isError = meta.status === 'error'
+  const isPaused = meta.status === 'paused'
+  const hasCron = !!meta.schedule?.cron
+  const active = !isPaused
+  const scheduleLabel = meta.schedule?.cron ? cronToHuman(meta.schedule.cron) : 'Run on demand'
+  const nextRunLabel = !active
+    ? '—'
+    : meta.nextRunAt
+      ? formatRelativeTime(meta.nextRunAt)
+      : scheduleLabel
+  const recentRuns = meta.runHistory?.slice().reverse() ?? []
+  const hasRuns = recentRuns.length > 0
 
   return (
-    <div className="conv-panel">
-      {/* Top bar */}
-      <div className="conv-panel__topbar">
-        <button
-          type="button"
-          className="conv-panel__back"
-          onClick={onBack}
-          aria-label="Back to routines"
-        >
-          <ArrowLeft size={16} strokeWidth={1.5} />
-        </button>
-        <div className="conv-panel__title">{meta.name}</div>
-        <div className="conv-panel__actions">
-          <button
-            type="button"
-            className={`conv-panel__action-btn conv-panel__action-btn--label${isRunning ? ' conv-panel__action-btn--danger' : ''}`}
-            onClick={handleRunStop}
-            aria-label={isRunning ? 'Stop routine' : 'Run routine'}
-          >
-            {isRunning ? (
-              <>
-                <Square size={15} strokeWidth={1.5} />
-                <span>Stop</span>
-              </>
-            ) : (
-              <>
-                <Play size={15} strokeWidth={1.5} />
-                <span>Run</span>
-              </>
-            )}
-          </button>
-          <button type="button" className="conv-panel__action-btn" aria-label="More options">
-            <MoreHorizontal size={18} strokeWidth={1.5} />
-          </button>
-        </div>
-      </div>
+    <div className="rt-detail">
+      <button type="button" className="conv-back" onClick={onBack}>
+        <ChevronLeft size={14} strokeWidth={1.5} /> All
+      </button>
 
-      {/* Content */}
-      <div className="routine-home">
-        {/* Agent identity */}
-        <div className="routine-home__identity">
-          <div className="routine-home__status-row">
-            <span
-              className={`routine-home__dot${isRunning ? ' routine-home__dot--running' : isError ? ' routine-home__dot--error' : ''}`}
-            />
-            <span className="routine-home__status-text">
-              {isRunning
-                ? 'Running'
-                : isError
-                  ? 'Error'
-                  : meta.schedule?.cron
-                    ? 'Scheduled'
-                    : 'Idle'}
-            </span>
-            {meta.schedule?.cron && (
-              <span className="routine-home__schedule">
-                <Calendar size={12} strokeWidth={1.5} />
-                {cronToHuman(meta.schedule.cron)}
-              </span>
-            )}
-          </div>
-          {meta.description && <p className="routine-home__desc">{meta.description}</p>}
-        </div>
-
-        {/* Stats row */}
-        <div className="routine-home__stats">
-          <div className="routine-home__stat">
-            <Clock size={13} strokeWidth={1.5} />
-            <span>{meta.lastRunAt ? formatRelativeTime(meta.lastRunAt) : 'Never'}</span>
-            <span className="routine-home__stat-label">last run</span>
-          </div>
-          <div className="routine-home__stat">
-            <Calendar size={13} strokeWidth={1.5} />
-            <span>{meta.nextRunAt ? formatRelativeTime(meta.nextRunAt) : 'Manual'}</span>
-            <span className="routine-home__stat-label">next run</span>
-          </div>
-          <div className="routine-home__stat">
-            <Hash size={13} strokeWidth={1.5} />
-            <span>{meta.runCount}</span>
-            <span className="routine-home__stat-label">runs</span>
-          </div>
-          <div className="routine-home__stat">
-            <Zap size={13} strokeWidth={1.5} />
-            <span>
-              {meta.tokenBudget ? `${Math.round(meta.tokenBudget.usedThisMonth / 1000)}k` : '—'}
-            </span>
-            <span className="routine-home__stat-label">tokens</span>
-          </div>
-        </div>
-
-        {/* Instructions (collapsible) */}
-        {meta.instructions && (
-          <div className="routine-home__section">
+      <div className="rt-head">
+        <div className="rt-head__text">
+          <h1 className="rt-head__title">{meta.name}</h1>
+          {meta.description && <div className="rt-head__blurb">{meta.description}</div>}
+          <div className="rt-head__row">
             <button
               type="button"
-              className="routine-home__section-toggle"
-              onClick={() => setShowInstructions(!showInstructions)}
+              className={`rt-badge rt-badge--clickable ${active ? 'rt-badge--active' : 'rt-badge--paused'}`}
+              onClick={handleTogglePause}
+              title={active ? 'Pause this routine' : 'Resume this routine'}
             >
-              <span>Instructions</span>
-              {showInstructions ? (
-                <ChevronUp size={14} strokeWidth={1.5} />
-              ) : (
-                <ChevronDown size={14} strokeWidth={1.5} />
-              )}
+              <span className="rt-badge__dot" />
+              {isRunning ? 'Running' : active ? 'Active' : 'Paused'}
             </button>
-            {showInstructions && (
-              <pre className="routine-home__instructions-body">{meta.instructions}</pre>
-            )}
+            <span className="rt-head__next">
+              Next run: <strong>{nextRunLabel}</strong>
+            </span>
           </div>
-        )}
-
-        {/* Run History */}
-        <div className="routine-home__section">
+        </div>
+        <div className="rt-head__actions">
+          {onEdit && (
+            <button type="button" className="btn btn--icon" title="Edit" onClick={onEdit}>
+              <Edit3 size={14} strokeWidth={1.5} />
+            </button>
+          )}
           <button
             type="button"
-            className="routine-home__section-toggle"
-            onClick={() => setShowHistory(!showHistory)}
+            className="btn btn--icon rt-btn-danger"
+            title="Delete"
+            onClick={() => setConfirmDel(true)}
           >
-            <span>Run History ({meta.runHistory?.length ?? 0})</span>
-            {showHistory ? (
-              <ChevronUp size={14} strokeWidth={1.5} />
-            ) : (
-              <ChevronDown size={14} strokeWidth={1.5} />
-            )}
+            <Trash2 size={14} strokeWidth={1.5} />
           </button>
-          {showHistory && (
-            <div className="routine-home__run-list">
-              {!meta.runHistory?.length ? (
-                <div className="routine-home__run-empty">
-                  No runs yet. Click Run to trigger the first execution.
-                </div>
-              ) : (
-                [...meta.runHistory]
-                  .reverse()
-                  .map((run) => (
-                    <RunEntry
-                      key={run.startedAt}
-                      run={run}
-                      onViewLogs={() => handleViewRunLogs(run)}
-                    />
-                  ))
-              )}
-            </div>
+          {isRunning ? (
+            <button
+              type="button"
+              className="btn btn--primary"
+              style={{ fontSize: 12 }}
+              onClick={handleStop}
+            >
+              <Square size={12} strokeWidth={1.5} /> Stop
+            </button>
+          ) : (
+            <button
+              type="button"
+              className="btn btn--primary"
+              style={{ fontSize: 12 }}
+              onClick={handleRunNow}
+            >
+              <Play size={12} strokeWidth={1.5} /> Run now
+            </button>
           )}
         </div>
       </div>
 
-      {/* Chat input at bottom */}
-      <div className="conv-panel__input">
-        <ChatInput
-          onSend={handleSend}
-          onSkillSelect={handleSkillSelect}
-          variant="minimal"
-          placeholder="Chat with this routine..."
-        />
+      {confirmDel && (
+        <div className="rt-confirm">
+          <div className="rt-confirm__text">
+            Delete <strong>{meta.name}</strong>? This can't be undone.
+          </div>
+          <div className="rt-confirm__actions">
+            <button type="button" className="btn" onClick={() => setConfirmDel(false)}>
+              Cancel
+            </button>
+            <button
+              type="button"
+              className="btn rt-btn-danger-solid"
+              onClick={() => {
+                setConfirmDel(false)
+                handleDelete()
+              }}
+            >
+              Delete
+            </button>
+          </div>
+        </div>
+      )}
+
+      {meta.instructions && (
+        <div className="rt-field">
+          <div className="rt-field__label">Instructions</div>
+          <div className="rt-field__value rt-field__value--prose">{meta.instructions}</div>
+        </div>
+      )}
+
+      <div className="rt-field">
+        <div className="rt-field__label">Folder</div>
+        <div className="rt-field__value rt-field__folder">
+          <Folder size={13} strokeWidth={1.5} />
+          <span>Project folder</span>
+        </div>
+      </div>
+
+      <div className="rt-field">
+        <div className="rt-field__label">Repeats</div>
+        <div className="rt-field__value rt-field__repeats">
+          <span className={`toggle${hasCron ? ' on' : ''}`} />
+          <span>{scheduleLabel}</span>
+        </div>
+      </div>
+
+      <div className="rt-field">
+        <div className="rt-field__label">
+          Always allowed <CheckCircle2 size={11} className="rt-field__label-icon" />
+        </div>
+        <div className="rt-field__value rt-field__value--muted">
+          Approvals you grant during a run appear here.
+        </div>
+      </div>
+
+      <div className="rt-field">
+        <div className="rt-field__label">Recent runs {hasRuns ? `(${recentRuns.length})` : ''}</div>
+        {hasRuns ? (
+          <div className="rt-runs">
+            {recentRuns.slice(0, 6).map((run) => {
+              const isErr = run.status === 'error'
+              return (
+                <div key={`${run.startedAt}-${run.runSessionId ?? ''}`} className="rt-run">
+                  <div className={`rt-run__status${isErr ? ' rt-run__status--error' : ''}`}>
+                    {isErr ? (
+                      <AlertCircle size={11} strokeWidth={1.5} />
+                    ) : (
+                      <CheckCircle2 size={11} strokeWidth={1.5} />
+                    )}
+                  </div>
+                  <div className="rt-run__body">
+                    <div className="rt-run__title">{formatAbsoluteTime(run.startedAt)}</div>
+                    <div className="rt-run__meta">
+                      {run.trigger}
+                      {run.durationMs != null && (
+                        <>
+                          {' · '}
+                          {formatDuration(run.durationMs)}
+                        </>
+                      )}
+                      {isErr && run.error && <> · {run.error}</>}
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    className="rt-run__open"
+                    onClick={() => handleViewRunLogs(run)}
+                    disabled={!run.completedAt}
+                  >
+                    View
+                  </button>
+                </div>
+              )
+            })}
+          </div>
+        ) : (
+          <div className="rt-runs-empty">
+            Not run yet.{' '}
+            <button type="button" className="rt-link" onClick={handleRunNow} disabled={isRunning}>
+              {isRunning ? 'Running…' : 'Run it now'}
+            </button>{' '}
+            to see output here.
+          </div>
+        )}
       </div>
 
       {showLogsModal && (

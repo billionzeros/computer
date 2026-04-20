@@ -38,6 +38,8 @@ interface UIState {
   setActiveMode: (mode: ActiveMode) => void
   activeView: ActiveView
   setActiveView: (view: ActiveView) => void
+  viewSubCrumb: string | null
+  setViewSubCrumb: (crumb: string | null) => void
 
   // Side panel
   sidePanelView: SidePanelView
@@ -47,8 +49,10 @@ interface UIState {
   onboardingLoaded: boolean
   onboardingCompleted: boolean
   onboardingRole: string | null
+  tourCompleted: boolean
   setOnboardingLoaded: (loaded: boolean) => void
   setOnboardingCompleted: (role?: string) => void
+  setTourCompleted: (completed: boolean) => void
 
   // Dev mode
   devMode: boolean
@@ -80,14 +84,21 @@ interface UIState {
 }
 
 export const uiStore = create<UIState>((set, get) => ({
-  // Theme
-  theme: (localStorage.getItem('anton-theme') as 'light' | 'dark' | 'system') || 'dark',
+  // Theme — only 'light' | 'dark' | 'system'. 'dark' resolves to the Ink palette.
+  // Legacy stored values ('paper', 'soft-dark', 'ink') migrate to the closest
+  // equivalent so existing user prefs keep working.
+  theme: ((): 'light' | 'dark' | 'system' => {
+    const saved = localStorage.getItem('anton-theme')
+    if (saved === 'light' || saved === 'system') return saved
+    return 'dark'
+  })(),
   resolvedTheme: (() => {
-    const saved = localStorage.getItem('anton-theme') || 'dark'
-    if (saved === 'system') {
+    const saved = localStorage.getItem('anton-theme')
+    const normalized = saved === 'light' || saved === 'system' ? saved : 'dark'
+    if (normalized === 'system') {
       return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'
     }
-    return saved as 'light' | 'dark'
+    return normalized as 'light' | 'dark'
   })(),
   setTheme: (theme) => {
     localStorage.setItem('anton-theme', theme)
@@ -133,7 +144,10 @@ export const uiStore = create<UIState>((set, get) => ({
   },
 
   activeView: 'home' as ActiveView,
-  setActiveView: (view) => set({ activeView: view }),
+  setActiveView: (view) => set({ activeView: view, viewSubCrumb: null }),
+
+  viewSubCrumb: null as string | null,
+  setViewSubCrumb: (crumb: string | null) => set({ viewSubCrumb: crumb }),
 
   // Side panel
   sidePanelView: 'artifacts',
@@ -143,6 +157,13 @@ export const uiStore = create<UIState>((set, get) => ({
   onboardingLoaded: false,
   onboardingCompleted: false,
   onboardingRole: null,
+  tourCompleted: (() => {
+    try {
+      return localStorage.getItem('anton.tourSeen.v1') === '1'
+    } catch {
+      return false
+    }
+  })(),
   setOnboardingLoaded: (loaded) => set({ onboardingLoaded: loaded }),
   setOnboardingCompleted: (role?: string) => {
     set({ onboardingCompleted: true, onboardingRole: role ?? null })
@@ -150,6 +171,23 @@ export const uiStore = create<UIState>((set, get) => ({
       type: 'config_update',
       key: 'onboarding',
       value: { completed: true, role: role ?? undefined },
+    })
+  },
+  setTourCompleted: (completed) => {
+    set({ tourCompleted: completed })
+    try {
+      if (completed) localStorage.setItem('anton.tourSeen.v1', '1')
+      else localStorage.removeItem('anton.tourSeen.v1')
+    } catch {
+      // localStorage unavailable — server is authoritative anyway
+    }
+    connection.send(Channel.CONTROL, {
+      type: 'config_update',
+      key: 'onboarding',
+      value: {
+        tourCompleted: completed,
+        tourCompletedAt: completed ? new Date().toISOString() : undefined,
+      },
     })
   },
 
