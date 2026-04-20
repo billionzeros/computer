@@ -119,6 +119,21 @@ export class HarnessSession {
   }
 
   /**
+   * Switch the model for subsequent turns. Provider is fixed at spawn
+   * (the adapter + CLI binary are bound to it), so cross-provider switches
+   * throw and the caller should spin a new session instead. The next turn
+   * picks up the new model at spawn time via `buildSpawnArgs({ model })`.
+   */
+  switchModel(provider: string, model: string): void {
+    if (provider !== this.provider) {
+      throw new Error(
+        `HarnessSession cannot switch provider mid-session (have=${this.provider}, requested=${provider})`,
+      )
+    }
+    this.model = model
+  }
+
+  /**
    * Process a user message by spawning the CLI and streaming back events.
    * Same async generator interface as Session.processMessage().
    */

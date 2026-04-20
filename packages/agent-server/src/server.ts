@@ -2625,7 +2625,7 @@ export class AgentServer {
     try {
       this.sessions.delete(msg.id)
       this.activeTurns.delete(msg.id)
-      deletePersistedSession(msg.id)
+      deletePersistedSession(msg.id, projectId)
       if (wasHarness && this.mcpIpcServer) {
         this.mcpIpcServer.unregisterSession(msg.id)
       }
@@ -3262,15 +3262,56 @@ export class AgentServer {
     try {
       setDefault(this.config, msg.provider, msg.model)
 
-      // Switch all active API sessions to the new default model (harness sessions manage their own model)
+      let apiSwitched = 0
+      let harnessSwitched = 0
+      let harnessSkipped = 0
       for (const [id, session] of this.sessions) {
-        if (isHarnessSession(session)) continue
+        if (isHarnessSession(session)) {
+          // Harness sessions are bound to their provider (CLI binary + auth)
+          // at spawn time, but the model is applied per-turn (turn/start for
+          // codex, --model for claude). Same-provider switches mutate
+          // this.model and take effect on the next turn; cross-provider
+          // switches can't be hot-swapped and the old session keeps running
+          // its original model until it's destroyed.
+          if (session.provider !== msg.provider) {
+            log.info(
+              {
+                sessionId: id,
+                sessionProvider: session.provider,
+                sessionModel: session.model,
+                requestedProvider: msg.provider,
+                requestedModel: msg.model,
+              },
+              'Harness session kept on original provider — cross-provider switch requires a new session',
+            )
+            harnessSkipped++
+            continue
+          }
+          try {
+            const previousModel = session.model
+            session.switchModel(msg.provider, msg.model)
+            log.info(
+              {
+                sessionId: id,
+                provider: msg.provider,
+                previousModel,
+                model: msg.model,
+              },
+              'Switched harness session model (applies to next turn)',
+            )
+            harnessSwitched++
+          } catch (err) {
+            log.warn({ err, sessionId: id }, 'Failed to switch harness session model')
+          }
+          continue
+        }
         try {
           session.switchModel(msg.provider, msg.model)
-          log.debug(
+          log.info(
             { sessionId: id, provider: msg.provider, model: msg.model },
-            'Switched session model',
+            'Switched API session to new default model',
           )
+          apiSwitched++
         } catch (err) {
           log.warn({ err, sessionId: id }, 'Failed to switch session model')
         }
@@ -3285,7 +3326,15 @@ export class AgentServer {
         provider: msg.provider,
         model: msg.model,
       })
-      log.info({ provider: msg.provider, model: msg.model }, 'Default provider/model set')
+      log.info(
+        {
+          provider: msg.provider,
+          model: msg.model,
+          apiSwitched,
+          harnessSkipped,
+        },
+        'Default provider/model set',
+      )
     } catch {
       this.sendToClient(Channel.AI, {
         type: 'provider_set_default_response',
