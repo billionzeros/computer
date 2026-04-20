@@ -98,7 +98,7 @@ curl -fsSL https://antoncomputer.in/install.sh | bash
 The install script:
 1. Creates `anton` user (if not exists)
 2. Installs Node.js 22 + pnpm
-3. `git clone https://github.com/OmGuptaIND/computer.git /opt/anton`
+3. `git clone https://github.com/billionzeros/computer.git /opt/anton`
 4. `cd /opt/anton && pnpm install && pnpm -r build`
 5. Runs `anton computer setup` (creates systemd, env file, config)
 6. Starts the service

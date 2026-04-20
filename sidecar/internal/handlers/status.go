@@ -3,8 +3,8 @@ package handlers
 import (
 	"github.com/gofiber/fiber/v2"
 
-	"github.com/OmGuptaIND/anton.computer/sidecar/internal/checks"
-	"github.com/OmGuptaIND/anton.computer/sidecar/internal/config"
+	"github.com/billionzeros/computer/sidecar/internal/checks"
+	"github.com/billionzeros/computer/sidecar/internal/config"
 )
 
 type statusResponse struct {

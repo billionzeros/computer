@@ -575,7 +575,7 @@ The agent periodically fetches a manifest from a known URL (default: GitHub raw)
   "version": "0.5.0",
   "specVersion": "0.5.0",
   "gitHash": "abc1234",
-  "releaseUrl": "https://github.com/OmGuptaIND/anton.computer/releases",
+  "releaseUrl": "https://github.com/billionzeros/computer/releases",
   "changelog": "- Feature A\n- Fix B",
   "publishedAt": "2026-03-21T00:00:00Z"
 }

@@ -207,7 +207,7 @@ node -e "
   const oldUnreleasedLink = /\\[Unreleased\\]: .*/;
   changelog = changelog.replace(
     oldUnreleasedLink,
-    '[Unreleased]: https://github.com/OmGuptaIND/computer/compare/v${NEW_VERSION}...HEAD\n[${NEW_VERSION}]: https://github.com/OmGuptaIND/computer/compare/v\$(changelog.match(/## \\[(\\d+\\.\\d+\\.\\d+)\\]/g)[1].match(/\\d+\\.\\d+\\.\\d+/)[0])...v${NEW_VERSION}'
+    '[Unreleased]: https://github.com/billionzeros/computer/compare/v${NEW_VERSION}...HEAD\n[${NEW_VERSION}]: https://github.com/billionzeros/computer/compare/v\$(changelog.match(/## \\[(\\d+\\.\\d+\\.\\d+)\\]/g)[1].match(/\\d+\\.\\d+\\.\\d+/)[0])...v${NEW_VERSION}'
   );
 
   fs.writeFileSync('CHANGELOG.md', changelog);
@@ -226,7 +226,7 @@ echo ""
 
 step "Updating manifest.json"
 
-GITHUB_BASE="https://github.com/OmGuptaIND/computer/releases/download/v${NEW_VERSION}"
+GITHUB_BASE="https://github.com/billionzeros/computer/releases/download/v${NEW_VERSION}"
 
 node -e "
   const fs = require('fs');
@@ -300,7 +300,7 @@ if [[ "$AUTO_PUSH" == "--push" ]]; then
   echo "    3. Create GitHub Release with all artifacts + changelog"
   echo "    4. Update manifest.json with git hash"
   echo ""
-  echo -e "  Track progress: ${BLUE}https://github.com/OmGuptaIND/computer/actions${NC}"
+  echo -e "  Track progress: ${BLUE}https://github.com/billionzeros/computer/actions${NC}"
 else
   echo ""
   echo -e "  ${BOLD}Release v${NEW_VERSION} ready locally.${NC}"

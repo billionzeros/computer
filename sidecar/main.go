@@ -8,8 +8,8 @@ import (
 	"os/signal"
 	"syscall"
 
-	"github.com/OmGuptaIND/anton.computer/sidecar/internal/config"
-	"github.com/OmGuptaIND/anton.computer/sidecar/internal/server"
+	"github.com/billionzeros/computer/sidecar/internal/config"
+	"github.com/billionzeros/computer/sidecar/internal/server"
 )
 
 // Set via -ldflags at build time.

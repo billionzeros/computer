@@ -5,7 +5,7 @@ in a new conversation without re-discovering everything from scratch.
 
 ## Status snapshot
 
-- **Branch:** `OmGuptaIND/stream-redesign`
+- **Branch:** `billionzeros/stream-redesign`
 - **Plan source:** `.context/attachments/plan.md` (the original 5-phase plan)
 - **Design source (latest bundle):** `/tmp/anton-design-v2/anton-computer/`
   - Read `README.md` at the top of that bundle first — it tells coding agents

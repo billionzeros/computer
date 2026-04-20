@@ -55,7 +55,7 @@ async function downloadSidecarBinary(): Promise<boolean> {
   if (!binaryUrl) {
     // Fallback: try constructing URL from version
     const version = manifest.version as string
-    binaryUrl = `https://github.com/OmGuptaIND/computer/releases/download/v${version}/anton-sidecar-${arch}`
+    binaryUrl = `https://github.com/billionzeros/computer/releases/download/v${version}/anton-sidecar-${arch}`
   }
 
   step('Downloading sidecar binary')

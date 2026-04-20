@@ -14,7 +14,7 @@ import (
 	"time"
 )
 
-const manifestURL = "https://raw.githubusercontent.com/OmGuptaIND/computer/main/manifest.json"
+const manifestURL = "https://raw.githubusercontent.com/billionzeros/computer/main/manifest.json"
 
 // Manifest is the remote release manifest.
 type Manifest struct {

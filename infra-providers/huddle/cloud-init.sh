@@ -27,7 +27,7 @@ set -euo pipefail
 AGENT_PORT="${AGENT_PORT:-9876}"
 AGENT_ARCH="${AGENT_ARCH:-arm64}"
 ANTON_DIR="/home/anton/.anton"
-MANIFEST_URL="https://raw.githubusercontent.com/OmGuptaIND/computer/main/manifest.json"
+MANIFEST_URL="https://raw.githubusercontent.com/billionzeros/computer/main/manifest.json"
 INIT_LOG="/var/log/anton-init.log"
 INIT_START=$(date +%s)
 
@@ -105,7 +105,7 @@ fi
 
 # Fallback to latest release URL if manifest parsing fails
 if [ -z "${BINARY_URL:-}" ] || [ "$BINARY_URL" = "null" ]; then
-    BINARY_URL="https://github.com/OmGuptaIND/computer/releases/latest/download/anton-agent-linux-${AGENT_ARCH}"
+    BINARY_URL="https://github.com/billionzeros/computer/releases/latest/download/anton-agent-linux-${AGENT_ARCH}"
     log "BINARY: falling back to latest release URL"
 fi
 
@@ -125,7 +125,7 @@ if [ -n "$MANIFEST" ]; then
 fi
 
 if [ -z "${SIDECAR_URL:-}" ] || [ "$SIDECAR_URL" = "null" ]; then
-    SIDECAR_URL="https://github.com/OmGuptaIND/computer/releases/latest/download/anton-sidecar-linux-${SIDECAR_ARCH}"
+    SIDECAR_URL="https://github.com/billionzeros/computer/releases/latest/download/anton-sidecar-linux-${SIDECAR_ARCH}"
     log "SIDECAR: falling back to latest release URL"
 fi
 

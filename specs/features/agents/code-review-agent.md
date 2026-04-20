@@ -140,7 +140,7 @@ Webhook arrives at agent server
   │   ├─ Find the workflow's agent(s)
   │   ├─ Inject event payload into agent context as a structured block:
   │   │   <github-event type="pull_request" action="opened">
-  │   │     repo: OmGuptaIND/computer
+  │   │     repo: billionzeros/computer
   │   │     pr: #42 "Add dark mode support"
   │   │     author: contributor123
   │   │     head: feature/dark-mode → main
@@ -283,7 +283,7 @@ code-review/
     {
       "id": "auto_review_repos",
       "type": "textarea",
-      "label": "Repos to auto-review on every PR (one per line, e.g. OmGuptaIND/computer)",
+      "label": "Repos to auto-review on every PR (one per line, e.g. billionzeros/computer)",
       "description": "Leave empty to only review when @mentioned. All repos with the App installed can use @mention regardless.",
       "required": false
     },

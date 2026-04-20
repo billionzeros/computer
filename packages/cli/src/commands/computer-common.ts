@@ -17,7 +17,7 @@ export const REPO_DIR = '/opt/anton'
 export const AGENT_ENTRY = `${REPO_DIR}/packages/agent-server/dist/index.js`
 export const SIDECAR_BIN = '/usr/local/bin/anton-sidecar'
 export const AGENT_SERVICE_PATH = '/etc/systemd/system/anton-agent.service'
-export const REPO_URL = 'https://github.com/OmGuptaIND/computer.git'
+export const REPO_URL = 'https://github.com/billionzeros/computer.git'
 
 /** @deprecated Use AGENT_ENTRY instead — kept for migration from SEA binary */
 export const AGENT_BIN = '/usr/local/bin/anton-agent'
@@ -126,7 +126,7 @@ export function readTokenFromEnv(): string | null {
 
 /** Manifest URL for downloading release artifacts. */
 export const MANIFEST_URL =
-  'https://raw.githubusercontent.com/OmGuptaIND/computer/main/manifest.json'
+  'https://raw.githubusercontent.com/billionzeros/computer/main/manifest.json'
 
 /** Systemd unit for the sidecar health/status server. */
 export function sidecarServiceUnit(agentPort: number, sidecarPort: number): string {

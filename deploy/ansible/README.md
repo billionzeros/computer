@@ -116,7 +116,7 @@ All variables have sensible defaults and can be overridden in `inventory.ini`, v
 | `anton_user` | `anton` | Linux user created on the VPS to run the agent. |
 | `anton_install_dir` | `/home/anton/.anton` | Root directory for config, certs, sessions, and skills. |
 | `anton_repo_dir` | `/home/anton/.anton/agent` | Where the repo is cloned and built. |
-| `anton_repo_url` | `https://github.com/OmGuptaIND/computer.git` | Git repository URL. |
+| `anton_repo_url` | `https://github.com/billionzeros/computer.git` | Git repository URL. |
 | `anton_branch` | `main` | Git branch to deploy. |
 | `node_major_version` | `22` | Node.js major version to install. |
 | `anton_port` | `9876` | Port the agent WebSocket server listens on. |
@@ -156,7 +156,7 @@ Installs base dependencies needed to build and run the agent.
 ### 5. Clone the repository
 
 - Creates the install directory (`/home/anton/.anton/`).
-- Clones `https://github.com/OmGuptaIND/computer.git` (shallow, depth 1) into `/home/anton/.anton/agent/`.
+- Clones `https://github.com/billionzeros/computer.git` (shallow, depth 1) into `/home/anton/.anton/agent/`.
 - On re-runs, pulls the latest commit from the configured branch.
 
 ### 6. Build the agent

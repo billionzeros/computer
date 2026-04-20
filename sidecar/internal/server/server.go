@@ -7,9 +7,9 @@ import (
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/fiber/v2/middleware/recover"
 
-	"github.com/OmGuptaIND/anton.computer/sidecar/internal/config"
-	"github.com/OmGuptaIND/anton.computer/sidecar/internal/handlers"
-	"github.com/OmGuptaIND/anton.computer/sidecar/internal/middleware"
+	"github.com/billionzeros/computer/sidecar/internal/config"
+	"github.com/billionzeros/computer/sidecar/internal/handlers"
+	"github.com/billionzeros/computer/sidecar/internal/middleware"
 )
 
 // Start creates and starts the sidecar Fiber server on localhost only.

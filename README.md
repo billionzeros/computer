@@ -7,10 +7,10 @@
 Give Anton a task. It figures out the rest — writes the code, deploys it,<br>monitors it, and tells you when it's done. Always on. Never stops. **Yours.**
 
 [![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
-[![GitHub Release](https://img.shields.io/github/v/release/OmGuptaIND/computer)](https://github.com/OmGuptaIND/computer/releases)
-[![Issues](https://img.shields.io/github/issues/OmGuptaIND/computer)](https://github.com/OmGuptaIND/computer/issues)
+[![GitHub Release](https://img.shields.io/github/v/release/billionzeros/computer)](https://github.com/billionzeros/computer/releases)
+[![Issues](https://img.shields.io/github/issues/billionzeros/computer)](https://github.com/billionzeros/computer/issues)
 
-**[Website](https://antoncomputer.in)** &middot; **[Docs](https://docs.antoncomputer.in)** &middot; **[Releases](https://github.com/OmGuptaIND/computer/releases)**
+**[Website](https://antoncomputer.in)** &middot; **[Docs](https://docs.antoncomputer.in)** &middot; **[Releases](https://github.com/billionzeros/computer/releases)**
 
 </div>
 
@@ -76,7 +76,7 @@ anton connect 203.0.113.10 --token ak_your_token_here
 **Optional:** Go 1.25+ (sidecar), Rust + Tauri CLI (desktop app)
 
 ```bash
-git clone https://github.com/OmGuptaIND/computer.git
+git clone https://github.com/billionzeros/computer.git
 cd computer
 pnpm install
 pnpm dev              # agent + desktop
@@ -515,7 +515,7 @@ make env                  # Show env vars (redacts secrets)
 <summary>Docker</summary>
 
 ```bash
-git clone https://github.com/OmGuptaIND/computer.git
+git clone https://github.com/billionzeros/computer.git
 cd computer
 export ANTHROPIC_API_KEY=sk-ant-...
 docker compose -f deploy/docker-compose.yml up -d
@@ -527,7 +527,7 @@ docker compose -f deploy/docker-compose.yml up -d
 <summary>Manual install script</summary>
 
 ```bash
-git clone https://github.com/OmGuptaIND/computer.git ~/.anton/agent
+git clone https://github.com/billionzeros/computer.git ~/.anton/agent
 cd ~/.anton/agent && bash deploy/install.sh
 ```
 
@@ -585,8 +585,8 @@ We welcome contributions! Open source because AI agents should be owned by the p
 
 - **Website:** [antoncomputer.in](https://antoncomputer.in)
 - **Documentation:** [docs.antoncomputer.in](https://docs.antoncomputer.in)
-- **Issues:** [github.com/OmGuptaIND/computer/issues](https://github.com/OmGuptaIND/computer/issues)
-- **Releases:** [github.com/OmGuptaIND/computer/releases](https://github.com/OmGuptaIND/computer/releases)
+- **Issues:** [github.com/billionzeros/computer/issues](https://github.com/billionzeros/computer/issues)
+- **Releases:** [github.com/billionzeros/computer/releases](https://github.com/billionzeros/computer/releases)
 
 ---
 

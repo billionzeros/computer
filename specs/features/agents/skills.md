@@ -4,7 +4,7 @@
 
 Skills are **directory-based packages** — self-contained toolkits where `SKILL.md` orchestrates the model to use bundled real assets at runtime. This matches Claude Code's SKILL.md system.
 
-**Status:** Implemented on branch `OmGuptaIND/skills-ui-redesign`
+**Status:** Implemented on branch `billionzeros/skills-ui-redesign`
 
 ---
 

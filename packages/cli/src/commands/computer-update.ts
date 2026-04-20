@@ -203,7 +203,7 @@ export async function computerUpdateCommand(
     const arch = getSidecarArch()
     const sidecarUrl =
       manifest.sidecar?.[arch] ??
-      `https://github.com/OmGuptaIND/computer/releases/download/v${manifest.version}/anton-sidecar-${arch}`
+      `https://github.com/billionzeros/computer/releases/download/v${manifest.version}/anton-sidecar-${arch}`
 
     execSync(`curl -fSL -o "${SIDECAR_BIN}.new" "${sidecarUrl}"`, {
       stdio: 'pipe',

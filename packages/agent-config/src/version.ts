@@ -15,7 +15,7 @@ import { fileURLToPath } from 'node:url'
  * The agent checks this periodically for self-update.
  */
 export const UPDATE_MANIFEST_URL =
-  'https://raw.githubusercontent.com/OmGuptaIND/computer/main/manifest.json'
+  'https://raw.githubusercontent.com/billionzeros/computer/main/manifest.json'
 
 /** How often to check for updates (ms) — default 1 hour */
 export const UPDATE_CHECK_INTERVAL = 60 * 60 * 1000

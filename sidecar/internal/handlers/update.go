@@ -7,8 +7,8 @@ import (
 
 	"github.com/gofiber/fiber/v2"
 
-	"github.com/OmGuptaIND/anton.computer/sidecar/internal/config"
-	"github.com/OmGuptaIND/anton.computer/sidecar/internal/update"
+	"github.com/billionzeros/computer/sidecar/internal/config"
+	"github.com/billionzeros/computer/sidecar/internal/update"
 )
 
 var updateMu sync.Mutex

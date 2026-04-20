@@ -31,14 +31,14 @@ A `version.json` file in `~/.anton/` records deployment metadata (version, hash,
 A single JSON file at repo root, served via GitHub raw URL:
 
 ```
-https://raw.githubusercontent.com/OmGuptaIND/computer/main/manifest.json
+https://raw.githubusercontent.com/billionzeros/computer/main/manifest.json
 ```
 
 ```json
 {
   "version": "1.0.30",
   "gitHash": "abc1234",
-  "releaseUrl": "https://github.com/OmGuptaIND/computer/releases",
+  "releaseUrl": "https://github.com/billionzeros/computer/releases",
   "changelog": "- Fixed X\n- Added Y",
   "publishedAt": "2026-03-31T12:35:55Z",
   "binaries": {

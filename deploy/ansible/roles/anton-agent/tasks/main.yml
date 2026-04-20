@@ -128,7 +128,7 @@
   become: true
   become_user: "{{ anton_user }}"
   git:
-    repo: "https://github.com/OmGuptaIND/computer.git"
+    repo: "https://github.com/billionzeros/computer.git"
     dest: /opt/anton
     version: "{{ anton_branch | default('main') }}"
     force: true

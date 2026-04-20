@@ -1,4 +1,4 @@
-module github.com/OmGuptaIND/anton.computer/sidecar
+module github.com/billionzeros/computer/sidecar
 
 go 1.25.3
 

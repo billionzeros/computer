@@ -138,7 +138,7 @@ add_to_path() {
 # ── Fetch latest version ─────────────────────────────────────────
 
 get_latest_version() {
-  local manifest_url="https://raw.githubusercontent.com/OmGuptaIND/computer/main/manifest.json"
+  local manifest_url="https://raw.githubusercontent.com/billionzeros/computer/main/manifest.json"
   local version
 
   if command -v curl &>/dev/null; then
@@ -178,7 +178,7 @@ download_cli() {
   local version="$1"
   local dest="$2"
 
-  local url="https://github.com/OmGuptaIND/computer/releases/download/v${version}/anton-cli.mjs"
+  local url="https://github.com/billionzeros/computer/releases/download/v${version}/anton-cli.mjs"
 
   if command -v curl &>/dev/null; then
     curl -fsSL --progress-bar -o "$dest" "$url" || fail "Download failed. Check if v${version} has been released."
