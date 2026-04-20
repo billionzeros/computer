@@ -1,0 +1,25 @@
+specs/features/agents/skills.md
+  cb6878ea5641f64a 7
+specs/features/ui/PHASE6_HANDOFF.md
+  cb6878ea5641f64a 8
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.3.0",
+  "base_commit_sha": "693d0ec5ea96fedd55a35ade20c60843363444d9",
+  "prompts": {
+    "cb6878ea5641f64a": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "5e19f510-08f8-41c9-bc40-793ddb519da6",
+        "model": "composer-2"
+      },
+      "human_author": "Om Gupta",
+      "messages": [],
+      "total_additions": 2,
+      "total_deletions": 2,
+      "accepted_lines": 2,
+      "overriden_lines": 0
+    }
+  }
+}
