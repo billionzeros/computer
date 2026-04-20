@@ -10,6 +10,58 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versioning: [S
 
 ---
 
+## [1.0.0] - 2026-04-20
+
+### Features
+- redo UI
+- add BYOS harness providers — Codex CLI support, bug fixes, and context passing
+- add disconnect button to settings and prevent auto-connect after logout (#68)
+- redesign connect page and onboarding with new design system
+- add desktop notifications for task completion and user-attention events
+
+### Fixes
+- remove chat/computer mode toggle and add sidebar branding (#69)
+- handle unhandled promise rejection in dock bounce and escape special chars in AppleScript notification title
+
+### Added
+- worktrees in gitignore
+
+### Chores
+- audit cleanup — dedupe defineTool helper, trim dead re-exports
+
+### Other
+- chore(webhooks): trim Codex menu to gpt-5.4 + gpt-5.4-mini
+- feat(webhooks): button-driven /model picker on Telegram and Slack
+- revert(harness): drop mcp_servers.codex_apps.enabled=false (broke config load)
+- fix(harness): support harness providers on Slack and Telegram surfaces
+- chore(desktop): remove HarnessProviderSwitch from composer toolbar
+- docs(harness): refresh specs to match shipped state
+- fix(desktop): format MCP tool names readably in chat tool chips
+- fix(harness): disable Codex hosted MCP server to force anton shim
+- feat(harness): background memory extraction from the mirror
+- feat(harness): port "Memory Usage" guidelines from system.md
+- test(harness): cover Codex reasoning items in tool-call fixture
+- fix(harness): parse Codex mcp_tool_call + steer CLIs toward anton MCP
+- fix(harness): adapt to Codex CLI's new mcp_tool_call item shape
+- feat(desktop): provider-switch picker for harness sessions
+- fix(harness): read session history from mirror + add provider-switch
+- chore(harness): log every raw CLI stdout line for adapter discovery
+- feat(harness): strengthen identity block — explicit who/what Anton scripts
+- refactor(mobile): rename AgentStep → RoutineStep to match desktop
+- feat(harness): add identity block so CLIs understand Anton
+- feat(harness): Phase 4 — conversation mirror into Anton's session store
+- refactor(prompt): single source of truth for shared <system-reminder> blocks
+- refactor(tools): single source of truth for Anton-core tool definitions
+- feat(harness): expand MCP tool surface — connectors, workflow activation, publish
+- feat(harness): per-turn context assembly to match Pi SDK parity
+- docs: add harness operations guide
+- test(harness): add adapter NDJSON fixtures and parse check script
+- feat(harness): IPC auth, session scoping, and classified error codes
+- docs: add harness architecture spec
+- rename remaining agent references to routine across codebase (#70)
+- rename agents to routines across codebase, prompts, icons, and specs
+---
+
 ## [1.0.57] - 2026-04-15
 
 ### Chores
@@ -571,7 +623,8 @@ Maintenance release.
 
 ---
 
-[Unreleased]: https://github.com/OmGuptaIND/computer/compare/v1.0.57...HEAD
+[Unreleased]: https://github.com/OmGuptaIND/computer/compare/v1.0.0...HEAD
+[1.0.0]: https://github.com/OmGuptaIND/computer/compare/v$(changelog.match(/## [(d+.d+.d+)]/g)[1].match(/d+.d+.d+/)[0])...v1.0.0
 [1.0.57]: https://github.com/OmGuptaIND/computer/compare/v$(changelog.match(/## [(d+.d+.d+)]/g)[1].match(/d+.d+.d+/)[0])...v1.0.57
 [1.0.56]: https://github.com/OmGuptaIND/computer/compare/v$(changelog.match(/## [(d+.d+.d+)]/g)[1].match(/d+.d+.d+/)[0])...v1.0.56
 [1.0.55]: https://github.com/OmGuptaIND/computer/compare/v$(changelog.match(/## [(d+.d+.d+)]/g)[1].match(/d+.d+.d+/)[0])...v1.0.55

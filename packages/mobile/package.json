@@ -1,6 +1,6 @@
 {
   "name": "@anton/mobile",
-  "version": "1.0.57",
+  "version": "1.0.0",
   "private": true,
   "main": "expo-router/entry",
   "scripts": {
