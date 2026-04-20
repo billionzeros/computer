@@ -1203,30 +1203,51 @@ export function listSessionMetas(): SessionMeta[] {
 }
 
 /** Delete session (hard delete) */
-export function deleteSession(id: string): boolean {
+export function deleteSession(id: string, projectId?: string): boolean {
   const dir = sessionDir(id)
   if (existsSync(dir)) {
     rmSync(dir, { recursive: true, force: true })
   }
 
-  // Delete from project conversations dir if this is a project session
-  // Session IDs follow the format: proj_{projectId}_sess_{suffix}
+  // Project-scoped sessions live at ~/.anton/projects/{projectId}/conversations/{id}/.
+  // Session IDs themselves usually carry no project info (e.g. `sess_abc123`), so we
+  // rely on the caller passing projectId, and fall back to scanning as a safety net.
+  const projectIds = new Set<string>()
+  if (projectId) projectIds.add(projectId)
+
   const projMatch = id.match(/^proj_(.+?)_sess_/)
-  if (projMatch) {
-    const projectId = projMatch[1]
-    const projectSessionDir = join(ANTON_DIR, 'projects', projectId, 'conversations', id)
+  if (projMatch) projectIds.add(projMatch[1])
+
+  const agentJobMatch = id.match(/^agent-job-(.+?)-job_/)
+  if (agentJobMatch) projectIds.add(agentJobMatch[1])
+
+  let removedFromProjectDir = false
+  for (const pid of projectIds) {
+    const projectSessionDir = join(ANTON_DIR, 'projects', pid, 'conversations', id)
     if (existsSync(projectSessionDir)) {
       rmSync(projectSessionDir, { recursive: true, force: true })
+      removedFromProjectDir = true
     }
   }
 
-  // Also handle agent-job sessions: agent-job-{projectId}-{jobId}
-  const agentJobMatch = id.match(/^agent-job-(.+?)-job_/)
-  if (agentJobMatch) {
-    const projectId = agentJobMatch[1]
-    const projectSessionDir = join(ANTON_DIR, 'projects', projectId, 'conversations', id)
-    if (existsSync(projectSessionDir)) {
-      rmSync(projectSessionDir, { recursive: true, force: true })
+  // Fallback: if we had no projectId hint (or the hint was wrong), scan all project
+  // dirs. Needed because session IDs like `sess_xxx` don't embed the project, so
+  // without this the project folder keeps the session and it reappears on reload.
+  if (!removedFromProjectDir) {
+    const projectsRoot = join(ANTON_DIR, 'projects')
+    if (existsSync(projectsRoot)) {
+      try {
+        const entries = readdirSync(projectsRoot, { withFileTypes: true })
+        for (const entry of entries) {
+          if (!entry.isDirectory()) continue
+          const candidate = join(projectsRoot, entry.name, 'conversations', id)
+          if (existsSync(candidate)) {
+            rmSync(candidate, { recursive: true, force: true })
+          }
+        }
+      } catch {
+        // Best-effort scan; ignore errors.
+      }
     }
   }
 
