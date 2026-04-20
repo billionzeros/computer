@@ -139,6 +139,23 @@ export class CodexHarnessSession {
     return this.lastActiveAt
   }
 
+  /**
+   * Swap the model used for subsequent turns. The codex app-server
+   * subprocess is bound to the provider (its CLI binary / auth), but
+   * `turn/start.model` is a per-turn override — so mutating `this.model`
+   * makes the next `buildTurnStartParams` pick up the new model without
+   * respawning. Cross-provider switches throw; the caller should create a
+   * fresh session instead.
+   */
+  switchModel(provider: string, model: string): void {
+    if (provider !== this.provider) {
+      throw new Error(
+        `CodexHarnessSession cannot switch provider mid-session (have=${this.provider}, requested=${provider})`,
+      )
+    }
+    this.model = model
+  }
+
   async *processMessage(
     userMessage: string,
     attachments: ChatImageAttachmentInput[] = [],
@@ -534,7 +551,7 @@ export class CodexHarnessSession {
       sandboxPolicy: {
         type: 'workspaceWrite',
         writableRoots: [],
-        readOnlyAccess: {},
+        readOnlyAccess: { type: 'fullAccess' },
         networkAccess: true,
         excludeTmpdirEnvVar: false,
         excludeSlashTmp: false,
