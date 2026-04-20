@@ -1,6 +1,6 @@
 {
   "version": "2.0.1",
-  "gitHash": "",
+  "gitHash": "39fedb0",
   "releaseUrl": "https://github.com/billionzeros/computer/releases",
   "changelog": "Fixes:\n- unblock codex harness turns and hot-swap models mid-session (#1)",
   "publishedAt": "2026-04-20T12:12:18.350Z",
