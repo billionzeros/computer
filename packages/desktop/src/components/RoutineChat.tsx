@@ -6,6 +6,7 @@ import { useStore } from '../lib/store.js'
 import { connectionStore } from '../lib/store/connectionStore.js'
 import { projectStore } from '../lib/store/projectStore.js'
 import { sessionStore, useSessionState } from '../lib/store/sessionStore.js'
+import { AskUserInline } from './chat/AskUserInline.js'
 import { ChatInput } from './chat/ChatInput.js'
 import { ConfirmDialog } from './chat/ConfirmDialog.js'
 import { ContextIndicator } from './chat/ContextIndicator.js'
@@ -267,6 +268,34 @@ export function RoutineChat() {
           />
         </div>
       )}
+
+      {/*
+       * Generic ask_user renders INLINE in the transcript so the
+       * composer stays free. Specialized routine-create /
+       * routine-delete / publish_confirm cards take over the composer
+       * via ChatInput below — skip the inline render for those so
+       * the card shows in only one place.
+       */}
+      {pendingAskUser &&
+        (() => {
+          const metaType = (
+            pendingAskUser.questions[0]?.metadata as { type?: string } | undefined
+          )?.type
+          const isSpecialized =
+            pendingAskUser.questions.length === 1 &&
+            (metaType === 'routine_create' ||
+              metaType === 'routine_delete' ||
+              metaType === 'publish_confirm')
+          if (isSpecialized) return null
+          return (
+            <div className="chat-shell__ask-user">
+              <AskUserInline
+                questions={pendingAskUser.questions}
+                onSubmit={handleAskUserSubmit}
+              />
+            </div>
+          )
+        })()}
 
       <PlanReviewOverlay />
 

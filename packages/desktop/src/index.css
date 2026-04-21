@@ -1282,6 +1282,16 @@ button {
   padding: 0 24px;
 }
 
+/* Generic ask_user card — renders above the composer in the transcript.
+   Specialized routine/publish cards still take over the composer via
+   ChatInput; this block is skipped for those. */
+.chat-shell__ask-user {
+  padding: 0 24px 8px;
+  max-width: 760px;
+  margin: 0 auto;
+  width: 100%;
+}
+
 .chat-shell__sync-loader {
   flex: 1;
   display: flex;
