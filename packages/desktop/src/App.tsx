@@ -15,6 +15,7 @@ import { Terminal } from './components/Terminal.js'
 import { UpdateBanner } from './components/UpdateBanner.js'
 import { WelcomeModal } from './components/WelcomeModal.js'
 import { DebugOverlay } from './components/chat/DebugOverlay.js'
+import { SessionFilesBar } from './components/chat/SessionFilesBar.js'
 import { WaitingBadge } from './components/chat/WaitingBadge.js'
 import { ConnectorsView } from './components/connectors/ConnectorsView.js'
 import { CustomizeView } from './components/customize/CustomizeView.js'
@@ -372,6 +373,7 @@ export function App() {
                 )}
                 {activeView === 'chat' && hasMessages && (
                   <>
+                    <SessionFilesBar />
                     {sessionUsage && (
                       <button
                         type="button"
