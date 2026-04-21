@@ -1,0 +1,25 @@
+packages/desktop/src/index.css
+  63d6cd8a3bd54265 1285-1294
+packages/desktop/src/components/RoutineChat.tsx
+  63d6cd8a3bd54265 9,272-299
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.3.2",
+  "base_commit_sha": "b4574ba6a343d20b1f6ddd6b4416c038e2ca0b92",
+  "prompts": {
+    "63d6cd8a3bd54265": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "762a7d21-4a2e-421b-8173-6fe445781387",
+        "model": "claude-opus-4-7"
+      },
+      "human_author": "Om Gupta",
+      "messages": [],
+      "total_additions": 39,
+      "total_deletions": 0,
+      "accepted_lines": 1879,
+      "overriden_lines": 0
+    }
+  }
+}
