@@ -32,6 +32,59 @@ import type { McpSpawnConfig } from './mcp-spawn-config.js'
 const log = createLogger('codex-harness-session')
 
 /**
+ * Codex's built-in execution sandbox (bubblewrap on Linux). Anton runs
+ * inside an already-isolated VM, so the bwrap layer is redundant — and
+ * on container runtimes that don't grant unprivileged user namespaces it
+ * outright breaks, failing every shell call with `bwrap: setting up uid
+ * map: Permission denied`. Default is `danger-full-access` to sidestep
+ * bwrap entirely; tighter modes are opt-in for environments where Anton
+ * runs outside a trusted container.
+ *
+ *   ANTON_CODEX_SANDBOX=danger-full-access  → default; no bwrap
+ *   ANTON_CODEX_SANDBOX=workspace-write     → bwrap confines writes to cwd + TMPDIR
+ *   ANTON_CODEX_SANDBOX=read-only           → read-only
+ */
+type AntonSandboxMode = 'read-only' | 'workspace-write' | 'danger-full-access'
+
+const DEFAULT_SANDBOX_MODE: AntonSandboxMode = 'danger-full-access'
+
+function resolveSandboxMode(): AntonSandboxMode {
+  const raw = process.env.ANTON_CODEX_SANDBOX?.trim()
+  if (!raw) return DEFAULT_SANDBOX_MODE
+  if (raw === 'read-only' || raw === 'workspace-write' || raw === 'danger-full-access') {
+    return raw
+  }
+  log.warn(
+    { value: raw, fallback: DEFAULT_SANDBOX_MODE },
+    'ANTON_CODEX_SANDBOX: invalid value — ignoring',
+  )
+  return DEFAULT_SANDBOX_MODE
+}
+
+/**
+ * Map the kebab-case SandboxMode (thread/start) onto the camelCase
+ * SandboxPolicy discriminated union that `turn/start.sandboxPolicy`
+ * expects. The two fields use different shapes in the v2 proto.
+ */
+function buildTurnSandboxPolicy(mode: AntonSandboxMode): Record<string, unknown> {
+  switch (mode) {
+    case 'danger-full-access':
+      return { type: 'dangerFullAccess' }
+    case 'read-only':
+      return { type: 'readOnly', access: { type: 'fullAccess' } }
+    case 'workspace-write':
+      return {
+        type: 'workspaceWrite',
+        writableRoots: [],
+        readOnlyAccess: { type: 'fullAccess' },
+        networkAccess: true,
+        excludeTmpdirEnvVar: false,
+        excludeSlashTmp: false,
+      }
+  }
+}
+
+/**
  * MCP bridge config passed into CodexHarnessSession. The `spawn` block is
  * produced by `buildMcpSpawnConfig()` from agent-core (package-owned
  * shim path + `process.execPath` — see `mcp-spawn-config.ts`). We keep
@@ -159,6 +212,18 @@ export class CodexHarnessSession {
   private pendingCancel = false
   private pendingSteer: { text: string; attachments: ChatImageAttachmentInput[] } | null = null
 
+  /**
+   * Sandbox mode resolved once at construction from `ANTON_CODEX_SANDBOX`.
+   * Applied identically to `thread/start.sandbox` (kebab), `config.sandbox_mode`
+   * (kebab), and every `turn/start.sandboxPolicy` (camelCase shape).
+   */
+  private readonly sandboxMode: AntonSandboxMode
+
+  /** Wall-clock start of the current turn. Set in `onTurnStarted`, read in `onTurnCompleted`. */
+  private currentTurnStartedAt: number | null = null
+  /** Wall-clock start of each open item, for durationMs in `onItemCompleted`. */
+  private readonly openItemStartedAt = new Map<string, number>()
+
   constructor(opts: CodexHarnessSessionOpts) {
     this.opts = opts
     this.id = opts.id
@@ -166,10 +231,24 @@ export class CodexHarnessSession {
     this.model = opts.model
     this.createdAt = Date.now()
     this.lastActiveAt = Date.now()
+    this.sandboxMode = resolveSandboxMode()
   }
 
   getTitle(): string {
     return this.title
+  }
+
+  /**
+   * Set the conversation title and emit a `title_update` SessionEvent.
+   * Called by the `set_session_title` MCP tool on the model's first turn
+   * — the canonical title path for harness sessions. No-op if the
+   * incoming value is empty or already the current title.
+   */
+  setTitle(title: string): void {
+    const next = title.trim().split('\n')[0].slice(0, 60)
+    if (!next || next === this.title) return
+    this.title = next
+    this.emit({ type: 'title_update', title: this.title })
   }
 
   getLastActiveAt(): number {
@@ -322,7 +401,9 @@ export class CodexHarnessSession {
     } finally {
       this.currentTurn = null
       this.currentTurnId = null
+      this.currentTurnStartedAt = null
       this.openToolCalls.clear()
+      this.openItemStartedAt.clear()
       // Buffered cancel/steer that didn't get a turn id (e.g. turn/start
       // rejected before turn/started fired) would otherwise leak into
       // the next turn. Drop them.
@@ -537,7 +618,7 @@ export class CodexHarnessSession {
         modelProvider: null,
         cwd: this.opts.cwd ?? null,
         approvalPolicy: 'never',
-        sandbox: 'workspace-write',
+        sandbox: this.sandboxMode,
         config: this.buildConfig(),
         baseInstructions: null,
         developerInstructions,
@@ -556,7 +637,12 @@ export class CodexHarnessSession {
 
       this.started = true
       log.info(
-        { sessionId: this.id, threadId: this.threadId, model: this.model },
+        {
+          sessionId: this.id,
+          threadId: this.threadId,
+          model: this.model,
+          sandbox: this.sandboxMode,
+        },
         'codex app-server ready',
       )
       if (capabilityBlock.length > 0) {
@@ -594,6 +680,7 @@ export class CodexHarnessSession {
     // MUST match the value the identity + capability blocks reference.
     return {
       model_reasoning_summary: 'detailed',
+      sandbox_mode: this.sandboxMode,
       mcp_servers: {
         [ANTON_MCP_NAMESPACE]: {
           command: this.opts.mcp.spawn.command,
@@ -610,14 +697,7 @@ export class CodexHarnessSession {
       input,
       cwd: this.opts.cwd ?? process.cwd(),
       approvalPolicy: 'never',
-      sandboxPolicy: {
-        type: 'workspaceWrite',
-        writableRoots: [],
-        readOnlyAccess: { type: 'fullAccess' },
-        networkAccess: true,
-        excludeTmpdirEnvVar: false,
-        excludeSlashTmp: false,
-      },
+      sandboxPolicy: buildTurnSandboxPolicy(this.sandboxMode),
       model: this.model,
       effort: 'medium',
       summary: 'detailed',
@@ -664,7 +744,11 @@ export class CodexHarnessSession {
     rpc.on_('item/agentMessage/delta', (p) => this.onAgentMessageDelta(p))
     rpc.on_('item/reasoning/textDelta', (p) => this.onReasoningDelta(p))
     rpc.on_('item/reasoning/summaryTextDelta', (p) => this.onReasoningDelta(p))
-    rpc.on_('thread/name/updated', (p) => this.onThreadNameUpdated(p))
+    // Intentionally NOT subscribing to `thread/name/updated`: Codex's
+    // server-side titler emits progressive partial names ("I", "I'll",
+    // "I'll che", …) which pins the UI to whatever prefix arrived first.
+    // The model now owns titling via the `anton:set_session_title` MCP
+    // tool — one-shot, finalized, sentence-cased.
     rpc.on_('thread/tokenUsage/updated', (p) => this.onTokenUsageUpdated(p))
     rpc.on_('thread/compacted', () => this.onCompacted())
 
@@ -774,6 +858,9 @@ export class CodexHarnessSession {
     const id = p?.turn?.id
     if (!id) return
     this.currentTurnId = id
+    this.currentTurnStartedAt = Date.now()
+
+    log.info({ sessionId: this.id, turnId: id, turnIndex: this.turnIndex }, 'codex turn started')
 
     // Drain race-window buffers in priority order. A buffered cancel
     // tears the turn down — no point also steering. A buffered steer
@@ -799,6 +886,18 @@ export class CodexHarnessSession {
     // separately via `thread/tokenUsage/updated`.
     const p = params as { turn?: { status?: string; error?: { message?: string } } } | undefined
     const status = p?.turn?.status
+    const durationMs = this.currentTurnStartedAt ? Date.now() - this.currentTurnStartedAt : null
+    log.info(
+      {
+        sessionId: this.id,
+        turnId: this.currentTurnId,
+        status: status ?? 'unknown',
+        durationMs,
+        openItems: this.openToolCalls.size,
+      },
+      'codex turn completed',
+    )
+    this.currentTurnStartedAt = null
     if (status === 'failed' || status === 'interrupted') {
       const message = p?.turn?.error?.message ?? `turn ${status}`
       this.emit({ type: 'error', message, code: 'runtime' })
@@ -824,15 +923,6 @@ export class CodexHarnessSession {
     const delta = p?.delta
     if (typeof delta !== 'string' || delta.length === 0) return
     this.emit({ type: 'thinking', text: delta, blockId: p?.itemId, kind: 'summary' })
-  }
-
-  private onThreadNameUpdated(params: unknown) {
-    const p = params as { threadName?: string } | undefined
-    const name = p?.threadName
-    if (typeof name === 'string' && name.length > 0 && name !== this.title) {
-      this.title = name.slice(0, 60).split('\n')[0]
-      this.emit({ type: 'title_update', title: this.title })
-    }
   }
 
   private onTokenUsageUpdated(params: unknown) {
@@ -939,6 +1029,10 @@ export class CodexHarnessSession {
       lower.includes('401') || lower.includes('unauthorized') || lower.includes('not logged in')
         ? 'not_authed'
         : 'runtime'
+    log.error(
+      { sessionId: this.id, turnId: this.currentTurnId, code, message },
+      'codex stream error',
+    )
     this.emit({ type: 'error', message, code })
   }
 
@@ -958,6 +1052,11 @@ export class CodexHarnessSession {
       case 'webSearch': {
         if (this.openToolCalls.has(item.id)) return
         this.openToolCalls.set(item.id, { name: 'web_search', input: {} })
+        this.openItemStartedAt.set(item.id, Date.now())
+        log.info(
+          { sessionId: this.id, turnId: this.currentTurnId, itemId: item.id, tool: 'web_search' },
+          'codex tool_call started',
+        )
         this.emit({ type: 'tool_call', id: item.id, name: 'web_search', input: {} })
         return
       }
@@ -968,6 +1067,17 @@ export class CodexHarnessSession {
         const cwd = (item as { cwd?: string }).cwd ?? this.opts.cwd ?? ''
         const input = { command: cmd, cwd }
         this.openToolCalls.set(item.id, { name: 'shell', input })
+        this.openItemStartedAt.set(item.id, Date.now())
+        log.info(
+          {
+            sessionId: this.id,
+            turnId: this.currentTurnId,
+            itemId: item.id,
+            tool: 'shell',
+            command: cmd.slice(0, 200),
+          },
+          'codex tool_call started',
+        )
         this.emit({ type: 'tool_call', id: item.id, name: 'shell', input })
         return
       }
@@ -978,6 +1088,16 @@ export class CodexHarnessSession {
         const name = `${i.server ?? 'mcp'}:${i.tool ?? 'tool'}`
         const inp = i.arguments ?? {}
         this.openToolCalls.set(item.id, { name, input: inp })
+        this.openItemStartedAt.set(item.id, Date.now())
+        log.info(
+          {
+            sessionId: this.id,
+            turnId: this.currentTurnId,
+            itemId: item.id,
+            tool: name,
+          },
+          'codex tool_call started',
+        )
         this.emit({ type: 'tool_call', id: item.id, name, input: inp })
         return
       }
@@ -988,6 +1108,10 @@ export class CodexHarnessSession {
         // verbs (sendInput, wait, resumeAgent, closeAgent) interact with
         // an already-open sub-agent and don't start a new card.
         if (i.tool !== 'spawnAgent') return
+        log.info(
+          { sessionId: this.id, turnId: this.currentTurnId, itemId: item.id },
+          'codex sub_agent started',
+        )
         this.emit({ type: 'sub_agent_start', toolCallId: item.id, task: i.prompt ?? '' })
         return
       }
@@ -1012,6 +1136,7 @@ export class CodexHarnessSession {
             action: (item as { action?: unknown }).action,
           })
           this.openToolCalls.delete(item.id)
+          this.logItemCompleted(item.id, 'web_search', false)
           this.emit({ type: 'tool_result', id: item.id, output })
         }
         return
@@ -1024,6 +1149,7 @@ export class CodexHarnessSession {
           const exitCode = i.exitCode
           const isError = typeof exitCode === 'number' && exitCode !== 0
           this.openToolCalls.delete(item.id)
+          this.logItemCompleted(item.id, 'shell', isError, { exitCode: exitCode ?? null })
           this.emit({
             type: 'tool_result',
             id: item.id,
@@ -1075,6 +1201,9 @@ export class CodexHarnessSession {
             this.emitTasksUpdateEvent(open.input)
           }
           this.openToolCalls.delete(item.id)
+          this.logItemCompleted(item.id, open?.name ?? 'mcp:unknown', isError, {
+            ...(errMsg ? { error: errMsg.slice(0, 200) } : {}),
+          })
           this.emit({ type: 'tool_result', id: item.id, output, isError })
         }
         return
@@ -1118,10 +1247,47 @@ export class CodexHarnessSession {
         const i = item as { tool?: string; status?: string }
         if (i.tool !== 'spawnAgent') return
         const success = i.status === 'completed'
+        log.info(
+          {
+            sessionId: this.id,
+            turnId: this.currentTurnId,
+            itemId: item.id,
+            success,
+          },
+          'codex sub_agent completed',
+        )
         this.emit({ type: 'sub_agent_end', toolCallId: item.id, success })
         return
       }
     }
+  }
+
+  /**
+   * Centralized `tool_call completed` log so every path (shell, MCP,
+   * webSearch) emits the same shape with a durationMs sourced from
+   * `openItemStartedAt`. Missing start times produce `durationMs: null`
+   * rather than a bogus number.
+   */
+  private logItemCompleted(
+    itemId: string,
+    tool: string,
+    isError: boolean,
+    extra: Record<string, unknown> = {},
+  ): void {
+    const startedAt = this.openItemStartedAt.get(itemId)
+    this.openItemStartedAt.delete(itemId)
+    log.info(
+      {
+        sessionId: this.id,
+        turnId: this.currentTurnId,
+        itemId,
+        tool,
+        isError,
+        durationMs: startedAt ? Date.now() - startedAt : null,
+        ...extra,
+      },
+      'codex tool_call completed',
+    )
   }
 }
 

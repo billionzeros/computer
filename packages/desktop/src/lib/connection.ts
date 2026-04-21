@@ -267,7 +267,7 @@ export class Connection {
   // ── Config management ───────────────────────────────────────────
 
   sendConfigQuery(
-    key: 'providers' | 'defaults' | 'security' | 'system_prompt' | 'memories',
+    key: 'providers' | 'defaults' | 'security' | 'system_prompt' | 'memories' | 'sessions',
     sessionId?: string,
     projectId?: string,
   ) {
@@ -276,6 +276,17 @@ export class Connection {
       key,
       ...(sessionId && { sessionId }),
       ...(projectId && { projectId }),
+    })
+  }
+
+  sendSessionsConfigUpdate(value: {
+    disconnectMode?: 'attached' | 'detached'
+    detachedTurnMaxMs?: number
+  }) {
+    this.send(Channel.CONTROL, {
+      type: 'config_update',
+      key: 'sessions',
+      value,
     })
   }
 

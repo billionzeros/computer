@@ -35,6 +35,7 @@ import { buildMemoryTool } from './memory.js'
 import { buildNotificationTool } from './notification.js'
 import { buildPublishTool } from './publish.js'
 import { buildRoutineTool } from './routine-factory.js'
+import { type SetSessionTitleHandler, buildSetSessionTitleTool } from './set-session-title.js'
 import { buildSpawnSubAgentTool } from './spawn-sub-agent.js'
 import { buildTaskTrackerTool } from './task-tracker-factory.js'
 import { buildUpdateProjectContextTool } from './update-project-context.js'
@@ -95,6 +96,13 @@ export interface AntonCoreToolContext {
    * inline sub_agent implementation, so we keep the default off.
    */
   includeHarnessMcpTools?: boolean
+  /**
+   * Handler the `set_session_title` tool forwards to. Server wires this
+   * per-session so the tool call lands on the owning session's
+   * `setTitle()`, which emits a `title_update` SessionEvent. Undefined =
+   * tool hidden (Pi SDK path, which uses its own `generateAITitle`).
+   */
+  onSetTitle?: SetSessionTitleHandler
 }
 
 /**
@@ -153,6 +161,12 @@ export function buildAntonCoreTools(ctx: AntonCoreToolContext = {}): AgentTool[]
     // round-trip server-side.
     if (ctx.onAskUser) {
       tools.push(buildAskUserTool(ctx.onAskUser))
+    }
+    // One-shot conversation title. Only the harness path needs it: Pi
+    // SDK already runs `generateAITitle` at turn-start from within the
+    // session, so giving the model a tool would be redundant.
+    if (ctx.onSetTitle) {
+      tools.push(buildSetSessionTitleTool(ctx.onSetTitle))
     }
   }
   if (ctx.projectId) {

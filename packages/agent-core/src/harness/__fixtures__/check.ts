@@ -748,6 +748,56 @@ const mirrorCases: MirrorCase[] = [
     events: [],
     expectedRoles: ['user'],
   },
+  {
+    name: 'streamed text deltas coalesce into one block',
+    userMessage: 'save it',
+    events: [
+      { type: 'text', content: ' artifact' },
+      { type: 'text', content: ' is' },
+      { type: 'text', content: ' now' },
+      { type: 'text', content: ' saved.' },
+    ],
+    expectedRoles: ['user', 'assistant'],
+    expectedContent: {
+      1: [{ type: 'text', text: ' artifact is now saved.' }],
+    },
+  },
+  {
+    name: 'streamed thinking deltas coalesce into one block',
+    userMessage: 'think',
+    events: [
+      { type: 'thinking', text: 'First, ' },
+      { type: 'thinking', text: 'then second.' },
+      { type: 'text', content: 'done' },
+    ],
+    expectedRoles: ['user', 'assistant'],
+    expectedContent: {
+      1: [
+        { type: 'thinking', thinking: 'First, then second.' },
+        { type: 'text', text: 'done' },
+      ],
+    },
+  },
+  {
+    name: 'text deltas split by tool_call do not coalesce across the tool',
+    userMessage: 'do work',
+    events: [
+      { type: 'text', content: 'Starting' },
+      { type: 'text', content: ' now.' },
+      { type: 'tool_call', id: 't1', name: 'Bash', input: { command: 'ls' } },
+      { type: 'tool_result', id: 't1', output: 'ok' },
+      { type: 'text', content: 'All' },
+      { type: 'text', content: ' done.' },
+    ],
+    expectedRoles: ['user', 'assistant', 'tool', 'assistant'],
+    expectedContent: {
+      1: [
+        { type: 'text', text: 'Starting now.' },
+        { type: 'tool_use', id: 't1', name: 'Bash', input: { command: 'ls' } },
+      ],
+      3: [{ type: 'text', text: 'All done.' }],
+    },
+  },
 ]
 
 let mirrorFailed = 0
@@ -918,6 +968,47 @@ if (rtFailed > 0) {
 
 console.log(`All ${roundTripCases.length} round-trip checks passed`)
 
+// Legacy mirror files written before per-delta coalescing landed can
+// contain a single assistant message whose content is a run of
+// per-token TextBlocks. readHarnessHistory must fuse these back into
+// one entry, otherwise the UI renders each token on its own line.
+try {
+  withTempSession((sessionId, dir) => {
+    mkdirSync(dir, { recursive: true })
+    const legacyMsg = {
+      role: 'assistant',
+      timestamp: 1000,
+      content: [
+        { type: 'text', text: ' artifact' },
+        { type: 'text', text: ' is' },
+        { type: 'text', text: ' now' },
+        { type: 'text', text: ' saved.' },
+      ],
+    }
+    writeFileSync(pathJoin(dir, 'messages.jsonl'), `${JSON.stringify(legacyMsg)}\n`, 'utf-8')
+    const entries = _readHarnessHistory(sessionId)
+    const assistantEntries = entries.filter((e) => e.role === 'assistant')
+    if (assistantEntries.length !== 1) {
+      rtFailed++
+      console.error(
+        `✗ legacy-mirror: expected 1 assistant entry, got ${assistantEntries.length}`,
+      )
+    } else if (assistantEntries[0].content !== ' artifact is now saved.') {
+      rtFailed++
+      console.error(
+        `✗ legacy-mirror: content not fused, got ${JSON.stringify(assistantEntries[0].content)}`,
+      )
+    } else {
+      console.log('✓ legacy-mirror: per-token text blocks coalesce on read')
+    }
+  })
+} catch (err) {
+  rtFailed++
+  console.error('✗ legacy-mirror (threw)', err)
+}
+
+if (rtFailed > 0) process.exit(1)
+
 // ── Replay seed smoke test ─────────────────────────────────────────
 // Builds a seed from a minimal stored conversation and checks it
 // contains the load-bearing markers the new provider will read.
@@ -970,3 +1061,231 @@ if (replayFailed > 0) {
 }
 
 console.log('All 1 replay-seed check passed')
+
+// ── Cross-surface rendering invariant ──────────────────────────────
+// Pins the rule that desktop, webhook (Telegram/Slack), and mirror/
+// history all render the same text for a given event stream. The
+// 200-per-token bubble bug was a violation of this — mirror exploded
+// where desktop and webhook coalesced. Each surface has its own
+// rendering loop today; this test simulates all three against shared
+// fixtures and asserts they agree on the final assistant text run.
+//
+// To faithfully represent each surface, the simulators mirror the
+// exact logic shipped in production:
+//
+//   desktop  → packages/desktop/src/lib/store/handlers/chatHandler.ts
+//              + toolHandler.ts clear-on-tool-call behavior
+//   webhook  → packages/agent-server/src/webhooks/agent-runner.ts
+//              (chunks.push on text, chunks.length = 0 on tool_call)
+//   mirror   → packages/agent-core/src/harness/mirror.ts
+//              (synthesizeHarnessTurn + readHarnessHistory)
+//
+// If any of those surfaces changes, update the simulator here.
+
+interface RenderSurface {
+  name: string
+  render: (events: SessionEvent[], sessionId: string) => string[]
+}
+
+// Desktop: appendAssistantText accumulates into the current bubble;
+// tool_call resets the tracked bubble so the next text opens a new one.
+const desktopSurface: RenderSurface = {
+  name: 'desktop',
+  render: (events) => {
+    const bubbles: string[] = []
+    let current: string | null = null
+    for (const ev of events) {
+      if (ev.type === 'text') {
+        if (!ev.content) continue
+        if (current === null) current = ''
+        current += ev.content
+      } else if (ev.type === 'tool_call') {
+        if (current !== null) {
+          bubbles.push(current)
+          current = null
+        }
+      }
+      // Other event types don't split the bubble.
+    }
+    if (current !== null) bubbles.push(current)
+    return bubbles
+  },
+}
+
+// Webhook runner: chunks.push on text, reset chunks on tool_call,
+// post one final message at turn-end with chunks.join('').
+const webhookSurface: RenderSurface = {
+  name: 'webhook',
+  render: (events) => {
+    const chunks: string[] = []
+    for (const ev of events) {
+      if (ev.type === 'text') {
+        chunks.push(ev.content)
+      } else if (ev.type === 'tool_call') {
+        chunks.length = 0
+      }
+    }
+    return chunks.length > 0 ? [chunks.join('')] : []
+  },
+}
+
+// Mirror: synthesize the turn, write messages.jsonl, read it back.
+// Filter assistant-text entries only — tool_call entries have a
+// toolName set; tool_result entries have role='tool_result'.
+const mirrorSurface: RenderSurface = {
+  name: 'mirror',
+  render: (events, sessionId) => {
+    const userMsg = 'user prompt'
+    const msgs = synthesizeHarnessTurn(userMsg, events, 1000)
+    const dir = pathJoin(process.env.HOME ?? tmpdir(), '.anton', 'conversations', sessionId)
+    mkdirSync(dir, { recursive: true })
+    const lines = msgs.map((m) => JSON.stringify(m)).join('\n')
+    writeFileSync(
+      pathJoin(dir, 'messages.jsonl'),
+      lines.length > 0 ? `${lines}\n` : '',
+      'utf-8',
+    )
+    const entries = _readHarnessHistory(sessionId)
+    return entries
+      .filter((e) => e.role === 'assistant' && !e.isThinking && !e.toolName)
+      .map((e) => e.content)
+  },
+}
+
+interface CrossSurfaceCase {
+  name: string
+  events: SessionEvent[]
+  // The final assistant text run every surface must agree on.
+  // (Webhook only shows the final run; desktop/mirror may have more
+  // but the LAST one has to match.)
+  expectedFinalText: string
+  // If true, assert all three surfaces produce the exact same full
+  // set of bubbles — only applicable when there's no tool boundary
+  // (webhook's clear-on-tool-call makes multi-run cases asymmetric).
+  expectFullAgreement?: boolean
+}
+
+function genTokens(n: number): SessionEvent[] {
+  return Array.from({ length: n }, (_, i) => ({
+    type: 'text',
+    content: `t${i} `,
+  }))
+}
+
+const crossSurfaceCases: CrossSurfaceCase[] = [
+  {
+    name: 'single text event',
+    events: [{ type: 'text', content: 'Hello world' }],
+    expectedFinalText: 'Hello world',
+    expectFullAgreement: true,
+  },
+  {
+    name: '200 per-token deltas coalesce (the original bug)',
+    events: genTokens(200),
+    expectedFinalText: Array.from({ length: 200 }, (_, i) => `t${i} `).join(''),
+    expectFullAgreement: true,
+  },
+  {
+    name: '1000 per-token deltas stress test',
+    events: genTokens(1000),
+    expectedFinalText: Array.from({ length: 1000 }, (_, i) => `t${i} `).join(''),
+    expectFullAgreement: true,
+  },
+  {
+    name: 'unicode emoji surrogate pair split across deltas',
+    // 😀 = U+1F600, encoded as UTF-16 surrogate pair \uD83D\uDE00.
+    // Streaming adapters can split this across deltas; the final
+    // rendered text must still contain one intact emoji.
+    events: [
+      { type: 'text', content: 'hi ' },
+      { type: 'text', content: '\uD83D' },
+      { type: 'text', content: '\uDE00' },
+      { type: 'text', content: ' ok' },
+    ],
+    expectedFinalText: 'hi \uD83D\uDE00 ok',
+    expectFullAgreement: true,
+  },
+  {
+    name: 'empty deltas interleaved',
+    events: [
+      { type: 'text', content: '' },
+      { type: 'text', content: 'a' },
+      { type: 'text', content: '' },
+      { type: 'text', content: 'b' },
+      { type: 'text', content: '' },
+    ],
+    expectedFinalText: 'ab',
+    expectFullAgreement: true,
+  },
+  {
+    name: 'text run after a tool_call — final run agrees',
+    // Webhook clears on tool_call, so it only shows the final run.
+    // Desktop splits into two bubbles; mirror has two entries.
+    // The *final* run must match across all three.
+    events: [
+      { type: 'text', content: 'Let me check. ' },
+      { type: 'text', content: 'One sec.' },
+      { type: 'tool_call', id: 't1', name: 'Bash', input: { command: 'ls' } },
+      { type: 'tool_result', id: 't1', output: 'ok' },
+      { type: 'text', content: 'Done: ' },
+      { type: 'text', content: 'files listed.' },
+    ],
+    expectedFinalText: 'Done: files listed.',
+    expectFullAgreement: false,
+  },
+]
+
+let xsurfaceFailed = 0
+let xsurfaceTotal = 0
+for (const c of crossSurfaceCases) {
+  try {
+    withTempSession((sessionId) => {
+      const outputs: Record<string, string[]> = {}
+      for (const s of [desktopSurface, webhookSurface, mirrorSurface]) {
+        outputs[s.name] = s.render(c.events, sessionId)
+      }
+
+      // Every surface must have emitted at least one bubble for the final text.
+      for (const s of Object.keys(outputs)) {
+        xsurfaceTotal++
+        const last = outputs[s][outputs[s].length - 1]
+        if (last !== c.expectedFinalText) {
+          xsurfaceFailed++
+          console.error(`✗ cross-surface[${s}]: ${c.name} — final text mismatch`)
+          console.error(`  expected: ${JSON.stringify(c.expectedFinalText)}`)
+          console.error(`  actual:   ${JSON.stringify(last)}`)
+        } else {
+          console.log(`✓ cross-surface[${s}]: ${c.name}`)
+        }
+      }
+
+      if (c.expectFullAgreement) {
+        xsurfaceTotal++
+        const d = outputs.desktop
+        const w = outputs.webhook
+        const m = outputs.mirror
+        const sameAcross =
+          JSON.stringify(d) === JSON.stringify(w) && JSON.stringify(d) === JSON.stringify(m)
+        if (!sameAcross) {
+          xsurfaceFailed++
+          console.error(`✗ cross-surface[full]: ${c.name} — surfaces diverge`)
+          console.error(`  desktop:`, d)
+          console.error(`  webhook:`, w)
+          console.error(`  mirror: `, m)
+        } else {
+          console.log(`✓ cross-surface[full]: ${c.name}`)
+        }
+      }
+    })
+  } catch (err) {
+    xsurfaceFailed++
+    console.error(`✗ cross-surface: ${c.name} (threw)`, err)
+  }
+}
+
+if (xsurfaceFailed > 0) {
+  console.error(`\n${xsurfaceFailed}/${xsurfaceTotal} cross-surface checks failed`)
+  process.exit(1)
+}
+
+console.log(`All ${xsurfaceTotal} cross-surface checks passed`)

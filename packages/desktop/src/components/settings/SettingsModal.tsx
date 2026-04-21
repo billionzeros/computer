@@ -923,6 +923,8 @@ function BehaviorSection() {
   const [retry, setRetry] = useState(true)
   const [citation, setCitation] = useState<'inline' | 'foot' | 'off'>('inline')
   const [toolInline, setToolInline] = useState(true)
+  const disconnectMode = uiStore((s) => s.disconnectMode)
+  const setDisconnectMode = uiStore((s) => s.setDisconnectMode)
   return (
     <>
       <Group label="Autonomy">
@@ -957,6 +959,16 @@ function BehaviorSection() {
           compact
         >
           <Toggle on={retry} onChange={setRetry} />
+        </Row>
+        <Row
+          title="Keep running when I close the tab"
+          desc="Detached turns finish in the background. Hard-cancelled after 10 minutes without a client."
+          compact
+        >
+          <Toggle
+            on={disconnectMode === 'detached'}
+            onChange={(on) => setDisconnectMode(on ? 'detached' : 'attached')}
+          />
         </Row>
       </Group>
       <Divider />

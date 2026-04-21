@@ -451,6 +451,8 @@ export class WebhookAgentRunner {
         this.wireInteractiveHandlers(session, sessionId, event, provider)
       }
 
+      // Invariant: final text sent here must agree with desktop + mirror.
+      // See packages/agent-core/src/harness/__fixtures__/check.ts cross-surface test.
       const chunks: string[] = []
       const errorMessages: string[] = []
       let textEvents = 0

@@ -81,6 +81,50 @@
     group: root
     validate: "visudo -cf %s"
 
+# Codex's inner sandbox (bwrap) needs unprivileged user namespaces:
+# subuid/subgid ranges for the anton user, the userns_clone sysctl, and
+# (on Ubuntu 24.04+) the AppArmor unprivileged-userns restriction lifted.
+# Without these, every shell call fails with
+# `bwrap: setting up uid map: Permission denied`.
+
+- name: Grant subordinate UID range to anton user
+  lineinfile:
+    path: /etc/subuid
+    regexp: "^{{ anton_user }}:"
+    line: "{{ anton_user }}:100000:65536"
+    create: true
+    owner: root
+    group: root
+    mode: "0644"
+
+- name: Grant subordinate GID range to anton user
+  lineinfile:
+    path: /etc/subgid
+    regexp: "^{{ anton_user }}:"
+    line: "{{ anton_user }}:100000:65536"
+    create: true
+    owner: root
+    group: root
+    mode: "0644"
+
+- name: Enable unprivileged user namespaces (persistent)
+  sysctl:
+    name: kernel.unprivileged_userns_clone
+    value: "1"
+    state: present
+    sysctl_file: /etc/sysctl.d/99-anton-userns.conf
+    reload: true
+  ignore_errors: true  # kernel may not expose this knob; safe to skip
+
+- name: Lift AppArmor unprivileged-userns restriction (Ubuntu 24.04+)
+  sysctl:
+    name: kernel.apparmor_restrict_unprivileged_userns
+    value: "0"
+    state: present
+    sysctl_file: /etc/sysctl.d/99-anton-userns.conf
+    reload: true
+  ignore_errors: true  # absent on pre-24.04 kernels
+
 - name: Ensure home directory is traversable (for Caddy file serving)
   file:
     path: "/home/{{ anton_user }}"

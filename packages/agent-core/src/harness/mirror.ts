@@ -77,6 +77,9 @@ type AssistantBlock = TextBlock | ThinkingBlock | ToolUseBlock
  *   • 'done' and 'error' events do not contribute content but mark the
  *     end of the turn — caller should stop feeding us after 'done'.
  */
+// Invariant: output must render identically to the desktop live stream
+// and the webhook runner's chunks.join. See the cross-surface test in
+// packages/agent-core/src/harness/__fixtures__/check.ts.
 export function synthesizeHarnessTurn(
   userMessage: string,
   events: SessionEvent[],
@@ -124,13 +127,26 @@ export function synthesizeHarnessTurn(
       case 'text': {
         if (pendingToolResults) flushTool()
         if (!pendingAssistant) pendingAssistant = []
-        pendingAssistant.push({ type: 'text', text: ev.content })
+        // Streaming adapters (Claude Code stream-json) emit one text
+        // event per delta. Merge consecutive text blocks into one so
+        // history entries aren't split per-token.
+        const lastText = pendingAssistant[pendingAssistant.length - 1]
+        if (lastText && lastText.type === 'text') {
+          lastText.text += ev.content
+        } else {
+          pendingAssistant.push({ type: 'text', text: ev.content })
+        }
         break
       }
       case 'thinking': {
         if (pendingToolResults) flushTool()
         if (!pendingAssistant) pendingAssistant = []
-        pendingAssistant.push({ type: 'thinking', thinking: ev.text })
+        const lastThinking = pendingAssistant[pendingAssistant.length - 1]
+        if (lastThinking && lastThinking.type === 'thinking') {
+          lastThinking.thinking += ev.text
+        } else {
+          pendingAssistant.push({ type: 'thinking', thinking: ev.text })
+        }
         break
       }
       case 'tool_call': {
@@ -330,15 +346,28 @@ export function readHarnessHistory(sessionId: string, projectId?: string): Sessi
       if (role === 'user' && type === 'text' && typeof b.text === 'string') {
         entries.push({ seq: seq++, role: 'user', content: b.text, ts })
       } else if (role === 'assistant' && type === 'text' && typeof b.text === 'string') {
-        entries.push({ seq: seq++, role: 'assistant', content: b.text, ts })
+        // Coalesce with the previous entry when it's an assistant text
+        // run in the same message, so legacy mirrors written before the
+        // synthesizer started coalescing still render as one bubble.
+        const last = entries[entries.length - 1]
+        if (last && last.role === 'assistant' && !last.isThinking && !last.toolName) {
+          last.content += b.text
+        } else {
+          entries.push({ seq: seq++, role: 'assistant', content: b.text, ts })
+        }
       } else if (role === 'assistant' && type === 'thinking' && typeof b.thinking === 'string') {
-        entries.push({
-          seq: seq++,
-          role: 'assistant',
-          content: b.thinking,
-          ts,
-          isThinking: true,
-        })
+        const last = entries[entries.length - 1]
+        if (last && last.role === 'assistant' && last.isThinking) {
+          last.content += b.thinking
+        } else {
+          entries.push({
+            seq: seq++,
+            role: 'assistant',
+            content: b.thinking,
+            ts,
+            isThinking: true,
+          })
+        }
       } else if (role === 'assistant' && type === 'tool_use') {
         const id = typeof b.id === 'string' ? b.id : `t-${seq}`
         const name = typeof b.name === 'string' ? b.name : 'tool'
