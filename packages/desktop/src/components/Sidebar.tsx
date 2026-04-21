@@ -21,10 +21,12 @@ import {
   X,
   Zap,
 } from 'lucide-react'
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { formatRelativeTime } from '../lib/agent-utils.js'
 import { sanitizeTitle } from '../lib/conversations.js'
 import { loadMachines, useStore } from '../lib/store.js'
+import { accountColorValue, accountStore, avatarInitial } from '../lib/store/accountStore.js'
 import { projectStore } from '../lib/store/projectStore.js'
 import { sessionStore } from '../lib/store/sessionStore.js'
 import { uiStore } from '../lib/store/uiStore.js'
@@ -60,6 +62,8 @@ const NAV: { id: NavId; label: string; icon: typeof SquareCheck }[] = [
 
 export function Sidebar({ onViewChange, onOpenSettings }: Props) {
   const devMode = uiStore((s) => s.devMode)
+  const displayName = accountStore((s) => s.displayName)
+  const avatarColor = accountStore((s) => s.avatarColor)
   const switchConversation = useStore((s) => s.switchConversation)
   const newConversation = useStore((s) => s.newConversation)
   const deleteConversation = useStore((s) => s.deleteConversation)
@@ -76,11 +80,36 @@ export function Sidebar({ onViewChange, onOpenSettings }: Props) {
 
   const [projectMenuOpen, setProjectMenuOpen] = useState(false)
   const projectWrapRef = useRef<HTMLDivElement | null>(null)
+  const projectMenuRef = useRef<HTMLDivElement | null>(null)
+  const [projectMenuPos, setProjectMenuPos] = useState<{ top: number; left: number } | null>(null)
+
+  useLayoutEffect(() => {
+    if (!projectMenuOpen) {
+      setProjectMenuPos(null)
+      return
+    }
+    const computePos = () => {
+      const el = projectWrapRef.current
+      if (!el) return
+      const rect = el.getBoundingClientRect()
+      setProjectMenuPos({ top: rect.bottom + 6, left: rect.left })
+    }
+    computePos()
+    window.addEventListener('resize', computePos)
+    window.addEventListener('scroll', computePos, true)
+    return () => {
+      window.removeEventListener('resize', computePos)
+      window.removeEventListener('scroll', computePos, true)
+    }
+  }, [projectMenuOpen])
 
   useEffect(() => {
     if (!projectMenuOpen) return
     const onDoc = (e: MouseEvent) => {
-      if (projectWrapRef.current && !projectWrapRef.current.contains(e.target as Node)) {
+      const target = e.target as Node
+      const inWrap = projectWrapRef.current?.contains(target)
+      const inMenu = projectMenuRef.current?.contains(target)
+      if (!inWrap && !inMenu) {
         setProjectMenuOpen(false)
       }
     }
@@ -256,8 +285,12 @@ export function Sidebar({ onViewChange, onOpenSettings }: Props) {
             <ChevronDown size={13} strokeWidth={1.5} className="sb-project__chev" />
           </button>
 
-          {projectMenuOpen && (
-            <div className="sb-project-menu fade-in">
+          {projectMenuOpen && projectMenuPos && createPortal(
+            <div
+              ref={projectMenuRef}
+              className="sb-project-menu fade-in"
+              style={{ position: 'fixed', top: projectMenuPos.top, left: projectMenuPos.left }}
+            >
               <div className="sb-project-menu__label">Projects</div>
               <div className="sb-project-menu__list">
                 {[...projects]
@@ -339,7 +372,8 @@ export function Sidebar({ onViewChange, onOpenSettings }: Props) {
                 <SlidersHorizontal size={12} strokeWidth={1.5} />
                 <span>Manage projects</span>
               </button>
-            </div>
+            </div>,
+            document.body,
           )}
         </div>
 
@@ -456,10 +490,18 @@ export function Sidebar({ onViewChange, onOpenSettings }: Props) {
               <Code size={15} strokeWidth={1.5} />
             </button>
           )}
-          <div className="sb-footer-user" title="Account">
-            <div className="sb-avatar">O</div>
-            <span className="name">omg</span>
-          </div>
+          <button
+            type="button"
+            className="sb-footer-user"
+            onClick={() => onOpenSettings()}
+            title="Account"
+            aria-label="Account"
+          >
+            <div className="sb-avatar" style={{ color: accountColorValue(avatarColor) }}>
+              {avatarInitial(displayName)}
+            </div>
+            <span className="name">{displayName}</span>
+          </button>
         </div>
       </div>
     </motion.aside>

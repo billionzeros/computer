@@ -3,8 +3,11 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import type { ProviderInfo } from '../../lib/store.js'
 import { sessionStore } from '../../lib/store/sessionStore.js'
-import { SettingsModal } from '../settings/SettingsModal.js'
 import { formatModelName, providerIcons } from './model-utils.js'
+
+function openSettingsModels() {
+  window.dispatchEvent(new CustomEvent('open-settings', { detail: { tab: 'models' } }))
+}
 
 function ProviderIcon({ provider, size = 16 }: { provider: string; size?: number }) {
   const icon = providerIcons[provider]
@@ -119,7 +122,7 @@ function computePosition(rect: DOMRect): PopoverPosition {
   return { top, left, maxHeight, placement }
 }
 
-function ModelPopover({
+export function ModelPopover({
   anchorRef,
   providers,
   currentProvider,
@@ -285,7 +288,6 @@ export function ModelSelector() {
   const currentModel = sessionStore((s) => s.currentModel)
   const providers = sessionStore((s) => s.providers)
   const [open, setOpen] = useState(false)
-  const [settingsOpen, setSettingsOpen] = useState(false)
   const buttonRef = useRef<HTMLButtonElement>(null)
 
   const hasAnyProvider = providers.length > 0
@@ -301,48 +303,39 @@ export function ModelSelector() {
   }
 
   return (
-    <>
-      <div className="composer__model-wrap">
-        <button
-          type="button"
-          ref={buttonRef}
-          className="composer__model"
-          onClick={() => {
-            if (hasAnyProvider) setOpen((o) => !o)
-            else setSettingsOpen(true)
-          }}
-        >
-          {hasAnyKey && (
-            <span className="composer__model-av">
-              <ProviderIcon provider={currentProvider} size={14} />
-            </span>
-          )}
-          <span className="composer__model-name">{displayModel}</span>
-          {tag && <span className={`composer__model-tag composer__model-tag--${tag}`}>{tag}</span>}
-          <ChevronDown size={12} strokeWidth={1.8} className="composer__model-chev" />
-        </button>
-        {open && (
-          <ModelPopover
-            anchorRef={buttonRef}
-            providers={providers}
-            currentProvider={currentProvider}
-            currentModel={currentModel}
-            onSelect={handleSelect}
-            onClose={() => setOpen(false)}
-            onManage={() => {
-              setOpen(false)
-              setSettingsOpen(true)
-            }}
-          />
+    <div className="composer__model-wrap">
+      <button
+        type="button"
+        ref={buttonRef}
+        className="composer__model"
+        onClick={() => {
+          if (hasAnyProvider) setOpen((o) => !o)
+          else openSettingsModels()
+        }}
+      >
+        {hasAnyKey && (
+          <span className="composer__model-av">
+            <ProviderIcon provider={currentProvider} size={14} />
+          </span>
         )}
-      </div>
-
-      <SettingsModal
-        open={settingsOpen}
-        onClose={() => setSettingsOpen(false)}
-        onDisconnect={() => setSettingsOpen(false)}
-        initialPage="models"
-      />
-    </>
+        <span className="composer__model-name">{displayModel}</span>
+        {tag && <span className={`composer__model-tag composer__model-tag--${tag}`}>{tag}</span>}
+        <ChevronDown size={12} strokeWidth={1.8} className="composer__model-chev" />
+      </button>
+      {open && (
+        <ModelPopover
+          anchorRef={buttonRef}
+          providers={providers}
+          currentProvider={currentProvider}
+          currentModel={currentModel}
+          onSelect={handleSelect}
+          onClose={() => setOpen(false)}
+          onManage={() => {
+            setOpen(false)
+            openSettingsModels()
+          }}
+        />
+      )}
+    </div>
   )
 }
