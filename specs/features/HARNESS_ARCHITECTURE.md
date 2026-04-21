@@ -33,6 +33,8 @@
 │  transport: stdio ↔ Unix domain socket (no TCP, no port)    │
 │  relays: tools/list + tools/call to Anton's tool registry   │
 │  auth: per-session 32-byte token in ANTON_AUTH env          │
+│  spawn: buildMcpSpawnConfig() — execPath + import.meta.url  │
+│  health: probeMcpShim() on boot + every 60s                 │
 └─────────────────────────────────────────────────────────────┘
 
   *Gemini adapter is planned (Phase 5); not yet implemented.
@@ -114,6 +116,43 @@
 | 9 | **`# Prior Conversation`** (optional, one-shot) | `buildReplaySeed()` | Injected only on turn 0 after a provider switch. Subsequent turns rely on the new CLI's `--resume` tape. |
 
 Shared block builders live in [`packages/agent-core/src/prompt-layers.ts`](../../packages/agent-core/src/prompt-layers.ts) — same module Pi SDK's `Session.getSystemPrompt()` uses for the overlap layers. Single source.
+
+## MCP shim spawn + health
+
+### Spawn config (single source of truth)
+
+`buildMcpSpawnConfig()` in [`packages/agent-core/src/harness/mcp-spawn-config.ts`](../../packages/agent-core/src/harness/mcp-spawn-config.ts) is the **only** place that constructs the shim command line. Both `HarnessSession` and `CodexHarnessSession` accept a `mcp.spawn: McpSpawnConfig` from the server, so there's no per-adapter path logic.
+
+```ts
+interface McpSpawnConfig {
+  command: string    // always process.execPath
+  args: string[]     // [ SHIM_PATH ]
+  shimPath: string   // absolute path to anton-mcp-shim.js on disk
+}
+```
+
+Two invariants the config enforces:
+
+- **`command = process.execPath`** — not the literal `"node"`. systemd services don't inherit PATH reliably; `execPath` is guaranteed to be the node binary currently running the server. This matters on VPS deployments running under `NodeJS` + systemd.
+- **`shimPath` via `import.meta.url`** — resolved from the module's own location on disk, independent of `HOME` or cwd. The previous implementation composed the path from `homedir() + '../node_modules/...'`, which broke on VPS where the host process runs as `anton@/home/anton` but the install actually lives at `/opt/anton`.
+
+### Health probe
+
+`probeMcpShim(spawnConfig, timeoutMs)` spawns the shim in isolation, completes one `initialize` JSON-RPC round-trip, and tears down. It's called on server boot and then every 60s (the interval is `.unref()`ed so it doesn't hold the event loop open).
+
+The probe confirms:
+1. The shim binary exists at the expected path.
+2. Node loads it without syntax errors or missing imports.
+3. JSON-RPC framing works end to end.
+4. Reported `serverInfo.version` matches `getExpectedShimVersion()` (warn on mismatch — symptom of a partial deploy).
+
+It does **not** verify the IPC auth path; that's exercised by every live session the first time a tool is called.
+
+### Capability-block gating
+
+If the most recent probe failed (`mcpHealth?.ok === false`), the server **omits the harness capability block** from the system prompt and passes an empty connector list to `buildHarnessContextPrompt`. The model therefore never believes it has tools it can't call — preventing the failure mode where a broken shim path caused harness CLIs to confidently attempt `anton:gmail_search_emails` against a shim that couldn't be spawned.
+
+The probe's stderr tail and resolved `shimPath` are logged at error level on every failed interval so ops can diagnose deploy issues without shelling into the box.
 
 ## MCP tool surface (what the CLI sees via `tools/list`)
 
@@ -208,6 +247,8 @@ Desktop `interactionHandler` decorates the rendered message with actionable pref
 | — | **Background memory extraction** — `runHarnessMemoryExtraction` fire-and-forget after each turn | ✅ Shipped |
 | — | **Provider switch** — `session_provider_switch` message, `buildReplaySeed`, `createHarnessSession` refactor, desktop `HarnessProviderSwitch` component | ✅ Shipped |
 | — | **Codex adapter — mcp_tool_call** — new item type + field names (server/tool/object args+result) | ✅ Shipped |
+| — | **MCP production hardening** — `buildMcpSpawnConfig` single-source spawn, `probeMcpShim` health check on boot + 60s, capability-block gating on probe failure, version handshake, `process.execPath` instead of `"node"` | ✅ Shipped |
+| — | **Session lifecycle** — `SessionRegistry` with partitioned LRU pools, pin-during-turn, awaited shutdown on `session_destroy`; see [SESSION_LIFECYCLE.md](./SESSION_LIFECYCLE.md) | ✅ Shipped |
 | 5 | **Gemini adapter + per-provider tuning** | ⏳ Planned |
 | — | **Per-provider prompt variants** | ⏳ Planned (revisit with usage telemetry) |
 | — | **External HTTP MCP server** | ⏳ Planned (separate spec) |
@@ -222,7 +263,9 @@ Desktop `interactionHandler` decorates the rendered message with actionable pref
 | Codex adapter | `packages/agent-core/src/harness/adapters/codex.ts` |
 | Session lifecycle | `packages/agent-core/src/harness/harness-session.ts` |
 | MCP shim (stdio↔IPC relay) | `packages/agent-core/src/harness/anton-mcp-shim.ts` |
+| MCP spawn config + health probe | `packages/agent-core/src/harness/mcp-spawn-config.ts` |
 | IPC server (auth + tool dispatch) | `packages/agent-core/src/harness/mcp-ipc-handler.ts` |
+| Session registry (LRU + shutdown) | `packages/agent-core/src/session-registry.ts` |
 | Tool registry | `packages/agent-core/src/harness/tool-registry.ts` |
 | Shared tool catalog | `packages/agent-core/src/tools/factories.ts` (`buildAntonCoreTools`) |
 | Per-tool factories | `packages/agent-core/src/tools/{memory,database,notification,publish,activate-workflow,update-project-context}.ts` |
