@@ -1,5 +1,15 @@
 import type { AskUserOption, AskUserQuestion } from '@anton/protocol'
-import { Calendar, Clock, FileText, Play, Repeat, Trash2 } from 'lucide-react'
+import {
+  Calendar,
+  Clock,
+  FileText,
+  Globe,
+  Hash,
+  Play,
+  Repeat,
+  Trash2,
+  UploadCloud,
+} from 'lucide-react'
 import { useState } from 'react'
 import { uiStore } from '../../lib/store/uiStore.js'
 
@@ -246,6 +256,129 @@ function RoutineDeleteCard({
   )
 }
 
+/* ── Publish confirmation card ── */
+
+interface PublishConfirmMeta {
+  type: 'publish_confirm'
+  title: string
+  contentType: string
+  language: string | null
+  suggestedSlug: string
+  domain: string | null
+}
+
+function isPublishConfirm(q: AskUserQuestion): PublishConfirmMeta | null {
+  const m = q.metadata
+  if (m && (m as Record<string, unknown>).type === 'publish_confirm')
+    return m as unknown as PublishConfirmMeta
+  return null
+}
+
+function PublishConfirmCard({
+  meta,
+  onConfirm,
+  onCancel,
+}: {
+  meta: PublishConfirmMeta
+  onConfirm: (finalSlug: string) => void
+  onCancel: () => void
+}) {
+  const [slug, setSlug] = useState(meta.suggestedSlug)
+  const slugTrimmed = slug.trim()
+  const slugValid = /^[a-zA-Z0-9_-]+$/.test(slugTrimmed)
+  const publicUrl = meta.domain
+    ? `https://${meta.domain}/a/${slugTrimmed || meta.suggestedSlug}`
+    : `/a/${slugTrimmed || meta.suggestedSlug}`
+  const typeLabel = (() => {
+    const t = meta.contentType.toUpperCase()
+    if (t === 'CODE' && meta.language) return meta.language.toUpperCase()
+    return t
+  })()
+
+  return (
+    <div className="routine-confirm">
+      <div className="routine-confirm__header">
+        <div className="routine-confirm__icon">
+          <UploadCloud size={18} strokeWidth={1.5} />
+        </div>
+        <div className="routine-confirm__title-group">
+          <span className="routine-confirm__title">Publish to Anton</span>
+          <span className="routine-confirm__name">{meta.title}</span>
+        </div>
+      </div>
+
+      <div className="routine-confirm__fields">
+        <div className="routine-confirm__field">
+          <span className="routine-confirm__field-icon">
+            <FileText size={14} strokeWidth={1.5} />
+          </span>
+          <span className="routine-confirm__field-label">Type</span>
+          <span className="routine-confirm__field-value">{typeLabel}</span>
+        </div>
+
+        {meta.domain && (
+          <div className="routine-confirm__field">
+            <span className="routine-confirm__field-icon">
+              <Globe size={14} strokeWidth={1.5} />
+            </span>
+            <span className="routine-confirm__field-label">Domain</span>
+            <span className="routine-confirm__field-value routine-confirm__field-value--mono">
+              {meta.domain}
+            </span>
+          </div>
+        )}
+
+        <div className="routine-confirm__field routine-confirm__field--block">
+          <span className="routine-confirm__field-icon">
+            <Hash size={14} strokeWidth={1.5} />
+          </span>
+          <span className="routine-confirm__field-label">Slug</span>
+          <input
+            type="text"
+            className="ix__custom-input"
+            value={slug}
+            onChange={(e) => setSlug(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && slugValid) onConfirm(slugTrimmed)
+              if (e.key === 'Escape') onCancel()
+            }}
+            autoFocus
+            aria-label="URL slug"
+          />
+        </div>
+
+        <div className="routine-confirm__field routine-confirm__field--block">
+          <span className="routine-confirm__field-icon">
+            <Globe size={14} strokeWidth={1.5} />
+          </span>
+          <span className="routine-confirm__field-label">Will live at</span>
+          <span className="routine-confirm__field-value routine-confirm__field-value--mono">
+            {publicUrl}
+          </span>
+        </div>
+      </div>
+
+      <div className="routine-confirm__actions">
+        <button
+          type="button"
+          className="routine-confirm__btn routine-confirm__btn--cancel"
+          onClick={onCancel}
+        >
+          Cancel
+        </button>
+        <button
+          type="button"
+          className="routine-confirm__btn routine-confirm__btn--confirm"
+          onClick={() => onConfirm(slugTrimmed)}
+          disabled={!slugValid}
+        >
+          Publish
+        </button>
+      </div>
+    </div>
+  )
+}
+
 /* ── Generic inline ask-user (unchanged) ── */
 
 export function AskUserInline({ questions, onSubmit }: Props) {
@@ -279,6 +412,21 @@ export function AskUserInline({ questions, onSubmit }: Props) {
             meta={deleteMeta}
             onConfirm={() => onSubmit({ [q.question]: opts[0]?.label || 'Yes, delete it' })}
             onCancel={() => onSubmit({ [q.question]: opts[1]?.label || 'No, keep it' })}
+          />
+        </div>
+      )
+    }
+
+    const publishMeta = isPublishConfirm(q)
+    if (publishMeta) {
+      return (
+        <div className="ask-inline">
+          <PublishConfirmCard
+            meta={publishMeta}
+            // Publish tool interprets the answer string as the slug.
+            // Empty string is cancel — see buildPublishTool in publish.ts.
+            onConfirm={(finalSlug) => onSubmit({ [q.question]: finalSlug })}
+            onCancel={() => onSubmit({ [q.question]: '' })}
           />
         </div>
       )

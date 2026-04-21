@@ -323,20 +323,42 @@ export function executePublish(input: PublishInput, domain?: string): string {
 
 import type { AgentTool } from '@mariozechner/pi-agent-core'
 import { Type } from '@sinclair/typebox'
+import type { AskUserHandler } from '../agent.js'
 import { defineTool, toolResult } from './_helpers.js'
+
+export interface PublishToolDeps {
+  /** Public base domain Anton publishes under (from config). Used in the URL. */
+  domain?: string
+  /**
+   * When wired, publishing goes through a `publish_confirm` ask_user
+   * prompt first. The desktop renders a specialized card showing title,
+   * type, domain, and an editable slug; the user either confirms
+   * (submitting the final slug) or cancels. Empty answer = cancel.
+   * Routine-factory follows the same pattern for create/delete.
+   */
+  askUser?: AskUserHandler
+}
 
 /**
  * Build the `publish` tool definition. Shared between the Pi SDK agent
  * and the harness MCP shim — do not duplicate this schema elsewhere.
+ *
+ * When an `askUser` handler is present, the model's call is gated: we
+ * surface a publish_confirm prompt and only run `executePublish` after
+ * the user approves + picks a slug. When it isn't, we publish directly
+ * (non-desktop contexts like evals — no human in the loop to prompt).
  */
-export function buildPublishTool(domain?: string): AgentTool {
+export function buildPublishTool(deps: PublishToolDeps = {}): AgentTool {
+  const { domain, askUser } = deps
   return defineTool({
     name: 'publish',
     label: 'Publish',
     description:
       'Publish content to a public URL accessible from the internet. ' +
       'Converts markdown, HTML, SVG, mermaid diagrams, or code into a standalone web page. ' +
-      'Returns the public URL. Use after creating an artifact when the user wants to share it publicly.',
+      'Returns the public URL. Use after creating an artifact when the user wants to share it publicly. ' +
+      'IMPORTANT: The user will be asked to confirm + pick a final slug before this tool actually publishes — ' +
+      "do not pre-ask via ask_user; just call publish with your suggested slug and let this tool's gate handle it.",
     parameters: Type.Object({
       title: Type.String({ description: 'Page title' }),
       content: Type.String({ description: 'The content to publish' }),
@@ -354,11 +376,48 @@ export function buildPublishTool(domain?: string): AgentTool {
         Type.String({ description: 'Language for code syntax (e.g. "typescript")' }),
       ),
       slug: Type.Optional(
-        Type.String({ description: 'Custom URL slug (auto-generated if omitted)' }),
+        Type.String({
+          description:
+            'Suggested URL slug (the user can edit or replace before publishing; auto-generated if omitted).',
+        }),
       ),
     }),
     async execute(_toolCallId, params) {
-      return toolResult(executePublish(params, domain))
+      // When there's no human in the loop (evals, scripts), fall back to
+      // publishing directly — matches pre-gate behavior.
+      if (!askUser) {
+        return toolResult(executePublish(params, domain))
+      }
+
+      const suggestedSlug = params.slug || generateSlug()
+      const answers = await askUser([
+        {
+          question: `Publish "${params.title}" to Anton?`,
+          options: ['Publish', 'Cancel'],
+          allowFreeText: false,
+          metadata: {
+            type: 'publish_confirm',
+            title: params.title,
+            contentType: params.type,
+            language: params.language || null,
+            suggestedSlug,
+            domain: domain || null,
+          },
+        },
+      ])
+
+      const answer = (Object.values(answers)[0] || '').trim()
+
+      // The PublishConfirmCard emits either the chosen slug (confirm)
+      // or an empty string (cancel). Handle legacy string answers too.
+      if (!answer || /^(no|cancel)$/i.test(answer)) {
+        return toolResult('Publish cancelled by user.')
+      }
+
+      // Any non-empty, non-cancel answer is the final slug the user
+      // wants. Validate and clamp — executePublish throws on bad slugs.
+      const finalSlug = VALID_SLUG.test(answer) ? answer : suggestedSlug
+      return toolResult(executePublish({ ...params, slug: finalSlug }, domain))
     },
   })
 }

@@ -300,7 +300,9 @@ export function ChatInput({
     const metaType = (q?.metadata as { type?: string } | undefined)?.type
     const isSpecializedCard =
       pendingAskUser.questions.length === 1 &&
-      (metaType === 'routine_create' || metaType === 'routine_delete')
+      (metaType === 'routine_create' ||
+        metaType === 'routine_delete' ||
+        metaType === 'publish_confirm')
     if (isSpecializedCard) {
       return (
         <div className={rootClass}>

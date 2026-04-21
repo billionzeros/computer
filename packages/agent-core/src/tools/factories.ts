@@ -116,7 +116,7 @@ export function buildAntonCoreTools(ctx: AntonCoreToolContext = {}): AgentTool[]
     buildDatabaseTool(),
     buildMemoryTool(ctx.conversationId),
     buildNotificationTool(),
-    buildPublishTool(ctx.domain),
+    buildPublishTool({ domain: ctx.domain, askUser: ctx.onAskUser }),
     // Exposed to every harness surface as `anton:web_search` via the
     // MCP shim. The tool self-resolves the Exa connector from config;
     // if no connector is configured, it returns a setup message instead
