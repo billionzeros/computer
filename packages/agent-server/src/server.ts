@@ -84,17 +84,20 @@ import {
   updateConnector as updateConnectorConfig,
 } from '@anton/agent-config'
 import {
+  ANTON_MCP_NAMESPACE,
   AntonToolRegistry,
   ClaudeAdapter,
   CodexAdapter,
   CodexHarnessSession,
   HarnessSession,
+  type LiveConnectorSummary,
   McpManager,
   type McpServerConfig,
   type Session,
   type SubAgentEventHandler,
   appendHarnessTurn,
   assembleConversationContext,
+  buildHarnessCapabilityBlock,
   buildHarnessContextPrompt,
   buildReplaySeed,
   createMcpIpcServer,
@@ -104,6 +107,7 @@ import {
   extractHarnessMemoriesFromMirror,
   hashPromptVersion,
   isHarnessSession,
+  matchesSurface,
   readHarnessHistory,
   resolveModel,
   resumeSession,
@@ -314,6 +318,7 @@ export class AgentServer {
     // connectorManager is assigned.
     this.toolRegistry = new AntonToolRegistry({
       connectorManager: this.connectorManager,
+      mcpManager: this.mcpManager,
       getSessionContext: (sessionId) => this.harnessSessionContexts.get(sessionId),
     })
 
@@ -2104,6 +2109,10 @@ export class AgentServer {
       this.runHarnessMemoryExtraction(id, mirrorProjectId)
     }
 
+    const liveConnectorsAtStart = this.collectLiveConnectorsForPrompt(surfaceLabel)
+    const capabilityBlock = buildHarnessCapabilityBlock(liveConnectorsAtStart, ANTON_MCP_NAMESPACE)
+    const liveConnectorIdsAtStart = liveConnectorsAtStart.map((c) => c.id)
+
     const session: HarnessSession | CodexHarnessSession =
       providerName === 'codex'
         ? new CodexHarnessSession({
@@ -2115,6 +2124,8 @@ export class AgentServer {
             authToken,
             cwd,
             buildSystemPrompt,
+            capabilityBlock,
+            capabilityConnectorIds: liveConnectorIdsAtStart,
             onTurnEnd,
           })
         : new HarnessSession({
@@ -3639,6 +3650,63 @@ export class AgentServer {
         .filter((w) => w.whenToUse.length > 0)
     }
     return this._workflowCatalog
+  }
+
+  /**
+   * Collect the set of connectors actually live for this session, so the
+   * harness identity prompt can answer "what services do I have?" from
+   * ground truth instead of the model's training priors. Includes both
+   * direct connectors (Slack, GitHub, Gmail, …) and enabled MCP servers.
+   */
+  private collectLiveConnectorsForPrompt(surface?: string): LiveConnectorSummary[] {
+    const result: LiveConnectorSummary[] = []
+    const seen = new Set<string>()
+
+    for (const id of this.connectorManager.getActiveIds()) {
+      const connector = this.connectorManager.getConnector(id)
+      if (!connector) continue
+      if (
+        surface &&
+        connector.surfaces &&
+        connector.surfaces.length > 0 &&
+        !connector.surfaces.includes(surface)
+      ) {
+        continue
+      }
+      const toolNames = connector.getTools().map((t) => t.name)
+      if (toolNames.length === 0) continue
+      // Prefer the connector's declared example (authoritative) and fall
+      // back to the first tool name only when none is set.
+      const example = connector.capabilityExample ?? toolNames[0]
+      result.push({
+        id,
+        name: connector.name,
+        capabilitySummary: connector.capabilitySummary ?? '',
+        capabilityExample: example ?? '',
+      })
+      seen.add(id)
+    }
+
+    for (const status of this.mcpManager.getStatus()) {
+      if (!status.connected || status.toolCount === 0) continue
+      // Skip if a direct connector with the same id already claimed it —
+      // prevents a duplicate "Gmail / Gmail (MCP)" entry when the user
+      // has both wired up.
+      if (seen.has(status.id)) continue
+      // Honor any surface allowlist the user configured on the MCP
+      // server so its tools don't get advertised in surfaces where they
+      // wouldn't execute anyway.
+      if (!matchesSurface(status.surfaces, surface)) continue
+      const example = status.tools[0] ?? ''
+      result.push({
+        id: status.id,
+        name: status.name,
+        capabilitySummary: status.description ?? '',
+        capabilityExample: example,
+      })
+    }
+
+    return result
   }
 
   // ── Workflow handlers ──────────────────────────────────────────────

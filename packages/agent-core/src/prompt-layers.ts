@@ -284,6 +284,70 @@ export function buildMemoryGuidelinesLayer(): string {
  * below reads well for both Claude and Codex based on their documented
  * prompting conventions. Revisit after we have usage telemetry.
  */
+/**
+ * Namespace Anton's MCP server uses when surfaced to a harness CLI that
+ * supports per-server tool prefixes (today: codex). Tools reach the model
+ * as `anton:<tool_name>`. Exported so the identity block, capability
+ * block, and the codex server-config use ONE source of truth — changing
+ * this string must stay consistent across all three.
+ */
+export const ANTON_MCP_NAMESPACE = 'anton'
+
+export interface LiveConnectorSummary {
+  /** Stable id, e.g. `gmail`, `google-calendar`, `slack-bot`. */
+  id: string
+  /** Human-readable name, e.g. `Gmail`, `Google Calendar`. */
+  name: string
+  /** One-line capability summary from the connector definition. Empty string if absent. */
+  capabilitySummary: string
+  /** A canonical tool name for this connector (`gmail_send_email`). Empty if absent. */
+  capabilityExample: string
+}
+
+/**
+ * Thread-start capability block — lists the connectors that are actually
+ * live for THIS session, baked into `developerInstructions` once so the
+ * model answers "do you have access to X?" from ground truth instead of
+ * training priors.
+ *
+ * Deliberately injected at thread start only, NOT per turn:
+ *   - `developerInstructions` is immutable for the life of a codex
+ *     thread, so a one-time cost covers the entire conversation.
+ *   - Per-turn injection of the same block wastes tokens and busts the
+ *     prompt cache whenever connectors change mid-session, which almost
+ *     never happens in practice.
+ *
+ * Returns `''` when no connectors are live — callers should still append
+ * unconditionally; an empty string is a no-op.
+ */
+export function buildHarnessCapabilityBlock(
+  liveConnectors: LiveConnectorSummary[],
+  namespace: string,
+): string {
+  if (liveConnectors.length === 0) return ''
+  const list = liveConnectors
+    .map((c) => {
+      const summary = c.capabilitySummary ? ` — ${c.capabilitySummary}` : ''
+      const example = c.capabilityExample ? ` (e.g. \`${namespace}:${c.capabilityExample}\`)` : ''
+      return `- **${c.name}**${summary}${example}`
+    })
+    .join('\n')
+  // Anchor the "call directly or tools/list" hint on a concrete example.
+  // Every connector now declares `capabilityExample`, so this is always set
+  // for at least one entry in practice; the `?? ''` only guards against a
+  // misconfigured connector sneaking through.
+  const anchor = liveConnectors.find((c) => c.capabilityExample)?.capabilityExample ?? ''
+  const exampleHint = anchor ? ` (e.g. \`${namespace}:${anchor}\`)` : ''
+  return systemReminder(
+    'Active Anton Connectors',
+    `The user has authenticated these services in Anton right now. Their tools are live under the \`${namespace}\` MCP server:
+
+${list}
+
+These ARE available — call the tools directly${exampleHint} or run \`tools/list\` on the \`${namespace}\` server for exact tool names and schemas. Do NOT claim "no access" for any service in the list above. If the user asks about a service NOT listed, tell them to add it in Anton → Settings → Connectors instead of refusing generically.`,
+  )
+}
+
 export function buildHarnessIdentityBlock(): string {
   return systemReminder(
     'Anton',

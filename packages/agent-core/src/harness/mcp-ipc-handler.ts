@@ -167,6 +167,14 @@ export function createMcpIpcServer(socketPath: string, provider: IpcToolProvider
         switch (request.method) {
           case 'tools/list': {
             const tools = provider.getTools(sessionId)
+            log.info(
+              {
+                sessionId,
+                toolCount: tools.length,
+                toolNames: tools.map((t) => t.name),
+              },
+              'tools/list served to harness',
+            )
             result = {
               tools: tools.map((t) => ({
                 name: t.name,

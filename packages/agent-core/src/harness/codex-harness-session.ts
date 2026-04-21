@@ -23,6 +23,7 @@ import { existsSync, readFileSync, statSync } from 'node:fs'
 import { basename, extname } from 'node:path'
 import { createLogger } from '@anton/logger'
 import type { ChatImageAttachmentInput } from '@anton/protocol'
+import { ANTON_MCP_NAMESPACE } from '../prompt-layers.js'
 import type { SessionEvent } from '../session.js'
 import { CodexRpcClient, CodexRpcError } from './codex-rpc.js'
 import { PINNED_CLI_VERSION, detectCodexCli } from './codex-version.js'
@@ -45,6 +46,24 @@ export interface CodexHarnessSessionOpts {
   systemPrompt?: string
   /** Per-turn system-prompt builder — same contract as HarnessSession. */
   buildSystemPrompt?: (userMessage: string, turnIndex: number) => Promise<string>
+  /**
+   * Capability block appended ONCE to `developerInstructions` at
+   * thread-start — ground truth for which connectors are live in THIS
+   * session. Built by the server from live connector state (see
+   * `buildHarnessCapabilityBlock`). `developerInstructions` is immutable
+   * for the life of a codex thread, so baking it in here is both
+   * sufficient and cheap; no per-turn re-injection.
+   *
+   * Empty string = no connectors live (still safe to pass — appended
+   * as-is and produces no extra text).
+   */
+  capabilityBlock?: string
+  /**
+   * Stable ids of the connectors reflected in `capabilityBlock`, purely
+   * for telemetry: logged after `thread/start` succeeds so we know which
+   * services the model was told it has. Not otherwise used.
+   */
+  capabilityConnectorIds?: string[]
   /** Hook invoked after each turn with {userMessage, events}. */
   onTurnEnd?: (turn: { userMessage: string; events: SessionEvent[] }) => void | Promise<void>
   maxBudgetUsd?: number
@@ -187,6 +206,18 @@ export class CodexHarnessSession {
     } else {
       systemPromptForTurn = this.opts.systemPrompt
     }
+
+    // First-turn title: truncated user question. Mirrors ChatGPT/Claude.ai —
+    // the UI gets a title immediately; `thread/name/updated` may later
+    // upgrade it to a server-generated smart title.
+    if (this.turnIndex === 0 && !this.title) {
+      const seed = userMessage.trim().slice(0, 60).split('\n')[0]
+      if (seed.length > 0) {
+        this.title = seed
+        yield { type: 'title_update', title: this.title }
+      }
+    }
+
     this.turnIndex += 1
 
     try {
@@ -252,18 +283,6 @@ export class CodexHarnessSession {
       while (!queue.done || queue.events.length > 0) {
         if (queue.events.length > 0) {
           const ev = queue.events.shift()!
-
-          // Side effect: capture first text for auto-title.
-          if (!this.title && ev.type === 'text' && ev.content.length > 0) {
-            this.title = ev.content.slice(0, 60).split('\n')[0]
-            turnEvents.push(ev)
-            yield ev
-            const titleEv: SessionEvent = { type: 'title_update', title: this.title }
-            turnEvents.push(titleEv)
-            yield titleEv
-            continue
-          }
-
           turnEvents.push(ev)
           yield ev
         } else if (!queue.done) {
@@ -483,6 +502,18 @@ export class CodexHarnessSession {
         capabilities: null,
       })
 
+      const baseInstructions = (systemPrompt ?? this.opts.systemPrompt ?? '').trim()
+      const capabilityBlock = (this.opts.capabilityBlock ?? '').trim()
+      // Explicit `\n\n` joiner — don't rely on the leading blank lines
+      // `systemReminder()` emits to separate the capability block from the
+      // prompt above it. Either piece may be empty; `filter(Boolean)` drops
+      // empties so we never leave a stray `\n\n` at the start or end.
+      const developerInstructionsJoined = [baseInstructions, capabilityBlock]
+        .filter((s) => s.length > 0)
+        .join('\n\n')
+      const developerInstructions =
+        developerInstructionsJoined.length > 0 ? developerInstructionsJoined : null
+
       const threadStartParams: Record<string, unknown> = {
         model: this.model,
         modelProvider: null,
@@ -491,7 +522,7 @@ export class CodexHarnessSession {
         sandbox: 'workspace-write',
         config: this.buildConfig(),
         baseInstructions: null,
-        developerInstructions: systemPrompt ?? this.opts.systemPrompt ?? null,
+        developerInstructions,
         // Required fields in v2 — we do not opt into either.
         experimentalRawEvents: false,
         persistExtendedHistory: false,
@@ -510,6 +541,17 @@ export class CodexHarnessSession {
         { sessionId: this.id, threadId: this.threadId, model: this.model },
         'codex app-server ready',
       )
+      if (capabilityBlock.length > 0) {
+        log.info(
+          {
+            sessionId: this.id,
+            threadId: this.threadId,
+            capabilityBlockChars: capabilityBlock.length,
+            liveConnectorIds: this.opts.capabilityConnectorIds ?? [],
+          },
+          'capability block installed via thread/start',
+        )
+      }
     } catch (err) {
       const message = err instanceof CodexRpcError ? err.message : (err as Error).message
       this.rpc?.close('init-failed')
@@ -530,10 +572,12 @@ export class CodexHarnessSession {
       ANTON_SESSION: this.id,
       ANTON_AUTH: this.opts.authToken,
     }
+    // The namespace Codex uses to prefix our tools (e.g. `anton:gmail_*`)
+    // MUST match the value the identity + capability blocks reference.
     return {
       model_reasoning_summary: 'detailed',
       mcp_servers: {
-        anton: {
+        [ANTON_MCP_NAMESPACE]: {
           command: 'node',
           args: [this.opts.shimPath],
           env: mcpEnv,
