@@ -228,8 +228,12 @@ export class WebhookAgentRunner {
       this.pendingInteractions.delete(sessionId)
       // Resolve as rejection so the awaiting handler inside the session
       // generator unblocks instead of hanging until the interaction
-      // timeout (up to 24h for plan/ask_user).
-      pending.resolve({ approved: false, feedback: 'Session evicted.' })
+      // timeout (up to 24h for plan/ask_user). No feedback text — for
+      // plan_confirm and ask_user the feedback field is forwarded to the
+      // model as plan-revision input / the first question's answer, and
+      // we don't want "Session evicted." to leak into the conversation
+      // the way it used to.
+      pending.resolve({ approved: false })
     }
 
     const progress = this.progressStates.get(sessionId)

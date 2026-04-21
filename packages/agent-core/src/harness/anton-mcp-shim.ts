@@ -250,6 +250,25 @@ async function ensureAuthed(): Promise<net.Socket> {
 
     try {
       const sock = await doConnect()
+      // A server-sent `bye` arriving in the same readline chunk as our
+      // auth_ok would have run `transitionToLost` synchronously — setting
+      // state='lost' — before this microtask resumed. Blindly assigning
+      // state='authed' here would clobber that transition and hand out a
+      // socket the server has already half-closed. Detect it and treat
+      // the attempt as failed so the caller sees a clean error and the
+      // backoff/reconnect path runs. Double-cast escapes control-flow
+      // narrowing from the `state = { tag: 'connecting', ... }` above;
+      // `state` is a module-level `let` and may have been mutated
+      // synchronously inside readline while we were awaited.
+      const stateNow = state as unknown as ConnState
+      if (stateNow.tag === 'lost') {
+        try {
+          sock.destroy()
+        } catch {
+          /* */
+        }
+        throw new Error(`connection lost during handshake: ${stateNow.reason}`)
+      }
       const since = Date.now()
       state = { tag: 'authed', socket: sock, since }
       startPing()
