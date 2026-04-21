@@ -1,0 +1,25 @@
+specs/features/SESSION_LIFECYCLE.md
+  772c58242e946686 1-101
+specs/features/HARNESS_ARCHITECTURE.md
+  772c58242e946686 36-37,120-156,250-251,266,268
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.3.2",
+  "base_commit_sha": "500c504abfec240db3ea2d455e0decefc88b861b",
+  "prompts": {
+    "772c58242e946686": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "e71dbe55-6218-49be-9103-289b6657eebc",
+        "model": "claude-opus-4-7"
+      },
+      "human_author": "Om Gupta",
+      "messages": [],
+      "total_additions": 0,
+      "total_deletions": 0,
+      "accepted_lines": 213,
+      "overriden_lines": 0
+    }
+  }
+}
