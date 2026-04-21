@@ -193,30 +193,6 @@ export function ChatInput({
 
     const text = parts.join('').trim()
 
-    // Single-question generic ask_user: route the user's text as the
-    // answer. Keeps the composer free while resolving the prompt.
-    // For multi-question ask_user we fall through to the normal send
-    // path — the AskUserInline card (rendered elsewhere in the
-    // transcript) collects all answers before submitting. Copying one
-    // answer across N questions would confuse the model with duplicate
-    // values.
-    if (
-      pendingAskUser &&
-      onAskUserSubmit &&
-      text &&
-      pendingAskUser.questions.length === 1
-    ) {
-      const q = pendingAskUser.questions[0]
-      onAskUserSubmit({ [q.question]: text })
-      handle.clear()
-      setInput('')
-      setImageCount(0)
-      setShowSlashMenu(false)
-      if (conversationId) clearDraftInput(conversationId)
-      handle.focus()
-      return
-    }
-
     // If agent is working and no attachments, steer with text only
     if (isCurrentSessionWorking && attachments.length === 0) {
       if (text && onSteer) {
@@ -239,15 +215,7 @@ export function ChatInput({
     setShowSlashMenu(false)
     if (conversationId) clearDraftInput(conversationId)
     handle.focus()
-  }, [
-    isCurrentSessionWorking,
-    onSend,
-    onSteer,
-    conversationId,
-    clearDraftInput,
-    pendingAskUser,
-    onAskUserSubmit,
-  ])
+  }, [isCurrentSessionWorking, onSend, onSteer, conversationId, clearDraftInput])
 
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent) => {
@@ -296,29 +264,21 @@ export function ChatInput({
 
   const rootClass = `composer composer--${variant}`
 
-  // Only specialized routine-create / routine-delete confirmations still
-  // take over the composer — they need the explicit Confirm/Cancel UI.
-  // Generic ask_user questions no longer hide the composer; the user
-  // keeps typing normally and the model can continue when they respond.
+  // While an ask_user is pending, the card takes over the composer so
+  // the user can't type until they answer — matches Claude Code's
+  // prompt UX. AskUserInline itself routes to specialized Routine /
+  // Publish cards when the question's metadata matches, and falls
+  // back to its generic one-question-at-a-time renderer otherwise.
   if (pendingAskUser && onAskUserSubmit) {
-    const q = pendingAskUser.questions[0]
-    const metaType = (q?.metadata as { type?: string } | undefined)?.type
-    const isSpecializedCard =
-      pendingAskUser.questions.length === 1 &&
-      (metaType === 'routine_create' ||
-        metaType === 'routine_delete' ||
-        metaType === 'publish_confirm')
-    if (isSpecializedCard) {
-      return (
-        <div className={rootClass}>
-          <div className="composer__anchor">
-            <div className="composer__box composer__box--ask-user">
-              <AskUserInline questions={pendingAskUser.questions} onSubmit={onAskUserSubmit} />
-            </div>
+    return (
+      <div className={rootClass}>
+        <div className="composer__anchor">
+          <div className="composer__box composer__box--ask-user">
+            <AskUserInline questions={pendingAskUser.questions} onSubmit={onAskUserSubmit} />
           </div>
         </div>
-      )
-    }
+      </div>
+    )
   }
 
   return (
