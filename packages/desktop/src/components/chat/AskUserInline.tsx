@@ -349,13 +349,20 @@ export function AskUserInline({ questions, onSubmit }: Props) {
       </div>
 
       <div className="ix__body">
-        {questions.map((q, qi) => {
-          const options = (q.options ?? []).map(normalizeOption)
-          const selected = answers[q.question]
-          const isCustom = showCustom[q.question]
-          const isAnswered = !!(selected || customInputs[q.question]?.trim())
+        {(() => {
+          // Render only the first unanswered question — questions flow
+          // one at a time. Answered ones advance the progress dots in
+          // the header, and once all are done the ix__done block below
+          // fires the auto-submit.
+          const currentIndex = questions.findIndex(
+            (q) => !(answers[q.question] || customInputs[q.question]?.trim()),
+          )
+          if (currentIndex === -1) return null
 
-          if (isAnswered) return null
+          const q = questions[currentIndex]
+          const qi = currentIndex
+          const options = (q.options ?? []).map(normalizeOption)
+          const isCustom = showCustom[q.question]
 
           return (
             <div key={q.question}>
@@ -428,7 +435,7 @@ export function AskUserInline({ questions, onSubmit }: Props) {
               )}
             </div>
           )
-        })}
+        })()}
 
         {answeredCount === questions.length && (
           <div className="ix__done">
