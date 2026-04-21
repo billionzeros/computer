@@ -193,16 +193,21 @@ export function ChatInput({
 
     const text = parts.join('').trim()
 
-    // If there's a generic ask_user pending (routine confirmations still
-    // take over the composer above), route the user's text as the answer
-    // to each pending question so the server-side handler unblocks
-    // cleanly. Keeps the composer free while still resolving the prompt.
-    if (pendingAskUser && onAskUserSubmit && text) {
-      const answers: Record<string, string> = {}
-      for (const q of pendingAskUser.questions) {
-        answers[q.question] = text
-      }
-      onAskUserSubmit(answers)
+    // Single-question generic ask_user: route the user's text as the
+    // answer. Keeps the composer free while resolving the prompt.
+    // For multi-question ask_user we fall through to the normal send
+    // path — the AskUserInline card (rendered elsewhere in the
+    // transcript) collects all answers before submitting. Copying one
+    // answer across N questions would confuse the model with duplicate
+    // values.
+    if (
+      pendingAskUser &&
+      onAskUserSubmit &&
+      text &&
+      pendingAskUser.questions.length === 1
+    ) {
+      const q = pendingAskUser.questions[0]
+      onAskUserSubmit({ [q.question]: text })
       handle.clear()
       setInput('')
       setImageCount(0)

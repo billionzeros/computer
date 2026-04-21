@@ -122,11 +122,15 @@ export function SessionFilesBar() {
 
   const list = useMemo<Artifact[]>(() => {
     const sessionId = activeConversation?.sessionId
+    // Only show artifacts that explicitly match the active session /
+    // conversation. Orphan artifacts (no conversationId set) stay
+    // hidden rather than leaking into every session's Files bar.
     return allArtifacts
       .filter((a) => {
-        if (a.conversationId && sessionId) return a.conversationId === sessionId
-        if (a.conversationId && activeConversationId) return a.conversationId === activeConversationId
-        return true
+        if (!a.conversationId) return false
+        if (sessionId) return a.conversationId === sessionId
+        if (activeConversationId) return a.conversationId === activeConversationId
+        return false
       })
       .slice()
       .sort((a, b) => b.timestamp - a.timestamp)
