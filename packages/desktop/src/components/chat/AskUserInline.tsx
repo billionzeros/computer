@@ -322,7 +322,7 @@ export function AskUserInline({ questions, onSubmit }: Props) {
   ).length
 
   return (
-    <div className="ix ix--bordered">
+    <div className="ix ix--accent">
       <div className="ix__head">
         <div className="ix__head-left">
           <div className="ix__glyph">?</div>
