@@ -1,12 +1,12 @@
 {
-  "version": "2.0.1",
-  "gitHash": "39fedb0",
+  "version": "2.0.2",
+  "gitHash": "",
   "releaseUrl": "https://github.com/billionzeros/computer/releases",
-  "changelog": "Fixes:\n- unblock codex harness turns and hot-swap models mid-session (#1)",
-  "publishedAt": "2026-04-20T12:12:18.350Z",
-  "cli": "https://github.com/billionzeros/computer/releases/download/v2.0.1/anton-cli.mjs",
+  "changelog": "Other:\n- fix(harness): title emission + codex capability block + MCP exposure (#2)",
+  "publishedAt": "2026-04-21T06:20:13.993Z",
+  "cli": "https://github.com/billionzeros/computer/releases/download/v2.0.2/anton-cli.mjs",
   "sidecar": {
-    "linux-arm64": "https://github.com/billionzeros/computer/releases/download/v2.0.1/anton-sidecar-linux-arm64",
-    "linux-amd64": "https://github.com/billionzeros/computer/releases/download/v2.0.1/anton-sidecar-linux-amd64"
+    "linux-arm64": "https://github.com/billionzeros/computer/releases/download/v2.0.2/anton-sidecar-linux-arm64",
+    "linux-amd64": "https://github.com/billionzeros/computer/releases/download/v2.0.2/anton-sidecar-linux-amd64"
   }
 }
