@@ -1,0 +1,29 @@
+packages/desktop/src/components/chat/AskUserInline.tsx
+  63d6cd8a3bd54265 2-12,259-381,419-429
+packages/agent-core/src/tools/publish.ts
+  63d6cd8a3bd54265 326,329-341,345-349,351-352,359-361,379-382,386-420
+packages/desktop/src/components/chat/ChatInput.tsx
+  63d6cd8a3bd54265 303-305
+packages/agent-core/src/tools/factories.ts
+  63d6cd8a3bd54265 119
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.3.2",
+  "base_commit_sha": "5d17fe15b08f588875891c7b4b6579f8537f09b8",
+  "prompts": {
+    "63d6cd8a3bd54265": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "762a7d21-4a2e-421b-8173-6fe445781387",
+        "model": "claude-opus-4-7"
+      },
+      "human_author": "Om Gupta",
+      "messages": [],
+      "total_additions": 217,
+      "total_deletions": 8,
+      "accepted_lines": 2056,
+      "overriden_lines": 0
+    }
+  }
+}
