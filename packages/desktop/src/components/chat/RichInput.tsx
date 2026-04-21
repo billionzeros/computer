@@ -1,5 +1,6 @@
 import type React from 'react'
 import { forwardRef, useCallback, useEffect, useImperativeHandle, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import type { ChatImageAttachment } from '../../lib/store.js'
 
 // ── Public types ──────────────────────────────────────────────────────────────
@@ -451,19 +452,21 @@ export const RichInput = forwardRef<RichInputHandle, Props>(function RichInput(
         suppressContentEditableWarning
         style={{ minHeight, maxHeight }}
       />
-      {preview && (
-        <div
-          className="rich-input__hover-preview"
-          style={{
-            top: preview.top,
-            left: preview.left,
-            transform: preview.flipBelow ? 'translateX(-50%)' : 'translate(-50%, -100%)',
-          }}
-        >
-          <img src={preview.src} alt={preview.name} className="rich-input__hover-preview-img" />
-          <span className="rich-input__hover-preview-name">{preview.name}</span>
-        </div>
-      )}
+      {preview &&
+        createPortal(
+          <div
+            className="rich-input__hover-preview"
+            style={{
+              top: preview.top,
+              left: preview.left,
+              transform: preview.flipBelow ? 'translateX(-50%)' : 'translate(-50%, -100%)',
+            }}
+          >
+            <img src={preview.src} alt={preview.name} className="rich-input__hover-preview-img" />
+            <span className="rich-input__hover-preview-name">{preview.name}</span>
+          </div>,
+          document.body,
+        )}
     </div>
   )
 })

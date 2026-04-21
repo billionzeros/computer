@@ -53,6 +53,15 @@ export interface McpServerConfig {
   args: string[]
   env?: Record<string, string>
   enabled: boolean
+  /**
+   * Surfaces this MCP connector may appear on. `undefined` (the default) =
+   * all surfaces. Set to e.g. `['desktop']` to keep a developer-machine
+   * MCP server from leaking its tools into Slack / Telegram conversations
+   * where the user context is different. Values are free-form strings so
+   * new surfaces can be added without touching agent-core; the current
+   * well-known set matches `ConnectorSurface` in @anton/connectors.
+   */
+  surfaces?: string[]
 }
 
 // ── MCP Client ──────────────────────────────────────────────────────
@@ -71,6 +80,11 @@ export class McpClient extends EventEmitter {
   private buffer = ''
   /** Serializes requests to prevent concurrent stdin writes to non-thread-safe MCP servers */
   private requestQueue: Promise<void> = Promise.resolve()
+  /** Ring buffer of the most recent stderr lines, surfaced in handshake errors. */
+  private stderrTail: string[] = []
+  private static readonly STDERR_TAIL_MAX = 40
+  /** Process exit details captured before rejectAllPending fires. */
+  private exitInfo: { code: number | null; signal: NodeJS.Signals | null } | null = null
   private log
 
   constructor(config: McpServerConfig) {
@@ -96,6 +110,15 @@ export class McpClient extends EventEmitter {
 
     const env = { ...process.env, ...this.config.env }
 
+    this.log.info(
+      {
+        command: this.config.command,
+        args: this.config.args,
+        envKeys: this.config.env ? Object.keys(this.config.env) : [],
+      },
+      'spawning MCP server',
+    )
+
     this.process = spawn(this.config.command, this.config.args, {
       stdio: ['pipe', 'pipe', 'pipe'],
       env,
@@ -109,11 +132,21 @@ export class McpClient extends EventEmitter {
       rl.on('line', (line) => this.handleLine(line))
     }
 
-    // Log stderr but don't crash
+    // Capture stderr into a ring buffer and log it. The buffer is attached
+    // to handshake errors so we can see *why* a server died on startup.
     if (this.process.stderr) {
       const rl = createInterface({ input: this.process.stderr })
       rl.on('line', (line) => {
-        this.log.error({ stream: 'stderr' }, line)
+        this.stderrTail.push(line)
+        if (this.stderrTail.length > McpClient.STDERR_TAIL_MAX) {
+          this.stderrTail.shift()
+        }
+        // During handshake, promote to warn so it surfaces alongside the failure.
+        if (this.connected) {
+          this.log.error({ stream: 'stderr' }, line)
+        } else {
+          this.log.warn({ stream: 'stderr', phase: 'handshake' }, line)
+        }
       })
     }
 
@@ -123,10 +156,23 @@ export class McpClient extends EventEmitter {
       this.emit('error', err)
     })
 
-    this.process.on('exit', (code) => {
-      this.log.info({ exitCode: code }, 'process exited')
+    this.process.on('exit', (code, signal) => {
+      this.exitInfo = { code, signal }
+      this.log.info(
+        {
+          exitCode: code,
+          signal,
+          pendingRequests: this.pending.size,
+          wasConnected: this.connected,
+        },
+        'process exited',
+      )
       this.connected = false
-      this.rejectAllPending(new Error(`MCP server exited with code ${code}`))
+      const reason =
+        signal !== null
+          ? `MCP server killed by signal ${signal}`
+          : `MCP server exited with code ${code}`
+      this.rejectAllPending(new Error(reason))
       this.emit('disconnected', code)
     })
 
@@ -159,9 +205,27 @@ export class McpClient extends EventEmitter {
       // Discover tools
       await this.refreshTools()
     } catch (err) {
+      const cause = (err as Error).message
+      const tail = this.stderrTail.slice(-10)
+      const exitDetail = this.exitInfo
+        ? ` [exit: code=${this.exitInfo.code}${
+            this.exitInfo.signal ? ` signal=${this.exitInfo.signal}` : ''
+          }]`
+        : ''
+      const stderrDetail = tail.length > 0 ? ` [stderr tail: ${tail.join(' | ')}]` : ''
+      this.log.error(
+        {
+          err,
+          cause,
+          exitInfo: this.exitInfo,
+          stderrTail: tail,
+          command: this.config.command,
+        },
+        'handshake failed',
+      )
       this.kill()
       throw new Error(
-        `Failed to initialize MCP server "${this.config.id}": ${(err as Error).message}`,
+        `Failed to initialize MCP server "${this.config.id}": ${cause}${exitDetail}${stderrDetail}`,
       )
     }
   }
@@ -273,7 +337,14 @@ export class McpClient extends EventEmitter {
     try {
       msg = JSON.parse(trimmed)
     } catch {
-      // Not JSON — ignore (some servers emit non-JSON on stdout)
+      // Non-JSON stdout is a common MCP bug (servers logging to stdout).
+      // During handshake this silently swallows the initialize response, so
+      // surface it — quietly once we're past initialize.
+      if (!this.connected) {
+        this.log.warn({ stream: 'stdout', phase: 'handshake', line: trimmed }, 'non-JSON stdout')
+      } else {
+        this.log.debug({ stream: 'stdout', line: trimmed }, 'non-JSON stdout')
+      }
       return
     }
 

@@ -6,6 +6,8 @@ import { createGoogleCalendarTools } from './tools.js'
 export class GoogleCalendarConnector implements DirectConnector {
   readonly id = 'google-calendar'
   readonly name = 'Google Calendar'
+  readonly capabilitySummary = 'List/create/update/delete calendar events, list calendars'
+  readonly capabilityExample = 'gcal_create_event'
 
   private api = new GoogleCalendarAPI()
   private tools: AgentTool[] = []

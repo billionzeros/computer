@@ -8,14 +8,23 @@ import {
   HelpCircle,
   LogOut,
   MoreHorizontal,
-  Pencil,
   PlayCircle,
   Search,
   X,
 } from 'lucide-react'
-import { type ReactNode, useCallback, useEffect, useMemo, useState } from 'react'
+import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import type { ProviderInfo } from '../../lib/store.js'
+import {
+  ACCOUNT_COLORS,
+  accountColorValue,
+  accountStore,
+  avatarInitial,
+} from '../../lib/store/accountStore.js'
 import { sessionStore } from '../../lib/store/sessionStore.js'
 import { uiStore } from '../../lib/store/uiStore.js'
+import { HarnessSetupModal } from '../chat/HarnessSetupModal.js'
+import { ModelPopover } from '../chat/ModelSelector.js'
+import { ProviderSettingsModal } from '../chat/ProviderSettingsModal.js'
 import { formatModelName, providerIcons } from '../chat/model-utils.js'
 
 // ── Types ─────────────────────────────────────────────────────────
@@ -254,25 +263,82 @@ function GeneralSection({
         <ReplayTourRow onReplayTour={onClose} />
       </Group>
       <Divider />
-      <Group label="Profile">
-        <div className="sprofile">
-          <div className="sprofile__av">A</div>
-          <div className="sprofile__body">
-            <div className="sprofile__name">Anton user</div>
-            <div className="sprofile__meta">Signed in locally</div>
-          </div>
-          <button type="button" className="sm-btn sm-btn--quiet">
-            <Pencil size={13} strokeWidth={1.5} /> Edit profile
-          </button>
-        </div>
+      <Group label="Profile" hint="How you appear in Anton. Stored on this machine only.">
+        <ProfileEditor />
       </Group>
       <Divider />
-      <Group label="Session">
-        <button type="button" className="sm-btn" onClick={onDisconnect}>
-          <LogOut size={15} strokeWidth={1.5} /> Disconnect from machine
+      <Group
+        label="Session"
+        hint="Sign out of this machine. You'll need to reconnect to use Anton again."
+      >
+        <button
+          type="button"
+          className="sm-btn sm-btn--danger sm-btn--inline"
+          onClick={onDisconnect}
+        >
+          <LogOut size={14} strokeWidth={1.5} />
+          <span>Disconnect from machine</span>
         </button>
       </Group>
     </>
+  )
+}
+
+function ProfileEditor() {
+  const displayName = accountStore((s) => s.displayName)
+  const avatarColor = accountStore((s) => s.avatarColor)
+  const setDisplayName = accountStore((s) => s.setDisplayName)
+  const setAvatarColor = accountStore((s) => s.setAvatarColor)
+  const reset = accountStore((s) => s.reset)
+  const [draft, setDraft] = useState(displayName)
+
+  useEffect(() => {
+    setDraft(displayName)
+  }, [displayName])
+
+  const commit = () => {
+    const trimmed = draft.trim()
+    if (!trimmed || trimmed === displayName) return
+    setDisplayName(trimmed)
+  }
+
+  return (
+    <div className="sprofile">
+      <div className="sprofile__av" style={{ color: accountColorValue(avatarColor) }}>
+        {avatarInitial(draft || displayName)}
+      </div>
+      <div className="sprofile__body">
+        <input
+          className="sprofile__input"
+          value={draft}
+          onChange={(e) => setDraft(e.target.value)}
+          onBlur={commit}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') (e.target as HTMLInputElement).blur()
+            if (e.key === 'Escape') setDraft(displayName)
+          }}
+          placeholder="Anton"
+          maxLength={40}
+          aria-label="Display name"
+        />
+        <div className="sprofile__colors">
+          {ACCOUNT_COLORS.map((c) => (
+            <button
+              key={c.id}
+              type="button"
+              className={`sprofile__color${avatarColor === c.id ? ' is-active' : ''}`}
+              style={{ background: c.value }}
+              onClick={() => setAvatarColor(c.id)}
+              aria-label={`${c.id} avatar color`}
+              aria-pressed={avatarColor === c.id}
+            />
+          ))}
+        </div>
+      </div>
+      <button type="button" className="sm-btn sm-btn--quiet" onClick={reset}>
+        Reset
+      </button>
+    </div>
   )
 }
 
@@ -693,15 +759,95 @@ function ProviderMark({ provider, size = 18 }: { provider: string; size?: number
   return <span className="sprov__av-fallback">{provider.charAt(0).toUpperCase()}</span>
 }
 
+function ProviderRow({
+  provider,
+  onOpen,
+}: {
+  provider: ProviderInfo
+  onOpen: (p: ProviderInfo) => void
+}) {
+  const isHarness = provider.type === 'harness'
+  const connected = provider.hasApiKey || provider.installed === true
+  const meta = isHarness
+    ? connected
+      ? 'CLI installed'
+      : 'Install to connect'
+    : connected
+      ? 'API key configured'
+      : 'Not connected'
+  return (
+    <div className="sprov">
+      <div className="sprov__av">
+        <ProviderMark provider={provider.name} size={18} />
+      </div>
+      <div className="sprov__body">
+        <div className="sprov__name">{provider.name}</div>
+        <div className="sprov__meta">{meta}</div>
+      </div>
+      {connected ? (
+        <span className="stag stag--ok">
+          <span className="stag__dot" /> Connected
+        </span>
+      ) : (
+        <button type="button" className="sm-btn sm-btn--quiet" onClick={() => onOpen(provider)}>
+          Connect
+        </button>
+      )}
+      <button
+        type="button"
+        className="sicon"
+        title={isHarness ? 'Manage CLI' : 'Manage API key'}
+        onClick={() => onOpen(provider)}
+      >
+        <MoreHorizontal size={14} strokeWidth={1.5} />
+      </button>
+    </div>
+  )
+}
+
 function ModelsSection({ onOpenUsage }: { onOpenUsage?: () => void }) {
   const providers = sessionStore((s) => s.providers)
   const currentProvider = sessionStore((s) => s.currentProvider)
   const currentModel = sessionStore((s) => s.currentModel)
   const sendProvidersList = sessionStore((s) => s.sendProvidersList)
+  const sendDetectHarnesses = sessionStore((s) => s.sendDetectHarnesses)
+  const sendProviderSetDefault = sessionStore((s) => s.sendProviderSetDefault)
+  const setCurrentSession = sessionStore((s) => s.setCurrentSession)
+  const currentSessionId = sessionStore((s) => s.currentSessionId)
+
+  const [pickerOpen, setPickerOpen] = useState(false)
+  const [apiProvider, setApiProvider] = useState<ProviderInfo | null>(null)
+  const [harnessProvider, setHarnessProvider] = useState<ProviderInfo | null>(null)
+  const changeBtnRef = useRef<HTMLButtonElement>(null)
 
   useEffect(() => {
     sendProvidersList()
-  }, [sendProvidersList])
+    sendDetectHarnesses()
+  }, [sendProvidersList, sendDetectHarnesses])
+
+  const { harnesses, apis } = useMemo(() => {
+    const h: ProviderInfo[] = []
+    const a: ProviderInfo[] = []
+    for (const p of providers) {
+      if (p.type === 'harness') h.push(p)
+      else a.push(p)
+    }
+    return { harnesses: h, apis: a }
+  }, [providers])
+
+  const openProvider = useCallback((p: ProviderInfo) => {
+    if (p.type === 'harness') setHarnessProvider(p)
+    else setApiProvider(p)
+  }, [])
+
+  const handleSelectModel = useCallback(
+    (provider: string, model: string) => {
+      setCurrentSession(currentSessionId || '', provider, model)
+      sendProviderSetDefault(provider, model)
+      setPickerOpen(false)
+    },
+    [currentSessionId, sendProviderSetDefault, setCurrentSession],
+  )
 
   return (
     <>
@@ -715,63 +861,33 @@ function ModelsSection({ onOpenUsage }: { onOpenUsage?: () => void }) {
             <div className="smodel__meta">{currentProvider}</div>
           </div>
           <button
+            ref={changeBtnRef}
             type="button"
             className="sm-btn sm-btn--quiet"
-            onClick={() => window.dispatchEvent(new CustomEvent('anton:open-model-selector'))}
+            onClick={() => setPickerOpen((o) => !o)}
           >
             Change
           </button>
         </div>
       </Group>
       <Divider />
-      <Group label="Providers" hint="Connect CLIs and API keys.">
-        {providers.length === 0 ? (
-          <Row title="No providers yet" desc="Connect in the model selector to add one.">
+      <Group label="CLIs" hint="Use your ChatGPT / Claude / Anton subscription via installed CLIs.">
+        {harnesses.length === 0 ? (
+          <Row title="No CLI providers" desc="Harness-backed providers will appear here.">
             <span className="stag">Empty</span>
           </Row>
         ) : (
-          providers.map((p) => {
-            const connected = p.hasApiKey || p.installed === true
-            const meta =
-              p.type === 'harness'
-                ? connected
-                  ? 'CLI installed'
-                  : 'Install to connect'
-                : connected
-                  ? 'API key configured'
-                  : 'Not connected'
-            return (
-              <div key={p.name} className="sprov">
-                <div className="sprov__av">
-                  <ProviderMark provider={p.name} size={18} />
-                </div>
-                <div className="sprov__body">
-                  <div className="sprov__name">{p.name}</div>
-                  <div className="sprov__meta">{meta}</div>
-                </div>
-                {connected ? (
-                  <span className="stag stag--ok">
-                    <span className="stag__dot" /> Connected
-                  </span>
-                ) : (
-                  <button
-                    type="button"
-                    className="sm-btn sm-btn--quiet"
-                    onClick={() =>
-                      window.dispatchEvent(
-                        new CustomEvent('anton:open-provider', { detail: { provider: p.name } }),
-                      )
-                    }
-                  >
-                    Connect
-                  </button>
-                )}
-                <button type="button" className="sicon" title="More">
-                  <MoreHorizontal size={14} strokeWidth={1.5} />
-                </button>
-              </div>
-            )
-          })
+          harnesses.map((p) => <ProviderRow key={p.name} provider={p} onOpen={openProvider} />)
+        )}
+      </Group>
+      <Divider />
+      <Group label="API keys" hint="Bring your own key to route requests directly.">
+        {apis.length === 0 ? (
+          <Row title="No API providers" desc="API-key-based providers will appear here.">
+            <span className="stag">Empty</span>
+          </Row>
+        ) : (
+          apis.map((p) => <ProviderRow key={p.name} provider={p} onOpen={openProvider} />)
         )}
       </Group>
       <Divider />
@@ -782,6 +898,20 @@ function ModelsSection({ onOpenUsage }: { onOpenUsage?: () => void }) {
           </button>
         </Row>
       </Group>
+
+      {pickerOpen && (
+        <ModelPopover
+          anchorRef={changeBtnRef}
+          providers={providers}
+          currentProvider={currentProvider}
+          currentModel={currentModel}
+          onSelect={handleSelectModel}
+          onClose={() => setPickerOpen(false)}
+          onManage={() => setPickerOpen(false)}
+        />
+      )}
+      <ProviderSettingsModal provider={apiProvider} onClose={() => setApiProvider(null)} />
+      <HarnessSetupModal provider={harnessProvider} onClose={() => setHarnessProvider(null)} />
     </>
   )
 }
@@ -1169,9 +1299,20 @@ export function SettingsModal({
                 </div>
               )
             })}
-            <div className="sm-rail__meta">
-              <div className="sm-rail__build">Anton</div>
-              <div className="sm-rail__ver">preview</div>
+            <div className="sm-rail__footer">
+              <button
+                type="button"
+                className="sm-rail__disconnect"
+                onClick={onDisconnect}
+                title="Disconnect from machine"
+              >
+                <LogOut size={13} strokeWidth={1.5} />
+                <span>Disconnect from machine</span>
+              </button>
+              <div className="sm-rail__meta">
+                <div className="sm-rail__build">Anton</div>
+                <div className="sm-rail__ver">preview</div>
+              </div>
             </div>
           </aside>
           <main className="sm-content">

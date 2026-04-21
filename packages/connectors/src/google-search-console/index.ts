@@ -6,6 +6,9 @@ import { createGoogleSearchConsoleTools } from './tools.js'
 export class GoogleSearchConsoleConnector implements DirectConnector {
   readonly id = 'google-search-console'
   readonly name = 'Google Search Console'
+  readonly capabilitySummary =
+    'SEO analytics: top queries/pages, impressions, CTR, device/country breakdowns, sitemaps'
+  readonly capabilityExample = 'gsc_top_queries'
 
   private api = new GoogleSearchConsoleAPI()
   private tools: AgentTool[] = []

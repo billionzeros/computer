@@ -6,6 +6,8 @@ import { createGoogleSheetsTools } from './tools.js'
 export class GoogleSheetsConnector implements DirectConnector {
   readonly id = 'google-sheets'
   readonly name = 'Google Sheets'
+  readonly capabilitySummary = 'Read/write spreadsheet ranges, append rows, create sheets and tabs'
+  readonly capabilityExample = 'gsheets_append_rows'
 
   private api = new GoogleSheetsAPI()
   private tools: AgentTool[] = []

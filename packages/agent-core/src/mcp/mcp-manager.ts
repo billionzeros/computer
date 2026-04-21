@@ -15,6 +15,22 @@ import { mcpClientToAgentTools } from './mcp-tool-adapter.js'
 
 const log = createLogger('mcp-manager')
 
+/**
+ * Match rule for `McpServerConfig.surfaces` / `ConnectorStatus.surfaces`:
+ * an undefined or empty allowlist means "every surface"; otherwise the
+ * session's surface must appear in the list. Called without a `surface`
+ * (e.g. from Pi SDK `buildTools()`) also returns true — filtering is a
+ * harness / session-level feature, not a global block.
+ */
+export function matchesSurface(
+  allowed: string[] | undefined,
+  surface: string | undefined,
+): boolean {
+  if (!allowed || allowed.length === 0) return true
+  if (!surface) return true
+  return allowed.includes(surface)
+}
+
 export interface ConnectorStatus {
   id: string
   name: string
@@ -23,6 +39,8 @@ export interface ConnectorStatus {
   toolCount: number
   tools: string[]
   error?: string
+  /** Mirrors `McpServerConfig.surfaces` — undefined means "all surfaces". */
+  surfaces?: string[]
 }
 
 /** Per-tool permission override applied at runtime. Anything missing from the map defaults to 'auto'. */
@@ -219,11 +237,16 @@ export class McpManager {
   /**
    * Get all tools from all connected MCP servers, as pi SDK AgentTools.
    * This is the key method — called by buildTools() to merge MCP tools.
+   *
+   * If `surface` is provided, skip any MCP server whose config declares a
+   * `surfaces` whitelist that doesn't include this surface. Undeclared
+   * `surfaces` = all surfaces (current default behavior).
    */
-  getAllTools(): AgentTool[] {
+  getAllTools(surface?: string): AgentTool[] {
     const tools: AgentTool[] = []
     for (const client of this.clients.values()) {
       if (!client.isConnected()) continue
+      if (!matchesSurface(client.config.surfaces, surface)) continue
       const connectorPerms = this.toolPermissions.get(client.config.id)
       for (const tool of mcpClientToAgentTools(client)) {
         // Filter 'never' tools — agent should not even see them
@@ -252,6 +275,7 @@ export class McpManager {
         connected: client?.isConnected() ?? false,
         toolCount: client?.getTools().length ?? 0,
         tools: client?.getTools().map((t) => t.name) ?? [],
+        surfaces: config.surfaces,
       })
     }
     return statuses

@@ -36,6 +36,21 @@ export interface DirectConnector {
   readonly name: string
 
   /**
+   * One-line, action-oriented capability summary — fed to a harness CLI
+   * at thread-start so it knows what the service CAN do without reading
+   * every tool's schema. Short sentences, imperative voice, no trailing
+   * period. Example: `"Send/read Gmail, search threads, manage labels"`.
+   */
+  readonly capabilitySummary?: string
+
+  /**
+   * A single concrete tool-call example — surfaces a canonical intent
+   * the model can pattern-match on. Example: `"gmail_send_message"`.
+   * Should be a tool name this connector actually registers.
+   */
+  readonly capabilityExample?: string
+
+  /**
    * Optional surface restriction. When set, this connector's tools are
    * only visible to sessions whose surface matches one of these values.
    * When unset, the connector is visible everywhere (the default;

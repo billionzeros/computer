@@ -13,6 +13,9 @@ import { createSlackTools } from './tools.js'
 export class SlackUserConnector implements DirectConnector {
   readonly id = 'slack'
   readonly name = 'Slack'
+  readonly capabilitySummary =
+    'Send/edit messages, list channels, read history/threads, search, react, resolve users'
+  readonly capabilityExample = 'slack_send_message'
 
   private api = new SlackAPI()
   private tools: AgentTool[] = createSlackTools(this.api, { mode: 'user' })
@@ -53,6 +56,9 @@ export class SlackUserConnector implements DirectConnector {
 export class SlackBotConnector implements DirectConnector {
   readonly id = 'slack-bot'
   readonly name = 'Slack (Anton Bot)'
+  readonly capabilitySummary =
+    'Post/reply as the Anton bot in-workspace; restricted to Slack surface sessions'
+  readonly capabilityExample = 'slack_send_message'
   /**
    * Bot tools are gated to Slack sessions only. They use the workspace
    * bot token (xoxb-) to post inside *this specific workspace*; exposing

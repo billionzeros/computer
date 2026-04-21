@@ -6,6 +6,8 @@ import { createGmailTools } from './tools.js'
 export class GmailConnector implements DirectConnector {
   readonly id = 'gmail'
   readonly name = 'Gmail'
+  readonly capabilitySummary = 'Send/draft emails, search threads, read/trash messages, mark read'
+  readonly capabilityExample = 'gmail_send_email'
 
   private api = new GmailAPI()
   private tools: AgentTool[] = []

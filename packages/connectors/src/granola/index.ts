@@ -6,6 +6,8 @@ import { createGranolaTools } from './tools.js'
 export class GranolaConnector implements DirectConnector {
   readonly id = 'granola'
   readonly name = 'Granola'
+  readonly capabilitySummary = 'List, read, and search Granola meeting notes'
+  readonly capabilityExample = 'granola_search_notes'
 
   private api = new GranolaAPI()
   private tools: AgentTool[] = []

@@ -35,14 +35,46 @@ function greetingForHour(h: number): string {
   return "It's late-night"
 }
 
+const TAIL_PHRASES = [
+  'ready to build?',
+  'what are we making today?',
+  "what's on your mind?",
+  'what shall we tackle?',
+  "let's ship something.",
+  'ready when you are.',
+  "what's next?",
+  'got a spark?',
+  'what are we exploring?',
+  "let's dig in.",
+  "what's cooking?",
+  'shall we begin?',
+  "what's the move?",
+  'got something in motion?',
+  'ready to create?',
+  'what are we solving?',
+  "let's make something good.",
+  'what feels exciting today?',
+  'where are we headed?',
+  'pick up where you left off?',
+  'ready for a fresh start?',
+  "what's the mission?",
+  "let's get into it.",
+  "what's calling you today?",
+  'time to make a dent.',
+]
+
+function pickTail(): string {
+  return TAIL_PHRASES[Math.floor(Math.random() * TAIL_PHRASES.length)] ?? ''
+}
+
 export function StreamHome({ onSkillSelect }: Props) {
   const [draft, setDraft] = useState('')
   const newConversation = useStore((s) => s.newConversation)
+  const activeConversationId = useStore((s) => s.activeConversationId)
   const setActiveView = uiStore((s) => s.setActiveView)
-  const onboardingRole = uiStore((s) => s.onboardingRole)
 
   const greeting = useMemo(() => greetingForHour(new Date().getHours()), [])
-  const userName = onboardingRole ?? ''
+  const tail = useMemo(() => pickTail(), [])
 
   // Generate suggestions once on mount — avoid regenerating when conversations mutate.
   const forYouRef = useRef<PersonalizedSuggestion[] | null>(null)
@@ -117,8 +149,7 @@ export function StreamHome({ onSkillSelect }: Props) {
           <div className="home-welcome">
             <span className="home-welcome__glyph">✻</span>
             <span className="home-welcome__greet">
-              {greeting}
-              {userName ? ` ${userName}` : ''}
+              {greeting}, {tail}
             </span>
           </div>
 
@@ -130,6 +161,7 @@ export function StreamHome({ onSkillSelect }: Props) {
               placeholder="How can I help you today?"
               initialValue={draft}
               ignoreWorkingState
+              conversationId={activeConversationId ?? undefined}
             />
           </div>
 

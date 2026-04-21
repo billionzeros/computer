@@ -6,6 +6,9 @@ import { createGitHubTools } from './tools.js'
 export class GitHubConnector implements DirectConnector {
   readonly id = 'github'
   readonly name = 'GitHub'
+  readonly capabilitySummary =
+    'Read/write GitHub: repos, issues, PRs, branches, files, code search, merges'
+  readonly capabilityExample = 'github_create_issue'
 
   private api = new GitHubAPI()
   private tools: AgentTool[] = []

@@ -27,9 +27,12 @@ export {
 // use buildHarnessContextPrompt when they need the full harness context
 // string; it lives next to Session.getSystemPrompt in prompt-layers.ts.
 export {
+  ANTON_MCP_NAMESPACE,
+  buildHarnessCapabilityBlock,
   buildHarnessContextPrompt,
   buildHarnessIdentityBlock,
   type HarnessContextPromptOpts,
+  type LiveConnectorSummary,
   type WorkflowEntry,
 } from '../prompt-layers.js'
 export {

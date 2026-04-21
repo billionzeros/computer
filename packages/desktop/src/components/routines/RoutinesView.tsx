@@ -1,7 +1,9 @@
 import type { RoutineRunRecord, RoutineSession } from '@anton/protocol'
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { useStore } from '../../lib/store.js'
 import { connectionStore } from '../../lib/store/connectionStore.js'
 import { projectStore } from '../../lib/store/projectStore.js'
+import { sessionStore } from '../../lib/store/sessionStore.js'
 import { uiStore } from '../../lib/store/uiStore.js'
 import { WorkflowPipelineView } from '../workflows/WorkflowPipelineView.js'
 import { RoutineCreateForm, type RoutineDraft, type RoutineTemplate } from './RoutineCreateForm.js'
@@ -116,9 +118,27 @@ export function RoutinesView() {
   }, [])
 
   const startCreate = useCallback(() => {
-    setCreating(true)
-    setEditingId(null)
-    setSelectedRoutineId(null)
+    const ps = projectStore.getState()
+    const projectId = ps.projects.find((p) => p.isDefault)?.id ?? ps.activeProjectId ?? undefined
+    const sessionId = `sess_${Date.now().toString(36)}`
+
+    const store = useStore.getState()
+    const ss = sessionStore.getState()
+
+    const convId = store.newConversation(undefined, sessionId, projectId)
+    ss.createSession(sessionId, {
+      provider: ss.currentProvider,
+      model: ss.currentModel,
+      projectId,
+    })
+
+    store.setDraftInput(
+      convId,
+      "I want to create a new routine. It should ",
+      [],
+    )
+    store.switchConversation(convId)
+    uiStore.getState().setActiveView('home')
   }, [])
 
   const startEdit = useCallback((id: string) => {

@@ -156,6 +156,19 @@ export interface AntonToolRegistryOpts {
    */
   connectorManager?: { getAllTools(surface?: string): AgentTool[] }
   /**
+   * External MCP server tools (user-added MCP connectors). Mirrors what
+   * the Pi SDK path does in `buildTools()` — without this, harness
+   * sessions would silently never see any external MCP tool, even when
+   * the server is connected. Tool names are already namespaced with
+   * `mcp_<id>_` by McpManager, so they do not collide with Anton's core
+   * tools or connector tools.
+   *
+   * Accepts an optional `surface` hint so MCP configs with a
+   * `surfaces` allowlist stay out of surfaces they were not authorized
+   * for. Undefined `surfaces` on the config = all surfaces (default).
+   */
+  mcpManager?: { getAllTools(surface?: string): AgentTool[] }
+  /**
    * Called on every tools/list and tools/call to resolve the session's
    * context (projectId, surface, handlers). Returning undefined means
    * only the default (non-project) shared tools are exposed.
@@ -169,10 +182,12 @@ export interface AntonToolRegistryOpts {
  */
 export class AntonToolRegistry implements IpcToolProvider {
   private connectorManager?: AntonToolRegistryOpts['connectorManager']
+  private mcpManager?: AntonToolRegistryOpts['mcpManager']
   private getSessionContext?: AntonToolRegistryOpts['getSessionContext']
 
   constructor(opts: AntonToolRegistryOpts = {}) {
     this.connectorManager = opts.connectorManager
+    this.mcpManager = opts.mcpManager
     this.getSessionContext = opts.getSessionContext
   }
 
@@ -203,6 +218,8 @@ export class AntonToolRegistry implements IpcToolProvider {
       map.set(tool.name, agentToolToMcpDefinition(tool))
     }
 
+    const coreCount = map.size
+    let connectorToolCount = 0
     if (this.connectorManager) {
       const connectorTools = this.connectorManager.getAllTools(ctx?.surface)
       for (const tool of connectorTools) {
@@ -215,11 +232,47 @@ export class AntonToolRegistry implements IpcToolProvider {
             )
           }
           map.set(def.schema.name, def)
+          connectorToolCount += 1
         } catch (err) {
           log.warn({ err, name: tool.name, sessionId }, 'failed to adapt connector tool — skipping')
         }
       }
     }
+
+    let mcpToolCount = 0
+    if (this.mcpManager) {
+      const mcpTools = this.mcpManager.getAllTools(ctx?.surface)
+      for (const tool of mcpTools) {
+        try {
+          const def = agentToolToMcpDefinition(tool)
+          if (map.has(def.schema.name)) {
+            log.warn(
+              { name: def.schema.name, sessionId },
+              'mcp tool name collides with an existing tool — overriding',
+            )
+          }
+          map.set(def.schema.name, def)
+          mcpToolCount += 1
+        } catch (err) {
+          log.warn({ err, name: tool.name, sessionId }, 'failed to adapt mcp tool — skipping')
+        }
+      }
+    }
+
+    log.info(
+      {
+        sessionId,
+        projectId: ctx?.projectId,
+        surface: ctx?.surface,
+        coreToolCount: coreCount,
+        connectorToolCount,
+        mcpToolCount,
+        totalToolCount: map.size,
+        hasConnectorManager: Boolean(this.connectorManager),
+        hasMcpManager: Boolean(this.mcpManager),
+      },
+      'built harness tool map',
+    )
 
     return map
   }

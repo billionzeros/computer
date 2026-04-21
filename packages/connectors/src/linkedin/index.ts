@@ -6,6 +6,9 @@ import { createLinkedInTools } from './tools.js'
 export class LinkedInConnector implements DirectConnector {
   readonly id = 'linkedin'
   readonly name = 'LinkedIn'
+  readonly capabilitySummary =
+    'Read profiles, search people, send messages/invitations, create/comment on posts'
+  readonly capabilityExample = 'linkedin_send_message'
 
   private api = new UnipileLinkedInAPI()
   private tools: AgentTool[] = []

@@ -6,6 +6,8 @@ import { createAirtableTools } from './tools.js'
 export class AirtableConnector implements DirectConnector {
   readonly id = 'airtable'
   readonly name = 'Airtable'
+  readonly capabilitySummary = 'Read/write Airtable bases — list records, create/update/delete rows'
+  readonly capabilityExample = 'airtable_list_records'
 
   private api = new AirtableAPI()
   private tools: AgentTool[] = []

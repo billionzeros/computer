@@ -6,6 +6,9 @@ import { createPolymarketTools } from './tools.js'
 export class PolymarketConnector implements DirectConnector {
   readonly id = 'polymarket'
   readonly name = 'Polymarket'
+  readonly capabilitySummary =
+    'Browse prediction markets, get prices/orderbook, view portfolio, place/cancel orders'
+  readonly capabilityExample = 'polymarket_search'
 
   private api = new PolymarketAPI()
   private tools: AgentTool[] = []
