@@ -1,6 +1,6 @@
 {
   "version": "2.0.2",
-  "gitHash": "",
+  "gitHash": "54031d5",
   "releaseUrl": "https://github.com/billionzeros/computer/releases",
   "changelog": "Other:\n- fix(harness): title emission + codex capability block + MCP exposure (#2)",
   "publishedAt": "2026-04-21T06:20:13.993Z",
