@@ -1,0 +1,55 @@
+packages/connectors/src/slack/index.ts
+  75db79f402847cf3 16-18,59-61
+packages/connectors/src/notion/index.ts
+  75db79f402847cf3 9-11
+packages/connectors/src/google-sheets/index.ts
+  75db79f402847cf3 9-10
+packages/connectors/src/linkedin/index.ts
+  75db79f402847cf3 9-11
+packages/connectors/src/google-drive/index.ts
+  75db79f402847cf3 9-11
+packages/connectors/src/google-docs/index.ts
+  75db79f402847cf3 9-10
+packages/connectors/src/google-calendar/index.ts
+  75db79f402847cf3 9-10
+packages/connectors/src/linear/index.ts
+  75db79f402847cf3 9-11
+packages/connectors/src/types.ts
+  75db79f402847cf3 39-52
+packages/connectors/src/gmail/index.ts
+  75db79f402847cf3 9-10
+packages/connectors/src/airtable/index.ts
+  75db79f402847cf3 9-10
+packages/connectors/src/granola/index.ts
+  75db79f402847cf3 9-10
+packages/connectors/src/exa/index.ts
+  75db79f402847cf3 9-11
+packages/connectors/src/telegram/index.ts
+  75db79f402847cf3 9-10
+packages/connectors/src/google-search-console/index.ts
+  75db79f402847cf3 9-11
+packages/connectors/src/github/index.ts
+  75db79f402847cf3 9-11
+packages/connectors/src/polymarket/index.ts
+  75db79f402847cf3 9-11
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.3.2",
+  "base_commit_sha": "89bcfbe3b128e0a29e732a92c0ce887c17de9bab",
+  "prompts": {
+    "75db79f402847cf3": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "bc4073bf-4c82-49c2-8d37-94151b6363ac",
+        "model": "claude-opus-4-7"
+      },
+      "human_author": "Om Gupta",
+      "messages": [],
+      "total_additions": 0,
+      "total_deletions": 0,
+      "accepted_lines": 1344,
+      "overriden_lines": 0
+    }
+  }
+}
