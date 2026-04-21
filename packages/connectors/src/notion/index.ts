@@ -6,6 +6,9 @@ import { createNotionTools } from './tools.js'
 export class NotionConnector implements DirectConnector {
   readonly id = 'notion'
   readonly name = 'Notion'
+  readonly capabilitySummary =
+    'Search/read Notion, create and update pages, append blocks, query databases'
+  readonly capabilityExample = 'notion_create_page'
 
   private api = new NotionAPI()
   private tools: AgentTool[] = []

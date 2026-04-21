@@ -6,6 +6,9 @@ import { createGoogleDriveTools } from './tools.js'
 export class GoogleDriveConnector implements DirectConnector {
   readonly id = 'google-drive'
   readonly name = 'Google Drive'
+  readonly capabilitySummary =
+    'Browse/search Drive files, read contents, upload/delete, create folders'
+  readonly capabilityExample = 'gdrive_search_files'
 
   private api = new GoogleDriveAPI()
   private tools: AgentTool[] = []

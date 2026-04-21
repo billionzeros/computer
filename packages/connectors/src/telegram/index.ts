@@ -6,6 +6,8 @@ import { createTelegramTools } from './tools.js'
 export class TelegramConnector implements DirectConnector {
   readonly id = 'telegram'
   readonly name = 'Telegram'
+  readonly capabilitySummary = 'Send/forward Telegram messages, poll updates, look up chats'
+  readonly capabilityExample = 'telegram_send_message'
 
   private api = new TelegramBotAPI()
   private tools: AgentTool[] = []

@@ -6,6 +6,9 @@ import { createExaTools } from './tools.js'
 export class ExaConnector implements DirectConnector {
   readonly id = 'exa-search'
   readonly name = 'Exa Search'
+  readonly capabilitySummary =
+    'Web search with citations, page-content extraction, structured answers'
+  readonly capabilityExample = 'exa_search'
 
   private api = new ExaAPI()
   private tools: AgentTool[] = []

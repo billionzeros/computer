@@ -6,6 +6,8 @@ import { createGoogleDocsTools } from './tools.js'
 export class GoogleDocsConnector implements DirectConnector {
   readonly id = 'google-docs'
   readonly name = 'Google Docs'
+  readonly capabilitySummary = 'List/read/create Google Docs, append or insert text'
+  readonly capabilityExample = 'gdocs_create_document'
 
   private api = new GoogleDocsAPI()
   private tools: AgentTool[] = []

@@ -6,6 +6,9 @@ import { createLinearTools } from './tools.js'
 export class LinearConnector implements DirectConnector {
   readonly id = 'linear'
   readonly name = 'Linear'
+  readonly capabilitySummary =
+    'Create/list/update Linear issues, add comments, browse teams/states/projects'
+  readonly capabilityExample = 'linear_create_issue'
 
   private api = new LinearAPI()
   private tools: AgentTool[] = []
