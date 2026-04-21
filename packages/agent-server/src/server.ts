@@ -94,11 +94,14 @@ import {
   McpManager,
   type McpServerConfig,
   type Session,
+  SessionRegistry,
   type SubAgentEventHandler,
+  type ShimProbeResult,
   appendHarnessTurn,
   assembleConversationContext,
   buildHarnessCapabilityBlock,
   buildHarnessContextPrompt,
+  buildMcpSpawnConfig,
   buildReplaySeed,
   createMcpIpcServer,
   createSession,
@@ -108,6 +111,7 @@ import {
   hashPromptVersion,
   isHarnessSession,
   matchesSurface,
+  probeMcpShim,
   readHarnessHistory,
   resolveModel,
   resumeSession,
@@ -262,8 +266,23 @@ function spawnFallback(shell: string, cols: number, rows: number, cwd: string): 
 export class AgentServer {
   private wss: WebSocketServer | null = null
   private config: AgentConfig
-  private sessions: Map<string, Session | HarnessSession | CodexHarnessSession> = new Map()
+  /**
+   * Bounded, LRU-ordered registry for every live session. Replaces a
+   * plain Map. Guarantees (a) `shutdown()` runs on eviction and explicit
+   * delete, and (b) partitioned pools so routine bursts can't evict live
+   * conversations. Category is passed at `put()` time by the call site
+   * that knows intent best.
+   */
+  private sessions: SessionRegistry<Session | HarnessSession | CodexHarnessSession> =
+    new SessionRegistry()
   private activeTurns: Set<string> = new Set() // sessions currently processing a turn
+  /**
+   * Latest result from `probeMcpShim()`. `null` = not yet probed. Gates
+   * the capability block on harness session creation so the model
+   * doesn't hallucinate connectors when the shim is unreachable.
+   */
+  private mcpHealth: ShimProbeResult | null = null
+  private mcpProbeTimer: NodeJS.Timeout | null = null
   private activeClient: WebSocket | null = null
   // Track pending interactive prompts so they can be re-sent on client reconnect
   private pendingPrompts: Map<string, { type: string; payload: Record<string, unknown> }> =
@@ -347,6 +366,36 @@ export class AgentServer {
     // Start MCP IPC server for harness sessions
     const socketPath = join(getAntonDir(), 'harness.sock')
     this.mcpIpcServer = createMcpIpcServer(socketPath, this.toolRegistry)
+
+    // Probe the MCP shim now + every 60s. Gates the capability block
+    // so the model never hallucinates a connector when the shim can't
+    // be spawned (e.g. missing file on a partial deploy).
+    this.scheduleMcpProbe()
+  }
+
+  /**
+   * Fire `probeMcpShim()` immediately, then on a 60s interval. The
+   * result stays on `this.mcpHealth` and is consulted by harness session
+   * creation before the capability block is emitted.
+   */
+  private scheduleMcpProbe(): void {
+    const runProbe = async () => {
+      try {
+        this.mcpHealth = await probeMcpShim()
+      } catch (err) {
+        log.error({ err }, 'probeMcpShim threw — treating as unhealthy')
+        this.mcpHealth = {
+          ok: false,
+          error: (err as Error).message,
+          stderrTail: [],
+          durationMs: 0,
+        }
+      }
+    }
+    void runProbe()
+    this.mcpProbeTimer = setInterval(() => void runProbe(), 60_000)
+    // Don't keep the event loop alive on just the probe timer.
+    this.mcpProbeTimer.unref?.()
   }
 
   setScheduler(scheduler: Scheduler) {
@@ -370,16 +419,16 @@ export class AgentServer {
       }
       this.ptys.delete(id)
     }
-    // Shutdown harness sessions and IPC server
-    for (const [, session] of this.sessions) {
-      if (isHarnessSession(session)) {
-        try {
-          await session.shutdown()
-        } catch {
-          /* best-effort */
-        }
-      }
+    // Stop MCP probe loop before draining sessions.
+    if (this.mcpProbeTimer) {
+      clearInterval(this.mcpProbeTimer)
+      this.mcpProbeTimer = null
     }
+    // Shutdown every registered session via the registry — harness
+    // sessions get SIGTERM→SIGKILL on their CLI; Pi SDK sessions are
+    // currently a no-op (no shutdown() method) but will pick it up for
+    // free if one is added later.
+    await this.sessions.shutdownAll()
     if (this.mcpIpcServer) {
       await this.mcpIpcServer.close()
       this.mcpIpcServer = null
@@ -409,7 +458,10 @@ export class AgentServer {
 
         // Agent sessions are autonomous — auto-approve everything
         this.wireAgentAutoHandlers(session)
-        this.sessions.set(runSessionId, session)
+        // Ephemeral: agent runs are one-shot; the finally-block below
+        // deletes explicitly, but if an exception races that path the
+        // registry's ephemeral pool caps the damage.
+        this.sessions.put(runSessionId, session, 'ephemeral')
 
         log.info({ runSessionId, agentSessionId }, 'Created fresh agent run session')
 
@@ -447,7 +499,7 @@ export class AgentServer {
           throw err
         } finally {
           // Always clean up cached session (persisted to disk by the session itself)
-          this.sessions.delete(runSessionId)
+          await this.sessions.delete(runSessionId)
         }
 
         return { eventCount, summary, runSessionId }
@@ -1386,7 +1438,7 @@ export class AgentServer {
         break
 
       case 'session_destroy':
-        this.handleSessionDestroy(msg)
+        void this.handleSessionDestroy(msg)
         break
 
       case 'session_provider_switch':
@@ -1807,7 +1859,7 @@ export class AgentServer {
         this.wireSessionConfirmHandler(session)
         this.wirePlanConfirmHandler(session)
         this.wireAskUserHandler(session)
-        this.sessions.set(msg.id, session)
+        this.sessions.put(msg.id, session, 'conversation')
 
         this.sendToClient(Channel.AI, {
           type: 'session_created',
@@ -1907,16 +1959,12 @@ export class AgentServer {
     // don't touch this variable — so we only build it for non-codex.
     const adapter = providerName === 'codex' ? null : new ClaudeAdapter()
     const socketPath = join(getAntonDir(), 'harness.sock')
-    const shimPath = join(
-      getAntonDir(),
-      '..',
-      'node_modules',
-      '@anton',
-      'agent-core',
-      'dist',
-      'harness',
-      'anton-mcp-shim.js',
-    )
+    // Shim path + node binary come from buildMcpSpawnConfig(), which
+    // resolves the shim via import.meta.url (package-owned) and uses
+    // process.execPath for the node binary. This replaces the previous
+    // `homedir() + '../node_modules/...'` construction which broke on
+    // VPS deployments where HOME != install root.
+    const mcpSpawn = buildMcpSpawnConfig()
 
     // Resolve workspace path from the project (if any)
     let cwd: string | undefined
@@ -2110,8 +2158,22 @@ export class AgentServer {
     }
 
     const liveConnectorsAtStart = this.collectLiveConnectorsForPrompt(surfaceLabel)
-    const capabilityBlock = buildHarnessCapabilityBlock(liveConnectorsAtStart, ANTON_MCP_NAMESPACE)
-    const liveConnectorIdsAtStart = liveConnectorsAtStart.map((c) => c.id)
+    // Gate on MCP shim health. If the shim probe failed (or hasn't run
+    // yet), we skip emitting the capability block entirely — the model
+    // would otherwise believe it can call connector tools when the
+    // transport is dead. We log once at creation so the operator can
+    // correlate missing tools with a known probe failure.
+    const mcpReady = this.mcpHealth?.ok === true
+    if (!mcpReady) {
+      log.warn(
+        { sessionId: id, mcpHealth: this.mcpHealth },
+        'MCP shim probe not ok — omitting capability block from harness session',
+      )
+    }
+    const capabilityBlock = mcpReady
+      ? buildHarnessCapabilityBlock(liveConnectorsAtStart, ANTON_MCP_NAMESPACE)
+      : ''
+    const liveConnectorIdsAtStart = mcpReady ? liveConnectorsAtStart.map((c) => c.id) : []
 
     const session: HarnessSession | CodexHarnessSession =
       providerName === 'codex'
@@ -2119,9 +2181,7 @@ export class AgentServer {
             id,
             provider: providerName,
             model,
-            socketPath,
-            shimPath,
-            authToken,
+            mcp: { socketPath, authToken, spawn: mcpSpawn },
             cwd,
             buildSystemPrompt,
             capabilityBlock,
@@ -2135,14 +2195,14 @@ export class AgentServer {
             // Non-codex branch: adapter is guaranteed non-null by
             // construction above (only the codex branch sets it to null).
             adapter: adapter ?? new ClaudeAdapter(),
-            socketPath,
-            shimPath,
-            authToken,
+            mcp: { socketPath, authToken, spawn: mcpSpawn },
             cwd,
             buildSystemPrompt,
             onTurnEnd,
           })
-    this.sessions.set(id, session)
+    // Harness sessions share the `conversation` pool with Pi SDK chats.
+    // Agent-run variants come through createSession with 'ephemeral'.
+    this.sessions.put(id, session, 'conversation')
 
     this.sendToClient(Channel.AI, {
       type: 'session_created',
@@ -2226,7 +2286,10 @@ export class AgentServer {
       this.mcpIpcServer.unregisterSession(msg.id)
     }
     this.harnessSessionContexts.delete(msg.id)
-    this.sessions.delete(msg.id)
+    // Provider switch already called existing.shutdown() above — use
+    // registry.delete() as a no-op-safe cleanup. Shutdown on the freshly
+    // destroyed session is an inexpensive idempotent call.
+    await this.sessions.delete(msg.id)
     this.activeTurns.delete(msg.id)
 
     // Build the replay seed from the mirror. Empty string is fine —
@@ -2625,16 +2688,20 @@ export class AgentServer {
     })
   }
 
-  private handleSessionDestroy(msg: { id: string }) {
+  private async handleSessionDestroy(msg: { id: string }) {
     // Extract projectId before deleting so we can update stats
-    const session = this.sessions.get(msg.id)
+    const session = this.sessions.peek(msg.id)
     const projectId =
       (session && !isHarnessSession(session) ? session.contextInfo?.projectId : undefined) ??
       this.extractProjectId(msg.id)
     const wasHarness = session ? isHarnessSession(session) : false
 
     try {
-      this.sessions.delete(msg.id)
+      // Registry.delete() awaits session.shutdown() when present — this
+      // is the leak fix. Previously the harness codex app-server (and
+      // its shim child) leaked until the host process exited, because
+      // only `this.sessions.delete(id)` was called.
+      await this.sessions.delete(msg.id)
       this.activeTurns.delete(msg.id)
       deletePersistedSession(msg.id, projectId)
       if (wasHarness && this.mcpIpcServer) {
@@ -2751,7 +2818,7 @@ export class AgentServer {
         this.wireSessionConfirmHandler(session)
         this.wirePlanConfirmHandler(session)
         this.wireAskUserHandler(session)
-        this.sessions.set(msg.id, session)
+        this.sessions.put(msg.id, session, 'conversation')
       }
 
       // Pi SDK session: continue with existing logic.
@@ -4354,7 +4421,7 @@ export class AgentServer {
         this.wireSessionConfirmHandler(session)
         this.wirePlanConfirmHandler(session)
         this.wireAskUserHandler(session)
-        this.sessions.set(DEFAULT_SESSION_ID, session)
+        this.sessions.put(DEFAULT_SESSION_ID, session, 'conversation')
       } else {
         // Try to resume from disk automatically
         const projectId = this.extractProjectId(sessionId)
@@ -4390,7 +4457,10 @@ export class AgentServer {
             this.wirePlanConfirmHandler(session)
             this.wireAskUserHandler(session)
           }
-          this.sessions.set(sessionId, session)
+          // Agent sessions land in `routine` pool — they run on a schedule
+          // and naturally come and go; conversations go to the `conversation`
+          // pool where they compete for chat capacity.
+          this.sessions.put(sessionId, session, isAgentSession ? 'routine' : 'conversation')
           log.info({ sessionId }, 'Auto-resumed session from disk')
         } else {
           this.sendToClient(Channel.AI, {
@@ -4458,6 +4528,10 @@ export class AgentServer {
     }
 
     this.activeTurns.add(sessionId)
+    // Pin the session for the duration of the turn so the LRU can't
+    // evict it out from under a streaming generator. `unpin` lives in
+    // the finally block below.
+    this.sessions.pin(sessionId)
     let eventCount = 0
 
     // Buffer text chunks and flush every ~80ms (or before any non-text event)
@@ -4690,6 +4764,7 @@ export class AgentServer {
       // the try block exited without reaching textBuffer.destroy()
       textBuffer.destroy()
       this.activeTurns.delete(sessionId)
+      this.sessions.unpin(sessionId)
       this.sendToClient(Channel.EVENTS, {
         type: 'routine_status',
         status: 'idle',

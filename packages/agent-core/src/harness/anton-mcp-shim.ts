@@ -13,12 +13,27 @@
  *   ANTON_AUTH    — per-session token used to authenticate with Anton
  */
 
+import { readFileSync } from 'node:fs'
 import * as net from 'node:net'
 import * as readline from 'node:readline'
+import { fileURLToPath } from 'node:url'
 
 const ANTON_SOCK = process.env.ANTON_SOCK
 const ANTON_SESSION = process.env.ANTON_SESSION
 const ANTON_AUTH = process.env.ANTON_AUTH
+
+// Resolved once at module load. Host logs this on `initialize` so we can
+// detect version skew between the server binary and the shim on disk
+// (e.g. a half-synced deploy).
+const SHIM_VERSION: string = (() => {
+  try {
+    const pkgPath = fileURLToPath(new URL('../../package.json', import.meta.url))
+    const { version } = JSON.parse(readFileSync(pkgPath, 'utf8')) as { version?: string }
+    return typeof version === 'string' ? version : 'unknown'
+  } catch {
+    return 'unknown'
+  }
+})()
 
 if (!ANTON_SOCK || !ANTON_SESSION || !ANTON_AUTH) {
   process.stderr.write(
@@ -195,7 +210,7 @@ async function handleRequest(msg: {
       sendResponse(id ?? null, {
         protocolVersion: '2024-11-05',
         capabilities: { tools: { listChanged: false } },
-        serverInfo: { name: 'anton-mcp-shim', version: '1.0.0' },
+        serverInfo: { name: 'anton-mcp-shim', version: SHIM_VERSION },
       })
       break
 
