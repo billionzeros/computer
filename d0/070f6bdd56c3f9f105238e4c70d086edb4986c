@@ -1,0 +1,25 @@
+packages/agent-core/src/harness/anton-mcp-shim.ts
+  cc9fe459ed64aabc 253-271
+packages/agent-server/src/webhooks/agent-runner.ts
+  cc9fe459ed64aabc 231-236
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.3.2",
+  "base_commit_sha": "d0070f6bdd56c3f9f105238e4c70d086edb4986c",
+  "prompts": {
+    "cc9fe459ed64aabc": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "b20c3dfa-568e-403f-8674-83fb3ad0d33c",
+        "model": "claude-opus-4-7"
+      },
+      "human_author": "Om Gupta",
+      "messages": [],
+      "total_additions": 30,
+      "total_deletions": 7,
+      "accepted_lines": 25,
+      "overriden_lines": 0
+    }
+  }
+}
