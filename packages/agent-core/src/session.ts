@@ -832,6 +832,7 @@ export class Session {
     const isFirstMessage = !this.title && !this.ephemeral
     // Strip image placeholders for title generation so [img:...] doesn't leak into titles
     const titleText = trimmedMessage.replace(/\[img:[^\]]+\]/g, '').trim()
+    let initialTitle: string | null = null
     if (isFirstMessage) {
       this.title = generateSmartTitle(
         titleText ||
@@ -841,6 +842,7 @@ export class Session {
               : `${attachments.length} images`
             : userMessage),
       )
+      initialTitle = this.title
     }
 
     // Fire off AI title generation in parallel (non-blocking)
@@ -859,9 +861,12 @@ export class Session {
 
     const events: SessionEvent[] = []
 
-    // Title is emitted exactly once per conversation, after the first turn
-    // completes (see the aiTitlePromise handling below). The regex title set
-    // above acts as an in-memory fallback if AI title generation fails.
+    // Emit the truncated-user-question title up front so the UI has a title
+    // for the whole first turn. The AI-generated title (if any) is emitted
+    // again at the end only when it differs — see the aiTitlePromise block.
+    if (initialTitle) {
+      events.push({ type: 'title_update', title: initialTitle })
+    }
 
     let resolveNext: (() => void) | null = null
     let done = false
@@ -1080,17 +1085,14 @@ export class Session {
         this.pendingCompactionEvent = null
       }
 
-      // Emit the conversation title exactly once, on the first message.
-      // Prefer the AI-generated title; fall back to the regex title if the AI
-      // call failed or returned the generic placeholder.
-      if (isFirstMessage) {
-        if (aiTitlePromise) {
-          const aiTitle = await aiTitlePromise
-          if (aiTitle && aiTitle.toLowerCase() !== 'new conversation') {
-            this.title = aiTitle
-          }
+      // If the background AI-title call produced a better title than the
+      // truncated user question we emitted up front, upgrade it now.
+      if (isFirstMessage && aiTitlePromise) {
+        const aiTitle = await aiTitlePromise
+        if (aiTitle && aiTitle.toLowerCase() !== 'new conversation' && aiTitle !== this.title) {
+          this.title = aiTitle
+          yield { type: 'title_update', title: this.title }
         }
-        yield { type: 'title_update', title: this.title }
       }
 
       this.log.info({ eventCount, textEventCount }, 'processMessage complete')
