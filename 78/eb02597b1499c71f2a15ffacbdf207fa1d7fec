@@ -1,0 +1,27 @@
+packages/agent-core/src/__fixtures__/check-session-registry.ts
+  772c58242e946686 1-279
+packages/agent-core/src/harness/__fixtures__/check-mcp-shim.ts
+  772c58242e946686 1-167
+packages/agent-core/package.json
+  772c58242e946686 11-12
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.3.2",
+  "base_commit_sha": "78eb02597b1499c71f2a15ffacbdf207fa1d7fec",
+  "prompts": {
+    "772c58242e946686": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "e71dbe55-6218-49be-9103-289b6657eebc",
+        "model": "claude-opus-4-7"
+      },
+      "human_author": "Om Gupta",
+      "messages": [],
+      "total_additions": 0,
+      "total_deletions": 0,
+      "accepted_lines": 663,
+      "overriden_lines": 0
+    }
+  }
+}
