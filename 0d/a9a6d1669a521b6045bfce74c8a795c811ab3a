@@ -1,0 +1,55 @@
+packages/agent-server/src/server.ts
+  55c20643012b2acb 296-299,393-398,402-404,406-408,419-421,423-439,1470-1472,1868,1882-1886,2356-2359,5249-5254,5260-5277
+  94a3db77db472080 277-288,300-308,547-555,2326-2329,2335-2341,2743-2759,2768,2775-2801,2812-2815,2833,4631-4633
+packages/agent-core/package.json
+  55c20643012b2acb 13
+packages/agent-core/src/harness/anton-mcp-shim.ts
+  55c20643012b2acb 5-8,14-48,75-81,86,89-214,216-277,279-285,288,291-297,308-315,317,321-336,339-343,351,356,360,364,367-374,379-405,407-410,414,416-417,419-424,431-449,451-456,461,463,468,470-472,474,476-484,487-499,501,505,507-508,511-514,521,526,532,535,539,542-543,546-549,552-558,560,564-582,585-591,594-601,603,607,614,616-617,619,621-622,624-642,646-654,659-667,670-673
+packages/agent-core/src/__fixtures__/check-session-registry.ts
+  94a3db77db472080 242-364
+  55c20643012b2acb 378-431
+packages/agent-server/src/webhooks/agent-runner.ts
+  55c20643012b2acb 141-153,197-204,207-247,261-268,368,377-386,409,733-734,738,820-822,969,972,1019
+packages/agent-core/src/harness/mcp-spawn-config.ts
+  94a3db77db472080 239-249
+packages/agent-core/src/session-registry.ts
+  55c20643012b2acb 279-296,298-303,305-313
+  94a3db77db472080 87,89-101,107,109,114,161-168,278,297,304,314-318
+packages/agent-core/src/harness/mcp-ipc-handler.ts
+  55c20643012b2acb 8-30,36,39,55-58,75-84,90,95-100,113,119-121,124,137,145-161,172,182-187,196-201,209-235,256-261,292-303,323-338,344-347,357,359,361-375,379,395,397,399-434,439-457,464-519,522-528
+packages/agent-core/src/harness/__fixtures__/check-mcp-shim-runtime.ts
+  55c20643012b2acb 1-557
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.3.2",
+  "base_commit_sha": "0da9a6d1669a521b6045bfce74c8a795c811ab3a",
+  "prompts": {
+    "55c20643012b2acb": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "e79b0be6-58f9-43c5-8aec-2e2a3f78023c",
+        "model": "claude-opus-4-7"
+      },
+      "human_author": "Om Gupta",
+      "messages": [],
+      "total_additions": 1602,
+      "total_deletions": 200,
+      "accepted_lines": 1591,
+      "overriden_lines": 0
+    },
+    "94a3db77db472080": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "154940f1-304f-4635-9561-a3335e0a3b63",
+        "model": "claude-opus-4-7"
+      },
+      "human_author": "Om Gupta",
+      "messages": [],
+      "total_additions": 273,
+      "total_deletions": 37,
+      "accepted_lines": 262,
+      "overriden_lines": 0
+    }
+  }
+}
