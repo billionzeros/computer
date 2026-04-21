@@ -239,10 +239,17 @@ ${DOMAIN} {
 
     # Sidecar — only expose /health and /status, NEVER the update endpoints.
     # Listed first so these specific paths win before the agent catch-all.
-    handle_path /_anton/health {
+    #
+    # Use `handle` + `uri strip_prefix /_anton` (not `handle_path`). handle_path
+    # strips the *entire* matched path, which would turn /_anton/status into
+    # "/" upstream — sidecar has no route for /, so it falls through to the
+    # BearerAuth group at "/" and returns "missing authorization header".
+    handle /_anton/health {
+        uri strip_prefix /_anton
         reverse_proxy localhost:9878
     }
-    handle_path /_anton/status {
+    handle /_anton/status {
+        uri strip_prefix /_anton
         reverse_proxy localhost:9878
     }
 
