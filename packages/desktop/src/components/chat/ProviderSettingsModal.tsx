@@ -1,4 +1,4 @@
-import { Check, Plus, RotateCcw, Trash2 } from 'lucide-react'
+import { ArrowRight, Check, Plus, RotateCcw, X } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 import type { ProviderInfo } from '../../lib/store.js'
 import { sessionStore } from '../../lib/store/sessionStore.js'
@@ -15,15 +15,13 @@ export function ProviderSettingsModal({ provider, onClose }: Props) {
   const [keySaved, setKeySaved] = useState(false)
   const [models, setModels] = useState<string[]>([])
   const [newModel, setNewModel] = useState('')
-  const [modelsSaved, setModelsSaved] = useState(false)
-  const modelInputRef = useRef<HTMLInputElement>(null)
+  const addInputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
     if (provider) {
       setModels([...provider.models])
       setApiKey('')
       setKeySaved(false)
-      setModelsSaved(false)
       setNewModel('')
     }
   }, [provider])
@@ -31,182 +29,124 @@ export function ProviderSettingsModal({ provider, onClose }: Props) {
   if (!provider) return null
 
   const icon = providerIcons[provider.name]
-  const providerLabel = provider.name.charAt(0).toUpperCase() + provider.name.slice(1)
+  const label = provider.name.charAt(0).toUpperCase() + provider.name.slice(1)
+  const connected = provider.hasApiKey || keySaved
 
-  const handleSaveKey = () => {
+  const commitModels = (next: string[]) => {
+    setModels(next)
+    sessionStore.getState().sendProviderSetModels(provider.name, next)
+    setTimeout(() => sessionStore.getState().sendProvidersList(), 300)
+  }
+
+  const saveKey = (e: React.FormEvent) => {
+    e.preventDefault()
     const trimmed = apiKey.trim()
     if (!trimmed) return
     sessionStore.getState().sendProviderSetKey(provider.name, trimmed)
     setApiKey('')
     setKeySaved(true)
-    // Refresh providers to pick up new key status
     setTimeout(() => sessionStore.getState().sendProvidersList(), 300)
-    setTimeout(() => setKeySaved(false), 2000)
+    setTimeout(() => setKeySaved(false), 1800)
   }
 
-  const handleKeySubmit = (e: React.FormEvent) => {
+  const addModel = (e: React.FormEvent) => {
     e.preventDefault()
-    handleSaveKey()
-  }
-
-  const handleRemoveModel = (index: number) => {
-    setModels((prev) => prev.filter((_, i) => i !== index))
-    setModelsSaved(false)
-  }
-
-  const handleAddModel = () => {
     const trimmed = newModel.trim()
     if (!trimmed || models.includes(trimmed)) return
-    setModels((prev) => [...prev, trimmed])
+    commitModels([...models, trimmed])
     setNewModel('')
-    setModelsSaved(false)
-    modelInputRef.current?.focus()
+    addInputRef.current?.focus()
   }
 
-  const handleAddModelSubmit = (e: React.FormEvent) => {
-    e.preventDefault()
-    handleAddModel()
+  const removeModel = (id: string) => {
+    commitModels(models.filter((m) => m !== id))
   }
 
-  const handleResetModels = () => {
+  const resetDefaults = () => {
     const defaults = provider.defaultModels
-    if (defaults && defaults.length > 0) {
-      setModels([...defaults])
-      setModelsSaved(false)
-    }
+    if (defaults?.length) commitModels([...defaults])
   }
 
-  const handleSaveModels = () => {
-    sessionStore.getState().sendProviderSetModels(provider.name, models)
-    setModelsSaved(true)
-    // Refresh providers so the dropdown picks up the new models
-    setTimeout(() => sessionStore.getState().sendProvidersList(), 300)
-    setTimeout(() => setModelsSaved(false), 2000)
-  }
-
-  const modelsChanged =
-    models.length !== provider.models.length || models.some((m, i) => m !== provider.models[i])
+  const defaultsAvailable = (provider.defaultModels?.length ?? 0) > 0
+  const isAtDefaults =
+    defaultsAvailable &&
+    provider.defaultModels!.length === models.length &&
+    provider.defaultModels!.every((m, i) => m === models[i])
 
   return (
     <Modal open={!!provider} onClose={onClose}>
-      <div className="prov-modal">
-        {/* Title bar with icon */}
-        <div className="prov-modal__titlebar">
-          <div className="prov-modal__titlebar-left">
-            {icon ? (
-              <img src={icon} alt="" width={20} height={20} className="prov-modal__provider-icon" />
-            ) : (
-              <span className="prov-modal__provider-icon-fallback">
-                {provider.name.charAt(0).toUpperCase()}
-              </span>
-            )}
-            <span className="prov-modal__provider-name">{providerLabel}</span>
-            {provider.baseUrl && (
-              <span className="prov-modal__provider-url">{provider.baseUrl}</span>
-            )}
-          </div>
-          {(provider.hasApiKey || keySaved) && (
-            <span className="prov-modal__connected-badge">
-              <span className="prov-modal__connected-dot" />
-              Connected
+      <div className="pform">
+        <header className="pform__head">
+          {icon ? (
+            <img src={icon} alt="" width={22} height={22} className="pform__icon" />
+          ) : (
+            <span className="pform__icon pform__icon--fallback">
+              {provider.name.charAt(0).toUpperCase()}
             </span>
           )}
-        </div>
+          <span className="pform__title">{label}</span>
+          {connected && <span className="pform__dot" title="Connected" />}
+        </header>
 
-        {/* API Key */}
-        <div className="prov-modal__section">
-          <label className="prov-modal__field-label" htmlFor="prov-api-key">
-            API Key
-          </label>
-          <form onSubmit={handleKeySubmit} className="prov-modal__key-row">
-            <input
-              id="prov-api-key"
-              type="password"
-              className="prov-modal__key-input"
-              placeholder={provider.hasApiKey ? 'Replace existing key...' : 'sk-or-v1-...'}
-              value={apiKey}
-              onChange={(e) => setApiKey(e.target.value)}
-              autoComplete="off"
-              spellCheck={false}
-            />
-            <button
-              type="submit"
-              disabled={!apiKey.trim()}
-              className={`prov-modal__key-btn ${keySaved ? 'prov-modal__key-btn--saved' : ''}`}
-            >
-              {keySaved ? (
-                <>
-                  <Check size={14} strokeWidth={1.5} /> Saved
-                </>
-              ) : (
-                'Save key'
-              )}
-            </button>
-          </form>
-        </div>
+        <form onSubmit={saveKey} className="pform__key">
+          <input
+            type="password"
+            className="pform__key-input"
+            placeholder={provider.hasApiKey ? 'Replace API key…' : 'Paste API key'}
+            value={apiKey}
+            onChange={(e) => setApiKey(e.target.value)}
+            autoComplete="off"
+            spellCheck={false}
+          />
+          <button
+            type="submit"
+            disabled={!apiKey.trim() && !keySaved}
+            className="pform__key-btn"
+            aria-label={keySaved ? 'Saved' : 'Save key'}
+          >
+            {keySaved ? (
+              <Check size={14} strokeWidth={2} />
+            ) : (
+              <ArrowRight size={14} strokeWidth={2} />
+            )}
+          </button>
+        </form>
 
-        {/* Models */}
-        <div className="prov-modal__section">
-          <div className="prov-modal__field-header">
-            <span className="prov-modal__field-label">Models</span>
-            {provider.defaultModels && provider.defaultModels.length > 0 && (
-              <button type="button" onClick={handleResetModels} className="prov-modal__reset">
-                <RotateCcw size={12} strokeWidth={1.5} /> Defaults
+        <ul className="pform__list">
+          {models.map((m) => (
+            <li key={m} className="pform__row">
+              <span className="pform__row-id">{m}</span>
+              <button
+                type="button"
+                className="pform__row-x"
+                onClick={() => removeModel(m)}
+                aria-label={`Remove ${m}`}
+              >
+                <X size={13} strokeWidth={1.8} />
               </button>
-            )}
-          </div>
-
-          <div className="prov-modal__models">
-            {models.length === 0 && (
-              <div className="prov-modal__models-empty">
-                No models. Add one below or click Defaults.
-              </div>
-            )}
-            {models.map((model, index) => (
-              <div key={model} className="prov-modal__model-row">
-                <code className="prov-modal__model-id">{model}</code>
-                <button
-                  type="button"
-                  onClick={() => handleRemoveModel(index)}
-                  className="prov-modal__model-delete"
-                  title="Remove model"
-                >
-                  <Trash2 size={12} strokeWidth={1.5} />
-                </button>
-              </div>
-            ))}
-            <form onSubmit={handleAddModelSubmit} className="prov-modal__model-add-row">
-              <Plus size={14} strokeWidth={1.5} className="prov-modal__model-add-plus" />
+            </li>
+          ))}
+          <li className="pform__row pform__row--add">
+            <Plus size={12} strokeWidth={2} className="pform__row-plus" />
+            <form onSubmit={addModel} className="pform__row-form">
               <input
-                ref={modelInputRef}
+                ref={addInputRef}
                 type="text"
-                className="prov-modal__model-add-input"
-                placeholder="model-id or provider/model-id"
+                className="pform__row-input"
+                placeholder="add model"
                 value={newModel}
                 onChange={(e) => setNewModel(e.target.value)}
                 spellCheck={false}
               />
             </form>
-          </div>
-        </div>
+          </li>
+        </ul>
 
-        {/* Footer */}
-        {modelsChanged && (
-          <div className="prov-modal__footer">
-            <button
-              type="button"
-              onClick={handleSaveModels}
-              className={`prov-modal__save-btn ${modelsSaved ? 'prov-modal__save-btn--saved' : ''}`}
-            >
-              {modelsSaved ? (
-                <>
-                  <Check size={14} strokeWidth={1.5} /> Models saved
-                </>
-              ) : (
-                'Save model changes'
-              )}
-            </button>
-          </div>
+        {defaultsAvailable && !isAtDefaults && (
+          <button type="button" onClick={resetDefaults} className="pform__reset">
+            <RotateCcw size={11} strokeWidth={1.8} />
+            Reset to defaults
+          </button>
         )}
       </div>
     </Modal>

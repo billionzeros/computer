@@ -767,16 +767,19 @@ function ProviderRow({
   onOpen: (p: ProviderInfo) => void
 }) {
   const isHarness = provider.type === 'harness'
+  const comingSoon = provider.name === 'claude-code'
   const connected = provider.hasApiKey || provider.installed === true
-  const meta = isHarness
-    ? connected
-      ? 'CLI installed'
-      : 'Install to connect'
-    : connected
-      ? 'API key configured'
-      : 'Not connected'
+  const meta = comingSoon
+    ? 'Subscription support coming soon'
+    : isHarness
+      ? connected
+        ? 'CLI installed'
+        : 'Install to connect'
+      : connected
+        ? 'API key configured'
+        : 'Not connected'
   return (
-    <div className="sprov">
+    <div className="sprov" aria-disabled={comingSoon || undefined}>
       <div className="sprov__av">
         <ProviderMark provider={provider.name} size={18} />
       </div>
@@ -784,7 +787,9 @@ function ProviderRow({
         <div className="sprov__name">{provider.name}</div>
         <div className="sprov__meta">{meta}</div>
       </div>
-      {connected ? (
+      {comingSoon ? (
+        <span className="stag">Coming soon</span>
+      ) : connected ? (
         <span className="stag stag--ok">
           <span className="stag__dot" /> Connected
         </span>
@@ -793,14 +798,16 @@ function ProviderRow({
           Connect
         </button>
       )}
-      <button
-        type="button"
-        className="sicon"
-        title={isHarness ? 'Manage CLI' : 'Manage API key'}
-        onClick={() => onOpen(provider)}
-      >
-        <MoreHorizontal size={14} strokeWidth={1.5} />
-      </button>
+      {!comingSoon && (
+        <button
+          type="button"
+          className="sicon"
+          title={isHarness ? 'Manage CLI' : 'Manage API key'}
+          onClick={() => onOpen(provider)}
+        >
+          <MoreHorizontal size={14} strokeWidth={1.5} />
+        </button>
+      )}
     </div>
   )
 }
