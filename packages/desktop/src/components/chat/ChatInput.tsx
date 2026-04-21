@@ -193,6 +193,25 @@ export function ChatInput({
 
     const text = parts.join('').trim()
 
+    // If there's a generic ask_user pending (routine confirmations still
+    // take over the composer above), route the user's text as the answer
+    // to each pending question so the server-side handler unblocks
+    // cleanly. Keeps the composer free while still resolving the prompt.
+    if (pendingAskUser && onAskUserSubmit && text) {
+      const answers: Record<string, string> = {}
+      for (const q of pendingAskUser.questions) {
+        answers[q.question] = text
+      }
+      onAskUserSubmit(answers)
+      handle.clear()
+      setInput('')
+      setImageCount(0)
+      setShowSlashMenu(false)
+      if (conversationId) clearDraftInput(conversationId)
+      handle.focus()
+      return
+    }
+
     // If agent is working and no attachments, steer with text only
     if (isCurrentSessionWorking && attachments.length === 0) {
       if (text && onSteer) {
@@ -215,7 +234,15 @@ export function ChatInput({
     setShowSlashMenu(false)
     if (conversationId) clearDraftInput(conversationId)
     handle.focus()
-  }, [isCurrentSessionWorking, onSend, onSteer, conversationId, clearDraftInput])
+  }, [
+    isCurrentSessionWorking,
+    onSend,
+    onSteer,
+    conversationId,
+    clearDraftInput,
+    pendingAskUser,
+    onAskUserSubmit,
+  ])
 
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent) => {
@@ -264,16 +291,27 @@ export function ChatInput({
 
   const rootClass = `composer composer--${variant}`
 
+  // Only specialized routine-create / routine-delete confirmations still
+  // take over the composer — they need the explicit Confirm/Cancel UI.
+  // Generic ask_user questions no longer hide the composer; the user
+  // keeps typing normally and the model can continue when they respond.
   if (pendingAskUser && onAskUserSubmit) {
-    return (
-      <div className={rootClass}>
-        <div className="composer__anchor">
-          <div className="composer__box composer__box--ask-user">
-            <AskUserInline questions={pendingAskUser.questions} onSubmit={onAskUserSubmit} />
+    const q = pendingAskUser.questions[0]
+    const metaType = (q?.metadata as { type?: string } | undefined)?.type
+    const isSpecializedCard =
+      pendingAskUser.questions.length === 1 &&
+      (metaType === 'routine_create' || metaType === 'routine_delete')
+    if (isSpecializedCard) {
+      return (
+        <div className={rootClass}>
+          <div className="composer__anchor">
+            <div className="composer__box composer__box--ask-user">
+              <AskUserInline questions={pendingAskUser.questions} onSubmit={onAskUserSubmit} />
+            </div>
           </div>
         </div>
-      </div>
-    )
+      )
+    }
   }
 
   return (
