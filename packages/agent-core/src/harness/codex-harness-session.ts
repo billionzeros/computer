@@ -27,19 +27,37 @@ import { ANTON_MCP_NAMESPACE } from '../prompt-layers.js'
 import type { SessionEvent } from '../session.js'
 import { CodexRpcClient, CodexRpcError } from './codex-rpc.js'
 import { PINNED_CLI_VERSION, detectCodexCli } from './codex-version.js'
+import type { McpSpawnConfig } from './mcp-spawn-config.js'
 
 const log = createLogger('codex-harness-session')
+
+/**
+ * MCP bridge config passed into CodexHarnessSession. The `spawn` block is
+ * produced by `buildMcpSpawnConfig()` from agent-core (package-owned
+ * shim path + `process.execPath` — see `mcp-spawn-config.ts`). We keep
+ * this as an opaque bag so future transports (e.g. HTTP MCP) don't force
+ * a new breaking param.
+ */
+export interface CodexHarnessMcpOpts {
+  /** Unix socket path for MCP IPC. */
+  socketPath: string
+  /** Per-session auth token presented by the shim to Anton's IPC server. */
+  authToken: string
+  /** How to launch the shim subprocess — single source of truth. */
+  spawn: McpSpawnConfig
+}
 
 export interface CodexHarnessSessionOpts {
   id: string
   provider: string
   model: string
-  /** Unix socket path for MCP IPC. */
-  socketPath: string
-  /** Path to the anton-mcp-shim.js file. */
-  shimPath: string
-  /** Per-session auth token presented by the shim to Anton's IPC server. */
-  authToken: string
+  /**
+   * MCP bridge configuration. Constructed by the server once from
+   * `buildMcpSpawnConfig()` and wrapped with the per-session auth token +
+   * socket path. Replaces the old flat `socketPath` / `shimPath` /
+   * `authToken` triple.
+   */
+  mcp: CodexHarnessMcpOpts
   /** Project workspace. Passed as `cwd` to codex and `thread/start.cwd`. */
   cwd?: string
   /** Static system prompt fallback (used if no builder provided). */
@@ -568,9 +586,9 @@ export class CodexHarnessSession {
 
   private buildConfig(): Record<string, unknown> {
     const mcpEnv: Record<string, string> = {
-      ANTON_SOCK: this.opts.socketPath,
+      ANTON_SOCK: this.opts.mcp.socketPath,
       ANTON_SESSION: this.id,
-      ANTON_AUTH: this.opts.authToken,
+      ANTON_AUTH: this.opts.mcp.authToken,
     }
     // The namespace Codex uses to prefix our tools (e.g. `anton:gmail_*`)
     // MUST match the value the identity + capability blocks reference.
@@ -578,8 +596,8 @@ export class CodexHarnessSession {
       model_reasoning_summary: 'detailed',
       mcp_servers: {
         [ANTON_MCP_NAMESPACE]: {
-          command: 'node',
-          args: [this.opts.shimPath],
+          command: this.opts.mcp.spawn.command,
+          args: this.opts.mcp.spawn.args,
           env: mcpEnv,
         },
       },

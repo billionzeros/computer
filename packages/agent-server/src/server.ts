@@ -94,11 +94,14 @@ import {
   McpManager,
   type McpServerConfig,
   type Session,
+  SessionRegistry,
   type SubAgentEventHandler,
+  type ShimProbeResult,
   appendHarnessTurn,
   assembleConversationContext,
   buildHarnessCapabilityBlock,
   buildHarnessContextPrompt,
+  buildMcpSpawnConfig,
   buildReplaySeed,
   createMcpIpcServer,
   createSession,
@@ -108,6 +111,7 @@ import {
   hashPromptVersion,
   isHarnessSession,
   matchesSurface,
+  probeMcpShim,
   readHarnessHistory,
   resolveModel,
   resumeSession,
@@ -262,8 +266,46 @@ function spawnFallback(shell: string, cols: number, rows: number, cwd: string): 
 export class AgentServer {
   private wss: WebSocketServer | null = null
   private config: AgentConfig
-  private sessions: Map<string, Session | HarnessSession | CodexHarnessSession> = new Map()
+  /**
+   * Bounded, LRU-ordered registry for every live session. Replaces a
+   * plain Map. Guarantees (a) `shutdown()` runs on eviction and explicit
+   * delete, and (b) partitioned pools so routine bursts can't evict live
+   * conversations. Category is passed at `put()` time by the call site
+   * that knows intent best.
+   */
+  private sessions: SessionRegistry<Session | HarnessSession | CodexHarnessSession> =
+    new SessionRegistry<Session | HarnessSession | CodexHarnessSession>({
+      // LRU eviction only calls session.shutdown() on the evicted entry.
+      // We also own per-session bookkeeping outside the registry
+      // (mcpIpcServer auth, harness context maps, activeTurns) that
+      // would otherwise leak on eviction. Drop them here — deliberately
+      // NOT deletePersistedSession, because eviction is a memory-pressure
+      // signal, not a "user destroyed this session" signal, and the disk
+      // state must remain resumable.
+      onEvict: (id, session) => {
+        this.cleanupEvictedSessionState(id, isHarnessSession(session))
+      },
+    })
   private activeTurns: Set<string> = new Set() // sessions currently processing a turn
+  /**
+   * Latest result from `probeMcpShim()`. `null` = not yet probed. Gates
+   * the capability block on harness session creation so the model
+   * doesn't hallucinate connectors when the shim is unreachable.
+   */
+  private mcpHealth: ShimProbeResult | null = null
+  /** Epoch ms when `mcpHealth` was last written — used by the lazy freshness check. */
+  private mcpHealthAt = 0
+  /** Shared in-flight re-probe promise so concurrent callers collapse into one spawn. */
+  private mcpProbeInflight: Promise<void> | null = null
+  /**
+   * Resolves once the first `probeMcpShim()` finishes (ok or err) so
+   * `start()` can block on it before the WebSocket listener opens.
+   * Without this await, clients that connect in the first few hundred ms
+   * after boot see `mcpHealth === null` at session creation and lose the
+   * capability block for the session's entire lifetime — Codex bakes
+   * `developerInstructions` into `thread/start` and never rebuilds it.
+   */
+  private initialMcpProbe: Promise<void> | null = null
   private activeClient: WebSocket | null = null
   // Track pending interactive prompts so they can be re-sent on client reconnect
   private pendingPrompts: Map<string, { type: string; payload: Record<string, unknown> }> =
@@ -347,6 +389,54 @@ export class AgentServer {
     // Start MCP IPC server for harness sessions
     const socketPath = join(getAntonDir(), 'harness.sock')
     this.mcpIpcServer = createMcpIpcServer(socketPath, this.toolRegistry)
+
+    // Fire the boot probe. Subsequent re-probes happen lazily in
+    // `ensureMcpHealthFresh()` when a harness session is about to be
+    // created and the last probe is older than MCP_HEALTH_STALE_MS. We
+    // don't poll on an interval — the shim binary only changes on
+    // deploy, so idle re-probes just burn cycles and fill logs.
+    this.initialMcpProbe = this.runMcpProbe()
+  }
+
+  /**
+   * Run one probe and update `mcpHealth` / `mcpHealthAt`. Concurrent
+   * callers share the in-flight promise via `mcpProbeInflight` so we
+   * never spawn two probe subprocesses in parallel.
+   */
+  private runMcpProbe(): Promise<void> {
+    if (this.mcpProbeInflight) return this.mcpProbeInflight
+    this.mcpProbeInflight = (async () => {
+      try {
+        this.mcpHealth = await probeMcpShim()
+      } catch (err) {
+        log.error({ err }, 'probeMcpShim threw — treating as unhealthy')
+        this.mcpHealth = {
+          ok: false,
+          error: (err as Error).message,
+          stderrTail: [],
+          durationMs: 0,
+        }
+      } finally {
+        this.mcpHealthAt = Date.now()
+        this.mcpProbeInflight = null
+      }
+    })()
+    return this.mcpProbeInflight
+  }
+
+  /**
+   * Ensure `mcpHealth` is no older than `staleMs`. If stale (or absent),
+   * re-probe inline. Callers await this before consulting `mcpHealth` to
+   * gate the capability block on harness session creation. Safe to call
+   * concurrently — shares the in-flight promise.
+   *
+   * Default staleness: 5 minutes. The probe only protects against partial
+   * deploys / broken builds, which are discrete events, so a short-ish
+   * freshness window bounds exposure without polling idly.
+   */
+  private async ensureMcpHealthFresh(staleMs = 5 * 60_000): Promise<void> {
+    if (this.mcpHealth && Date.now() - this.mcpHealthAt < staleMs) return
+    await this.runMcpProbe()
   }
 
   setScheduler(scheduler: Scheduler) {
@@ -370,16 +460,11 @@ export class AgentServer {
       }
       this.ptys.delete(id)
     }
-    // Shutdown harness sessions and IPC server
-    for (const [, session] of this.sessions) {
-      if (isHarnessSession(session)) {
-        try {
-          await session.shutdown()
-        } catch {
-          /* best-effort */
-        }
-      }
-    }
+    // Shutdown every registered session via the registry — harness
+    // sessions get SIGTERM→SIGKILL on their CLI; Pi SDK sessions are
+    // currently a no-op (no shutdown() method) but will pick it up for
+    // free if one is added later.
+    await this.sessions.shutdownAll()
     if (this.mcpIpcServer) {
       await this.mcpIpcServer.close()
       this.mcpIpcServer = null
@@ -409,7 +494,10 @@ export class AgentServer {
 
         // Agent sessions are autonomous — auto-approve everything
         this.wireAgentAutoHandlers(session)
-        this.sessions.set(runSessionId, session)
+        // Ephemeral: agent runs are one-shot; the finally-block below
+        // deletes explicitly, but if an exception races that path the
+        // registry's ephemeral pool caps the damage.
+        this.sessions.put(runSessionId, session, 'ephemeral')
 
         log.info({ runSessionId, agentSessionId }, 'Created fresh agent run session')
 
@@ -447,7 +535,7 @@ export class AgentServer {
           throw err
         } finally {
           // Always clean up cached session (persisted to disk by the session itself)
-          this.sessions.delete(runSessionId)
+          await this.sessions.delete(runSessionId)
         }
 
         return { eventCount, summary, runSessionId }
@@ -456,6 +544,15 @@ export class AgentServer {
   }
 
   async start(): Promise<void> {
+    // Block on the initial MCP shim probe so every harness session
+    // created after `start()` returns sees a definitive mcpHealth
+    // result. Probe timeout is 5s (see probeMcpShim), so startup is
+    // bounded even if the shim is broken.
+    if (this.initialMcpProbe) {
+      log.info('awaiting initial MCP shim probe before opening WebSocket listener')
+      await this.initialMcpProbe
+    }
+
     const { port } = this.config
     const tlsPort = port + 1
 
@@ -1370,7 +1467,9 @@ export class AgentServer {
     switch (msg.type) {
       // ── Session lifecycle ──
       case 'session_create':
-        this.handleSessionCreate(msg)
+        this.handleSessionCreate(msg).catch((err) => {
+          log.error({ err, sessionId: msg.id }, 'handleSessionCreate rejected unexpectedly')
+        })
         break
 
       case 'sessions_list':
@@ -1386,7 +1485,7 @@ export class AgentServer {
         break
 
       case 'session_destroy':
-        this.handleSessionDestroy(msg)
+        void this.handleSessionDestroy(msg)
         break
 
       case 'session_provider_switch':
@@ -1766,7 +1865,7 @@ export class AgentServer {
 
   // ── Session handlers ────────────────────────────────────────────
 
-  private handleSessionCreate(msg: {
+  private async handleSessionCreate(msg: {
     id: string
     provider?: string
     model?: string
@@ -1780,6 +1879,11 @@ export class AgentServer {
       const providerConfig = this.config.providers[providerName] || DEFAULT_PROVIDERS[providerName]
 
       if (providerConfig?.type === 'harness') {
+        // Re-probe if the last probe is stale. createHarnessSession bakes
+        // the capability-block decision into the CLI's system prompt at
+        // creation time — a stale "ok" result would ship connector tools
+        // the shim can't actually serve.
+        await this.ensureMcpHealthFresh()
         // Harness sessions are created via createHarnessSession() so the
         // same setup code runs for both fresh starts and provider-switch
         // rebuilds. See that method for the full wiring.
@@ -1807,7 +1911,7 @@ export class AgentServer {
         this.wireSessionConfirmHandler(session)
         this.wirePlanConfirmHandler(session)
         this.wireAskUserHandler(session)
-        this.sessions.set(msg.id, session)
+        this.sessions.put(msg.id, session, 'conversation')
 
         this.sendToClient(Channel.AI, {
           type: 'session_created',
@@ -1907,16 +2011,12 @@ export class AgentServer {
     // don't touch this variable — so we only build it for non-codex.
     const adapter = providerName === 'codex' ? null : new ClaudeAdapter()
     const socketPath = join(getAntonDir(), 'harness.sock')
-    const shimPath = join(
-      getAntonDir(),
-      '..',
-      'node_modules',
-      '@anton',
-      'agent-core',
-      'dist',
-      'harness',
-      'anton-mcp-shim.js',
-    )
+    // Shim path + node binary come from buildMcpSpawnConfig(), which
+    // resolves the shim via import.meta.url (package-owned) and uses
+    // process.execPath for the node binary. This replaces the previous
+    // `homedir() + '../node_modules/...'` construction which broke on
+    // VPS deployments where HOME != install root.
+    const mcpSpawn = buildMcpSpawnConfig()
 
     // Resolve workspace path from the project (if any)
     let cwd: string | undefined
@@ -2110,8 +2210,22 @@ export class AgentServer {
     }
 
     const liveConnectorsAtStart = this.collectLiveConnectorsForPrompt(surfaceLabel)
-    const capabilityBlock = buildHarnessCapabilityBlock(liveConnectorsAtStart, ANTON_MCP_NAMESPACE)
-    const liveConnectorIdsAtStart = liveConnectorsAtStart.map((c) => c.id)
+    // Gate on MCP shim health. If the shim probe failed (or hasn't run
+    // yet), we skip emitting the capability block entirely — the model
+    // would otherwise believe it can call connector tools when the
+    // transport is dead. We log once at creation so the operator can
+    // correlate missing tools with a known probe failure.
+    const mcpReady = this.mcpHealth?.ok === true
+    if (!mcpReady) {
+      log.warn(
+        { sessionId: id, mcpHealth: this.mcpHealth },
+        'MCP shim probe not ok — omitting capability block from harness session',
+      )
+    }
+    const capabilityBlock = mcpReady
+      ? buildHarnessCapabilityBlock(liveConnectorsAtStart, ANTON_MCP_NAMESPACE)
+      : ''
+    const liveConnectorIdsAtStart = mcpReady ? liveConnectorsAtStart.map((c) => c.id) : []
 
     const session: HarnessSession | CodexHarnessSession =
       providerName === 'codex'
@@ -2119,9 +2233,7 @@ export class AgentServer {
             id,
             provider: providerName,
             model,
-            socketPath,
-            shimPath,
-            authToken,
+            mcp: { socketPath, authToken, spawn: mcpSpawn },
             cwd,
             buildSystemPrompt,
             capabilityBlock,
@@ -2135,14 +2247,14 @@ export class AgentServer {
             // Non-codex branch: adapter is guaranteed non-null by
             // construction above (only the codex branch sets it to null).
             adapter: adapter ?? new ClaudeAdapter(),
-            socketPath,
-            shimPath,
-            authToken,
+            mcp: { socketPath, authToken, spawn: mcpSpawn },
             cwd,
             buildSystemPrompt,
             onTurnEnd,
           })
-    this.sessions.set(id, session)
+    // Harness sessions share the `conversation` pool with Pi SDK chats.
+    // Agent-run variants come through createSession with 'ephemeral'.
+    this.sessions.put(id, session, 'conversation')
 
     this.sendToClient(Channel.AI, {
       type: 'session_created',
@@ -2211,23 +2323,22 @@ export class AgentServer {
 
     const projectId = this.harnessSessionContexts.get(msg.id)?.projectId
 
-    // Tear down the old harness session. shutdown() waits for the CLI
-    // to exit gracefully (SIGTERM → SIGKILL ladder) so we don't leak
-    // the subprocess on a hot swap.
-    try {
-      await existing.shutdown()
-    } catch (err) {
-      log.warn(
-        { err, sessionId: msg.id },
-        'harness shutdown errored during provider switch — continuing',
-      )
-    }
+    // Drop external bookkeeping BEFORE the registry tears down the
+    // subprocess, mirroring the onEvict ordering — any in-flight MCP
+    // call from the soon-to-be-dead session fails with a clean "unknown
+    // session" instead of racing a dangling auth entry.
     if (this.mcpIpcServer) {
       this.mcpIpcServer.unregisterSession(msg.id)
     }
     this.harnessSessionContexts.delete(msg.id)
-    this.sessions.delete(msg.id)
     this.activeTurns.delete(msg.id)
+    // registry.delete() runs shutdown() — the SIGTERM → SIGKILL ladder
+    // inside HarnessSession.shutdown already waits for the CLI to exit.
+    // We deliberately don't call shutdown() ourselves first; it isn't
+    // cheap (proc.killed doesn't flip fast enough to short-circuit the
+    // second call, so a manual call + registry.delete would double the
+    // ~7s delay ladder on every provider switch).
+    await this.sessions.delete(msg.id)
 
     // Build the replay seed from the mirror. Empty string is fine —
     // means no prior history yet (switch before the first turn).
@@ -2241,6 +2352,10 @@ export class AgentServer {
         'failed to build replay seed — continuing without history replay',
       )
     }
+
+    // Re-probe if the last probe is stale — the rebuild below bakes the
+    // capability block into the new CLI's system prompt.
+    await this.ensureMcpHealthFresh()
 
     // Rebuild. createHarnessSession writes meta.json via
     // ensureHarnessSessionInit, which is a no-op if the file exists —
@@ -2625,24 +2740,65 @@ export class AgentServer {
     })
   }
 
-  private handleSessionDestroy(msg: { id: string }) {
+  /**
+   * In-memory bookkeeping that must be dropped when a session leaves the
+   * registry via LRU eviction. Intentionally does NOT touch disk state —
+   * eviction is a memory-pressure signal and the persisted file must
+   * remain resumable.
+   */
+  private cleanupEvictedSessionState(id: string, wasHarness: boolean): void {
+    this.activeTurns.delete(id)
+    if (wasHarness && this.mcpIpcServer) {
+      this.mcpIpcServer.unregisterSession(id)
+    }
+    if (wasHarness) {
+      this.harnessSessionContexts.delete(id)
+      this.harnessExtractionCursor.delete(id)
+    }
+  }
+
+  private async handleSessionDestroy(msg: { id: string }) {
     // Extract projectId before deleting so we can update stats
-    const session = this.sessions.get(msg.id)
+    const session = this.sessions.peek(msg.id)
     const projectId =
       (session && !isHarnessSession(session) ? session.contextInfo?.projectId : undefined) ??
       this.extractProjectId(msg.id)
     const wasHarness = session ? isHarnessSession(session) : false
 
+    let idReused = false
     try {
-      this.sessions.delete(msg.id)
-      this.activeTurns.delete(msg.id)
-      deletePersistedSession(msg.id, projectId)
-      if (wasHarness && this.mcpIpcServer) {
-        this.mcpIpcServer.unregisterSession(msg.id)
-      }
-      if (wasHarness) {
-        this.harnessSessionContexts.delete(msg.id)
-        this.harnessExtractionCursor.delete(msg.id)
+      // Registry.delete() awaits session.shutdown() when present — this
+      // is the leak fix. Previously the harness codex app-server (and
+      // its shim child) leaked until the host process exited, because
+      // only `this.sessions.delete(id)` was called.
+      await this.sessions.delete(msg.id)
+
+      // Race guard: while the delete() await was suspended on
+      // session.shutdown() (which for codex harness can take several
+      // seconds), another WebSocket message — typically session_create
+      // reusing the same id — could have run to completion and re-populated
+      // the registry + harnessSessionContexts + mcpIpcServer auth under
+      // this id. Running the id-keyed cleanup below would then clobber
+      // the live new session. If the id is back in the registry, the new
+      // session already owns these maps, so we skip all tail ops
+      // (including deletePersistedSession, which would delete the new
+      // session's on-disk meta.json / messages.jsonl).
+      idReused = this.sessions.has(msg.id)
+      if (idReused) {
+        log.info(
+          { sessionId: msg.id },
+          'session id reused during destroy — skipping tail cleanup; new session owns these maps',
+        )
+      } else {
+        this.activeTurns.delete(msg.id)
+        deletePersistedSession(msg.id, projectId)
+        if (wasHarness && this.mcpIpcServer) {
+          this.mcpIpcServer.unregisterSession(msg.id)
+        }
+        if (wasHarness) {
+          this.harnessSessionContexts.delete(msg.id)
+          this.harnessExtractionCursor.delete(msg.id)
+        }
       }
     } catch (err: unknown) {
       log.error({ err, sessionId: msg.id }, 'Error destroying session')
@@ -2653,8 +2809,10 @@ export class AgentServer {
       id: msg.id,
     })
 
-    // Update project stats so session count reflects the deletion
-    if (projectId) {
+    // Update project stats so session count reflects the deletion. Skip
+    // on id-reuse: the new session's create path will refresh stats on
+    // its own, and recalculating here would race with its disk writes.
+    if (projectId && !idReused) {
       try {
         updateProjectStats(projectId)
         const project = loadProject(projectId)
@@ -2672,7 +2830,7 @@ export class AgentServer {
       }
     }
 
-    log.info({ sessionId: msg.id }, 'Session destroyed')
+    log.info({ sessionId: msg.id, idReused }, 'Session destroyed')
   }
 
   private handleSessionHistory(msg: {
@@ -2751,7 +2909,7 @@ export class AgentServer {
         this.wireSessionConfirmHandler(session)
         this.wirePlanConfirmHandler(session)
         this.wireAskUserHandler(session)
-        this.sessions.set(msg.id, session)
+        this.sessions.put(msg.id, session, 'conversation')
       }
 
       // Pi SDK session: continue with existing logic.
@@ -4354,7 +4512,7 @@ export class AgentServer {
         this.wireSessionConfirmHandler(session)
         this.wirePlanConfirmHandler(session)
         this.wireAskUserHandler(session)
-        this.sessions.set(DEFAULT_SESSION_ID, session)
+        this.sessions.put(DEFAULT_SESSION_ID, session, 'conversation')
       } else {
         // Try to resume from disk automatically
         const projectId = this.extractProjectId(sessionId)
@@ -4390,7 +4548,10 @@ export class AgentServer {
             this.wirePlanConfirmHandler(session)
             this.wireAskUserHandler(session)
           }
-          this.sessions.set(sessionId, session)
+          // Agent sessions land in `routine` pool — they run on a schedule
+          // and naturally come and go; conversations go to the `conversation`
+          // pool where they compete for chat capacity.
+          this.sessions.put(sessionId, session, isAgentSession ? 'routine' : 'conversation')
           log.info({ sessionId }, 'Auto-resumed session from disk')
         } else {
           this.sendToClient(Channel.AI, {
@@ -4467,6 +4628,9 @@ export class AgentServer {
     })
 
     try {
+      // Pin inside the try so the finally's unpin always pairs with a pin,
+      // even if a throw fires between the two statements.
+      this.sessions.pin(sessionId)
       const turnStartMs = Date.now()
       let accumulatedText = ''
       let toolCallCount = 0
@@ -4690,6 +4854,7 @@ export class AgentServer {
       // the try block exited without reaching textBuffer.destroy()
       textBuffer.destroy()
       this.activeTurns.delete(sessionId)
+      this.sessions.unpin(sessionId)
       this.sendToClient(Channel.EVENTS, {
         type: 'routine_status',
         status: 'idle',
@@ -5081,15 +5246,35 @@ export class AgentServer {
         },
         // Harness session factory — lets the runner build Codex /
         // Claude Code sessions for Slack/Telegram with the same wiring
-        // desktop sessions use (IPC auth, tool registry, mirror, etc.)
-        ({ sessionId, providerName, model, projectId, surface }) =>
-          this.createHarnessSession({
+        // desktop sessions use (IPC auth, tool registry, mirror, etc.).
+        // Async so we can freshen mcpHealth before baking the capability
+        // block into the CLI's system prompt, matching the desktop path.
+        async ({ sessionId, providerName, model, projectId, surface }) => {
+          await this.ensureMcpHealthFresh()
+          return this.createHarnessSession({
             id: sessionId,
             providerName,
             model,
             projectId,
             surface,
-          }),
+          })
+        },
+        // Session disposer — mirrors handleSessionProviderSwitch's
+        // teardown order: drop IPC auth + harness context map BEFORE
+        // awaiting registry.delete (which runs session.shutdown()).
+        // Without this, any webhook eviction path (/model switch,
+        // switchAllSessionModels, /reset) orphans the codex/claude-code
+        // subprocess because the webhook runner's own Map entry was the
+        // only thing keeping tightly-scoped state, but the real session
+        // owner is the server's SessionRegistry.
+        async (sessionId) => {
+          if (this.mcpIpcServer) {
+            this.mcpIpcServer.unregisterSession(sessionId)
+          }
+          this.harnessSessionContexts.delete(sessionId)
+          this.activeTurns.delete(sessionId)
+          await this.sessions.delete(sessionId)
+        },
       )
       // Wire scheduler access so /agents command works on Telegram/Slack
       if (this.scheduler) {

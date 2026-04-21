@@ -73,6 +73,8 @@ export {
   HarnessSession,
   CodexHarnessSession,
   type CodexHarnessSessionOpts,
+  type CodexHarnessMcpOpts,
+  type HarnessMcpOpts,
   isHarnessSession,
   type HarnessSessionOpts,
   createMcpIpcServer,
@@ -95,5 +97,20 @@ export {
   readHarnessHistory,
   buildReplaySeed,
   extractHarnessMemoriesFromMirror,
+  buildMcpSpawnConfig,
+  getExpectedShimVersion,
+  probeMcpShim,
+  type McpSpawnConfig,
+  type ShimProbeResult,
+  type ShimProbeOk,
+  type ShimProbeErr,
 } from './harness/index.js'
 export { resolveModel } from './session.js'
+export {
+  SessionRegistry,
+  DEFAULT_POOLS,
+  type SessionCategory,
+  type PoolConfig,
+  type SessionRegistryOpts,
+  type Shutdownable,
+} from './session-registry.js'

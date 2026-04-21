@@ -16,6 +16,18 @@ import { createLogger } from '@anton/logger'
 import type { ChatImageAttachmentInput } from '@anton/protocol'
 import type { SessionEvent } from '../session.js'
 import type { HarnessAdapter } from './adapter.js'
+import type { McpSpawnConfig } from './mcp-spawn-config.js'
+
+/**
+ * MCP bridge config for HarnessSession. Mirrors CodexHarnessMcpOpts; we
+ * keep the types separate so the two paths can diverge later (e.g. HTTP
+ * MCP for Codex only) without coupling.
+ */
+export interface HarnessMcpOpts {
+  socketPath: string
+  authToken: string
+  spawn: McpSpawnConfig
+}
 
 const log = createLogger('harness-session')
 
@@ -24,10 +36,13 @@ export interface HarnessSessionOpts {
   provider: string
   model: string
   adapter: HarnessAdapter
-  socketPath: string
-  shimPath: string
-  /** Per-session auth token presented by the shim to Anton's IPC server. */
-  authToken: string
+  /**
+   * MCP bridge configuration. Constructed once by the server from
+   * `buildMcpSpawnConfig()` and wrapped with the per-session auth token +
+   * socket path. Replaces the old flat `socketPath` / `shimPath` /
+   * `authToken` fields.
+   */
+  mcp: HarnessMcpOpts
   cwd?: string
   /**
    * Static system prompt. Kept for back-compat / test paths that don't
@@ -64,9 +79,7 @@ export class HarnessSession {
   readonly createdAt: number
 
   private adapter: HarnessAdapter
-  private socketPath: string
-  private shimPath: string
-  private authToken: string
+  private mcp: HarnessMcpOpts
   private cwd?: string
   private systemPrompt?: string
   private buildSystemPromptFn?: (userMessage: string, turnIndex: number) => Promise<string>
@@ -98,9 +111,7 @@ export class HarnessSession {
     this.provider = opts.provider
     this.model = opts.model
     this.adapter = opts.adapter
-    this.socketPath = opts.socketPath
-    this.shimPath = opts.shimPath
-    this.authToken = opts.authToken
+    this.mcp = opts.mcp
     this.cwd = opts.cwd
     this.systemPrompt = opts.systemPrompt
     this.buildSystemPromptFn = opts.buildSystemPrompt
@@ -174,18 +185,18 @@ export class HarnessSession {
         systemPrompt: systemPromptForTurn,
         maxBudgetUsd: this.maxBudgetUsd,
         cwd: this.cwd,
-        shimPath: this.shimPath,
-        socketPath: this.socketPath,
+        shimPath: this.mcp.spawn.shimPath,
+        socketPath: this.mcp.socketPath,
         sessionId: this.id,
-        authToken: this.authToken,
+        authToken: this.mcp.authToken,
       })
 
       const env = {
         ...process.env,
         ...this.adapter.buildEnv({
-          socketPath: this.socketPath,
+          socketPath: this.mcp.socketPath,
           sessionId: this.id,
-          authToken: this.authToken,
+          authToken: this.mcp.authToken,
         }),
       }
 
@@ -447,12 +458,12 @@ export class HarnessSession {
     const config = {
       mcpServers: {
         anton: {
-          command: 'node',
-          args: [this.shimPath],
+          command: this.mcp.spawn.command,
+          args: this.mcp.spawn.args,
           env: {
-            ANTON_SOCK: this.socketPath,
+            ANTON_SOCK: this.mcp.socketPath,
             ANTON_SESSION: this.id,
-            ANTON_AUTH: this.authToken,
+            ANTON_AUTH: this.mcp.authToken,
           },
         },
       },
