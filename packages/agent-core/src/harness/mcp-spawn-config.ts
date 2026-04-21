@@ -236,6 +236,17 @@ export async function probeMcpShim(
         clientInfo: { name: 'anton-probe', version: PACKAGE_VERSION },
       },
     })}\n`
+    // Route async stdin errors (EPIPE if the shim closes stdin after write
+    // returned synchronously) through `done` so they can't surface as an
+    // unhandled 'error' event on the stream.
+    child.stdin?.on('error', (err) => {
+      done({
+        ok: false,
+        error: `stdin error: ${(err as Error).message}`,
+        stderrTail: [...stderrTail],
+        durationMs: Date.now() - start,
+      })
+    })
     try {
       child.stdin?.write(initMsg)
     } catch (err) {

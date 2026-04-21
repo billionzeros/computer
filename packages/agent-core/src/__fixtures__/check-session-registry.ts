@@ -239,6 +239,130 @@ const cases: Case[] = [
     },
   },
   {
+    name: 'onEvict fires on LRU eviction with (id, session) and before shutdown',
+    run: async () => {
+      const calls: Array<{ id: string; shutdownAtCall: number }> = []
+      const reg = new SessionRegistry<FakeSession>({
+        pools: {
+          conversation: { maxSessions: 2, recencyFloorMs: 0 },
+          routine: { maxSessions: 40, recencyFloorMs: 0 },
+          ephemeral: { maxSessions: 20, recencyFloorMs: 0 },
+        },
+        onEvict: (id, session) => {
+          calls.push({ id, shutdownAtCall: session.shutdownCount })
+        },
+      })
+      const a = new FakeSession('a')
+      const b = new FakeSession('b')
+      reg.put('a', a, 'conversation')
+      await sleep(5)
+      reg.put('b', b, 'conversation')
+      await sleep(5)
+      reg.put('c', new FakeSession('c'), 'conversation') // evicts 'a'
+      await sleep(20)
+      if (calls.length !== 1) return `onEvict called ${calls.length}x, expected 1`
+      if (calls[0].id !== 'a') return `onEvict got id=${calls[0].id}, expected a`
+      if (calls[0].shutdownAtCall !== 0)
+        return 'onEvict ran after shutdown — must run before so external bookkeeping is cleared first'
+      if (a.shutdownCount !== 1) return `a.shutdown called ${a.shutdownCount}x, expected 1`
+      return null
+    },
+  },
+  {
+    name: 'onEvict does NOT fire on explicit delete',
+    run: async () => {
+      let evictCalls = 0
+      const reg = new SessionRegistry<FakeSession>({
+        onEvict: () => {
+          evictCalls += 1
+        },
+      })
+      const a = new FakeSession('a')
+      reg.put('a', a, 'conversation')
+      await reg.delete('a')
+      if (evictCalls !== 0) return `onEvict called ${evictCalls}x on delete, expected 0`
+      if (a.shutdownCount !== 1) return 'shutdown did not run on delete'
+      return null
+    },
+  },
+  {
+    name: 'onEvict does NOT fire on shutdownAll',
+    run: async () => {
+      let evictCalls = 0
+      const reg = new SessionRegistry<FakeSession>({
+        onEvict: () => {
+          evictCalls += 1
+        },
+      })
+      reg.put('a', new FakeSession('a'), 'conversation')
+      reg.put('b', new FakeSession('b'), 'routine')
+      await reg.shutdownAll()
+      if (evictCalls !== 0) return `onEvict called ${evictCalls}x on shutdownAll, expected 0`
+      return null
+    },
+  },
+  {
+    name: 'onEvict throwing does not block shutdown of the evicted session',
+    run: async () => {
+      const reg = new SessionRegistry<FakeSession>({
+        pools: {
+          conversation: { maxSessions: 1, recencyFloorMs: 0 },
+          routine: { maxSessions: 40, recencyFloorMs: 0 },
+          ephemeral: { maxSessions: 20, recencyFloorMs: 0 },
+        },
+        onEvict: () => {
+          throw new Error('boom')
+        },
+      })
+      const a = new FakeSession('a')
+      reg.put('a', a, 'conversation')
+      await sleep(5)
+      reg.put('b', new FakeSession('b'), 'conversation') // evicts 'a'
+      await sleep(20)
+      if (a.shutdownCount !== 1)
+        return `a.shutdown called ${a.shutdownCount}x despite onEvict throw, expected 1`
+      return null
+    },
+  },
+  {
+    name: 'destroy→create race: put() during delete()-await inserts cleanly and has() sees new',
+    run: async () => {
+      // Simulates the server.ts race: handleSessionDestroy calls
+      // sessions.delete(X) which sync-removes then awaits shutdown. While
+      // that await is suspended, a subsequent session_create calls
+      // sessions.put(X, new). The registry must accept the put (map slot
+      // is free after sync-remove) and has(X) must return true from the
+      // destroy path's perspective once its await resolves.
+      const reg = new SessionRegistry<FakeSession>()
+      const oldSession: FakeSession = {
+        id: 'x',
+        shutdownCount: 0,
+        shutdownAt: 0,
+        shutdown: async () => {
+          await sleep(30) // slow shutdown, like killing a codex subprocess
+          oldSession.shutdownCount += 1
+        },
+      } as FakeSession
+      reg.put('x', oldSession, 'conversation')
+
+      const deletePromise = reg.delete('x')
+      // Immediately after kicking off delete, the sync map-remove has
+      // already happened. A concurrent put with the same id must succeed.
+      await sleep(1)
+      const newSession = new FakeSession('x')
+      reg.put('x', newSession, 'conversation')
+
+      await deletePromise
+
+      if (!reg.has('x')) return 'new session missing from registry after delete of old resolved'
+      if (reg.peek('x') !== newSession) return 'registry has old session, not new'
+      if (oldSession.shutdownCount !== 1)
+        return `old session shutdown count ${oldSession.shutdownCount}, expected 1`
+      if (newSession.shutdownCount !== 0) return 'new session was shut down by old delete'
+      return null
+    },
+  },
+  {
     name: 'sizeOf reports per-pool counts',
     run: async () => {
       const reg = new SessionRegistry<FakeSession>()
@@ -248,6 +372,60 @@ const cases: Case[] = [
       if (reg.sizeOf('conversation') !== 2) return `conversation size ${reg.sizeOf('conversation')}`
       if (reg.sizeOf('routine') !== 1) return `routine size ${reg.sizeOf('routine')}`
       if (reg.sizeOf('ephemeral') !== 0) return `ephemeral size ${reg.sizeOf('ephemeral')}`
+      return null
+    },
+  },
+  {
+    name: 'eviction→replace race: onEvict is skipped when id was re-registered before async eviction fired',
+    run: async () => {
+      // Exercise the runEviction race guard: put() at capacity
+      // sync-removes the victim's map slot and fires async runEviction.
+      // Before that microtask runs, a fresh put(sameId) replaces the
+      // slot with a NEW session. When runEviction resumes, it must
+      // detect the replacement and skip onEvict (which is keyed on id)
+      // so the new session's external bookkeeping isn't wiped.
+      const onEvictCalls: Array<{ id: string; session: FakeSession }> = []
+      const reg = new SessionRegistry<FakeSession>({
+        pools: {
+          conversation: { maxSessions: 1, recencyFloorMs: 0 },
+          routine: { maxSessions: 40, recencyFloorMs: 0 },
+          ephemeral: { maxSessions: 20, recencyFloorMs: 0 },
+        },
+        onEvict: (id, session) => {
+          onEvictCalls.push({ id, session })
+        },
+      })
+      const victim = new FakeSession('a')
+      reg.put('a', victim, 'conversation')
+      await sleep(5)
+      // This triggers eviction of 'a' (async). The map slot for 'a' is
+      // already free by the time put('b') returns.
+      const bSession = new FakeSession('b')
+      reg.put('b', bSession, 'conversation')
+      // Immediately re-register 'a' with a fresh session while the
+      // async runEviction for the original 'a' is still pending its
+      // microtask turn. This also forces 'b' to be evicted (pool cap=1).
+      const replacement = new FakeSession('a')
+      reg.put('a', replacement, 'conversation')
+      await sleep(30)
+      // Victim's shutdown must still run (subprocess must be reaped).
+      if (victim.shutdownCount !== 1)
+        return `victim.shutdown called ${victim.shutdownCount}x, expected 1`
+      // Replacement must be untouched — no shutdown, still present.
+      if (replacement.shutdownCount !== 0)
+        return `replacement was shut down ${replacement.shutdownCount}x — id reuse must not cascade`
+      if (reg.peek('a') !== replacement) return 'replacement was evicted from registry'
+      // Critical assertion: onEvict must NOT have been called for 'a',
+      // because by the time the async body resumed, the 'a' slot pointed
+      // to the replacement. Calling onEvict('a', …) would wipe the
+      // replacement's external state. A single onEvict('b', …) IS
+      // expected since 'b' legitimately got evicted to make room for the
+      // replacement.
+      const aEvicts = onEvictCalls.filter((c) => c.id === 'a').length
+      if (aEvicts !== 0) return `onEvict fired for 'a' ${aEvicts}x despite id reuse, expected 0`
+      const bEvicts = onEvictCalls.filter((c) => c.id === 'b' && c.session === bSession).length
+      if (bEvicts !== 1)
+        return `onEvict should have fired exactly once for 'b', got ${bEvicts}`
       return null
     },
   },

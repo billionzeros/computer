@@ -84,19 +84,34 @@ interface Entry<T extends Shutdownable> {
   pinned: boolean
 }
 
-export interface SessionRegistryOpts {
+export interface SessionRegistryOpts<T extends Shutdownable = Shutdownable> {
   pools?: Partial<Record<SessionCategory, PoolConfig>>
+  /**
+   * Called when an entry is removed by LRU eviction (NOT by explicit
+   * `delete()` or `shutdownAll()`). The registry always runs
+   * `session.shutdown()` on the evicted entry itself; `onEvict` is the
+   * hook for callers that hold *external* bookkeeping keyed on the
+   * session id and need to clean it up symmetrically — e.g. the server's
+   * mcp IPC auth map, harness context map, activeTurns set. Fire-and-
+   * forget: a throw or rejected promise is caught and logged.
+   *
+   * Not called on `delete()` because explicit-delete callers already own
+   * the full cleanup path (see `handleSessionDestroy` in server.ts).
+   */
+  onEvict?: (id: string, session: T) => void | Promise<void>
 }
 
 export class SessionRegistry<T extends Shutdownable = Shutdownable> {
   private readonly entries = new Map<string, Entry<T>>()
   private readonly pools: Record<SessionCategory, PoolConfig>
+  private readonly onEvict?: (id: string, session: T) => void | Promise<void>
 
-  constructor(opts: SessionRegistryOpts = {}) {
+  constructor(opts: SessionRegistryOpts<T> = {}) {
     this.pools = {
       ...DEFAULT_POOLS,
       ...opts.pools,
     }
+    this.onEvict = opts.onEvict
   }
 
   size(): number {
@@ -143,9 +158,14 @@ export class SessionRegistry<T extends Shutdownable = Shutdownable> {
       const victim = this.pickEvictionVictim(category, now)
       if (victim) {
         this.entries.delete(victim.id)
-        // Fire-and-forget shutdown. Eviction logic must never block the
-        // foreground insert path.
-        void this.runShutdown(victim.id, victim.entry.session, 'eviction')
+        // Fire-and-forget cleanup. Eviction logic must never block the
+        // foreground insert path. onEvict gives the caller a chance to
+        // drop external bookkeeping keyed on this id (IPC auth, context
+        // maps, active-turn sets) BEFORE we kill the subprocess, so any
+        // in-flight MCP call from the soon-to-be-dead session fails
+        // with a clean "unknown session" instead of hitting a dangling
+        // auth entry.
+        void this.runEviction(victim.id, victim.entry.session)
       } else {
         log.warn(
           {
@@ -253,6 +273,47 @@ export class SessionRegistry<T extends Shutdownable = Shutdownable> {
       return { id: victimId, entry: victimEntry }
     }
     return null
+  }
+
+  private async runEviction(id: string, session: T): Promise<void> {
+    // Yield to the microtask queue before checking entries.get(id). An
+    // async function runs synchronously up to its first await, so
+    // without this line `void this.runEviction(...)` inside put() would
+    // execute the replacement check AND onEvict synchronously — before
+    // any subsequent synchronous put(sameId) call has a chance to
+    // repopulate the slot. Deferring here is what lets the race guard
+    // below actually detect replacement.
+    await Promise.resolve()
+
+    // Race guard: between `entries.delete(id)` (synchronous in `put()`)
+    // and this async eviction body running, a caller could have
+    // re-registered the same id with a different session — e.g. the
+    // chat auto-resume path in server.ts. Running `onEvict(id, …)` in
+    // that case would blindly wipe the NEW session's bookkeeping
+    // (IPC auth, harness context maps) because the cleanup is keyed on
+    // id, not on the session instance. Detect replacement and skip the
+    // external cleanup hook. We still run shutdown() on the OLD session
+    // so its subprocess is reaped.
+    if (this.onEvict) {
+      const current = this.entries.get(id)
+      const replaced = current !== undefined && current.session !== session
+      if (replaced) {
+        log.info(
+          { sessionId: id },
+          'eviction target was re-registered before onEvict fired — skipping external cleanup; new session owns the id',
+        )
+      } else {
+        try {
+          await Promise.resolve(this.onEvict(id, session))
+        } catch (err) {
+          log.warn(
+            { err: (err as Error).message, sessionId: id },
+            'onEvict threw — continuing with shutdown',
+          )
+        }
+      }
+    }
+    await this.runShutdown(id, session, 'eviction')
   }
 
   private async runShutdown(id: string, session: T, reason: string): Promise<void> {

@@ -138,7 +138,19 @@ export type HarnessSessionFactory = (opts: {
   model: string
   projectId?: string
   surface: string
-}) => HarnessSession | CodexHarnessSession
+}) => Promise<HarnessSession | CodexHarnessSession>
+
+/**
+ * Server-side session teardown hook. The runner holds its own sessions
+ * Map for per-surface state (chains, pending interactions, progress),
+ * but harness subprocesses and IPC auth live in the server's
+ * SessionRegistry + harnessSessionContexts. Dropping the Map entry
+ * alone leaks the subprocess; this callback asks the server to run
+ * `registry.delete(id)` (which awaits `shutdown()`) and evict the
+ * associated IPC/context bookkeeping. Fire-and-forget callers should
+ * `void` the returned promise.
+ */
+export type SessionDisposer = (sessionId: string) => Promise<void>
 
 export class WebhookAgentRunner {
   private sessions = new Map<string, Session | HarnessSession | CodexHarnessSession>()
@@ -182,7 +194,56 @@ export class WebhookAgentRunner {
      * on harness-only models like "gpt-5.4".
      */
     private harnessSessionFactory?: HarnessSessionFactory,
+    /**
+     * Optional — when set, session eviction paths (/model switch,
+     * switchAllSessionModels, /reset, etc.) call this to have the
+     * server drop its SessionRegistry entry + IPC auth + harness
+     * context maps. Without it, harness sessions leak their codex/
+     * claude-code subprocess on every eviction.
+     */
+    private sessionDisposer?: SessionDisposer,
   ) {}
+
+  /**
+   * Tear down a webhook session on eviction. Handles:
+   *   - local Map entry (queue continues to run on the old reference if
+   *     mid-turn, which is fine — JS keeps the object alive and the
+   *     shutdown() call sequenced by the server registry only triggers
+   *     after the queue drains if the subprocess still has in-flight
+   *     work)
+   *   - pending interactive prompts (clearTimeout + resolve with a
+   *     rejection so the blocked generator unblocks cleanly)
+   *   - throttled progress-message timers
+   *   - server-side registry + IPC auth, via `sessionDisposer`
+   *
+   * Safe to call on unknown ids; all steps are no-ops when state is
+   * absent.
+   */
+  private async disposeSession(sessionId: string): Promise<void> {
+    this.sessions.delete(sessionId)
+
+    const pending = this.pendingInteractions.get(sessionId)
+    if (pending) {
+      clearTimeout(pending.timeout)
+      this.pendingInteractions.delete(sessionId)
+      // Resolve as rejection so the awaiting handler inside the session
+      // generator unblocks instead of hanging until the interaction
+      // timeout (up to 24h for plan/ask_user).
+      pending.resolve({ approved: false, feedback: 'Session evicted.' })
+    }
+
+    const progress = this.progressStates.get(sessionId)
+    if (progress?.pendingTimer) clearTimeout(progress.pendingTimer)
+    this.progressStates.delete(sessionId)
+
+    if (this.sessionDisposer) {
+      try {
+        await this.sessionDisposer(sessionId)
+      } catch (err) {
+        log.warn({ err, sessionId }, 'sessionDisposer threw — continuing')
+      }
+    }
+  }
 
   /** Wire access to the scheduler's job list (called by the server after init). */
   setSchedulerJobsProvider(fn: typeof this.getSchedulerJobs): void {
@@ -197,7 +258,14 @@ export class WebhookAgentRunner {
     const bindingKey = extractBindingKey(sessionId)
     const ctx: CommandContext = {
       sessionId,
-      evictSession: () => this.sessions.delete(sessionId),
+      // CommandContext.evictSession is typed `() => void` because the
+      // slash-command handlers that call it are synchronous. Fire-and-
+      // forget the dispose — the next turn the user sends will create a
+      // fresh session, and the ~seconds-long harness shutdown runs in
+      // the background.
+      evictSession: () => {
+        void this.disposeSession(sessionId)
+      },
       // CommandContext.getSession is typed for Pi SDK Session — the
       // builtin /model and /status command handlers reach into
       // session.model/provider which both Session and HarnessSession
@@ -297,7 +365,7 @@ export class WebhookAgentRunner {
       () => this.runOne(event, provider),
     )
 
-    entry.tail = myTurn.finally(() => {
+    const settled = myTurn.finally(() => {
       entry.depth -= 1
       // Drop the chain entry once it's empty, so long-idle sessions don't
       // accumulate. Compare-and-set guards against a racing new arrival
@@ -306,6 +374,16 @@ export class WebhookAgentRunner {
         this.chains.delete(event.sessionId)
       }
     })
+    // Swallow rejections on the tail itself. The router awaits `myTurn`
+    // and handles its rejection; a subsequent event would attach an
+    // onRejected handler via `prevTail.then(..., ...)`. But if no next
+    // event arrives before the microtask drains, `settled` is a
+    // handler-less rejected promise and Node emits an
+    // unhandledRejection. The swallow here is decoupled from the chain:
+    // subsequent `.then(fn, fn)` still observes the rejection
+    // independently.
+    settled.catch(() => {})
+    entry.tail = settled
     this.chains.set(event.sessionId, entry)
 
     return myTurn
@@ -328,7 +406,7 @@ export class WebhookAgentRunner {
       'runOne: start',
     )
     try {
-      const { session, isNew } = this.getOrCreateSession(sessionId, event.surface)
+      const { session, isNew } = await this.getOrCreateSession(sessionId, event.surface)
 
       // Pre-flight: check if the session's provider has a usable API key.
       // Mirrors the env-var map in Session.resolveApiKey so we can catch this
@@ -652,12 +730,12 @@ export class WebhookAgentRunner {
           // Harness model lives on the session and is read at every CLI
           // spawn, so just mutating the field is enough — the next turn
           // picks it up. Switching providers (codex ↔ claude-code)
-          // would need a fresh HarnessSession; we drop the entry so the
-          // next message recreates it via the factory.
+          // would need a fresh HarnessSession; dispose so the subprocess
+          // is reaped and the next message rebuilds via the factory.
           if (session.provider === provider) {
             session.model = model
           } else {
-            this.sessions.delete(id)
+            void this.disposeSession(id)
           }
         } else {
           session.switchModel(provider, model)
@@ -739,7 +817,9 @@ export class WebhookAgentRunner {
       saveModelOverride(bindingKey, slug)
       // Drop the live session so the next message recreates it via the
       // override we just saved. Same eviction the text-based /model does.
-      this.sessions.delete(sessionId)
+      // Fire-and-forget: the user's ack message should post immediately;
+      // the background shutdown takes ~seconds for harness sessions.
+      void this.disposeSession(sessionId)
       next = {
         body: `\u2705 Model set to *${modelName}*${providerName ? ` on *${providerName}*` : ''}.\nYour next message will use it.`,
         rows: [[{ label: '\u2039\u2039 Back', action: 'm:open' }]],
@@ -886,10 +966,10 @@ export class WebhookAgentRunner {
     return !!(envVar && process.env[envVar])
   }
 
-  private getOrCreateSession(
+  private async getOrCreateSession(
     sessionId: string,
     surface?: SurfaceInfo,
-  ): { session: Session | HarnessSession | CodexHarnessSession; isNew: boolean } {
+  ): Promise<{ session: Session | HarnessSession | CodexHarnessSession; isNew: boolean }> {
     const existing = this.sessions.get(sessionId)
     if (existing) return { session: existing, isNew: false }
 
@@ -936,7 +1016,7 @@ export class WebhookAgentRunner {
         )
       }
       const surfaceLabel = surface?.kind ?? 'webhook'
-      const session = this.harnessSessionFactory({
+      const session = await this.harnessSessionFactory({
         sessionId,
         providerName,
         model,
