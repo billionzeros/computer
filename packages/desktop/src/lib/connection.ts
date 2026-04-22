@@ -15,6 +15,7 @@ import {
   type ControlMessage,
   type EventMessage,
   type TerminalMessage,
+  type ThinkingLevel,
 } from '@anton/protocol'
 
 /**
@@ -191,10 +192,14 @@ export class Connection {
       model?: string
       apiKey?: string
       projectId?: string
-      thinkingLevel?: 'off' | 'minimal' | 'low' | 'medium' | 'high'
+      thinkingLevel?: ThinkingLevel
     },
   ) {
     this.send(Channel.AI, { type: 'session_create', id, ...opts })
+  }
+
+  sendSessionSetThinkingLevel(sessionId: string, level: ThinkingLevel) {
+    this.send(Channel.AI, { type: 'session_set_thinking_level', sessionId, level })
   }
 
   sendSessionsSync(lastSyncVersion: number) {

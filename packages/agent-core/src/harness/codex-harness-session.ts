@@ -22,12 +22,22 @@ import { createHash, randomUUID } from 'node:crypto'
 import { existsSync, readFileSync, statSync } from 'node:fs'
 import { basename, extname } from 'node:path'
 import { createLogger } from '@anton/logger'
-import type { ChatImageAttachmentInput } from '@anton/protocol'
+import type { ChatImageAttachmentInput, ThinkingLevel } from '@anton/protocol'
 import { ANTON_MCP_NAMESPACE } from '../prompt-layers.js'
 import type { SessionEvent } from '../session.js'
+import type { ReasoningEffort } from './codex-proto/ReasoningEffort.js'
 import { CodexRpcClient, CodexRpcError } from './codex-rpc.js'
 import { PINNED_CLI_VERSION, detectCodexCli } from './codex-version.js'
 import type { McpSpawnConfig } from './mcp-spawn-config.js'
+
+/**
+ * Map Anton's UI-facing ThinkingLevel onto the Codex protocol's
+ * ReasoningEffort enum. Names line up except for 'off', which Codex
+ * spells 'none'. Both enums include 'minimal' and 'xhigh'.
+ */
+function thinkingLevelToCodexEffort(level: ThinkingLevel): ReasoningEffort {
+  return level === 'off' ? 'none' : level
+}
 
 const log = createLogger('codex-harness-session')
 
@@ -138,6 +148,13 @@ export interface CodexHarnessSessionOpts {
   /** Hook invoked after each turn with {userMessage, events}. */
   onTurnEnd?: (turn: { userMessage: string; events: SessionEvent[] }) => void | Promise<void>
   maxBudgetUsd?: number
+  /**
+   * Initial reasoning effort applied to every `turn/start`. Can be changed
+   * mid-session via `setThinkingLevel()`; takes effect on the next turn.
+   * Codex's protocol treats `effort` as "override for this and subsequent
+   * turns," so we re-send it on every call anyway.
+   */
+  thinkingLevel?: ThinkingLevel
 }
 
 interface TurnQueue {
@@ -224,6 +241,13 @@ export class CodexHarnessSession {
   /** Wall-clock start of each open item, for durationMs in `onItemCompleted`. */
   private readonly openItemStartedAt = new Map<string, number>()
 
+  /**
+   * Reasoning effort for subsequent `turn/start` calls. Mutable — the
+   * composer's Effort pill forwards changes here via
+   * `Session.setThinkingLevel()` and they take effect on the next turn.
+   */
+  private effort: ReasoningEffort
+
   constructor(opts: CodexHarnessSessionOpts) {
     this.opts = opts
     this.id = opts.id
@@ -232,6 +256,12 @@ export class CodexHarnessSession {
     this.createdAt = Date.now()
     this.lastActiveAt = Date.now()
     this.sandboxMode = resolveSandboxMode()
+    this.effort = thinkingLevelToCodexEffort(opts.thinkingLevel ?? 'medium')
+  }
+
+  /** Apply a new reasoning effort level to subsequent turns. */
+  setThinkingLevel(level: ThinkingLevel): void {
+    this.effort = thinkingLevelToCodexEffort(level)
   }
 
   getTitle(): string {
@@ -699,7 +729,7 @@ export class CodexHarnessSession {
       approvalPolicy: 'never',
       sandboxPolicy: buildTurnSandboxPolicy(this.sandboxMode),
       model: this.model,
-      effort: 'medium',
+      effort: this.effort,
       summary: 'detailed',
       outputSchema: null,
     }

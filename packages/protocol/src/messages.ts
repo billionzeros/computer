@@ -149,6 +149,8 @@ export type TerminalMessage = PtySpawnMessage | PtyResizeMessage | PtyCloseMessa
 
 // ── AI Channel (0x02) ───────────────────────────────────────────────
 
+export type ThinkingLevel = 'off' | 'minimal' | 'low' | 'medium' | 'high' | 'xhigh'
+
 // Session management
 export interface SessionCreateMessage {
   type: 'session_create'
@@ -157,7 +159,16 @@ export interface SessionCreateMessage {
   model?: string
   apiKey?: string // client-provided key override (not persisted)
   projectId?: string // create session scoped to a project
-  thinkingLevel?: 'off' | 'minimal' | 'low' | 'medium' | 'high'
+  thinkingLevel?: ThinkingLevel
+}
+
+// Runtime effort update — applies to next turn on both pi-SDK sessions
+// (via PiAgent.setThinkingLevel) and Codex harness sessions (via the
+// per-turn `effort` override in TurnStartParams).
+export interface SessionSetThinkingLevelMessage {
+  type: 'session_set_thinking_level'
+  sessionId: string
+  level: ThinkingLevel
 }
 
 export interface SessionCreatedMessage {
@@ -1383,6 +1394,7 @@ export type AiMessage =
   // Session management
   | SessionCreateMessage
   | SessionCreatedMessage
+  | SessionSetThinkingLevelMessage
   | SessionsListMessage
   | SessionsListResponse
   | SessionsSyncRequest

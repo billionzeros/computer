@@ -15,12 +15,6 @@ export function handleProviderMessage(msg: AiMessage): boolean {
       connectionStore.getState().markSynced('providers')
       const ui = uiStore.getState()
       ui.setOnboardingLoaded(true)
-      if (msg.onboarding?.completed) {
-        uiStore.setState({
-          onboardingCompleted: true,
-          onboardingRole: msg.onboarding?.role ?? null,
-        })
-      }
       // Server is authoritative for tour completion; mirror to localStorage so
       // legacy callers of hasSeenTour() agree with the hydrated state.
       if (typeof msg.onboarding?.tourCompleted === 'boolean') {

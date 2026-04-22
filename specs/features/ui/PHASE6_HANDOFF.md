@@ -77,17 +77,7 @@ head, actions, content — NB some `.art-*` is in; `.art-panel__*` is not).
 - **Heads up:** SVG bar-chart code is non-trivial; keep it pure React with
   `<rect>` / `<text>` rather than pulling a charting lib.
 
-### 3. WelcomeModal → AntonModal migration
-- **Current file:** `components/WelcomeModal.tsx` — 4-step wizard (role picker
-  → prompts → connectors → model setup with screenshot).
-- **Target:** swap modal chrome to `AntonModal` (`components/ui/AntonModal.tsx`).
-  Keep the internal step state + layout; only replace backdrop / card /
-  header / footer.
-- **Watch for:** screenshot image in step 4, `anton:create-project` event
-  dispatch, `onOpenSettings(role)` callback, `setOnboardingCompleted(role)`
-  wiring back to `uiStore`.
-
-### 4. Pages share modal → AntonModal migration
+### 3. Pages share modal → AntonModal migration
 - **Current file:** likely `components/artifacts/PublishModal.tsx` (invoked by
   `artifactStore.openPublishModal`).
 - **Target:** `AntonModal` shell with `AntonModalRow` + `AntonToggle` for

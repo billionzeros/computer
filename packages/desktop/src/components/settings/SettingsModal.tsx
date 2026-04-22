@@ -345,9 +345,6 @@ function ProfileEditor() {
 function StartBehaviorRows() {
   const [restore, setRestore] = useState(() => localStorage.getItem('anton-restore') !== 'false')
   const [resume, setResume] = useState(() => localStorage.getItem('anton-resume') !== 'false')
-  const [welcome, setWelcome] = useState(
-    () => localStorage.getItem('anton-show-welcome') === 'true',
-  )
   const persist = (k: string, v: boolean) => localStorage.setItem(k, String(v))
   return (
     <>
@@ -370,19 +367,6 @@ function StartBehaviorRows() {
           onChange={(v) => {
             setResume(v)
             persist('anton-resume', v)
-          }}
-        />
-      </Row>
-      <Row
-        title="Show welcome on new machine"
-        desc="Display the onboarding sheet on first connect."
-        compact
-      >
-        <Toggle
-          on={welcome}
-          onChange={(v) => {
-            setWelcome(v)
-            persist('anton-show-welcome', v)
           }}
         />
       </Row>

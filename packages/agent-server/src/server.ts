@@ -120,7 +120,13 @@ import {
 import { CONNECTOR_FACTORIES, ConnectorManager } from '@anton/connectors'
 import { createLogger } from '@anton/logger'
 import { Channel, decodeFrame, encodeFrame, parseJsonPayload } from '@anton/protocol'
-import type { AiMessage, ChannelId, ControlMessage, TerminalMessage } from '@anton/protocol'
+import type {
+  AiMessage,
+  ChannelId,
+  ControlMessage,
+  TerminalMessage,
+  ThinkingLevel,
+} from '@anton/protocol'
 import { WebSocket, WebSocketServer } from 'ws'
 import {
   CredentialStore,
@@ -1538,6 +1544,10 @@ export class AgentServer {
         this.handleSessionHistory(msg)
         break
 
+      case 'session_set_thinking_level':
+        this.handleSessionSetThinkingLevel(msg)
+        break
+
       // ── Provider management ──
       case 'providers_list':
         this.handleProvidersList()
@@ -1913,7 +1923,7 @@ export class AgentServer {
     model?: string
     apiKey?: string
     projectId?: string
-    thinkingLevel?: 'off' | 'minimal' | 'low' | 'medium' | 'high'
+    thinkingLevel?: ThinkingLevel
   }) {
     try {
       // Determine provider type (harness vs API)
@@ -1935,6 +1945,7 @@ export class AgentServer {
           providerName,
           model,
           projectId: msg.projectId,
+          thinkingLevel: msg.thinkingLevel,
         })
       } else {
         // ── Standard API session (Pi SDK) ──
@@ -2038,6 +2049,8 @@ export class AgentServer {
      * subsequent turns the CLI's own resume tape carries history.
      */
     replaySeedForFirstTurn?: string
+    /** Initial reasoning effort (Codex harness only — Claude Code CLI has no flag). */
+    thinkingLevel?: ThinkingLevel
   }): HarnessSession | CodexHarnessSession {
     const {
       id,
@@ -2046,6 +2059,7 @@ export class AgentServer {
       projectId: harnessProjectId,
       surface: surfaceLabel = 'desktop',
       replaySeedForFirstTurn,
+      thinkingLevel,
     } = opts
 
     // Legacy HarnessSession (Claude Code) still needs a spawn adapter.
@@ -2290,6 +2304,7 @@ export class AgentServer {
             capabilityBlock,
             capabilityConnectorIds: liveConnectorIdsAtStart,
             onTurnEnd,
+            thinkingLevel,
           })
         : new HarnessSession({
             id,
@@ -2297,6 +2312,9 @@ export class AgentServer {
             model,
             // Non-codex branch: adapter is guaranteed non-null by
             // construction above (only the codex branch sets it to null).
+            // thinkingLevel is intentionally ignored here — the Claude Code
+            // CLI has no thinking/budget flag, so the composer's Effort pill
+            // is hidden for claude harness sessions.
             adapter: adapter ?? new ClaudeAdapter(),
             mcp: { socketPath, authToken, spawn: mcpSpawn },
             cwd,
@@ -2805,6 +2823,30 @@ export class AgentServer {
     if (wasHarness) {
       this.harnessSessionContexts.delete(id)
       this.harnessExtractionCursor.delete(id)
+    }
+  }
+
+  /**
+   * Live-update the reasoning effort on an active session. Works for both
+   * Pi-SDK sessions (delegates to Session.setThinkingLevel → PiAgent) and
+   * Codex harness sessions (delegates to CodexHarnessSession.setThinkingLevel,
+   * which applies on the next `turn/start`). No-op for Claude Code harness
+   * sessions since the CLI has no thinking flag — the composer's Effort pill
+   * is already hidden there so this path shouldn't fire.
+   */
+  private handleSessionSetThinkingLevel(msg: {
+    sessionId: string
+    level: ThinkingLevel
+  }) {
+    const session = this.sessions.peek(msg.sessionId)
+    if (!session) {
+      log.warn({ sessionId: msg.sessionId }, 'session_set_thinking_level: unknown session')
+      return
+    }
+    if (session instanceof CodexHarnessSession) {
+      session.setThinkingLevel(msg.level)
+    } else if ('setThinkingLevel' in session && typeof session.setThinkingLevel === 'function') {
+      session.setThinkingLevel(msg.level)
     }
   }
 
@@ -4106,7 +4148,7 @@ export class AgentServer {
       domain?: string
       agentInstructions?: string
       agentMemory?: string
-      thinkingLevel?: 'off' | 'minimal' | 'low' | 'medium' | 'high'
+      thinkingLevel?: ThinkingLevel
     },
   ) {
     const project = projectId ? loadProject(projectId) : undefined
