@@ -1,6 +1,7 @@
 import { Check, ChevronDown, ChevronRight, Search, Settings } from 'lucide-react'
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
+import { isProviderReady } from '../../lib/providers.js'
 import type { ProviderInfo } from '../../lib/store.js'
 import { sessionStore } from '../../lib/store/sessionStore.js'
 import {
@@ -55,14 +56,11 @@ function modelNote(model: string, tag: ModelTag | null): string {
 }
 
 type Group = 'subscription' | 'api' | 'unconfigured'
+type HarnessStatusMap = ReturnType<typeof sessionStore.getState>['harnessStatuses']
 
-function groupFor(p: ProviderInfo): Group {
-  if (p.type === 'harness') {
-    const hs = sessionStore.getState().harnessStatuses[p.name]
-    const ready = hs?.installed && hs?.auth?.loggedIn
-    return ready ? 'subscription' : 'unconfigured'
-  }
-  return p.hasApiKey ? 'api' : 'unconfigured'
+function groupFor(p: ProviderInfo, harnessStatuses: HarnessStatusMap): Group {
+  if (!isProviderReady(p, harnessStatuses)) return 'unconfigured'
+  return p.type === 'harness' ? 'subscription' : 'api'
 }
 
 const SECTION_LABEL: Record<Group, string> = {
@@ -124,6 +122,10 @@ export function ModelPopover({
   const [query, setQuery] = useState('')
   const ref = useRef<HTMLDivElement>(null)
   const [pos, setPos] = useState<PopoverPosition | null>(null)
+  // Reactive — if the user completes `codex login` while the popover is open,
+  // the affected provider should move from "Not configured" to "Subscriptions"
+  // without the user closing and reopening.
+  const harnessStatuses = sessionStore((s) => s.harnessStatuses)
 
   useLayoutEffect(() => {
     const update = () => {
@@ -163,7 +165,7 @@ export function ModelPopover({
     const groups: Group[] = ['subscription', 'api', 'unconfigured']
     return groups
       .map((g) => {
-        const inGroup = providers.filter((p) => groupFor(p) === g)
+        const inGroup = providers.filter((p) => groupFor(p, harnessStatuses) === g)
         const withModels = inGroup
           .map((p) => ({
             provider: p,
@@ -179,7 +181,7 @@ export function ModelPopover({
         return { group: g, providers: withModels }
       })
       .filter((s) => s.providers.length > 0)
-  }, [providers, query])
+  }, [providers, query, harnessStatuses])
 
   if (!pos) return null
 
@@ -277,12 +279,14 @@ export function ModelSelector() {
   const currentProvider = sessionStore((s) => s.currentProvider)
   const currentModel = sessionStore((s) => s.currentModel)
   const providers = sessionStore((s) => s.providers)
+  const anyReady = sessionStore((s) =>
+    s.providers.some((p) => isProviderReady(p, s.harnessStatuses)),
+  )
   const [open, setOpen] = useState(false)
   const buttonRef = useRef<HTMLButtonElement>(null)
 
   const hasAnyProvider = providers.length > 0
-  const hasAnyKey = providers.some((p) => p.hasApiKey || p.type === 'harness')
-  const displayModel = hasAnyKey ? formatModelName(currentModel) : 'Select a model'
+  const displayModel = anyReady ? formatModelName(currentModel) : 'Select a model'
 
   const handleSelect = (provider: string, model: string) => {
     const ss = sessionStore.getState()
@@ -296,13 +300,13 @@ export function ModelSelector() {
       <button
         type="button"
         ref={buttonRef}
-        className="composer__model"
+        className={`composer__model${anyReady ? '' : ' composer__model--empty'}`}
         onClick={() => {
           if (hasAnyProvider) setOpen((o) => !o)
           else openSettingsModels()
         }}
       >
-        {hasAnyKey && (
+        {anyReady && (
           <span className="composer__model-av">
             <ProviderIcon provider={currentProvider} size={14} />
           </span>

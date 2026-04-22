@@ -2,6 +2,7 @@ import type { AskUserQuestion } from '@anton/protocol'
 import { Plus, Send, Square } from 'lucide-react'
 import type React from 'react'
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { anyProviderReady } from '../../lib/providers.js'
 import type { Skill } from '../../lib/skills.js'
 import type { ChatImageAttachment } from '../../lib/store.js'
 import { useIsCurrentSessionWorking, useStore } from '../../lib/store.js'
@@ -226,6 +227,11 @@ export function ChatInput({
     const handle = richInputRef.current
     if (!handle) return
 
+    // Gate Enter-key / programmatic sends on provider readiness to match the
+    // disabled send button — avoids silently emitting turns that will fail.
+    const { providers, harnessStatuses } = sessionStore.getState()
+    if (!anyProviderReady(providers, harnessStatuses)) return
+
     const blocks = handle.getContentBlocks()
     const hasContent = blocks.some((b) => (b.type === 'text' ? b.text.trim().length > 0 : true))
     if (!hasContent) return
@@ -318,6 +324,8 @@ export function ChatInput({
   }
 
   const hasContent = input.trim().length > 0 || imageCount > 0
+  const anyReady = sessionStore((s) => anyProviderReady(s.providers, s.harnessStatuses))
+  const canSend = hasContent && anyReady
 
   const rootClass = `composer composer--${variant}`
 
@@ -435,10 +443,10 @@ export function ChatInput({
                 <button
                   type="button"
                   onClick={handleSend}
-                  disabled={!hasContent}
-                  className={`composer__send${!hasContent ? ' composer__send--disabled' : ''}`}
+                  disabled={!canSend}
+                  className={`composer__send${!canSend ? ' composer__send--disabled' : ''}`}
                   aria-label="Send"
-                  data-tooltip="Send"
+                  data-tooltip={!anyReady ? 'Connect a provider to send' : 'Send'}
                 >
                   <Send size={14} strokeWidth={1.8} />
                 </button>

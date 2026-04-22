@@ -55,8 +55,10 @@ export {
   ensureHarnessSessionInit,
   appendHarnessTurn,
   readHarnessHistory,
+  writeHarnessSessionTitle,
   type HarnessSessionInitOpts,
   type AppendHarnessTurnOpts,
+  type WriteHarnessSessionTitleOpts,
 } from './mirror.js'
 export { buildReplaySeed, type BuildReplaySeedOpts } from './replay.js'
 export {
