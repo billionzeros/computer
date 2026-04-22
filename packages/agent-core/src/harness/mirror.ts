@@ -240,6 +240,42 @@ export interface AppendHarnessTurnOpts {
   firstTitle?: string
 }
 
+export interface WriteHarnessSessionTitleOpts {
+  sessionId: string
+  projectId?: string
+  /** Already-normalized title (e.g., from `HarnessSession.getTitle()`). */
+  title: string
+}
+
+/**
+ * Persist a harness session's title to meta.json. Called from the
+ * server's `set_session_title` handler so the title survives a client
+ * reload — the `title_update` SessionEvent only updates connected
+ * clients, and on reconnect both `buildSessionList` (index-backed) and
+ * `listProjectSessions` (meta.json-backed) read from disk. Without this,
+ * `appendHarnessTurn`'s first-text fallback overwrites the model's
+ * chosen title.
+ *
+ * Expects a pre-normalized title — the in-memory `setTitle` already
+ * trims / truncates to 60 chars, so callers should pass `getTitle()`
+ * rather than the raw tool argument. No-op if meta.json doesn't exist,
+ * the title is empty, or the value is unchanged.
+ */
+export function writeHarnessSessionTitle(opts: WriteHarnessSessionTitleOpts): void {
+  if (!opts.title) return
+  const dir = resolveSessionDir(opts.sessionId, opts.projectId)
+  const metaPath = join(dir, 'meta.json')
+  if (!existsSync(metaPath)) return
+  try {
+    const meta: SessionMeta = JSON.parse(readFileSync(metaPath, 'utf-8'))
+    if (meta.title === opts.title) return
+    meta.title = opts.title
+    writeFileSync(metaPath, JSON.stringify(meta, null, 2), 'utf-8')
+  } catch (err) {
+    log.warn({ err, sessionId: opts.sessionId }, 'failed to write title to meta.json')
+  }
+}
+
 /**
  * Append a synthesized turn's messages to messages.jsonl and update
  * meta.json (messageCount, lastActiveAt, title if still empty).

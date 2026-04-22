@@ -116,6 +116,7 @@ import {
   resolveModel,
   resumeSession,
   synthesizeHarnessTurn,
+  writeHarnessSessionTitle,
 } from '@anton/agent-core'
 import { CONNECTOR_FACTORIES, ConnectorManager } from '@anton/connectors'
 import { createLogger } from '@anton/logger'
@@ -2101,9 +2102,27 @@ export class AgentServer {
       // few lines below. Both HarnessSession and CodexHarnessSession
       // expose `setTitle(title: string)` which emits `title_update`.
       onSetTitle: (title: string) => {
-        const s = this.sessions.get(id)
-        if (!s || !('setTitle' in s) || typeof s.setTitle !== 'function') return
-        ;(s as { setTitle: (t: string) => void }).setTitle(title)
+        const s = this.sessions.get(id) as
+          | { setTitle?: (t: string) => void; getTitle?: () => string }
+          | undefined
+        if (!s || typeof s.setTitle !== 'function') return
+        s.setTitle(title)
+        // Persist to meta.json so the title survives a client reload —
+        // the `title_update` event only updates connected clients, and
+        // on reconnect the server reads titles from disk (buildSessionList
+        // + listProjectSessions). We read back via getTitle() so disk and
+        // memory stay in lockstep even if setTitle ever changes its
+        // normalization rules.
+        const normalized = typeof s.getTitle === 'function' ? s.getTitle() : title
+        try {
+          writeHarnessSessionTitle({
+            sessionId: id,
+            projectId: harnessProjectId,
+            title: normalized,
+          })
+        } catch (err) {
+          log.warn({ err, sessionId: id }, 'failed to persist harness session title')
+        }
       },
     })
 
@@ -2193,11 +2212,24 @@ export class AgentServer {
       const firstText = turn.events.find((e) => e.type === 'text') as
         | { content: string }
         | undefined
+      // Prefer the session's own title — it reflects `set_session_title`
+      // when the model called it, or the turn-0 user-message seed
+      // otherwise. Fall back to the assistant's first text snippet only
+      // if the session somehow has no title yet (e.g., a `turnIndex > 0`
+      // replay edge case). This avoids meta.json latching onto AI prose
+      // like "I'm checking both of your Google Calendar accounts..." as
+      // the conversation title.
+      const sessionForTitle = this.sessions.get(id) as
+        | { getTitle?: () => string }
+        | undefined
+      const sessionTitle =
+        typeof sessionForTitle?.getTitle === 'function' ? sessionForTitle.getTitle() : ''
+      const turnTitle = sessionTitle || firstText?.content
       appendHarnessTurn({
         sessionId: id,
         projectId: mirrorProjectId,
         messages,
-        firstTitle: firstText?.content,
+        firstTitle: turnTitle,
       })
 
       // Capture update_project_context tool-result from this turn.
@@ -2228,9 +2260,9 @@ export class AgentServer {
         }
       }
 
-      if (mirrorProjectId && firstText?.content) {
+      if (mirrorProjectId && turnTitle) {
         try {
-          const title = firstText.content.slice(0, 60).split('\n')[0]
+          const title = turnTitle.slice(0, 60).split('\n')[0]
           const sessionSummary = projectContextUpdate?.sessionSummary || title
           if (projectContextUpdate?.projectSummary) {
             updateProjectContext(mirrorProjectId, 'summary', projectContextUpdate.projectSummary)
