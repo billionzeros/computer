@@ -1670,6 +1670,16 @@ button {
   white-space: nowrap;
 }
 
+/* Empty state ("Select a model"): no avatar is rendered, so the pill loses the
+   18px avatar that normally sets its height and the 3px left-padding leaves the
+   label jammed against the border. Match the normal pill's vertical size (avatar
+   18px + 3px*2 padding + 1px*2 border = 26px, box-sizing is border-box) and
+   balance horizontal padding so it reads as the same control. */
+.composer__model--empty {
+  padding: 3px 10px;
+  min-height: 26px;
+}
+
 .composer__model:hover {
   background: var(--bg-elev-3);
   border-color: var(--border-strong);
