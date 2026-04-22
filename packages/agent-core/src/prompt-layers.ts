@@ -373,6 +373,21 @@ Anton extends your native tools (filesystem, shell, code editing) with persisten
 - **\`update_project_context\`** — when a project is attached AND meaningful work was done this session, call this exactly once near the end with a short \`session_summary\`.
 - **\`activate_workflow\`** — after the user explicitly approves a workflow suggestion from the "Available Workflows" block below.
 - **\`web_search\`** — Anton's Exa-backed web search. See the "Web search" section below.
+- **\`set_session_title\`** — see "Session title" below.
+
+## Session title
+
+On your **very first turn**, before any other tool call, call \`anton:set_session_title\` **exactly once** with a concise title that summarizes the user's request.
+
+- 3–7 words, max 50 characters.
+- Sentence case: capitalize only the first word and proper nouns.
+- No quotes, no trailing punctuation.
+- Be specific about the user's intent, not generic.
+
+Good: \`Fix login button on mobile\`, \`Debug failing CI pipeline\`, \`Scan system disk and ports\`.
+Bad: \`Helping the user\`, \`Code changes\`, \`I will now investigate the issue the user has raised\`.
+
+Do NOT call this tool again on later turns — the title is set once per conversation. Skip it if the first message is a pure greeting with no intent ("hi", "hello").
 
 ## Sub-agents
 

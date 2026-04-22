@@ -172,6 +172,20 @@ export interface AgentConfig {
 
   sessions?: {
     ttlDays: number // auto-cleanup after N days, default 7
+    /**
+     * Behavior when the WebSocket client disconnects mid-turn.
+     *   'attached' (default): cancel the active turn on disconnect.
+     *   'detached':           keep the turn running in the background;
+     *                         events buffer to the mirror and replay on
+     *                         reconnect. See specs/features/DETACHED_TURNS.md.
+     */
+    disconnectMode?: 'attached' | 'detached'
+    /**
+     * Hard wall-clock budget for a detached turn that runs without a
+     * connected client. Prevents zombie turns from burning tokens
+     * forever if the user never comes back. Default 10 minutes.
+     */
+    detachedTurnMaxMs?: number
   }
 
   compaction?: {
@@ -574,7 +588,9 @@ export function loadConfig(): AgentConfig {
     skills: parsed.skills ?? defaults.skills ?? [],
     connectors: parsed.connectors ?? defaults.connectors ?? [],
     workspace: parsed.workspace ?? defaults.workspace,
-    sessions: parsed.sessions ?? defaults.sessions,
+    // Shallow-merge so configs that set only ttlDays still inherit the
+    // new disconnectMode / detachedTurnMaxMs defaults.
+    sessions: { ...defaults.sessions, ...(parsed.sessions ?? {}) },
   }
 
   // Apply CLI/env overrides (these take precedence over config file)
@@ -647,7 +663,11 @@ function createDefaultConfig(): AgentConfig {
     skills: [],
     connectors: [],
     workspace: { root: DEFAULT_WORKSPACE_ROOT },
-    sessions: { ttlDays: 7 },
+    sessions: {
+      ttlDays: 7,
+      disconnectMode: 'attached',
+      detachedTurnMaxMs: 10 * 60 * 1000,
+    },
   }
 }
 

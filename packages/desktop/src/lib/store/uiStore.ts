@@ -79,6 +79,19 @@ interface UIState {
   notificationsEnabled: boolean
   setNotificationsEnabled: (enabled: boolean) => void
 
+  /**
+   * How turns behave when the desktop client disconnects mid-stream.
+   * 'attached' (default): cancel the turn — matches the old behavior.
+   * 'detached': keep the turn running in the background; a wall-clock
+   * budget on the server prevents zombies. Server is source of truth;
+   * hydrated from config_query on startup.
+   */
+  disconnectMode: 'attached' | 'detached'
+  setDisconnectMode: (
+    mode: 'attached' | 'detached',
+    opts?: { fromServer?: boolean },
+  ) => void
+
   // Reset
   reset: () => void
 }
@@ -233,6 +246,20 @@ export const uiStore = create<UIState>((set, get) => ({
   setNotificationsEnabled: (enabled) => {
     localStorage.setItem('anton-notifications', String(enabled))
     set({ notificationsEnabled: enabled })
+  },
+
+  // Server is authoritative — this is just optimistic local state that
+  // snaps to whatever the server reports on every config_query_response.
+  disconnectMode: 'attached',
+  setDisconnectMode: (mode, opts) => {
+    set({ disconnectMode: mode })
+    if (!opts?.fromServer) {
+      connection.send(Channel.CONTROL, {
+        type: 'config_update',
+        key: 'sessions',
+        value: { disconnectMode: mode },
+      })
+    }
   },
 
   // Reset — preserves theme, devMode, and sidebar preferences

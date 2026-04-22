@@ -91,6 +91,25 @@ echo "anton ALL=(ALL) NOPASSWD:ALL" > /etc/sudoers.d/anton
 chmod 0440 /etc/sudoers.d/anton
 log "USER: anton system user ready (with sudo)"
 
+# Codex's inner sandbox (bwrap) needs unprivileged user namespaces. System
+# users created via `useradd --system` don't get subuid/subgid ranges by
+# default, so add them explicitly and enable the kernel/AppArmor knobs.
+# Without this: `bwrap: setting up uid map: Permission denied`.
+if ! grep -q '^anton:' /etc/subuid 2>/dev/null; then
+    echo 'anton:100000:65536' >> /etc/subuid
+fi
+if ! grep -q '^anton:' /etc/subgid 2>/dev/null; then
+    echo 'anton:100000:65536' >> /etc/subgid
+fi
+mkdir -p /etc/sysctl.d
+cat > /etc/sysctl.d/99-anton-userns.conf <<'SYSCTL'
+kernel.unprivileged_userns_clone = 1
+kernel.apparmor_restrict_unprivileged_userns = 0
+SYSCTL
+# Apply now; either knob may be absent depending on kernel — don't fail init.
+sysctl -p /etc/sysctl.d/99-anton-userns.conf 2>/dev/null || true
+log "USER: anton subuid/subgid + userns sysctls configured"
+
 # ─────────────────────────────────────────────────────────────────
 # 5. Download latest agent binary from manifest
 # ─────────────────────────────────────────────────────────────────

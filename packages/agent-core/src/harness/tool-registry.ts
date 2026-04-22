@@ -147,6 +147,12 @@ export interface HarnessSessionContext {
    * same way Pi SDK can.
    */
   onJobAction?: JobActionHandler
+  /**
+   * Handler the `set_session_title` tool forwards to. The server wires
+   * this to the owning session's `setTitle()` so the tool call emits a
+   * single `title_update` SessionEvent. Undefined = tool hidden.
+   */
+  onSetTitle?: (title: string) => void
 }
 
 export interface AntonToolRegistryOpts {
@@ -207,6 +213,7 @@ export class AntonToolRegistry implements IpcToolProvider {
       onAskUser: ctx?.onAskUser,
       onDeliverResult: ctx?.onDeliverResult,
       onJobAction: ctx?.onJobAction,
+      onSetTitle: ctx?.onSetTitle,
       browserCallbacks: ctx?.browserCallbacks,
       domain: ctx?.domain,
       // Harness path gets spawn_sub_agent with live MCP progress.

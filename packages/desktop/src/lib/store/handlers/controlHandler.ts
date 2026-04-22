@@ -3,6 +3,7 @@
  */
 
 import type { ControlMessage } from '@anton/protocol'
+import { connection } from '../../connection.js'
 import { connectionStore } from '../connectionStore.js'
 import { projectStore } from '../projectStore.js'
 import { uiStore } from '../uiStore.js'
@@ -49,6 +50,9 @@ export function handleControlMessage(msg: ControlMessage): void {
       }
 
       connectionStore.getState().startSyncing()
+      // Hydrate the disconnect mode from server so Settings reflects
+      // the authoritative value on every reconnect.
+      connection.sendConfigQuery('sessions')
       return
     }
 
@@ -79,6 +83,11 @@ export function handleControlMessage(msg: ControlMessage): void {
         }[]
         uiStore.getState().setDevModeData({ memories })
         projectStore.getState().setMemories(memories)
+      } else if (msg.key === 'sessions' && msg.value && typeof msg.value === 'object') {
+        const v = msg.value as { disconnectMode?: 'attached' | 'detached' }
+        if (v.disconnectMode === 'attached' || v.disconnectMode === 'detached') {
+          uiStore.getState().setDisconnectMode(v.disconnectMode, { fromServer: true })
+        }
       }
       return
     }

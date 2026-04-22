@@ -264,6 +264,11 @@ export function ChatInput({
 
   const rootClass = `composer composer--${variant}`
 
+  // While an ask_user is pending, the card takes over the composer so
+  // the user can't type until they answer — matches Claude Code's
+  // prompt UX. AskUserInline itself routes to specialized Routine /
+  // Publish cards when the question's metadata matches, and falls
+  // back to its generic one-question-at-a-time renderer otherwise.
   if (pendingAskUser && onAskUserSubmit) {
     return (
       <div className={rootClass}>

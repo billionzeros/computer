@@ -41,6 +41,8 @@ export function handleChatMessage(msg: AiMessage, ctx: MessageContext): boolean 
     }
 
     case 'text': {
+      // Invariant: text rendering must agree with the webhook runner and mirror.
+      // See packages/agent-core/src/harness/__fixtures__/check.ts cross-surface test.
       const textContent = msg.content ?? ''
       if (!textContent) return true
       const textSessionId =

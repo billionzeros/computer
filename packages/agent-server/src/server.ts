@@ -338,6 +338,13 @@ export class AgentServer {
    * Cleared on session destroy.
    */
   private harnessExtractionCursor = new Map<string, number>()
+  /**
+   * Wall-clock cancel timers for detached turns. Keyed by sessionId.
+   * Scheduled when a client disconnects while the session is in
+   * detached mode; cleared if the client reconnects or the turn ends
+   * naturally. See specs/features/DETACHED_TURNS.md.
+   */
+  private detachedTurnTimers = new Map<string, NodeJS.Timeout>()
   private toolRegistry!: AntonToolRegistry
   private pendingLoginProc: import('node:child_process').ChildProcess | null = null
 
@@ -711,6 +718,16 @@ export class AgentServer {
               clearTimeout(authTimeout)
               this.activeClient = ws
 
+              // Client came back — cancel any pending detached-turn budget
+              // timers; the turn is attached again and the user can steer it.
+              if (this.detachedTurnTimers.size > 0) {
+                for (const [sessionId, timer] of this.detachedTurnTimers) {
+                  clearTimeout(timer)
+                  log.debug({ sessionId }, 'Client reconnected, cleared detached budget')
+                }
+                this.detachedTurnTimers.clear()
+              }
+
               // Build auth_ok with version compatibility + update info
               const authOk: Record<string, unknown> = {
                 type: 'auth_ok',
@@ -784,6 +801,8 @@ export class AgentServer {
             'Client disconnected with pending prompts, keeping turns alive',
           )
         } else {
+          const disconnectMode = this.config.sessions?.disconnectMode ?? 'attached'
+          const detachedBudgetMs = this.config.sessions?.detachedTurnMaxMs ?? 10 * 60 * 1000
           // Cancel interactive turns but keep background work (sub-agents, agent jobs) alive
           for (const sessionId of this.activeTurns) {
             // Sub-agent sessions (sub_*) and agent sessions continue in background
@@ -795,19 +814,32 @@ export class AgentServer {
               log.debug({ sessionId }, 'Keeping background turn alive')
               continue
             }
+            if (disconnectMode === 'detached') {
+              // User opted in: let the turn run unattended. Schedule a
+              // hard wall-clock cancel so a zombie turn can't burn
+              // tokens forever if the user never comes back.
+              log.info(
+                { sessionId, budgetMs: detachedBudgetMs },
+                'Detached mode: keeping turn alive, scheduling budget cancel',
+              )
+              this.scheduleDetachedTurnBudget(sessionId, detachedBudgetMs)
+              continue
+            }
             const session = this.sessions.get(sessionId)
             if (session) {
               log.info({ sessionId }, 'Cancelling active turn on disconnect')
               session.cancel()
             }
           }
-          // Only clear non-background turns
+          // Only clear non-background, non-detached turns. Detached turns
+          // stay in activeTurns so the registry pin holds until the turn
+          // actually ends.
           for (const sessionId of this.activeTurns) {
-            if (
-              !sessionId.startsWith('sub_') &&
-              !sessionId.startsWith('agent-job-') &&
-              !sessionId.startsWith('agent--')
-            ) {
+            const isBackground =
+              sessionId.startsWith('sub_') ||
+              sessionId.startsWith('agent-job-') ||
+              sessionId.startsWith('agent--')
+            if (!isBackground && disconnectMode !== 'detached') {
               this.activeTurns.delete(sessionId)
             }
           }
@@ -888,6 +920,9 @@ export class AgentServer {
         break
       case 'security':
         value = this.config.security
+        break
+      case 'sessions':
+        value = this.config.sessions ?? {}
         break
       case 'system_prompt': {
         // If a session is active, return the full composed prompt (what the model actually sees)
@@ -999,6 +1034,13 @@ export class AgentServer {
           this.config.onboarding = {
             ...this.config.onboarding,
             ...(value as NonNullable<typeof this.config.onboarding>),
+          }
+          saveConfig(this.config)
+          break
+        case 'sessions':
+          this.config.sessions = {
+            ...(this.config.sessions ?? { ttlDays: 7 }),
+            ...(value as NonNullable<typeof this.config.sessions>),
           }
           saveConfig(this.config)
           break
@@ -2054,6 +2096,15 @@ export class AgentServer {
       // created a few lines below — callbacks fire only after the
       // session exists.
       browserCallbacks: this.buildHarnessBrowserCallbacks(id),
+      // `set_session_title` MCP tool handler. Late-binds through
+      // `this.sessions.get(id)` because the session is constructed a
+      // few lines below. Both HarnessSession and CodexHarnessSession
+      // expose `setTitle(title: string)` which emits `title_update`.
+      onSetTitle: (title: string) => {
+        const s = this.sessions.get(id)
+        if (!s || !('setTitle' in s) || typeof s.setTitle !== 'function') return
+        ;(s as { setTitle: (t: string) => void }).setTitle(title)
+      },
     })
 
     // Per-turn system-prompt builder — mirrors Pi SDK's layer assembly
@@ -4855,6 +4906,7 @@ export class AgentServer {
       textBuffer.destroy()
       this.activeTurns.delete(sessionId)
       this.sessions.unpin(sessionId)
+      this.clearDetachedTurnBudget(sessionId)
       this.sendToClient(Channel.EVENTS, {
         type: 'routine_status',
         status: 'idle',
@@ -6132,6 +6184,40 @@ export class AgentServer {
   private sendToClient(channel: ChannelId, message: object) {
     if (this.activeClient && this.activeClient.readyState === WebSocket.OPEN) {
       this.activeClient.send(encodeFrame(channel, message))
+    }
+  }
+
+  /**
+   * Schedule a hard wall-clock cancel for a detached turn. Replaces any
+   * existing timer for the same session so repeated disconnects don't
+   * stack. Cleared automatically when the client reconnects or the
+   * turn ends naturally (see `clearDetachedTurnBudget`).
+   */
+  private scheduleDetachedTurnBudget(sessionId: string, budgetMs: number): void {
+    const existing = this.detachedTurnTimers.get(sessionId)
+    if (existing) clearTimeout(existing)
+    const timer = setTimeout(() => {
+      this.detachedTurnTimers.delete(sessionId)
+      const session = this.sessions.get(sessionId)
+      if (session) {
+        log.warn(
+          { sessionId, budgetMs },
+          'Detached turn budget exceeded, cancelling',
+        )
+        session.cancel()
+      }
+    }, budgetMs)
+    // Don't let this timer keep the process alive on shutdown.
+    if (typeof timer.unref === 'function') timer.unref()
+    this.detachedTurnTimers.set(sessionId, timer)
+  }
+
+  /** Called when a turn ends naturally — clear any pending budget timer. */
+  private clearDetachedTurnBudget(sessionId: string): void {
+    const t = this.detachedTurnTimers.get(sessionId)
+    if (t) {
+      clearTimeout(t)
+      this.detachedTurnTimers.delete(sessionId)
     }
   }
 }

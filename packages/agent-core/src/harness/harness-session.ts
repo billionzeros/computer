@@ -125,6 +125,22 @@ export class HarnessSession {
     return this.title
   }
 
+  /**
+   * Set the conversation title and push a `title_update` through the
+   * event queue. Called by the `set_session_title` MCP tool on the
+   * model's first turn — the canonical title path. No-op if the value
+   * is empty or already the current title.
+   *
+   * Uses `pushEvent` (the same late-bound queue out-of-band MCP events
+   * use) so the update flows through the active turn's generator.
+   */
+  setTitle(title: string): void {
+    const next = title.trim().split('\n')[0].slice(0, 60)
+    if (!next || next === this.title) return
+    this.title = next
+    this.pushEvent?.({ type: 'title_update', title: this.title })
+  }
+
   getLastActiveAt(): number {
     return this.lastActiveAt
   }
@@ -174,6 +190,18 @@ export class HarnessSession {
     } else {
       systemPromptForTurn = this.systemPrompt
     }
+    // First-turn title: truncated user question. Mirrors the Codex harness
+    // and Pi SDK seed — gives the UI a stable title up front instead of
+    // latching onto the first streaming text chunk (which produced titles
+    // like "I" from "I'm checking …").
+    if (this.turnIndex === 0 && !this.title) {
+      const seed = userMessage.trim().slice(0, 60).split('\n')[0]
+      if (seed.length > 0) {
+        this.title = seed
+        yield { type: 'title_update', title: this.title }
+      }
+    }
+
     this.turnIndex += 1
 
     try {
@@ -270,17 +298,6 @@ export class HarnessSession {
 
         const events = this.adapter.parseEvent(line)
         eventQueue.push(...events)
-
-        // Auto-generate title from first text content
-        if (!this.title) {
-          for (const ev of events) {
-            if (ev.type === 'text' && ev.content.length > 0) {
-              this.title = ev.content.slice(0, 60).split('\n')[0]
-              eventQueue.push({ type: 'title_update', title: this.title })
-              break
-            }
-          }
-        }
 
         if (resolveWait) {
           resolveWait()
