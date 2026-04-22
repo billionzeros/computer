@@ -8,12 +8,12 @@ import { DesktopUpdateBanner } from './components/DesktopUpdateBanner.js'
 import { FileBrowser } from './components/FileBrowser.js'
 import { ForceUpdateGate } from './components/ForceUpdateGate.js'
 import { MachineInfoPanel } from './components/MachineInfoPanel.js'
+import { OnboardingTour } from './components/OnboardingTour.js'
 import { RoutineChat } from './components/RoutineChat.js'
 import { SidePanel } from './components/SidePanel.js'
 import { Sidebar } from './components/Sidebar.js'
 import { Terminal } from './components/Terminal.js'
 import { UpdateBanner } from './components/UpdateBanner.js'
-import { WelcomeModal } from './components/WelcomeModal.js'
 import { DebugOverlay } from './components/chat/DebugOverlay.js'
 import { SessionFilesBar } from './components/chat/SessionFilesBar.js'
 import { WaitingBadge } from './components/chat/WaitingBadge.js'
@@ -69,8 +69,7 @@ export function App() {
   const theme = uiStore((s) => s.theme)
   const devMode = uiStore((s) => s.devMode)
   const onboardingLoaded = uiStore((s) => s.onboardingLoaded)
-  const onboardingCompleted = uiStore((s) => s.onboardingCompleted)
-  const setOnboardingCompleted = uiStore((s) => s.setOnboardingCompleted)
+  const tourCompleted = uiStore((s) => s.tourCompleted)
   const setArtifactPanelOpen = artifactStore((s) => s.setArtifactPanelOpen)
   const setSidePanelView = uiStore((s) => s.setSidePanelView)
   const tasksHidden = uiStore((s) => s.tasksHidden)
@@ -80,7 +79,8 @@ export function App() {
   const pendingAskUser = useActiveSessionState((s) => s.pendingAskUser)
   const pendingPlan = useActiveSessionState((s) => s.pendingPlan)
   const hasPendingInteraction = Boolean(pendingConfirm || pendingAskUser || pendingPlan)
-  const showWelcome = onboardingLoaded && !onboardingCompleted
+  const [tourOpen, setTourOpen] = useState(false)
+  const showTour = tourOpen || (onboardingLoaded && !tourCompleted)
 
   // Apply theme on mount + listen for system preference changes
   useEffect(() => {
@@ -116,6 +116,13 @@ export function App() {
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
   }, [connected])
+
+  // "Replay tour" from Settings dispatches this event; open the 6-step tour.
+  useEffect(() => {
+    const handler = () => setTourOpen(true)
+    window.addEventListener('anton:replay-tour', handler)
+    return () => window.removeEventListener('anton:replay-tour', handler)
+  }, [])
 
   const handleNewProject = useCallback(() => uiStore.getState().setActiveView('new-project'), [])
 
@@ -448,13 +455,12 @@ export function App() {
         />
         <UsageModal open={showUsage} onClose={() => setShowUsage(false)} />
         <DebugOverlay />
-        <WelcomeModal
-          open={showWelcome}
-          onClose={(role) => setOnboardingCompleted(role)}
-          onOpenSettings={(role) => {
-            setOnboardingCompleted(role)
-            setSettingsPage('models')
-            setShowSettings(true)
+        <OnboardingTour
+          open={showTour}
+          onClose={() => setTourOpen(false)}
+          onOpenPalette={() => {
+            setTourOpen(false)
+            setPaletteOpen(true)
           }}
         />
         <CommandPalette

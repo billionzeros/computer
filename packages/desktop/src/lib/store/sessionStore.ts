@@ -11,8 +11,42 @@ import type {
   AskUserQuestion,
   ChatImageAttachmentInput,
   TaskItem,
+  ThinkingLevel,
   TokenUsage,
 } from '@anton/protocol'
+
+/**
+ * User-facing reasoning effort tiers. Cycled by the composer's Effort pill
+ * in order: low → medium → high → xhigh → low. `off` is not a UI position;
+ * it's implicit (model has `reasoning: false`, or pill is hidden).
+ */
+export type EffortLevel = 'low' | 'medium' | 'high' | 'xhigh'
+
+export const EFFORT_CYCLE: readonly EffortLevel[] = ['low', 'medium', 'high', 'xhigh'] as const
+
+export function nextEffortLevel(current: EffortLevel): EffortLevel {
+  const i = EFFORT_CYCLE.indexOf(current)
+  return EFFORT_CYCLE[(i + 1) % EFFORT_CYCLE.length]
+}
+
+export function effortLabel(level: EffortLevel): string {
+  switch (level) {
+    case 'low':
+      return 'Low'
+    case 'medium':
+      return 'Medium'
+    case 'high':
+      return 'High'
+    case 'xhigh':
+      return 'Extra high'
+  }
+}
+
+function loadEffortLevel(): EffortLevel {
+  const raw = localStorage.getItem('anton.effortLevel')
+  if (raw === 'low' || raw === 'medium' || raw === 'high' || raw === 'xhigh') return raw
+  return 'medium'
+}
 import { create } from 'zustand'
 import { connection } from '../connection.js'
 import type { ProviderInfo, RoutineStatus, RoutineStep, SessionMeta } from './types.js'
@@ -86,6 +120,10 @@ export interface SessionState {
   // Message tracking
   assistantMsgId: string | null
 
+  // Reasoning effort for this session's next turn. Mirrors what the
+  // composer sent last (Pi SDK + Codex both honor per-turn updates).
+  thinkingLevel: ThinkingLevel | null
+
   // Session readiness
   resolver?: () => void
 }
@@ -116,6 +154,7 @@ export function createSessionState(partial?: Partial<SessionState>): SessionStat
     hasMore: true,
     isLoadingOlder: false,
     assistantMsgId: null,
+    thinkingLevel: null,
     ...partial,
   }
 }
@@ -158,8 +197,9 @@ interface SessionStoreState {
   providers: ProviderInfo[]
   defaults: { provider: string; model: string }
 
-  // Thinking toggle (app-wide, persisted)
-  thinkingEnabled: boolean
+  // Reasoning effort level (app-wide default, persisted per user).
+  // Per-session overrides live on `SessionState.thinkingLevel` below.
+  effortLevel: EffortLevel
 
   // Consolidated per-session state (ALL transient state lives here)
   sessionStates: Map<string, SessionState>
@@ -175,7 +215,9 @@ interface SessionStoreState {
   setCurrentSession: (id: string, provider: string, model: string) => void
   setSessions: (sessions: SessionMeta[]) => void
   setProviders: (providers: ProviderInfo[], defaults: { provider: string; model: string }) => void
-  setThinkingEnabled: (enabled: boolean) => void
+  setEffortLevel: (level: EffortLevel) => void
+  cycleEffortLevel: () => EffortLevel
+  setSessionThinkingLevel: (sessionId: string, level: ThinkingLevel) => void
 
   // Per-session state (the ONLY way to read/write session-specific data)
   getSessionState: (sessionId: string) => SessionState
@@ -198,7 +240,7 @@ interface SessionStoreState {
       provider: string
       model: string
       projectId?: string
-      thinkingLevel?: 'off' | 'minimal' | 'low' | 'medium' | 'high'
+      thinkingLevel?: ThinkingLevel
     },
   ) => void
   destroySession: (sessionId: string) => void
@@ -276,7 +318,7 @@ export const sessionStore = create<SessionStoreState>((set, get) => {
     sessionsLoaded: false,
     providers: [],
     defaults: { provider: 'anthropic', model: 'claude-sonnet-4-6' },
-    thinkingEnabled: localStorage.getItem('anton.thinkingEnabled') !== 'false',
+    effortLevel: loadEffortLevel(),
     sessionStates: new Map(),
 
     // ── Connection ────────────────────────────────────────────
@@ -303,9 +345,25 @@ export const sessionStore = create<SessionStoreState>((set, get) => {
       set({ providers, defaults, currentProvider: provider, currentModel: model })
     },
 
-    setThinkingEnabled: (enabled) => {
-      localStorage.setItem('anton.thinkingEnabled', String(enabled))
-      set({ thinkingEnabled: enabled })
+    setEffortLevel: (level) => {
+      localStorage.setItem('anton.effortLevel', level)
+      set({ effortLevel: level })
+    },
+
+    cycleEffortLevel: () => {
+      const next = nextEffortLevel(get().effortLevel)
+      localStorage.setItem('anton.effortLevel', next)
+      set({ effortLevel: next })
+      const sid = get().currentSessionId
+      if (sid) {
+        get().setSessionThinkingLevel(sid, next)
+      }
+      return next
+    },
+
+    setSessionThinkingLevel: (sessionId, level) => {
+      get().updateSessionState(sessionId, { thinkingLevel: level })
+      connection.sendSessionSetThinkingLevel(sessionId, level)
     },
 
     // ── Per-session state ─────────────────────────────────────
@@ -437,8 +495,9 @@ export const sessionStore = create<SessionStoreState>((set, get) => {
     // ── Connection actions ────────────────────────────────────
 
     createSession: (sessionId, opts) => {
-      const thinkingLevel = opts.thinkingLevel ?? (get().thinkingEnabled ? 'medium' : 'off')
+      const thinkingLevel: ThinkingLevel = opts.thinkingLevel ?? get().effortLevel
       connection.sendSessionCreate(sessionId, { ...opts, thinkingLevel })
+      get().updateSessionState(sessionId, { thinkingLevel })
     },
     destroySession: (sessionId) => connection.sendSessionDestroy(sessionId),
     switchSessionProvider: (sessionId, provider, model) =>

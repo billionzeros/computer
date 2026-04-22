@@ -16,7 +16,7 @@
 import type { AgentConfig } from '@anton/agent-config'
 import { loadCoreSystemPrompt } from '@anton/agent-config'
 import { createLogger } from '@anton/logger'
-import type { AskUserQuestion } from '@anton/protocol'
+import type { AskUserQuestion, ThinkingLevel } from '@anton/protocol'
 
 const log = createLogger('tools')
 import type { AgentTool } from '@mariozechner/pi-agent-core'
@@ -148,7 +148,7 @@ export interface ParentForkContext {
   tools: AgentTool[]
   provider: string
   model: string
-  thinkingLevel?: 'off' | 'minimal' | 'low' | 'medium' | 'high'
+  thinkingLevel?: ThinkingLevel
 }
 
 // humanizeCron lives in tools/cron-humanize.ts so the harness

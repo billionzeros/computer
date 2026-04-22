@@ -4,7 +4,13 @@ import { createPortal } from 'react-dom'
 import { isProviderReady } from '../../lib/providers.js'
 import type { ProviderInfo } from '../../lib/store.js'
 import { sessionStore } from '../../lib/store/sessionStore.js'
-import { formatModelName, providerIcons } from './model-utils.js'
+import {
+  classifyModelTag,
+  formatModelName,
+  type ModelTag,
+  providerDisplayName,
+  providerIcons,
+} from './model-utils.js'
 
 function openSettingsModels() {
   window.dispatchEvent(new CustomEvent('open-settings', { detail: { tab: 'models' } }))
@@ -32,16 +38,6 @@ function ProviderIcon({ provider, size = 16 }: { provider: string; size?: number
 
 export { ProviderIcon }
 
-type ModelTag = 'fast' | 'balanced' | 'reasoning'
-
-function classifyModelTag(model: string): ModelTag | null {
-  const m = model.toLowerCase()
-  if (/haiku|mini|flash|nano|lite|small|8b|7b|3b|groq/.test(m)) return 'fast'
-  if (/opus|reason|o1|o3|o4|thinking|deepseek-r|405b|70b/.test(m)) return 'reasoning'
-  if (/sonnet|gpt|claude|gemini|pro|medium|mistral|llama/.test(m)) return 'balanced'
-  return null
-}
-
 function modelNote(model: string, tag: ModelTag | null): string {
   const m = model.toLowerCase()
   if (/opus/.test(m)) return 'Deep reasoning · best for complex work'
@@ -57,12 +53,6 @@ function modelNote(model: string, tag: ModelTag | null): string {
   if (tag === 'reasoning') return 'Multi-step reasoning'
   if (tag === 'balanced') return 'Everyday default'
   return ''
-}
-
-function providerDisplayName(name: string): string {
-  if (name === 'claude-code') return 'Claude Code'
-  if (name === 'codex') return 'ChatGPT Codex'
-  return name.charAt(0).toUpperCase() + name.slice(1)
 }
 
 type Group = 'subscription' | 'api' | 'unconfigured'
@@ -297,7 +287,6 @@ export function ModelSelector() {
 
   const hasAnyProvider = providers.length > 0
   const displayModel = anyReady ? formatModelName(currentModel) : 'Select a model'
-  const tag = anyReady ? classifyModelTag(currentModel) : null
 
   const handleSelect = (provider: string, model: string) => {
     const ss = sessionStore.getState()
@@ -323,7 +312,6 @@ export function ModelSelector() {
           </span>
         )}
         <span className="composer__model-name">{displayModel}</span>
-        {tag && <span className={`composer__model-tag composer__model-tag--${tag}`}>{tag}</span>}
         <ChevronDown size={12} strokeWidth={1.8} className="composer__model-chev" />
       </button>
       {open && (

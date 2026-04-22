@@ -1,12 +1,12 @@
 import type { AskUserQuestion } from '@anton/protocol'
-import { Brain, Plus, Send, Square } from 'lucide-react'
+import { Plus, Send, Square } from 'lucide-react'
 import type React from 'react'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { anyProviderReady } from '../../lib/providers.js'
 import type { Skill } from '../../lib/skills.js'
 import type { ChatImageAttachment } from '../../lib/store.js'
 import { useIsCurrentSessionWorking, useStore } from '../../lib/store.js'
-import { sessionStore } from '../../lib/store/sessionStore.js'
+import { type EffortLevel, effortLabel, sessionStore } from '../../lib/store/sessionStore.js'
 import { AskUserInline } from './AskUserInline.js'
 import { ConnectorBanner, ConnectorPill } from './ConnectorToolbar.js'
 import { ModelSelector } from './ModelSelector.js'
@@ -33,6 +33,54 @@ interface Props {
 
 const MAX_IMAGE_ATTACHMENTS = 4
 const MAX_IMAGE_BYTES = 10 * 1024 * 1024
+
+/**
+ * Whether the active model + provider pair can take a reasoning effort
+ * override from the composer. Kept as a local heuristic so we don't have
+ * to ship the full anton-models catalog to the client.
+ *
+ *  - Claude Code harness: CLI has no thinking/budget flag — always false.
+ *  - Codex harness: always true (o-series under the hood, per-turn effort).
+ *  - API-key models: regex matches known reasoning-capable families.
+ */
+function supportsReasoningEffort(provider: string, model: string): boolean {
+  if (provider === 'claude') return false
+  if (provider === 'codex') return true
+  const m = model.toLowerCase()
+  return /opus|sonnet|gemini-2\.5|o1|o3|o4|reason|thinking|deepseek-r/.test(m)
+}
+
+/**
+ * Four-bar ascending effort indicator. The number of "lit" bars matches
+ * the level (1 / 2 / 3 / 4); the rest render at reduced opacity so the
+ * pill reads as a signal-strength meter. Inline SVG — Lucide's SignalHigh
+ * only exposes a single opacity channel, which can't render "2 of 4 lit."
+ */
+const EFFORT_LIT_COUNT: Record<EffortLevel, number> = {
+  low: 1,
+  medium: 2,
+  high: 3,
+  xhigh: 4,
+}
+
+function EffortBars({ level }: { level: EffortLevel }) {
+  const lit = EFFORT_LIT_COUNT[level]
+  const heights = [3, 5, 8, 10]
+  return (
+    <svg
+      width={14}
+      height={12}
+      viewBox="0 0 14 12"
+      fill="currentColor"
+      aria-hidden="true"
+      focusable="false"
+    >
+      {heights.slice(0, lit).map((h, i) => (
+        <rect key={h} x={i * 3.5} y={12 - h} width={2} height={h} rx={0.5} />
+      ))}
+    </svg>
+  )
+}
 
 async function readImageFile(file: File): Promise<ChatImageAttachment> {
   const dataUrl = await new Promise<string>((resolve, reject) => {
@@ -71,7 +119,10 @@ export function ChatInput({
   const [slashFilter, setSlashFilter] = useState('')
   const [imageCount, setImageCount] = useState(0)
   const [attachmentError, setAttachmentError] = useState<string | null>(null)
-  const thinkingEnabled = sessionStore((s) => s.thinkingEnabled)
+  const effortLevel = sessionStore((s) => s.effortLevel)
+  const currentProvider = sessionStore((s) => s.currentProvider)
+  const currentModel = sessionStore((s) => s.currentModel)
+  const showEffortPill = supportsReasoningEffort(currentProvider, currentModel)
   const richInputRef = useRef<RichInputHandle>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const _isWorking = useIsCurrentSessionWorking()
@@ -229,9 +280,15 @@ export function ChatInput({
       if (e.key === 'Enter' && !e.shiftKey) {
         e.preventDefault()
         handleSend()
+        return
+      }
+      // Alt/Option + T cycles reasoning effort when the pill is visible.
+      if (e.altKey && (e.key === 't' || e.key === 'T' || e.key === '†') && showEffortPill) {
+        e.preventDefault()
+        sessionStore.getState().cycleEffortLevel()
       }
     },
-    [showSlashMenu, handleSend],
+    [showSlashMenu, handleSend, showEffortPill],
   )
 
   const handlePaste = useCallback(
@@ -332,16 +389,18 @@ export function ChatInput({
                 <Plus size={12} strokeWidth={1.8} />
               </button>
               <ConnectorPill />
-              <button
-                type="button"
-                className={`composer__pill composer__pill--thinking${thinkingEnabled ? ' composer__pill--on' : ''}`}
-                aria-label={thinkingEnabled ? 'Thinking on' : 'Thinking off'}
-                data-tooltip={thinkingEnabled ? 'Thinking on' : 'Thinking off'}
-                onClick={() => sessionStore.getState().setThinkingEnabled(!thinkingEnabled)}
-              >
-                <Brain size={12} strokeWidth={1.8} />
-                <span>Thinking</span>
-              </button>
+              {showEffortPill && (
+                <button
+                  type="button"
+                  className={`composer__pill composer__pill--effort composer__pill--effort-${effortLevel}`}
+                  aria-label={`Adjust effort level (currently ${effortLabel(effortLevel)})`}
+                  data-tooltip="Adjust effort level ⌥T"
+                  onClick={() => sessionStore.getState().cycleEffortLevel()}
+                >
+                  <EffortBars level={effortLevel} />
+                  <span>{effortLabel(effortLevel)}</span>
+                </button>
+              )}
             </div>
             <div className="composer__toolbar-right">
               <ModelSelector />
