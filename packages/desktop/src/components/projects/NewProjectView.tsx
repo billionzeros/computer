@@ -6,8 +6,6 @@ import {
   FolderOpen,
   MapPin,
   Search,
-  Sparkles,
-  Upload,
 } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { projectStore } from '../../lib/store/projectStore.js'
@@ -97,8 +95,6 @@ export function NewProjectView() {
   const [instructions, setInstructions] = useState('')
   const [creating, setCreating] = useState(false)
 
-  const template = TEMPLATES.find((t) => t.id === templateId) ?? TEMPLATES[0]
-
   const pickTemplate = (id: TemplateId) => {
     const next = TEMPLATES.find((t) => t.id === id) ?? TEMPLATES[0]
     setTemplateId(id)
@@ -108,11 +104,6 @@ export function NewProjectView() {
     if (!instructions.trim() || TEMPLATES.some((t) => t.instructions === instructions)) {
       setInstructions(next.instructions)
     }
-  }
-
-  const suggestName = () => {
-    if (template.id === 'blank') return
-    setName(template.name)
   }
 
   const goBack = () => uiStore.getState().setActiveView('projects')
@@ -213,21 +204,15 @@ export function NewProjectView() {
 
           <div className="np-section">
             <div className="np-section__label">Name</div>
-            <div className="np-name">
-              <input
-                type="text"
-                className="np-input"
-                placeholder="e.g. Essay, Telegram Bots, Home ops"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                // biome-ignore lint/a11y/noAutofocus: new-project view expects the name field focused
-                autoFocus
-              />
-              <button type="button" className="np-suggest" onClick={suggestName}>
-                <Sparkles size={11} strokeWidth={1.5} />
-                Suggest
-              </button>
-            </div>
+            <input
+              type="text"
+              className="np-input"
+              placeholder="e.g. Essay, Telegram Bots, Home ops"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              // biome-ignore lint/a11y/noAutofocus: new-project view expects the name field focused
+              autoFocus
+            />
           </div>
 
           <div className="np-section">
@@ -241,20 +226,6 @@ export function NewProjectView() {
               value={instructions}
               onChange={(e) => setInstructions(e.target.value)}
             />
-          </div>
-
-          <div className="np-section">
-            <div className="np-section__label">
-              Files & context
-              <span className="np-section__hint">Anything Anton should always have on hand</span>
-            </div>
-            <div className="np-dropzone">
-              <Upload size={16} strokeWidth={1.5} />
-              <span>
-                Drop files here, or{' '}
-                <span className="np-dropzone__link">pick from your computer</span>
-              </span>
-            </div>
           </div>
         </div>
 
