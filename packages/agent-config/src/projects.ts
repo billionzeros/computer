@@ -10,13 +10,18 @@
 
 import {
   appendFileSync,
+  closeSync,
   existsSync,
+  fsyncSync,
   mkdirSync,
+  openSync,
   readFileSync,
   readdirSync,
+  renameSync,
   rmSync,
   statSync,
   writeFileSync,
+  writeSync,
 } from 'node:fs'
 import { dirname, join } from 'node:path'
 import type {
@@ -40,6 +45,46 @@ function projectsDir(): string {
   return _projectsDir
 }
 
+/**
+ * Atomically write JSON to `path`.
+ *
+ * Crash-safe per-file: writes to `{path}.tmp`, fsyncs, then renames onto the
+ * target (POSIX rename is atomic on a single filesystem). Without this, a
+ * crash/OOM/power loss mid-write can leave `index.json` or `project.json`
+ * truncated, which then JSON.parse-errors and zeroes the user's state.
+ *
+ * Caveats:
+ *  - Not transactional across files. If a caller writes `project.json` and
+ *    then `index.json` separately, a crash in between leaves them internally
+ *    consistent but logically out of sync. Callers should treat the index as
+ *    a view over per-project records and be tolerant of orphans/drift.
+ *  - Assumes single-process writers. Multiple processes writing the same
+ *    path would race on the shared `.tmp` name. Anton runs a single
+ *    agent-server today; if that changes, add a pid/random suffix.
+ */
+function writeJsonAtomic(path: string, data: unknown): void {
+  const tmp = `${path}.tmp`
+  const body = `${JSON.stringify(data, null, 2)}\n`
+  const fd = openSync(tmp, 'w')
+  try {
+    try {
+      writeSync(fd, body)
+      fsyncSync(fd)
+    } finally {
+      closeSync(fd)
+    }
+    renameSync(tmp, path)
+  } catch (err) {
+    // Write or rename failed — remove the orphan tmp so it doesn't
+    // accumulate on a flaky disk. Swallow the cleanup error: the caller
+    // will see the original write failure, which is what matters.
+    try {
+      rmSync(tmp, { force: true })
+    } catch {}
+    throw err
+  }
+}
+
 function indexPath(): string {
   _indexPath ??= join(projectsDir(), 'index.json')
   return _indexPath
@@ -57,31 +102,108 @@ export function getProjectSessionsDir(id: string): string {
   return join(getProjectDir(id), 'conversations')
 }
 
+let _sweptTmpFiles = false
+
+/** Remove `.tmp` files left behind by a SIGKILL between `openSync` and
+ *  `renameSync` in writeJsonAtomic. Runs once per process, best-effort.
+ *  Without this, orphan tmp files accumulate over time on flaky systems. */
+function sweepOrphanTmpFiles(): void {
+  if (_sweptTmpFiles) return
+  _sweptTmpFiles = true
+  const root = projectsDir()
+  if (!existsSync(root)) return
+  const walk = (d: string): void => {
+    let entries: import('node:fs').Dirent[]
+    try {
+      entries = readdirSync(d, { withFileTypes: true })
+    } catch {
+      return
+    }
+    for (const entry of entries) {
+      const full = join(d, entry.name)
+      if (entry.isDirectory()) {
+        walk(full)
+      } else if (entry.name.endsWith('.tmp')) {
+        try {
+          rmSync(full, { force: true })
+        } catch {}
+      }
+    }
+  }
+  walk(root)
+}
+
 /** Ensure projects directory and index exist */
 function ensureProjectsDir(): void {
   if (!existsSync(projectsDir())) {
     mkdirSync(projectsDir(), { recursive: true })
   }
   if (!existsSync(indexPath())) {
-    writeFileSync(indexPath(), '[]', 'utf-8')
+    writeJsonAtomic(indexPath(), [])
   }
+  sweepOrphanTmpFiles()
 }
 
-/** Load the project index */
-function loadIndex(): Project[] {
-  ensureProjectsDir()
+/** Rebuild the index by scanning each `proj_<id>/project.json` under the
+ *  projects dir. Used when `index.json` is unreadable (corrupted by a
+ *  pre-atomic-write crash). Prevents silent data loss — previous behavior
+ *  returned `[]` on JSON.parse errors, which the next `saveIndex([])` would
+ *  permanently overwrite. */
+function rebuildIndexFromDisk(): Project[] {
+  const root = projectsDir()
+  if (!existsSync(root)) return []
+  const rebuilt: Project[] = []
+  let entries: import('node:fs').Dirent[]
   try {
-    const raw = readFileSync(indexPath(), 'utf-8')
-    return JSON.parse(raw)
+    entries = readdirSync(root, { withFileTypes: true })
   } catch {
     return []
+  }
+  for (const entry of entries) {
+    if (!entry.isDirectory() || !entry.name.startsWith('proj_')) continue
+    const file = join(root, entry.name, 'project.json')
+    if (!existsSync(file)) continue
+    try {
+      rebuilt.push(JSON.parse(readFileSync(file, 'utf-8')))
+    } catch {
+      // Skip individual corrupt records — preserve the rest.
+    }
+  }
+  return rebuilt
+}
+
+/** Load the project index. Falls back to rebuilding from per-project
+ *  records if the index file is corrupt, so a single bad JSON parse
+ *  doesn't silently zero the user's project list. */
+function loadIndex(): Project[] {
+  ensureProjectsDir()
+  let raw: string
+  try {
+    raw = readFileSync(indexPath(), 'utf-8')
+  } catch {
+    return []
+  }
+  try {
+    const parsed = JSON.parse(raw)
+    if (Array.isArray(parsed)) return parsed
+    // Parsed to something other than an array — treat as corrupt.
+    throw new Error('index.json is not an array')
+  } catch (err) {
+    const rebuilt = rebuildIndexFromDisk()
+    console.warn(
+      `[loadIndex] index.json unreadable (${(err as Error).message}); rebuilt ${rebuilt.length} project(s) from disk`,
+    )
+    if (rebuilt.length > 0) {
+      saveIndex(rebuilt)
+    }
+    return rebuilt
   }
 }
 
 /** Save the project index */
 function saveIndex(projects: Project[]): void {
   ensureProjectsDir()
-  writeFileSync(indexPath(), JSON.stringify(projects, null, 2), 'utf-8')
+  writeJsonAtomic(indexPath(), projects)
 }
 
 /** Sanitize a project name into a filesystem-safe directory name */
@@ -107,7 +229,7 @@ function writeAntonLink(workspacePath: string, project: Project): void {
     source: project.source || 'manual',
     sourceConversationId: project.sourceConversationId,
   }
-  writeFileSync(join(workspacePath, '.anton.json'), JSON.stringify(linkData, null, 2), 'utf-8')
+  writeJsonAtomic(join(workspacePath, '.anton.json'), linkData)
 }
 
 /** Create a new project with full directory structure */
@@ -181,7 +303,7 @@ export function createProject(input: {
   writeAntonLink(workspacePath, project)
 
   // Write project.json
-  writeFileSync(join(dir, 'project.json'), JSON.stringify(project, null, 2), 'utf-8')
+  writeJsonAtomic(join(dir, 'project.json'), project)
 
   // Update index
   const index = loadIndex()
@@ -238,7 +360,7 @@ export function updateProject(
   }
 
   const dir = getProjectDir(id)
-  writeFileSync(join(dir, 'project.json'), JSON.stringify(updated, null, 2), 'utf-8')
+  writeJsonAtomic(join(dir, 'project.json'), updated)
 
   // Update index
   const index = loadIndex()
@@ -264,7 +386,7 @@ export function updateProjectContext(
   project.updatedAt = Date.now()
 
   const dir = getProjectDir(id)
-  writeFileSync(join(dir, 'project.json'), JSON.stringify(project, null, 2), 'utf-8')
+  writeJsonAtomic(join(dir, 'project.json'), project)
 
   // Also persist notes to context/notes.md for injection into sessions
   if (field === 'notes') {
@@ -319,7 +441,7 @@ export function saveProjectFile(projectId: string, filename: string, content: Bu
     project.context.files.push(filename)
     project.updatedAt = Date.now()
     const dir = getProjectDir(projectId)
-    writeFileSync(join(dir, 'project.json'), JSON.stringify(project, null, 2), 'utf-8')
+    writeJsonAtomic(join(dir, 'project.json'), project)
     const index = loadIndex()
     const idx = index.findIndex((p) => p.id === projectId)
     if (idx !== -1) {
@@ -347,7 +469,7 @@ export function deleteProjectFile(projectId: string, filename: string): boolean 
     project.context.files = project.context.files.filter((f) => f !== filename)
     project.updatedAt = Date.now()
     const dir = getProjectDir(projectId)
-    writeFileSync(join(dir, 'project.json'), JSON.stringify(project, null, 2), 'utf-8')
+    writeJsonAtomic(join(dir, 'project.json'), project)
     const index = loadIndex()
     const idx = index.findIndex((p) => p.id === projectId)
     if (idx !== -1) {
@@ -585,7 +707,7 @@ export function loadProjectPreferences(projectId: string): Preference[] {
 function saveProjectPreferences(projectId: string, prefs: Preference[]): void {
   const dir = getProjectDir(projectId)
   if (!existsSync(dir)) mkdirSync(dir, { recursive: true })
-  writeFileSync(getPreferencesPath(projectId), JSON.stringify(prefs, null, 2), 'utf-8')
+  writeJsonAtomic(getPreferencesPath(projectId), prefs)
 }
 
 /** Add a preference to a project */
@@ -617,11 +739,61 @@ export function deleteProjectPreference(projectId: string, preferenceId: string)
 
 // ── Default project ──────────────────────────────────────────────────
 
-/** Ensure the default "My Computer" project exists. Creates it if missing. */
+/** Ensure the default "My Computer" project exists. Creates it if missing,
+ *  and self-heals incomplete records (missing workspacePath / absent workspace dir).
+ *  Self-heal matters: older indexes — or partially-written records — could land
+ *  on disk without workspacePath, which downstream forces a `/root` fallback in
+ *  the desktop Files view that EACCES on non-root agent-server installs. */
 export function ensureDefaultProject(config?: AgentConfig): Project {
   const projects = loadIndex()
   const existing = projects.find((p) => p.isDefault)
-  if (existing) return existing
+  if (existing) {
+    const healed: string[] = []
+
+    if (!existing.workspacePath) {
+      const workspaceRoot = ensureWorkspaceRoot(config)
+      existing.workspacePath = join(workspaceRoot, 'my-computer')
+      healed.push('workspacePath')
+    }
+
+    let workspaceCreated = false
+    if (!existsSync(existing.workspacePath)) {
+      mkdirSync(existing.workspacePath, { recursive: true })
+      workspaceCreated = true
+      healed.push('workspaceDir')
+    }
+
+    // Ensure the `.anton.json` marker exists whenever we touched the
+    // workspace binding — covers "dir already existed but had no marker"
+    // (manual mkdir) as well as "we just created the dir". The marker is
+    // what identifies a directory as belonging to an Anton project; tools
+    // that scan disk depend on it.
+    if (healed.length > 0) {
+      const markerPath = join(existing.workspacePath, '.anton.json')
+      if (workspaceCreated || !existsSync(markerPath)) {
+        writeAntonLink(existing.workspacePath, existing)
+      }
+    }
+
+    if (healed.length > 0) {
+      console.warn(
+        `[ensureDefaultProject] Repaired default project ${existing.id}: backfilled [${healed.join(', ')}] → workspacePath=${existing.workspacePath}`,
+      )
+      // mkdirSync is idempotent + cheap; guards the edge case where the
+      // internal project dir was manually deleted while the index still
+      // references the project. Without it, writeJsonAtomic throws ENOENT.
+      const dir = getProjectDir(existing.id)
+      mkdirSync(dir, { recursive: true })
+      writeJsonAtomic(join(dir, 'project.json'), existing)
+      const idx = projects.findIndex((p) => p.id === existing.id)
+      if (idx !== -1) {
+        projects[idx] = existing
+        saveIndex(projects)
+      }
+    }
+
+    return existing
+  }
 
   // Create the default project with standard directory structure
   ensureProjectsDir()
@@ -672,7 +844,7 @@ export function ensureDefaultProject(config?: AgentConfig): Project {
   writeAntonLink(workspacePath, project)
 
   // Write project.json
-  writeFileSync(join(dir, 'project.json'), JSON.stringify(project, null, 2), 'utf-8')
+  writeJsonAtomic(join(dir, 'project.json'), project)
 
   // Update index — default project goes first
   const index = loadIndex()
@@ -703,7 +875,7 @@ export function saveAgentMetadata(
 ): void {
   const dir = join(getProjectSessionsDir(projectId), sessionId)
   if (!existsSync(dir)) mkdirSync(dir, { recursive: true })
-  writeFileSync(join(dir, 'agent.json'), JSON.stringify(agent, null, 2), 'utf-8')
+  writeJsonAtomic(join(dir, 'agent.json'), agent)
 }
 
 /** Load agent memory from memory.md in the agent's directory */
@@ -796,7 +968,7 @@ export function updateProjectStats(projectId: string): void {
   project.updatedAt = Date.now()
 
   const dir = getProjectDir(projectId)
-  writeFileSync(join(dir, 'project.json'), JSON.stringify(project, null, 2), 'utf-8')
+  writeJsonAtomic(join(dir, 'project.json'), project)
 
   // Update index
   const index = loadIndex()
