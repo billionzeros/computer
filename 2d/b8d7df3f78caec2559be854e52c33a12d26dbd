@@ -1,0 +1,27 @@
+packages/desktop/src/components/files/ProjectFilesView.tsx
+  c0002beae806ee82 14-15,18,157-162,172-173,299-315,417-433,526-568,587,742-745,825-826,884-960
+packages/desktop/src/index.css
+  c0002beae806ee82 21144-21221,21228-21233,21373-21376
+packages/desktop/src/components/projects/NewProjectView.tsx
+  c0002beae806ee82 207-215
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.3.2",
+  "base_commit_sha": "2db8d7df3f78caec2559be854e52c33a12d26dbd",
+  "prompts": {
+    "c0002beae806ee82": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "7a742e5e-332a-4662-bcaa-01e2beaa6b35",
+        "model": "claude-opus-4-7"
+      },
+      "human_author": "Om Gupta",
+      "messages": [],
+      "total_additions": 26468,
+      "total_deletions": 132,
+      "accepted_lines": 273,
+      "overriden_lines": 0
+    }
+  }
+}
