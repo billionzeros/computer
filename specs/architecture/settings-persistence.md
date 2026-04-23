@@ -25,7 +25,7 @@ set them on. Theme, sidebar width, which tab was open last, whether dev mode
 is on in this install.
 
 Keys are prefixed `anton-` (e.g. `anton-theme`, `anton-timezone`,
-`anton-show-welcome`) or `anton.*` for newer namespaced keys (e.g.
+`anton-restore`) or `anton.*` for newer namespaced keys (e.g.
 `anton.tourSeen.v1`, `anton.selectedModel`).
 
 Pattern:
@@ -133,9 +133,8 @@ After:
 - Schema: `AgentConfig.onboarding.tourCompleted?: boolean` +
   `tourCompletedAt?: string` (`packages/agent-config/src/config.ts`).
 - Protocol: `ProvidersListResponse.onboarding` extended with the same fields.
-- Server: the `onboarding` case in `handleConfigUpdate` now merges instead of
-  overwriting, so partial updates from the tour don't drop the welcome-modal
-  `completed`/`role` fields.
+- Server: the `onboarding` case in `handleConfigUpdate` merges partial
+  updates instead of overwriting the full onboarding blob.
 - Client: `uiStore.tourCompleted` + `setTourCompleted(completed)`. Hydrated
   from `providers_list_response.onboarding.tourCompleted` in
   `providerHandler.ts`. `OnboardingTour.finish()` calls the setter.

@@ -95,6 +95,7 @@ export {
   ensureHarnessSessionInit,
   appendHarnessTurn,
   readHarnessHistory,
+  writeHarnessSessionTitle,
   buildReplaySeed,
   extractHarnessMemoriesFromMirror,
   buildMcpSpawnConfig,

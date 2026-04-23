@@ -13,6 +13,7 @@ import {
   X,
 } from 'lucide-react'
 import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { anyProviderReady, isProviderReady } from '../../lib/providers.js'
 import type { ProviderInfo } from '../../lib/store.js'
 import {
   ACCOUNT_COLORS,
@@ -345,9 +346,6 @@ function ProfileEditor() {
 function StartBehaviorRows() {
   const [restore, setRestore] = useState(() => localStorage.getItem('anton-restore') !== 'false')
   const [resume, setResume] = useState(() => localStorage.getItem('anton-resume') !== 'false')
-  const [welcome, setWelcome] = useState(
-    () => localStorage.getItem('anton-show-welcome') === 'true',
-  )
   const persist = (k: string, v: boolean) => localStorage.setItem(k, String(v))
   return (
     <>
@@ -370,19 +368,6 @@ function StartBehaviorRows() {
           onChange={(v) => {
             setResume(v)
             persist('anton-resume', v)
-          }}
-        />
-      </Row>
-      <Row
-        title="Show welcome on new machine"
-        desc="Display the onboarding sheet on first connect."
-        compact
-      >
-        <Toggle
-          on={welcome}
-          onChange={(v) => {
-            setWelcome(v)
-            persist('anton-show-welcome', v)
           }}
         />
       </Row>
@@ -768,7 +753,7 @@ function ProviderRow({
 }) {
   const isHarness = provider.type === 'harness'
   const comingSoon = provider.name === 'claude-code'
-  const connected = provider.hasApiKey || provider.installed === true
+  const connected = sessionStore((s) => isProviderReady(provider, s.harnessStatuses))
   const meta = comingSoon
     ? 'Subscription support coming soon'
     : isHarness
@@ -816,6 +801,7 @@ function ModelsSection({ onOpenUsage }: { onOpenUsage?: () => void }) {
   const providers = sessionStore((s) => s.providers)
   const currentProvider = sessionStore((s) => s.currentProvider)
   const currentModel = sessionStore((s) => s.currentModel)
+  const anyReady = sessionStore((s) => anyProviderReady(s.providers, s.harnessStatuses))
   const sendProvidersList = sessionStore((s) => s.sendProvidersList)
   const sendDetectHarnesses = sessionStore((s) => s.sendDetectHarnesses)
   const sendProviderSetDefault = sessionStore((s) => s.sendProviderSetDefault)
@@ -860,21 +846,40 @@ function ModelsSection({ onOpenUsage }: { onOpenUsage?: () => void }) {
     <>
       <Group label="Default model" hint="Used when you start a new task without specifying one.">
         <div className="smodel">
-          <div className="smodel__av">
-            <ProviderMark provider={currentProvider} size={20} />
-          </div>
-          <div className="smodel__body">
-            <div className="smodel__name">{formatModelName(currentModel) || currentModel}</div>
-            <div className="smodel__meta">{currentProvider}</div>
-          </div>
-          <button
-            ref={changeBtnRef}
-            type="button"
-            className="sm-btn sm-btn--quiet"
-            onClick={() => setPickerOpen((o) => !o)}
-          >
-            Change
-          </button>
+          {anyReady ? (
+            <>
+              <div className="smodel__av">
+                <ProviderMark provider={currentProvider} size={20} />
+              </div>
+              <div className="smodel__body">
+                <div className="smodel__name">{formatModelName(currentModel) || currentModel}</div>
+                <div className="smodel__meta">{currentProvider}</div>
+              </div>
+              <button
+                ref={changeBtnRef}
+                type="button"
+                className="sm-btn sm-btn--quiet"
+                onClick={() => setPickerOpen((o) => !o)}
+              >
+                Change
+              </button>
+            </>
+          ) : (
+            <>
+              <div className="smodel__body">
+                <div className="smodel__name">No model selected</div>
+                <div className="smodel__meta">Connect a CLI or API key below to enable chat.</div>
+              </div>
+              <button
+                ref={changeBtnRef}
+                type="button"
+                className="sm-btn"
+                onClick={() => setPickerOpen((o) => !o)}
+              >
+                Select model
+              </button>
+            </>
+          )}
         </div>
       </Group>
       <Divider />

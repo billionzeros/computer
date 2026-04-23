@@ -47,11 +47,8 @@ interface UIState {
 
   // Onboarding
   onboardingLoaded: boolean
-  onboardingCompleted: boolean
-  onboardingRole: string | null
   tourCompleted: boolean
   setOnboardingLoaded: (loaded: boolean) => void
-  setOnboardingCompleted: (role?: string) => void
   setTourCompleted: (completed: boolean) => void
 
   // Dev mode
@@ -87,10 +84,7 @@ interface UIState {
    * hydrated from config_query on startup.
    */
   disconnectMode: 'attached' | 'detached'
-  setDisconnectMode: (
-    mode: 'attached' | 'detached',
-    opts?: { fromServer?: boolean },
-  ) => void
+  setDisconnectMode: (mode: 'attached' | 'detached', opts?: { fromServer?: boolean }) => void
 
   // Reset
   reset: () => void
@@ -168,8 +162,6 @@ export const uiStore = create<UIState>((set, get) => ({
 
   // Onboarding
   onboardingLoaded: false,
-  onboardingCompleted: false,
-  onboardingRole: null,
   tourCompleted: (() => {
     try {
       return localStorage.getItem('anton.tourSeen.v1') === '1'
@@ -178,14 +170,6 @@ export const uiStore = create<UIState>((set, get) => ({
     }
   })(),
   setOnboardingLoaded: (loaded) => set({ onboardingLoaded: loaded }),
-  setOnboardingCompleted: (role?: string) => {
-    set({ onboardingCompleted: true, onboardingRole: role ?? null })
-    connection.send(Channel.CONTROL, {
-      type: 'config_update',
-      key: 'onboarding',
-      value: { completed: true, role: role ?? undefined },
-    })
-  },
   setTourCompleted: (completed) => {
     set({ tourCompleted: completed })
     try {
@@ -267,8 +251,6 @@ export const uiStore = create<UIState>((set, get) => ({
     set({
       activeView: 'home',
       onboardingLoaded: false,
-      onboardingCompleted: false,
-      onboardingRole: null,
       eventLog: [],
     }),
 }))

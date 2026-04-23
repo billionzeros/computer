@@ -11,8 +11,11 @@ import {
   Home,
   Image,
   Loader2,
+  Paperclip,
+  Plus,
   Search,
   Trash2,
+  Type,
   Upload,
   X,
 } from 'lucide-react'
@@ -156,6 +159,12 @@ export function ProjectFilesView() {
   const [newFolderOpen, setNewFolderOpen] = useState(false)
   const [newFolderName, setNewFolderName] = useState('')
 
+  // Add menu + text-content modal
+  const [addMenuOpen, setAddMenuOpen] = useState(false)
+  const [textModalOpen, setTextModalOpen] = useState(false)
+  const [textTitle, setTextTitle] = useState('')
+  const [textBody, setTextBody] = useState('')
+
   // Preview pane state
   const [selected, setSelected] = useState<FileEntry | null>(null)
   const [preview, setPreview] = useState<string | null>(null)
@@ -165,6 +174,8 @@ export function ProjectFilesView() {
 
   const fileInputRef = useRef<HTMLInputElement>(null)
   const newFolderInputRef = useRef<HTMLInputElement>(null)
+  const addMenuRef = useRef<HTMLDivElement>(null)
+  const textTitleInputRef = useRef<HTMLInputElement>(null)
 
   // Breadcrumbs
   const breadcrumbs = useMemo(() => {
@@ -294,6 +305,23 @@ export function ProjectFilesView() {
   }, [refresh])
 
   useEffect(() => {
+    if (!addMenuOpen) return
+    const onDown = (e: MouseEvent) => {
+      if (!addMenuRef.current) return
+      if (!addMenuRef.current.contains(e.target as Node)) setAddMenuOpen(false)
+    }
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setAddMenuOpen(false)
+    }
+    window.addEventListener('mousedown', onDown)
+    window.addEventListener('keydown', onKey)
+    return () => {
+      window.removeEventListener('mousedown', onDown)
+      window.removeEventListener('keydown', onKey)
+    }
+  }, [addMenuOpen])
+
+  useEffect(() => {
     if (!loading) return
     const timer = setTimeout(() => {
       setLoading((prev) => {
@@ -392,6 +420,23 @@ export function ProjectFilesView() {
   const cancelNewFolder = () => {
     setNewFolderOpen(false)
     setNewFolderName('')
+  }
+
+  const cancelTextModal = () => {
+    setTextModalOpen(false)
+    setTextTitle('')
+    setTextBody('')
+  }
+
+  const canSubmitText = textTitle.trim().length > 0 && textBody.trim().length > 0
+
+  const submitTextContent = () => {
+    if (!canSubmitText) return
+    const raw = textTitle.trim()
+    const hasExt = /\.[A-Za-z0-9]{1,8}$/.test(raw)
+    const filename = hasExt ? raw : `${raw}.md`
+    connection.sendFilesystemWrite(resolvePath(filename), textBody, 'utf-8')
+    cancelTextModal()
   }
 
   const handleDelete = () => {
@@ -519,10 +564,49 @@ export function ProjectFilesView() {
         </div>
 
         <div className="fl-toolbar__actions">
-          <button type="button" className="fl-btn" onClick={() => fileInputRef.current?.click()}>
-            <Upload size={12} strokeWidth={1.5} />
-            Upload
-          </button>
+          <div className="fl-addmenu" ref={addMenuRef}>
+            <button
+              type="button"
+              className="fl-btn"
+              onClick={() => setAddMenuOpen((v) => !v)}
+              aria-haspopup="menu"
+              aria-expanded={addMenuOpen}
+            >
+              <Plus size={13} strokeWidth={1.5} />
+              Upload
+            </button>
+            {addMenuOpen && (
+              <div className="fl-addmenu__panel" role="menu">
+                <button
+                  type="button"
+                  className="fl-addmenu__item"
+                  role="menuitem"
+                  onClick={() => {
+                    setAddMenuOpen(false)
+                    fileInputRef.current?.click()
+                  }}
+                >
+                  <Paperclip size={14} strokeWidth={1.5} />
+                  Upload from device
+                </button>
+                <button
+                  type="button"
+                  className="fl-addmenu__item"
+                  role="menuitem"
+                  onClick={() => {
+                    setAddMenuOpen(false)
+                    setTextModalOpen(true)
+                    setTextTitle('')
+                    setTextBody('')
+                    setTimeout(() => textTitleInputRef.current?.focus(), 30)
+                  }}
+                >
+                  <Type size={14} strokeWidth={1.5} />
+                  Add text content
+                </button>
+              </div>
+            )}
+          </div>
           <input
             ref={fileInputRef}
             type="file"
@@ -541,7 +625,7 @@ export function ProjectFilesView() {
       </div>
 
       {/* Split: list + preview */}
-      <div className="fl-split">
+      <div className={`fl-split${selected ? '' : ' fl-split--nopreview'}`}>
         <div className="fl-list-wrap">
           <div className="fl-colhead">
             <button
@@ -696,98 +780,87 @@ export function ProjectFilesView() {
           </div>
         </div>
 
-        {/* Preview pane */}
-        <aside className="fl-preview">
-          {!selected ? (
-            <div className="fl-preview__empty">
-              <Eye size={20} strokeWidth={1.2} />
-              <div style={{ marginTop: 10 }}>Select a file to preview.</div>
-            </div>
-          ) : (
-            <>
-              <div className="fl-preview__thumb">
-                {previewLoading ? (
-                  <Loader2 size={20} strokeWidth={1.5} className="spin" />
-                ) : previewError ? (
-                  <div
+        {/* Preview pane — only render once a file is selected */}
+        {selected && (
+          <aside className="fl-preview">
+            <div className="fl-preview__thumb">
+              {previewLoading ? (
+                <Loader2 size={20} strokeWidth={1.5} className="spin" />
+              ) : previewError ? (
+                <div
+                  style={{
+                    color: 'var(--danger)',
+                    fontSize: 12,
+                    textAlign: 'center',
+                    padding: 20,
+                  }}
+                >
+                  {previewError}
+                </div>
+              ) : preview !== null ? (
+                previewIsImage ? (
+                  <img
+                    src={`data:${getMimeType(selected.name)};base64,${preview}`}
+                    alt={selected.name}
                     style={{
-                      color: 'var(--danger)',
-                      fontSize: 12,
-                      textAlign: 'center',
-                      padding: 20,
+                      maxWidth: '100%',
+                      maxHeight: 260,
+                      objectFit: 'contain',
+                      borderRadius: 6,
+                    }}
+                  />
+                ) : (
+                  <pre
+                    style={{
+                      fontFamily: 'var(--font-mono)',
+                      fontSize: 9.5,
+                      lineHeight: 1.5,
+                      color: 'var(--text-3)',
+                      maxHeight: 260,
+                      overflow: 'hidden',
+                      width: '100%',
+                      margin: 0,
+                      whiteSpace: 'pre',
                     }}
                   >
-                    {previewError}
-                  </div>
-                ) : preview !== null ? (
-                  previewIsImage ? (
-                    <img
-                      src={`data:${getMimeType(selected.name)};base64,${preview}`}
-                      alt={selected.name}
-                      style={{
-                        maxWidth: '100%',
-                        maxHeight: 260,
-                        objectFit: 'contain',
-                        borderRadius: 6,
-                      }}
-                    />
-                  ) : (
-                    <pre
-                      style={{
-                        fontFamily: 'var(--font-mono)',
-                        fontSize: 9.5,
-                        lineHeight: 1.5,
-                        color: 'var(--text-3)',
-                        maxHeight: 260,
-                        overflow: 'hidden',
-                        width: '100%',
-                        margin: 0,
-                        whiteSpace: 'pre',
-                      }}
-                    >
-                      {preview.slice(0, 2000)}
-                    </pre>
-                  )
-                ) : (
-                  iconFor(selected)
+                    {preview.slice(0, 2000)}
+                  </pre>
+                )
+              ) : (
+                iconFor(selected)
+              )}
+            </div>
+            <div className="fl-preview__info">
+              <div className="fl-preview__name">{selected.name}</div>
+              <div className="fl-preview__kind">
+                {iconFor(selected)}
+                <span>{kindLabel(selected)}</span>
+                {selected.size && (
+                  <>
+                    <span className="fl-preview__sep">·</span>
+                    <span>{selected.size}</span>
+                  </>
                 )}
               </div>
-              <div className="fl-preview__info">
-                <div className="fl-preview__name">{selected.name}</div>
-                <div className="fl-preview__kind">
-                  {iconFor(selected)}
-                  <span>{kindLabel(selected)}</span>
-                  {selected.size && (
-                    <>
-                      <span className="fl-preview__sep">·</span>
-                      <span>{selected.size}</span>
-                    </>
-                  )}
-                </div>
-                <dl className="fl-preview__meta">
-                  <dt>Path</dt>
-                  <dd>{resolvePath(selected.name)}</dd>
-                </dl>
-                <div className="fl-preview__actions">
-                  {isPreviewable(selected.name) && (
-                    <button
-                      type="button"
-                      className="fl-btn"
-                      onClick={() => handleRowClick(selected)}
-                    >
-                      <Eye size={12} strokeWidth={1.5} />
-                      Reload preview
-                    </button>
-                  )}
-                  <button type="button" className="fl-btn" onClick={handleDelete}>
-                    <Trash2 size={12} strokeWidth={1.5} />
-                    Delete
+              <dl className="fl-preview__meta">
+                <dt>Path</dt>
+                <dd>{resolvePath(selected.name)}</dd>
+              </dl>
+              <div className="fl-preview__actions">
+                {isPreviewable(selected.name) && (
+                  <button type="button" className="fl-btn" onClick={() => handleRowClick(selected)}>
+                    <Eye size={12} strokeWidth={1.5} />
+                    Reload preview
                   </button>
-                </div>
+                )}
+                <button type="button" className="fl-btn" onClick={handleDelete}>
+                  <Trash2 size={12} strokeWidth={1.5} />
+                  Delete
+                </button>
               </div>
-            </>
-          )}
-        </aside>
+            </div>
+          </aside>
+        )}
       </div>
 
       {dragging && (
@@ -840,6 +913,83 @@ export function ProjectFilesView() {
               </button>
               <button type="button" className="button button--danger" onClick={confirmDelete}>
                 Delete
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {textModalOpen && (
+        <div
+          className="modal-overlay"
+          onClick={cancelTextModal}
+          onKeyDown={(e) => {
+            if (e.key === 'Escape') cancelTextModal()
+          }}
+        >
+          <div
+            className="modal-card"
+            onClick={(e) => e.stopPropagation()}
+            onKeyDown={(e) => e.stopPropagation()}
+          >
+            <div className="fl-textmodal__head">
+              <h3>Add text content</h3>
+              <button
+                type="button"
+                className="fl-iconbtn"
+                onClick={cancelTextModal}
+                aria-label="Close"
+              >
+                <X size={14} strokeWidth={1.5} />
+              </button>
+            </div>
+            <div className="modal-card__body">
+              <div className="form-field">
+                <label className="form-field__label" htmlFor="fl-text-title">
+                  Title <span style={{ color: 'var(--danger)' }}>*</span>
+                </label>
+                <input
+                  id="fl-text-title"
+                  ref={textTitleInputRef}
+                  type="text"
+                  className="form-field__input"
+                  placeholder="Name your content"
+                  value={textTitle}
+                  onChange={(e) => setTextTitle(e.target.value)}
+                  onKeyDown={(e) => {
+                    const mod = e.metaKey || e.ctrlKey
+                    if (mod && e.key === 'Enter') submitTextContent()
+                  }}
+                />
+              </div>
+              <div className="form-field">
+                <label className="form-field__label" htmlFor="fl-text-body">
+                  Content <span style={{ color: 'var(--danger)' }}>*</span>
+                </label>
+                <textarea
+                  id="fl-text-body"
+                  className="form-field__input fl-textmodal__textarea"
+                  placeholder="Type or paste in content…"
+                  value={textBody}
+                  onChange={(e) => setTextBody(e.target.value)}
+                  onKeyDown={(e) => {
+                    const mod = e.metaKey || e.ctrlKey
+                    if (mod && e.key === 'Enter') submitTextContent()
+                  }}
+                />
+              </div>
+            </div>
+            <div className="modal-card__footer">
+              <button type="button" className="button button--ghost" onClick={cancelTextModal}>
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="button button--primary"
+                onClick={submitTextContent}
+                disabled={!canSubmitText}
+              >
+                Add Content
               </button>
             </div>
           </div>

@@ -16,6 +16,7 @@
 
 import { ChevronDown } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
+import { isProviderReady } from '../../lib/providers.js'
 import type { ProviderInfo } from '../../lib/store.js'
 import { sessionStore } from '../../lib/store/sessionStore.js'
 import { ProviderIcon } from './ModelSelector.js'
@@ -35,6 +36,7 @@ export function HarnessProviderSwitch() {
   const currentProvider = sessionStore((s) => s.currentProvider)
   const currentModel = sessionStore((s) => s.currentModel)
   const providers = sessionStore((s) => s.providers)
+  const harnessStatuses = sessionStore((s) => s.harnessStatuses)
   const switchSessionProvider = sessionStore((s) => s.switchSessionProvider)
 
   const [open, setOpen] = useState(false)
@@ -102,6 +104,8 @@ export function HarnessProviderSwitch() {
           {harnessProviders.map((p) => {
             const defaultModel = p.defaultModels?.[0] ?? p.models[0] ?? currentModel ?? ''
             const isCurrent = p.name === currentProvider
+            const status = harnessStatuses[p.name]
+            const ready = isProviderReady(p, harnessStatuses)
             return (
               <button
                 key={p.name}
@@ -111,7 +115,7 @@ export function HarnessProviderSwitch() {
                 aria-selected={isCurrent}
                 className="harness-provider-switch__item"
                 onClick={() => choose(p.name, defaultModel)}
-                disabled={!p.installed}
+                disabled={!ready}
                 style={{
                   display: 'flex',
                   alignItems: 'center',
@@ -121,12 +125,18 @@ export function HarnessProviderSwitch() {
                   background: isCurrent ? 'var(--bg-surface, #141414)' : 'transparent',
                   border: 'none',
                   borderRadius: 4,
-                  color: p.installed ? 'var(--text, #e5e5e5)' : 'var(--text-dim, #666)',
-                  cursor: p.installed ? 'pointer' : 'not-allowed',
+                  color: ready ? 'var(--text, #e5e5e5)' : 'var(--text-dim, #666)',
+                  cursor: ready ? 'pointer' : 'not-allowed',
                   textAlign: 'left',
                   fontSize: 13,
                 }}
-                title={p.installed ? undefined : `${p.name} CLI not installed on this machine`}
+                title={
+                  ready
+                    ? undefined
+                    : !status?.installed
+                      ? `${p.name} CLI not installed on this machine`
+                      : `${p.name} CLI not logged in`
+                }
               >
                 <ProviderIcon provider={p.name} size={14} />
                 <span style={{ flex: 1 }}>{p.name}</span>

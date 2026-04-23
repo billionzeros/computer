@@ -1,6 +1,6 @@
 {
   "version": "2.0.3",
-  "gitHash": "",
+  "gitHash": "8acb274",
   "releaseUrl": "https://github.com/billionzeros/computer/releases",
   "changelog": "Other:\n- fix(harness+desktop): coalesce streaming text deltas, add detached turns, cross-surface invariant (#6)\n- feat(settings): mark Claude CLI as coming soon, simplify provider form (#5)\n- fix(harness+server): MCP shim hardening + SessionRegistry (#4)\n- fix(caddy): preserve /health and /status paths upstream to sidecar (#3)",
   "publishedAt": "2026-04-22T08:22:59.398Z",

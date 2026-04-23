@@ -31,7 +31,12 @@ import {
 } from '@anton/agent-config'
 import type { ProjectType } from '@anton/agent-config'
 import { createLogger, withContext } from '@anton/logger'
-import type { ChatImageAttachmentInput, SessionImageAttachment, TokenUsage } from '@anton/protocol'
+import type {
+  ChatImageAttachmentInput,
+  SessionImageAttachment,
+  ThinkingLevel,
+  TokenUsage,
+} from '@anton/protocol'
 
 // ── Inline image marker parsing ───────────────────────────────────────────────
 
@@ -428,7 +433,7 @@ export class Session {
     maxDurationMs?: number // max wall-clock time for processMessage (0 = unlimited)
     maxTurns?: number // max LLM turns per processMessage call (0 = unlimited)
     maxToolCalls?: Record<string, number> // per-tool call limits (e.g., { browser: 5 })
-    thinkingLevel?: 'off' | 'minimal' | 'low' | 'medium' | 'high'
+    thinkingLevel?: ThinkingLevel
     parentTraceSpan?: Span // for sub-agents: nest under parent's trace
     workflowMetadata?: { workflowId: string; agentKey: string; promptVersion: string }
     /** Where this session is talking — Slack/Telegram/desktop. Injected into system prompt. */
@@ -2186,14 +2191,22 @@ export class Session {
   }
 
   /** Get the current thinking level. Used by fork sub-agents. */
-  getThinkingLevel(): 'off' | 'minimal' | 'low' | 'medium' | 'high' | undefined {
-    return this.piAgent.state.thinkingLevel as
-      | 'off'
-      | 'minimal'
-      | 'low'
-      | 'medium'
-      | 'high'
-      | undefined
+  getThinkingLevel(): ThinkingLevel | undefined {
+    return this.piAgent.state.thinkingLevel as ThinkingLevel | undefined
+  }
+
+  /**
+   * Apply a new reasoning effort to the next turn. Pi-SDK sessions forward
+   * via PiAgent's public setter; if this Session instance later gets
+   * extended to wrap a harness session, override this in a subclass.
+   *
+   * Guardrail: models with `reasoning: false` always get 'off' regardless
+   * of the requested level — pi-ai / some providers would ignore it, but
+   * we normalize here so the stored state reflects reality.
+   */
+  setThinkingLevel(level: ThinkingLevel): void {
+    const effective: ThinkingLevel = this.resolvedModel.reasoning ? level : 'off'
+    this.piAgent.setThinkingLevel(effective)
   }
 
   private getSystemPrompt(): string {

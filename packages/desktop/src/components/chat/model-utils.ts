@@ -28,6 +28,26 @@ export const providerIcons: Record<string, string> = {
   codex: openaiIcon,
 }
 
+export function providerDisplayName(name: string): string {
+  if (name === 'claude-code') return 'Claude Code'
+  if (name === 'codex') return 'ChatGPT Codex'
+  if (name === 'openai') return 'OpenAI'
+  if (name === 'xai') return 'xAI'
+  if (name === 'openrouter') return 'OpenRouter'
+  return name.charAt(0).toUpperCase() + name.slice(1)
+}
+
+export type ModelTag = 'fast' | 'balanced' | 'reasoning'
+
+/** Rough bucket used for quick-scan badges in pickers and settings. */
+export function classifyModelTag(model: string): ModelTag | null {
+  const m = model.toLowerCase()
+  if (/haiku|mini|flash|nano|lite|small|8b|7b|3b|groq/.test(m)) return 'fast'
+  if (/opus|reason|o1|o3|o4|thinking|deepseek-r|405b|70b/.test(m)) return 'reasoning'
+  if (/sonnet|gpt|claude|gemini|pro|medium|mistral|llama/.test(m)) return 'balanced'
+  return null
+}
+
 /** Format model ID into a clean display name: "claude-sonnet-4-6" → "Sonnet 4.6" */
 export function formatModelName(model: string): string {
   let name = model.split('/').pop() || model
