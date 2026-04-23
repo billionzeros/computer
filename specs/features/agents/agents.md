@@ -31,6 +31,16 @@ interface RoutineMetadata {
   instructions: string            // What to do on each run
   schedule?: { cron: string }     // "0 9 * * *" — null means manual-only
   originConversationId?: string   // Parent conversation (for result delivery)
+  // Pinned provider/model — set together or both unset. Unset falls back
+  // to `config.defaults` at run time. Validated on create/update so
+  // broken pairs surface in the UI, not at 3am when cron fires.
+  provider?: string               // "anthropic", "openrouter", "codex", "claude-code"
+  model?: string                  // "claude-sonnet-4.6", "minimax/minimax-m2.7", "gpt-5.4"
+  // Set only when this routine was spawned by a workflow installer.
+  // Lets buildSessionOptions reconstruct the workflow agent's rich
+  // context (instructions, memory, sharedState handler) on each run.
+  workflowId?: string
+  workflowAgentKey?: string
   tokenBudget?: {
     perRun: number
     monthly: number
@@ -44,6 +54,19 @@ interface RoutineMetadata {
   runHistory?: RoutineRunRecord[]   // Last 20 runs (ring buffer)
 }
 ```
+
+### Provider / Model Pinning
+
+Routines pin their own provider + model so routine A can run on (e.g.) `openrouter/minimax-m2.7` while routine B runs on `codex/gpt-5.4` — independent of the desktop conversation's current choice.
+
+Rules (enforced in `server.ts:validateRoutineProviderModel`):
+- Both unset → routine inherits `config.defaults` at run time.
+- Exactly one set → **rejected** at create/update time.
+- Provider must exist in `config.providers ∪ DEFAULT_PROVIDERS`.
+- Harness provider → model must be in the provider's `models[]` array.
+- Pi SDK provider → `resolveModel(provider, model)` must succeed.
+
+A second, lighter pre-flight runs at dispatch time (handler in `setAgentManager`) to catch drift (user deleted provider between create and fire). Failures map to a clean `runRecord.error` and the routine is marked `error`; we do **not** silently fall back to `config.defaults` — the routine's provider is its contract.
 
 ## How It Works
 
@@ -67,13 +90,36 @@ Each run creates a **fresh conversation** with routine instructions + memory in 
 
 1. `AgentManager.tick()` runs every 30s, checks cron schedules
 2. Collects all due routines, then runs them **sequentially with await**
-3. `runAgent()` loads `memory.md` from disk
-4. Server creates a fresh ephemeral session (`agent-run--{agentId}--{timestamp}`)
-5. System prompt includes an "Agent Context" `<system-reminder>` block with standing instructions + run history
-6. Short trigger message sent (not the full instructions)
-7. Routine runs autonomously (auto-approve confirms, skip ask_user)
-8. On completion: extracts last assistant text as summary, saves to `memory.md`
-9. Run record saved with `runSessionId` for log viewing
+3. `runAgent()` loads `memory.md` from disk and calls `sendMessage(agentSessionId, content, instructions, memory, provider, model)`
+4. Server handler (in `setAgentManager`) resolves effective provider, runs pre-flight, then **branches on provider type** (see below)
+5. Either path creates a fresh ephemeral session (`agent-run--{agentId}--{timestamp}`)
+6. System prompt includes an "Agent Context" `<system-reminder>` block with standing instructions + run history
+7. Short trigger message sent (not the full instructions)
+8. Routine runs autonomously (auto-approve confirms, skip ask_user)
+9. On completion: extracts last assistant text as summary, saves to `memory.md`
+10. Run record saved with `runSessionId` for log viewing
+
+### Execution Path — Harness vs Pi SDK
+
+The routine's pinned provider decides which session type carries the run. Both paths go through the same `handleChatMessage` → `session.processMessage` interface, so from the AgentManager's point of view the dispatch is uniform.
+
+**Harness path** (`providerCfg.type === 'harness'` — codex, claude-code):
+1. `ensureMcpHealthFresh()` — stale probe would bake the wrong capability block into the CLI system prompt.
+2. `createHarnessSession(...)` with `agentInstructions` + `agentMemory` — these feed `buildAgentContextLayer` inside `buildHarnessContextPrompt` so the CLI sees the routine persona the same way Pi SDK does.
+3. `sessions.put(runSessionId, harness, 'ephemeral')`.
+4. `handleChatMessage` drives the turn; output lands in the mirrored `messages.jsonl`.
+5. Summary extracted via `readHarnessHistory(runSessionId, projectId)` (harness has no `getHistory()`).
+6. `finally`: drop `harnessSessionContexts` + MCP IPC auth first, then `sessions.delete(runSessionId)` — registry awaits `shutdown()` which SIGTERMs the CLI.
+
+**Pi SDK path** (everything else):
+1. `createSession` with `buildSessionOptions(...)` (provider/model threaded through to the pi SDK `getModel`).
+2. `wireAgentAutoHandlers(session)` — auto-approve confirms, skip ask_user.
+3. `sessions.put(runSessionId, session, 'ephemeral')`.
+4. `handleChatMessage` drives the turn.
+5. Summary extracted via `session.getHistory()`.
+6. `finally`: `sessions.delete(runSessionId)`.
+
+No pooling on the harness path — every run is a fresh CLI subprocess. The cost is one spawn per run; the benefit is zero cross-run state leak and a clean ephemeral-pool eviction story.
 
 Each run is recorded as a `RoutineRunRecord` with start/end timestamps, duration, status, trigger type, and `runSessionId`. History capped at 20 entries.
 
@@ -144,12 +190,14 @@ Clicking a routine opens **the routine's own conversation** (its `agent--` sessi
 
 | File | Purpose |
 |------|---------|
-| `packages/protocol/src/projects.ts` | `RoutineMetadata`, `RoutineSession` types |
-| `packages/protocol/src/messages.ts` | Routine protocol messages |
+| `packages/protocol/src/projects.ts` | `RoutineMetadata` (incl. `provider?`, `model?`, `workflowId?`, `workflowAgentKey?`), `RoutineSession` types |
+| `packages/protocol/src/messages.ts` | Routine protocol messages — `routine_create.routine.{provider,model}`, `routine_update.patch.{provider,model}` tri-state |
+| `packages/agent-config/src/config.ts` | `DEFAULT_PROVIDERS` — default source for harness provider models (codex, claude-code); user config in `~/.anton/config.yaml` overrides |
 | `packages/agent-config/src/projects.ts` | `loadAgentMetadata()`, `saveAgentMetadata()`, `listProjectAgents()` |
-| `packages/agent-server/src/agents/agent-manager.ts` | CRUD + cron scheduler + sendMessage bridge |
+| `packages/agent-server/src/agents/agent-manager.ts` | CRUD + cron scheduler + `SendMessageHandler` signature (now carries `provider`/`model`) |
 | `packages/agent-server/src/agents/cron.ts` | Cron expression parser |
-| `packages/agent-server/src/server.ts` | Routine handlers, `buildAgentActionHandler()`, `buildDeliverResultHandler()` |
+| `packages/agent-server/src/server.ts` | Routine handlers, `validateRoutineProviderModel()`, `setAgentManager()` provider-type branch (harness vs Pi SDK dispatch), `buildAgentActionHandler()`, `buildDeliverResultHandler()` |
+| `packages/agent-server/src/workflows/workflow-installer.ts` | Threads `preferredProvider`/`preferredModel` from `WorkflowAgentRef` into `createAgent` |
 | `packages/agent-core/src/tools/job.ts` | `AgentToolInput` type, `JobActionHandler` callback |
 | `packages/agent-core/src/tools/deliver-result.ts` | `DeliverResultHandler` callback |
 | `packages/agent-core/src/agent.ts` | `agent` tool + `deliver_result` tool definitions |

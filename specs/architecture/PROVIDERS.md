@@ -1,9 +1,21 @@
 # Anton — Supported Providers
 
-> Single source of truth for supported AI providers, auth methods, and available models.
-> The agent uses [pi SDK](https://github.com/mariozechner/pi) (OpenClaw engine) for multi-provider support.
+> Default source for supported AI providers, auth methods, and available models. Users can extend/override this via `~/.anton/config.yaml` (`providers.<name>`).
+> API providers run through [pi SDK](https://github.com/mariozechner/pi) (OpenClaw engine).
+> Harness providers run a local CLI subprocess (see [BYOS_HARNESS_PROVIDERS.md](../features/BYOS_HARNESS_PROVIDERS.md) / [HARNESS_ARCHITECTURE.md](../features/HARNESS_ARCHITECTURE.md)).
+
+## Provider Types
+
+Providers fall into two dispatch lanes, discriminated by `providerConfig.type` in `DEFAULT_PROVIDERS` (`packages/agent-config/src/config.ts`):
+
+- **`type: 'api'`** (default) — routes through pi SDK. Model ID must resolve via `resolveModel(provider, model)`.
+- **`type: 'harness'`** — spawns a local CLI (codex, claude-code). Model ID must be in the provider's declared `models[]`. Validation is closed-set, not registry-based, because the model catalog is what the vendor CLI happens to support — there's no pi SDK registry entry for it.
+
+Session creation (`handleSessionCreate`) and routine dispatch (`setAgentManager`) both branch on this type.
 
 ## Provider Matrix
+
+### API providers (pi SDK)
 
 | Provider | Auth Method | Models | Default Base URL |
 |----------|------------|--------|-----------------|
@@ -16,6 +28,17 @@
 | **openrouter** | API key | Any model (proxy) | openrouter.ai/api |
 | **bedrock** | AWS credentials | claude-*, titan-* | (AWS region endpoint) |
 | **mistral** | API key | mistral-large, mistral-medium | api.mistral.ai |
+
+### Harness providers (CLI subprocess)
+
+| Provider | Binary | Models |
+|----------|--------|--------|
+| **claude-code** | `claude` CLI (Claude Pro/Max sub) | claude-sonnet-4-6, claude-opus-4-6, claude-haiku-4-5 |
+| **codex** | `codex` CLI (Codex/ChatGPT Plus sub) | gpt-5.4, gpt-5.4-mini, o3 |
+
+## Per-Routine Provider Override
+
+Routines pin their own `provider`/`model` in `RoutineMetadata` (see [agents.md](../features/agents/agents.md)). This is independent of the desktop conversation's current choice, so one project can have a routine on `codex/gpt-5.4` and another on `anthropic/claude-sonnet-4-6`. Validation lives in `validateRoutineProviderModel()` (server.ts) and runs at create/update time; a lighter pre-flight in the dispatch handler catches drift at run time.
 
 ## Auth Methods
 

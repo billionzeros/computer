@@ -934,20 +934,12 @@ export class WebhookAgentRunner {
   }
 
   /**
-   * Static catalog of well-known models per provider. For API providers
-   * we read from DEFAULT_PROVIDERS; for harness providers (Codex,
-   * Claude Code) we hardcode the commonly available models since the
-   * CLI doesn't expose an enumeration over its supported models in a
-   * machine-readable form. Empty for unknown providers — caller renders
-   * a "set manually" hint in that case.
+   * Static catalog of well-known models per provider. Reads from
+   * DEFAULT_PROVIDERS (merged with user overrides from config) so
+   * API and harness providers share one source of truth. Empty for
+   * unknown providers — caller renders a "set manually" hint.
    */
   private listModelsForProvider(providerName: string): string[] {
-    if (providerName === 'codex') {
-      return ['gpt-5.4', 'gpt-5.4-mini']
-    }
-    if (providerName === 'claude-code') {
-      return ['claude-sonnet-4.6', 'claude-opus-4.6', 'claude-haiku-4.5']
-    }
     const cfg = this.config.providers[providerName] || DEFAULT_PROVIDERS[providerName]
     const models = (cfg as { models?: string[] } | undefined)?.models
     return Array.isArray(models) ? models : []

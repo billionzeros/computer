@@ -33,12 +33,18 @@ function generateSessionId(projectId: string): string {
 /**
  * Callback to run an agent. Creates a fresh ephemeral session per run.
  * Returns event count, assistant summary, and the run's session ID.
+ *
+ * `provider`/`model` come from the routine's metadata. When unset the
+ * handler falls back to `config.defaults`. The handler is responsible
+ * for branching on provider type (Pi SDK vs harness CLI).
  */
 export type SendMessageHandler = (
   agentSessionId: string,
   content: string,
   agentInstructions: string,
   agentMemory: string | null,
+  provider?: string,
+  model?: string,
 ) => Promise<{ eventCount: number; summary: string; runSessionId: string }>
 
 export type AgentEventCallback = (event: AgentEvent) => void
@@ -102,6 +108,10 @@ export class AgentManager {
       instructions: string
       schedule?: string // cron expression
       originConversationId?: string
+      provider?: string
+      model?: string
+      workflowId?: string
+      workflowAgentKey?: string
     },
   ): RoutineSession {
     const sessionId = generateSessionId(projectId)
@@ -116,6 +126,10 @@ export class AgentManager {
       name: spec.name,
       description: spec.description ?? '',
       instructions: spec.instructions,
+      provider: spec.provider,
+      model: spec.model,
+      workflowId: spec.workflowId,
+      workflowAgentKey: spec.workflowAgentKey,
       schedule: spec.schedule ? { cron: spec.schedule } : undefined,
       originConversationId: spec.originConversationId,
       tokenBudget: {
@@ -166,6 +180,8 @@ export class AgentManager {
       description?: string
       instructions?: string
       schedule?: string | null
+      provider?: string | null
+      model?: string | null
     },
   ): RoutineSession | undefined {
     const entry = this.agents.get(sessionId)
@@ -174,6 +190,14 @@ export class AgentManager {
     if (patch.name !== undefined) entry.agent.name = patch.name
     if (patch.description !== undefined) entry.agent.description = patch.description
     if (patch.instructions !== undefined) entry.agent.instructions = patch.instructions
+
+    // Tri-state: undefined = no change, null = clear to default, string = set.
+    if (patch.provider !== undefined) {
+      entry.agent.provider = patch.provider ?? undefined
+    }
+    if (patch.model !== undefined) {
+      entry.agent.model = patch.model ?? undefined
+    }
 
     if (patch.schedule !== undefined) {
       if (patch.schedule === null || patch.schedule === '') {
@@ -246,23 +270,31 @@ export class AgentManager {
         ? `[Run #1 — ${timestamp}] This is your first run. Execute your instructions. Build any scripts or tooling you need, then deliver results.\n\nIMPORTANT: At the end of your run, write a concise summary of what you did and what you built (file paths, script names, key outcomes). This will be saved as your memory for future runs.`
         : `[Run #${entry.agent.runCount + 1} — ${timestamp}] Scheduled run. Your instructions and memory from previous runs are in your system prompt. Re-use existing scripts and tooling. Execute your task and deliver results.\n\nIMPORTANT: At the end of your run, write a concise summary of what you did. This will be saved as your memory for future runs.`
 
-      // Each run creates a fresh session — no accumulated context bloat
+      // Each run creates a fresh session — no accumulated context bloat.
+      // Pass the routine's pinned provider/model so harness-only models
+      // (e.g. codex/gpt-5.4) land on the CLI path instead of Pi SDK.
       const result = await this.sendMessage(
         sessionId,
         message,
         entry.agent.instructions,
         agentMemory,
+        entry.agent.provider,
+        entry.agent.model,
       )
       runRecord.runSessionId = result.runSessionId
 
       // Check if the LLM actually ran
       if (result.eventCount === 0) {
-        log.warn({ agent: entry.agent.name }, '0 events produced — run failed silently')
+        log.warn(
+          { agent: entry.agent.name, provider: entry.agent.provider, model: entry.agent.model },
+          '0 events produced — run failed silently',
+        )
         entry.agent.status = 'error'
         entry.agent.lastRunAt = Date.now()
         runRecord.status = 'error'
-        runRecord.error =
-          'No events produced — LLM may not have been called. Check API key or session state.'
+        runRecord.error = entry.agent.provider
+          ? `No events produced on ${entry.agent.provider}/${entry.agent.model}. Check provider credentials or confirm the CLI/API is reachable.`
+          : 'No events produced — LLM may not have been called. Check API key or session state.'
       } else {
         // Run completed successfully
         entry.agent.status = 'idle'
