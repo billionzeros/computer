@@ -12,6 +12,9 @@ export interface AuthOkMessage {
   agentId: string
   version: string
   gitHash: string
+  /** Wire-protocol version the server speaks. Absent on servers that predate
+   *  the version handshake (2026-04) — treat missing as "unversioned, very old". */
+  protocolVersion?: number
   /** Public domain for this agent (e.g. "itsomg.antoncomputer.in") */
   domain?: string
   /** If the agent knows a newer version is available, include it here. */
@@ -934,6 +937,10 @@ export interface RoutineCreateMessage {
     instructions: string
     schedule?: string // cron expression
     originConversationId?: string
+    /** Provider (e.g. "anthropic", "openrouter", "codex"). Omit to inherit default. */
+    provider?: string
+    /** Model ID. Omit to inherit default. */
+    model?: string
   }
 }
 
@@ -958,6 +965,10 @@ export interface RoutineUpdateMessage {
     description?: string
     instructions?: string
     schedule?: string | null // cron expression, or null to clear (manual-only)
+    /** Provider override. `null` clears it (revert to default); omitted leaves unchanged. */
+    provider?: string | null
+    /** Model override. `null` clears it (revert to default); omitted leaves unchanged. */
+    model?: string | null
   }
 }
 

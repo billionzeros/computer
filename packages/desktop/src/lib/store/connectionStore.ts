@@ -31,10 +31,14 @@ interface ConnectionStoreState {
   syncProgress: SyncProgress
   /** Public domain for this agent (e.g. "itsomg.antoncomputer.in") */
   domain: string | null
+  /** Wire-protocol version the server advertised in auth_ok. `null` means
+   *  the server predates the handshake (very old). */
+  serverProtocolVersion: number | null
 
   // Actions
   setInitPhase: (phase: InitPhase) => void
   setDomain: (domain: string | null) => void
+  setServerProtocolVersion: (v: number | null) => void
   startSyncing: () => void
   markSynced: (key: keyof SyncProgress) => void
   reset: () => void
@@ -51,9 +55,11 @@ export const connectionStore = create<ConnectionStoreState>((set, get) => ({
     connectors: false,
   },
   domain: null,
+  serverProtocolVersion: null,
 
   setInitPhase: (phase) => set({ initPhase: phase }),
   setDomain: (domain) => set({ domain }),
+  setServerProtocolVersion: (v) => set({ serverProtocolVersion: v }),
 
   startSyncing: () => {
     set({
@@ -106,5 +112,6 @@ export const connectionStore = create<ConnectionStoreState>((set, get) => ({
       initPhase: 'idle',
       syncProgress: { providers: false, sessions: false, projects: false, connectors: false },
       domain: null,
+      serverProtocolVersion: null,
     }),
 }))

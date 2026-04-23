@@ -95,8 +95,8 @@ import {
   type McpServerConfig,
   type Session,
   SessionRegistry,
-  type SubAgentEventHandler,
   type ShimProbeResult,
+  type SubAgentEventHandler,
   appendHarnessTurn,
   assembleConversationContext,
   buildHarnessCapabilityBlock,
@@ -119,7 +119,13 @@ import {
 } from '@anton/agent-core'
 import { CONNECTOR_FACTORIES, ConnectorManager } from '@anton/connectors'
 import { createLogger } from '@anton/logger'
-import { Channel, decodeFrame, encodeFrame, parseJsonPayload } from '@anton/protocol'
+import {
+  Channel,
+  PROTOCOL_VERSION,
+  decodeFrame,
+  encodeFrame,
+  parseJsonPayload,
+} from '@anton/protocol'
 import type { AiMessage, ChannelId, ControlMessage, TerminalMessage } from '@anton/protocol'
 import { WebSocket, WebSocketServer } from 'ws'
 import {
@@ -481,18 +487,116 @@ export class AgentServer {
   setAgentManager(agentManager: import('./agents/agent-manager.js').AgentManager) {
     this.agentManager = agentManager
 
-    // Wire sendMessage — each agent run creates a fresh ephemeral session
+    // Wire sendMessage — each agent run creates a fresh ephemeral session.
+    // Branches on the routine's pinned provider type: harness-type
+    // providers (codex, claude-code) route through createHarnessSession
+    // so their CLI subprocess gets spawned; Pi SDK providers keep the
+    // createSession path. Without the branch, routines on harness-only
+    // models (e.g. codex/gpt-5.4) fail the Pi SDK registry check and
+    // the run dies before sending a single event.
     agentManager.setSendMessageHandler(
-      async (agentSessionId, content, agentInstructions, agentMemory) => {
+      async (agentSessionId, content, agentInstructions, agentMemory, provider, model) => {
         // Generate a unique session ID for this run
         const runSessionId = `agent-run--${agentSessionId}--${Date.now().toString(36)}`
 
         // Extract projectId from agent session ID
         const projectId = this.extractProjectId(agentSessionId)
 
+        // Resolve effective provider/model. An unset pair is fine — the
+        // routine inherits `config.defaults`. A broken pair (provider
+        // deleted after create, harness binary uninstalled) fails loud:
+        // we don't silently swap in defaults, because the routine's
+        // configured provider is part of its contract.
+        const effectiveProvider = provider || this.config.defaults.provider
+        const effectiveModel = model || this.config.defaults.model
+
+        // Re-run the same validator used at create/update time. A fresh
+        // routine passed it then; this call catches the drift case.
+        // Throw turns into a clean `runRecord.error` in runAgent.
+        const check = this.validateRoutineProviderModel(effectiveProvider, effectiveModel)
+        if (!check.ok) {
+          throw new Error(`${check.error} Open the routine and pick a supported provider/model.`)
+        }
+        const providerCfg =
+          this.config.providers[effectiveProvider] || DEFAULT_PROVIDERS[effectiveProvider]
+        const isHarness = providerCfg?.type === 'harness'
+
+        if (isHarness) {
+          // Stale probe would bake wrong capability block into the
+          // CLI system prompt — mirror handleSessionCreate's gate.
+          await this.ensureMcpHealthFresh()
+          // `background: true` makes createHarnessSession routine-safe:
+          // skips session_created/context_info broadcasts (no desktop
+          // noise), skips its own sessions.put (we choose the pool),
+          // installs a no-op ask_user (can't interrupt a live user).
+          // Default surface 'desktop' ensures connectors with surface
+          // allowlists stay visible — same tool set a routine would
+          // have if launched from the desktop UI.
+          const harness = this.createHarnessSession({
+            id: runSessionId,
+            providerName: effectiveProvider,
+            model: effectiveModel,
+            projectId,
+            agentInstructions,
+            agentMemory: agentMemory ?? undefined,
+            background: true,
+          })
+          this.sessions.put(runSessionId, harness, 'ephemeral')
+
+          log.info(
+            { runSessionId, agentSessionId, provider: effectiveProvider, model: effectiveModel },
+            'Created fresh harness agent run session',
+          )
+
+          let eventCount = 0
+          let summary = ''
+
+          try {
+            eventCount = await this.handleChatMessage({ content, sessionId: runSessionId })
+            log.info({ runSessionId, eventCount }, 'Harness agent run events produced')
+
+            // Summary comes from the mirrored messages.jsonl — the
+            // harness doesn't expose getHistory(), but readHarnessHistory
+            // returns the same SessionHistoryEntry[] shape.
+            try {
+              const history = readHarnessHistory(runSessionId, projectId)
+              for (let i = history.length - 1; i >= 0; i--) {
+                if (history[i].role === 'assistant' && history[i].content) {
+                  summary = String(history[i].content).slice(0, 2000)
+                  break
+                }
+              }
+            } catch (extractErr) {
+              log.warn({ err: extractErr }, 'Harness agent run summary extraction failed')
+            }
+          } catch (err) {
+            log.error({ err, agentSessionId }, 'Harness agent run failed')
+            throw err
+          } finally {
+            // Drop external bookkeeping BEFORE the registry tears down
+            // the subprocess (mirrors handleSessionDestroy ordering) —
+            // SessionRegistry.delete intentionally skips onEvict on
+            // explicit deletes, so we clean up the harness context map
+            // and MCP IPC auth ourselves.
+            if (this.mcpIpcServer) {
+              this.mcpIpcServer.unregisterSession(runSessionId)
+            }
+            this.harnessSessionContexts.delete(runSessionId)
+            this.activeTurns.delete(runSessionId)
+            // SessionRegistry.delete awaits session.shutdown(), which
+            // SIGTERMs the CLI — keeps the ephemeral pool clean.
+            await this.sessions.delete(runSessionId)
+          }
+
+          return { eventCount, summary, runSessionId }
+        }
+
+        // ── Pi SDK path ─────────────────────────────────────────────
         // Create a fresh session — agent runs are autonomous, no onJobAction needed
         const session = createSession(runSessionId, this.config, {
           ...this.buildSessionOptions(runSessionId, projectId, {
+            provider: effectiveProvider,
+            model: effectiveModel,
             agentInstructions,
             agentMemory: agentMemory ?? undefined,
           }),
@@ -506,7 +610,10 @@ export class AgentServer {
         // registry's ephemeral pool caps the damage.
         this.sessions.put(runSessionId, session, 'ephemeral')
 
-        log.info({ runSessionId, agentSessionId }, 'Created fresh agent run session')
+        log.info(
+          { runSessionId, agentSessionId, provider: effectiveProvider, model: effectiveModel },
+          'Created fresh agent run session',
+        )
 
         let eventCount = 0
         let summary = ''
@@ -734,6 +841,7 @@ export class AgentServer {
                 agentId: this.config.agentId,
                 version: VERSION,
                 gitHash: GIT_HASH,
+                protocolVersion: PROTOCOL_VERSION,
                 domain: process.env.ANTON_HOST || undefined,
               }
 
@@ -2038,6 +2146,26 @@ export class AgentServer {
      * subsequent turns the CLI's own resume tape carries history.
      */
     replaySeedForFirstTurn?: string
+    /**
+     * Routine-agent instructions. Injected into the harness system
+     * prompt via buildAgentContextLayer so CLI runs see the routine's
+     * persona the same way Pi SDK sessions do. Only set when the
+     * session represents an agent/routine run.
+     */
+    agentInstructions?: string
+    /** Agent memory from previous routine runs (feeds same layer). */
+    agentMemory?: string
+    /**
+     * Background mode. Set for routine/cron runs that should NOT
+     * surface in the desktop UI or prompt the user.
+     *  - suppresses `session_created` and `context_info` broadcasts
+     *  - skips the internal `sessions.put` (caller puts with the pool
+     *    category it wants — routine runs use `'ephemeral'`)
+     *  - installs a no-op `ask_user` handler so a desktop user can't be
+     *    interrupted by a routine
+     * Matches the Pi SDK routine path (createSession + wireAgentAutoHandlers).
+     */
+    background?: boolean
   }): HarnessSession | CodexHarnessSession {
     const {
       id,
@@ -2046,6 +2174,9 @@ export class AgentServer {
       projectId: harnessProjectId,
       surface: surfaceLabel = 'desktop',
       replaySeedForFirstTurn,
+      agentInstructions,
+      agentMemory,
+      background = false,
     } = opts
 
     // Legacy HarnessSession (Claude Code) still needs a spawn adapter.
@@ -2086,7 +2217,10 @@ export class AgentServer {
       workspacePath: cwd,
       surface: surfaceLabel,
       onActivateWorkflow: harnessProjectId ? this.buildActivateWorkflowHandler() : undefined,
-      onAskUser: this.buildHarnessAskUserHandler(id),
+      // Background runs (routines) must not interrupt the desktop user
+      // with an ask_user prompt. Return empty answers immediately so the
+      // CLI stops blocking and makes autonomous choices.
+      onAskUser: background ? async () => ({}) : this.buildHarnessAskUserHandler(id),
       // Routine management (`routine` MCP tool). Same handler Pi SDK
       // uses inline via agent.ts; only meaningful when the session is
       // attached to a project.
@@ -2124,7 +2258,7 @@ export class AgentServer {
         const assembled = assembleConversationContext(id, userMessage, harnessProjectId)
         cachedMemoryData = assembled.memoryData
 
-        if (!cachedContextInfoSent) {
+        if (!cachedContextInfoSent && !background) {
           cachedContextInfoSent = true
           this.sendToClient(Channel.AI, {
             type: 'context_info',
@@ -2155,6 +2289,8 @@ export class AgentServer {
         projectId: harnessProjectId,
         workspacePath: cwd,
         memoryData: cachedMemoryData,
+        agentInstructions,
+        agentMemory,
         availableWorkflows: this.getAvailableWorkflowsForPrompt(),
       })
 
@@ -2303,16 +2439,19 @@ export class AgentServer {
             buildSystemPrompt,
             onTurnEnd,
           })
-    // Harness sessions share the `conversation` pool with Pi SDK chats.
-    // Agent-run variants come through createSession with 'ephemeral'.
-    this.sessions.put(id, session, 'conversation')
-
-    this.sendToClient(Channel.AI, {
-      type: 'session_created',
-      id,
-      provider: providerName,
-      model,
-    })
+    // Foreground (desktop) sessions go in the `conversation` pool and
+    // announce themselves so the UI can render. Background (routine)
+    // runs skip both — the caller owns pool placement (typically
+    // `ephemeral`) and there is no desktop listener to render them.
+    if (!background) {
+      this.sessions.put(id, session, 'conversation')
+      this.sendToClient(Channel.AI, {
+        type: 'session_created',
+        id,
+        provider: providerName,
+        model,
+      })
+    }
 
     log.info(
       {
@@ -2320,6 +2459,7 @@ export class AgentServer {
         provider: providerName,
         model,
         type: 'harness',
+        background,
         switched: Boolean(replaySeedForFirstTurn),
       },
       'Harness session created',
@@ -3551,6 +3691,7 @@ export class AgentServer {
           provider: msg.provider,
           model: msg.model,
           apiSwitched,
+          harnessSwitched,
           harnessSkipped,
         },
         'Default provider/model set',
@@ -3656,6 +3797,55 @@ export class AgentServer {
 
   // ── Routine handlers ─────────────────────────────────────────────
 
+  /**
+   * Validate a routine's provider+model. Catches bad configs at
+   * create/update time so routines fail in the UI, not at 3am when
+   * the cron fires.
+   *
+   * Rules:
+   *  - both unset → OK (routine inherits config.defaults at run time)
+   *  - exactly one set → error (they must be set together)
+   *  - provider must exist in config.providers ∪ DEFAULT_PROVIDERS
+   *  - harness provider → model must be in provider's models array
+   *  - Pi SDK provider → `resolveModel` must succeed
+   */
+  private validateRoutineProviderModel(
+    provider: string | undefined,
+    model: string | undefined,
+  ): { ok: true } | { ok: false; error: string } {
+    if (!provider && !model) return { ok: true }
+    if (!provider || !model) {
+      return {
+        ok: false,
+        error: 'Routine provider and model must be set together (or both cleared).',
+      }
+    }
+
+    const providerCfg = this.config.providers[provider] || DEFAULT_PROVIDERS[provider]
+    if (!providerCfg) {
+      return { ok: false, error: `Unknown provider: "${provider}"` }
+    }
+
+    if (providerCfg.type === 'harness') {
+      const models = providerCfg.models || []
+      if (!models.includes(model)) {
+        return {
+          ok: false,
+          error: `Unknown model "${model}" for harness provider "${provider}". Available: ${models.join(', ') || '(none)'}`,
+        }
+      }
+      return { ok: true }
+    }
+
+    if (!resolveModel(provider, model)) {
+      return {
+        ok: false,
+        error: `Unknown model "${model}" for provider "${provider}" (not in pi SDK registry).`,
+      }
+    }
+    return { ok: true }
+  }
+
   private handleRoutineCreate(msg: { projectId: string; routine: Record<string, unknown> }) {
     if (!this.agentManager) {
       this.sendToClient(Channel.AI, { type: 'error', message: 'Routine manager not initialized' })
@@ -3668,7 +3858,18 @@ export class AgentServer {
         instructions: string
         schedule?: string
         originConversationId?: string
+        provider?: string
+        model?: string
+        workflowId?: string
+        workflowAgentKey?: string
       }
+
+      const check = this.validateRoutineProviderModel(spec.provider, spec.model)
+      if (!check.ok) {
+        this.sendToClient(Channel.AI, { type: 'error', message: check.error })
+        return
+      }
+
       const routine = this.agentManager.createAgent(msg.projectId, spec)
       this.sendToClient(Channel.AI, { type: 'routine_created', routine })
     } catch (err: unknown) {
@@ -3745,6 +3946,8 @@ export class AgentServer {
       description?: string
       instructions?: string
       schedule?: string | null
+      provider?: string | null
+      model?: string | null
     }
   }) {
     if (!this.agentManager) {
@@ -3752,6 +3955,31 @@ export class AgentServer {
       return
     }
     try {
+      // If the patch touches provider or model, merge with current
+      // state and re-validate — an update that leaves provider set but
+      // clears model (or vice-versa) is incoherent.
+      if (msg.patch.provider !== undefined || msg.patch.model !== undefined) {
+        const current = this.agentManager.getAgent(msg.sessionId)
+        if (!current) {
+          this.sendToClient(Channel.AI, {
+            type: 'error',
+            message: `Routine not found: ${msg.sessionId}`,
+          })
+          return
+        }
+        const mergedProvider =
+          msg.patch.provider === undefined
+            ? current.agent.provider
+            : (msg.patch.provider ?? undefined)
+        const mergedModel =
+          msg.patch.model === undefined ? current.agent.model : (msg.patch.model ?? undefined)
+        const check = this.validateRoutineProviderModel(mergedProvider, mergedModel)
+        if (!check.ok) {
+          this.sendToClient(Channel.AI, { type: 'error', message: check.error })
+          return
+        }
+      }
+
       const routine = this.agentManager.updateAgent(msg.sessionId, msg.patch)
       if (!routine) {
         this.sendToClient(Channel.AI, {
@@ -3987,7 +4215,9 @@ export class AgentServer {
     }
 
     try {
-      const installer = new WorkflowInstaller(this.agentManager)
+      const installer = new WorkflowInstaller(this.agentManager, (p, m) =>
+        this.validateRoutineProviderModel(p, m),
+      )
       const installed = installer.install(
         msg.projectId,
         msg.workflowId,
@@ -4016,7 +4246,9 @@ export class AgentServer {
   private handleWorkflowUninstall(msg: { projectId: string; workflowId: string }) {
     if (!this.agentManager) return
 
-    const installer = new WorkflowInstaller(this.agentManager)
+    const installer = new WorkflowInstaller(this.agentManager, (p, m) =>
+      this.validateRoutineProviderModel(p, m),
+    )
     const success = installer.uninstall(msg.projectId, msg.workflowId)
     if (success) {
       this.sendToClient(Channel.AI, {
@@ -4037,7 +4269,9 @@ export class AgentServer {
     }
 
     try {
-      const installer = new WorkflowInstaller(this.agentManager)
+      const installer = new WorkflowInstaller(this.agentManager, (p, m) =>
+        this.validateRoutineProviderModel(p, m),
+      )
       const installed = installer.activateWorkflow(msg.projectId, msg.workflowId)
       const routines = this.agentManager
         .listAgents(msg.projectId)
@@ -4264,7 +4498,9 @@ export class AgentServer {
 
     return async (projectId, workflowId) => {
       try {
-        const installer = new WorkflowInstaller(this.agentManager!)
+        const installer = new WorkflowInstaller(this.agentManager!, (p, m) =>
+          this.validateRoutineProviderModel(p, m),
+        )
         const installed = installer.activateWorkflow(projectId, workflowId)
         const routines = this.agentManager!.listAgents(projectId).filter(
           (a) => a.agent.workflowId === workflowId,
@@ -6200,10 +6436,7 @@ export class AgentServer {
       this.detachedTurnTimers.delete(sessionId)
       const session = this.sessions.get(sessionId)
       if (session) {
-        log.warn(
-          { sessionId, budgetMs },
-          'Detached turn budget exceeded, cancelling',
-        )
+        log.warn({ sessionId, budgetMs }, 'Detached turn budget exceeded, cancelling')
         session.cancel()
       }
     }, budgetMs)

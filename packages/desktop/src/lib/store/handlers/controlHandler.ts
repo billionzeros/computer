@@ -13,6 +13,7 @@ export function handleControlMessage(msg: ControlMessage): void {
   switch (msg.type) {
     case 'auth_ok': {
       connectionStore.getState().setDomain(msg.domain ?? null)
+      connectionStore.getState().setServerProtocolVersion(msg.protocolVersion ?? null)
 
       const us = updateStore.getState()
 
