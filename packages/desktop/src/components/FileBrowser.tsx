@@ -11,6 +11,7 @@ import {
 } from 'lucide-react'
 import { useCallback, useEffect, useState } from 'react'
 import { connection } from '../lib/connection.js'
+import { connectionStore } from '../lib/store/connectionStore.js'
 import { projectStore } from '../lib/store/projectStore.js'
 import { uiStore } from '../lib/store/uiStore.js'
 
@@ -26,22 +27,28 @@ interface DirState {
   error: string | null
 }
 
-// Fallback if no workspace path is available
-const FALLBACK_DIR = '/root'
-
 export function FileBrowser() {
   const activeProjectId = projectStore((s) => s.activeProjectId)
   const projects = projectStore((s) => s.projects)
   const activeProject = projects.find((p) => p.id === activeProjectId)
-  const startDir = activeProject?.workspacePath || FALLBACK_DIR
+  const initPhase = connectionStore((s) => s.initPhase)
+  // Never guess at a startDir: an unknown workspacePath used to fall back to
+  // `/root`, which EACCES on any non-root agent-server. Stay idle until the
+  // real path lands.
+  const startDir = activeProject?.workspacePath ?? null
 
-  const [cwd, setCwd] = useState(startDir)
-  const [pathParts, setPathParts] = useState<string[]>([startDir])
-  const [dirState, setDirState] = useState<DirState>({ entries: [], loading: true, error: null })
+  const [cwd, setCwd] = useState<string>(startDir ?? '')
+  const [pathParts, setPathParts] = useState<string[]>(startDir ? [startDir] : [])
+  const [dirState, setDirState] = useState<DirState>({
+    entries: [],
+    loading: startDir !== null,
+    error: null,
+  })
   const [_expandedDirs, _setExpandedDirs] = useState<Set<string>>(new Set())
 
   const listDir = useCallback(
     (path: string) => {
+      if (!startDir) return
       setDirState({ entries: [], loading: true, error: null })
       setCwd(path)
 
@@ -96,7 +103,7 @@ export function FileBrowser() {
 
   // Load workspace directory on mount and project switch
   useEffect(() => {
-    listDir(startDir)
+    if (startDir) listDir(startDir)
   }, [listDir, startDir])
 
   const navigateTo = (path: string) => {
@@ -104,6 +111,7 @@ export function FileBrowser() {
   }
 
   const navigateToBreadcrumb = (index: number) => {
+    if (!startDir) return
     if (index === 0) {
       // First part is project name or /
       const isAbsRoot = pathParts[0] === '/'
@@ -140,6 +148,34 @@ export function FileBrowser() {
     return <File className="fb-entry__icon" />
   }
 
+  // Closes the one-frame gap between "startDir changed" and "listDir
+  // dispatched" where `dirState.loading` is still false but cwd points
+  // outside the new startDir tree (initial null→real, or project switch).
+  // Subdirectories of startDir are explicitly treated as "loaded" so
+  // normal navigation doesn't keep the loader stuck on.
+  const cwdWithinStartDir =
+    startDir !== null && (cwd === startDir || cwd.startsWith(`${startDir}/`))
+  const awaitingInitialFetch = startDir !== null && !cwdWithinStartDir
+  const showLoader = dirState.loading || awaitingInitialFetch
+
+  if (!startDir) {
+    const stillSyncing = initPhase !== 'ready'
+    return (
+      <div className="fb">
+        <div className="fb-status">
+          {stillSyncing ? (
+            <>
+              <Loader2 className="fb-status__icon fb-spinning" />
+              <span>Loading projects…</span>
+            </>
+          ) : (
+            <span>Select a project to browse its files.</span>
+          )}
+        </div>
+      </div>
+    )
+  }
+
   return (
     <div className="fb">
       {/* Breadcrumb */}
@@ -171,27 +207,27 @@ export function FileBrowser() {
 
       {/* File list */}
       <div className="fb-list">
-        {dirState.loading && (
+        {showLoader && (
           <div className="fb-status">
             <Loader2 className="fb-status__icon fb-spinning" />
             <span>Loading...</span>
           </div>
         )}
 
-        {dirState.error && (
+        {dirState.error && !showLoader && (
           <div className="fb-status fb-status--error">
             <span>{dirState.error}</span>
           </div>
         )}
 
-        {!dirState.loading && !dirState.error && dirState.entries.length === 0 && (
+        {!showLoader && !dirState.error && dirState.entries.length === 0 && (
           <div className="fb-status">
             <span>Empty directory</span>
           </div>
         )}
 
         {/* Show parent directory link if not at root */}
-        {cwd !== '/' && !dirState.loading && (
+        {cwd !== '/' && !showLoader && (
           <button
             type="button"
             onClick={() => {
