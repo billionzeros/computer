@@ -1,0 +1,83 @@
+packages/desktop/src/components/files/ProjectFilesView.tsx
+  26c7dc9b874bd1bd 23,25,336-354,469-472,477-499
+packages/desktop/src/components/artifacts/ArtifactRail.tsx
+  26c7dc9b874bd1bd 1-11,22-25,34-37
+packages/desktop/package.json
+  26c7dc9b874bd1bd 26,33
+packages/desktop/src/lib/mentions/filesProvider.ts
+  26c7dc9b874bd1bd 1-40,42-241
+packages/agent-core/src/session.ts
+  26c7dc9b874bd1bd 13,15,43,46-64,67-133,138,140-142,144,149,151-153,164-168,170,185-186,1081,1404
+packages/agent-server/src/server.ts
+  26c7dc9b874bd1bd 1292-1306,1359-1363,1367,1427-1480
+infra-providers/huddle/cloud-init.sh
+  26c7dc9b874bd1bd 60-78
+packages/desktop/src/components/chat/ComposerAddMenu.tsx
+  26c7dc9b874bd1bd 1-95
+packages/desktop/src/components/artifacts/ArtifactPanel.tsx
+  26c7dc9b874bd1bd 8,11,21-26,31-33,35,45-48,138-161,171-181,224-225,228-237,241,254-288,296-308
+specs/features/MULTI_FORMAT_ATTACHMENTS_FOLLOWUPS.md
+  26c7dc9b874bd1bd 1-207
+packages/desktop/src/lib/mentions/registry.ts
+  26c7dc9b874bd1bd 1-61
+packages/desktop/src/lib/conversations.ts
+  26c7dc9b874bd1bd 117-129
+packages/desktop/src/lib/mentions/types.ts
+  26c7dc9b874bd1bd 1-56
+packages/desktop/src/components/artifacts/XlsxRenderer.tsx
+  26c7dc9b874bd1bd 1-203
+packages/desktop/src/components/chat/MessageBubble.tsx
+  26c7dc9b874bd1bd 2-10,12,15-16,33-36,38-55,57-84,86-94,102,105-110,112-116,148,152,154,160-196,199,201-203,205-206
+packages/desktop/src/components/chat/SessionFilesBar.tsx
+  26c7dc9b874bd1bd 13,30-33,42-45,94-116,142-175,205-217,264-281,283-293
+packages/desktop/src/components/mentions/MentionDropdown.tsx
+  26c7dc9b874bd1bd 1-350
+packages/desktop/src/lib/uploadDefaults.ts
+  26c7dc9b874bd1bd 1-30,32-140
+packages/desktop/src/components/artifacts/ImageRenderer.tsx
+  26c7dc9b874bd1bd 1-54
+packages/desktop/src/components/chat/RichInput.tsx
+  26c7dc9b874bd1bd 8-25,29-30,37-44,46-50,61-64,74-123,125-168,231-242,268-278,281-316,338,354-357,385,392-394,396-398,400,404-414,420,583-586,592-681,687-689,699-701,704,706,714,716
+packages/desktop/src/lib/artifacts.ts
+  26c7dc9b874bd1bd 5-26,36,48-53,62-65,74-77,162-251
+packages/desktop/src/lib/connection.ts
+  26c7dc9b874bd1bd 527-532,549-550,556,558,566-567,598-615
+packages/desktop/src/components/artifacts/DocxRenderer.tsx
+  26c7dc9b874bd1bd 1-72,74-128
+packages/desktop/src/components/artifacts/PdfRenderer.tsx
+  26c7dc9b874bd1bd 1-55
+deploy/Dockerfile
+  26c7dc9b874bd1bd 6,10-20
+specs/features/MULTI_FORMAT_ATTACHMENTS.md
+  26c7dc9b874bd1bd 1-775
+packages/desktop/src/components/files/DestinationPicker.tsx
+  26c7dc9b874bd1bd 2-106,108-492
+packages/desktop/src/components/artifacts/useWorkspaceBytes.ts
+  26c7dc9b874bd1bd 1-109
+packages/desktop/src/lib/mentions/register.ts
+  26c7dc9b874bd1bd 1-13
+packages/desktop/src/components/chat/ChatInput.tsx
+  26c7dc9b874bd1bd 4-10,15-16,18-22,24,26,101-108,127-138,163,165-169,172-179,203-207,209-214,237-243,245-246,255-256,258,260-269,271-286,289-291,293-322,324-336,339,341-372,374-378,384,416-511,513-517,519-526,540-544,550,553-556,605-613,615,617,619-621,623,626-632,634,638-656,702-707,709,714-722,731,737,741,744-752,825-852,857-909
+packages/desktop/src/index.css
+  26c7dc9b874bd1bd 1482-1507,3658-3694,25926-25952,26091-26720
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.3.4",
+  "base_commit_sha": "8b2a15a58ac8c4ef126c0bfdd0de77f170bacff0",
+  "prompts": {
+    "26c7dc9b874bd1bd": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "f1bb311f-6276-409f-8511-3046ff9ea24e",
+        "model": "claude-opus-4-7"
+      },
+      "human_author": "Om Gupta",
+      "messages": [],
+      "total_additions": 12861,
+      "total_deletions": 325,
+      "accepted_lines": 16380,
+      "overriden_lines": 76
+    }
+  }
+}
