@@ -121,6 +121,7 @@ const MODEL_CONTEXT_SIZES: Record<string, number> = {
   // Mistral
   'mistral-large-latest': 128_000,
   // Anton (GRU) — models not already covered above
+  'gpt-5.5': 1_000_000,
   'gpt-5.4': 1_000_000,
   'gpt-5.4-pro': 1_000_000,
   'gpt-4.1': 1_000_000,

@@ -26,6 +26,15 @@ interface AntonModelDef {
 const ANTON_MODELS: AntonModelDef[] = [
   // ── OpenAI ──────────────────────────────────────────────────
   {
+    id: 'gpt-5.5',
+    name: 'GPT-5.5',
+    reasoning: false,
+    input: ['text', 'image'],
+    cost: { input: 3, output: 18, cacheRead: 0, cacheWrite: 0 },
+    contextWindow: 1_000_000,
+    maxTokens: 32_768,
+  },
+  {
     id: 'gpt-5.4',
     name: 'GPT-5.4',
     reasoning: false,

@@ -378,6 +378,7 @@ export const DEFAULT_PROVIDERS: ProvidersMap = {
     baseUrl: 'https://gru.huddle01.io/v1',
     models: [
       // OpenAI
+      'gpt-5.5',
       'gpt-5.4',
       'gpt-5.4-pro',
       'gpt-4.1',
@@ -414,7 +415,7 @@ export const DEFAULT_PROVIDERS: ProvidersMap = {
   },
   codex: {
     // Harness CLI model IDs — passed as-is to the `codex` binary.
-    models: ['gpt-5.4', 'gpt-5.4-mini', 'o3'],
+    models: ['gpt-5.5', 'gpt-5.4', 'gpt-5.4-mini', 'o3'],
     type: 'harness',
   },
 }
