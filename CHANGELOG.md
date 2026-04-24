@@ -10,6 +10,25 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versioning: [S
 
 ---
 
+## [2.1.0] - 2026-04-25
+
+### Features
+- multi-format file attachments with @-mentions and preview renderers (#12)
+
+### Fixes
+- pnpm lock
+- workspace safety net — no more /root EACCES, atomic writes, version handshake (#11)
+
+### Chores
+- clean up biome lint + format across repo
+
+### Other
+- feat(desktop): remove new-project attachments, add text-file creator in files view (#10)
+- feat(desktop): reasoning effort pill + provider modal redesign + onboarding tour (#9)
+- fix(desktop): honor real harness readiness in provider UI (#8)
+- fix(harness): persist session title to meta.json across reloads (#7)
+---
+
 ## [2.0.3] - 2026-04-22
 
 ### Other
@@ -710,7 +729,8 @@ Maintenance release.
 
 ---
 
-[Unreleased]: https://github.com/billionzeros/computer/compare/v2.0.3...HEAD
+[Unreleased]: https://github.com/billionzeros/computer/compare/v2.1.0...HEAD
+[2.1.0]: https://github.com/billionzeros/computer/compare/v$(changelog.match(/## [(d+.d+.d+)]/g)[1].match(/d+.d+.d+/)[0])...v2.1.0
 [2.0.3]: https://github.com/billionzeros/computer/compare/v$(changelog.match(/## [(d+.d+.d+)]/g)[1].match(/d+.d+.d+/)[0])...v2.0.3
 [2.0.2]: https://github.com/billionzeros/computer/compare/v$(changelog.match(/## [(d+.d+.d+)]/g)[1].match(/d+.d+.d+/)[0])...v2.0.2
 [2.0.1]: https://github.com/billionzeros/computer/compare/v$(changelog.match(/## [(d+.d+.d+)]/g)[1].match(/d+.d+.d+/)[0])...v2.0.1

@@ -1,6 +1,6 @@
 {
   "name": "@anton/cli",
-  "version": "2.0.3",
+  "version": "2.1.0",
   "type": "module",
   "bin": {
     "anton": "dist/index.js"
