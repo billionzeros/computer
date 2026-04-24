@@ -1,0 +1,27 @@
+packages/agent-core/src/compaction.ts
+  c0990862f1457422 124
+packages/agent-config/src/config.ts
+  c0990862f1457422 381,418
+packages/agent-core/src/anton-models.ts
+  c0990862f1457422 29-36
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.3.4",
+  "base_commit_sha": "fb0a5d088fa63717418d96079c84c6005e3247c0",
+  "prompts": {
+    "c0990862f1457422": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "200035fc-afb7-4415-ae01-4107c659339b",
+        "model": "claude-opus-4-7"
+      },
+      "human_author": "Om Gupta",
+      "messages": [],
+      "total_additions": 2772,
+      "total_deletions": 1,
+      "accepted_lines": 12,
+      "overriden_lines": 0
+    }
+  }
+}
