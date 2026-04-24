@@ -57,6 +57,26 @@ apt-get install -y -qq curl jq dnsutils debian-keyring debian-archive-keyring ap
 log "DEPS: system packages installed"
 
 # ─────────────────────────────────────────────────────────────────
+# 2b. Document-processing tools
+#
+# The agent reads user-uploaded docs on demand via its `read` / `bash`
+# tools rather than the harness pre-parsing them. These are the standard
+# Unix helpers the model is already fluent in:
+#   - poppler-utils: `pdftotext` for PDF extraction
+#   - pandoc:         docx → plain / markdown / html conversion
+#   - python3-pandas + python3-openpyxl: the canonical xlsx path,
+#                      `pandas.read_excel(...)` one-liner
+#   - xlsx2csv:       quick shell-friendly xlsx → csv for `bash` tool chains
+# ─────────────────────────────────────────────────────────────────
+apt-get install -y -qq --no-install-recommends \
+    poppler-utils \
+    pandoc \
+    python3-pandas \
+    python3-openpyxl \
+    xlsx2csv
+log "DEPS: document-processing tools installed (pdftotext, pandoc, pandas, openpyxl, xlsx2csv)"
+
+# ─────────────────────────────────────────────────────────────────
 # 3. Create SSH user (if USERNAME + PASSWORD provided)
 # ─────────────────────────────────────────────────────────────────
 if [ -n "${USERNAME:-}" ] && [ -n "${PASSWORD:-}" ]; then

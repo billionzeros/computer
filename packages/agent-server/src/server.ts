@@ -1397,6 +1397,21 @@ export class AgentServer {
     heif: 'image/heif',
   }
 
+  // Binary document MIME lookup for fs_read_bytes. Images still go through IMAGE_MIME.
+  private static readonly BINARY_DOC_MIME: Record<string, string> = {
+    pdf: 'application/pdf',
+    doc: 'application/msword',
+    docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    xls: 'application/vnd.ms-excel',
+    xlsx: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    ppt: 'application/vnd.ms-powerpoint',
+    pptx: 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+    zip: 'application/zip',
+  }
+
+  // Hard cap for arbitrary binary reads (e.g. artifact previews). 500MB.
+  private static readonly MAX_BINARY_READ_BYTES = 500 * 1024 * 1024
+
   /** Check if a resolved path is within the active workspace.
    *  When no workspace is set (non-project context), allows all paths.
    *  Follows symlinks on the workspace to prevent symlink-based escapes. */
@@ -1449,10 +1464,15 @@ export class AgentServer {
                 return { name: e.name, type: 'file' as const, size: '' }
               }
             })
-          this.sendToClient(Channel.FILESYNC, { type: 'fs_list_response', entries: result })
+          this.sendToClient(Channel.FILESYNC, {
+            type: 'fs_list_response',
+            path: msg.path,
+            entries: result,
+          })
         } catch (err: unknown) {
           this.sendToClient(Channel.FILESYNC, {
             type: 'fs_list_response',
+            path: msg.path,
             entries: [],
             error: (err as Error).message,
           })
@@ -1504,6 +1524,68 @@ export class AgentServer {
         } catch (err: unknown) {
           this.sendToClient(Channel.FILESYNC, {
             type: 'fs_read_response',
+            path: filePath,
+            content: '',
+            error: (err as Error).message,
+          })
+        }
+        break
+      }
+
+      case 'fs_read_bytes': {
+        // Dedicated binary read for artifact previews / client-side rendering of
+        // user-uploaded files (docx, xlsx, pdf, images). Returns base64 content
+        // plus a best-effort MIME type. Separate from fs_read so the cap and
+        // semantics can diverge (fs_read stays agent-facing and text-first).
+        const filePath = msg.path || ''
+        if (!this.isPathWithinWorkspace(filePath)) {
+          this.sendToClient(Channel.FILESYNC, {
+            type: 'fs_read_bytes_response',
+            path: filePath,
+            content: '',
+            error: 'Read denied: path is outside the project workspace',
+          })
+          break
+        }
+        try {
+          const { readFileSync, statSync } = await import('node:fs')
+          const stat = statSync(filePath)
+          if (!stat.isFile()) {
+            this.sendToClient(Channel.FILESYNC, {
+              type: 'fs_read_bytes_response',
+              path: filePath,
+              content: '',
+              error: 'Path is not a file',
+            })
+            break
+          }
+          if (stat.size > AgentServer.MAX_BINARY_READ_BYTES) {
+            this.sendToClient(Channel.FILESYNC, {
+              type: 'fs_read_bytes_response',
+              path: filePath,
+              content: '',
+              size: stat.size,
+              error: `File too large (${Math.round(stat.size / 1024 / 1024)}MB). Maximum is ${Math.round(AgentServer.MAX_BINARY_READ_BYTES / 1024 / 1024)}MB.`,
+            })
+            break
+          }
+          const ext = filePath.split('.').pop()?.toLowerCase() || ''
+          const mimeType =
+            AgentServer.IMAGE_MIME[ext] ||
+            AgentServer.BINARY_DOC_MIME[ext] ||
+            'application/octet-stream'
+          const buf = readFileSync(filePath)
+          this.sendToClient(Channel.FILESYNC, {
+            type: 'fs_read_bytes_response',
+            path: filePath,
+            content: buf.toString('base64'),
+            encoding: 'base64',
+            mimeType,
+            size: stat.size,
+          })
+        } catch (err: unknown) {
+          this.sendToClient(Channel.FILESYNC, {
+            type: 'fs_read_bytes_response',
             path: filePath,
             content: '',
             error: (err as Error).message,

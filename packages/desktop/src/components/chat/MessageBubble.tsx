@@ -1,8 +1,19 @@
 import { motion } from 'framer-motion'
-import { AlertTriangle, FileImage } from 'lucide-react'
+import {
+  AlertTriangle,
+  File as FileIcon,
+  FileImage,
+  FileSpreadsheet,
+  FileText,
+  Folder,
+  Image as ImageIcon,
+} from 'lucide-react'
 import { useState } from 'react'
+import { classifyUpload } from '../../lib/artifacts.js'
 import type { ChatImageAttachment } from '../../lib/store.js'
 import { type ChatMessage, useStore } from '../../lib/store.js'
+import { artifactStore } from '../../lib/store/artifactStore.js'
+import { projectStore } from '../../lib/store/projectStore.js'
 import { useActiveSessionState } from '../../lib/store/sessionStore.js'
 import { ImageViewer } from './ImageViewer.js'
 import { MarkdownRenderer } from './MarkdownRenderer.js'
@@ -19,31 +30,90 @@ function attachmentSrc(attachment: ChatImageAttachment): string | undefined {
   return attachment.data ? `data:${attachment.mimeType};base64,${attachment.data}` : undefined
 }
 
-const IMG_MARKER_RE = /\[img:([^\]]+)\]/g
+// Matches [img:id], [file:path], [dir:path] — three marker kinds the composer
+// may embed in the outgoing message text. Keeping one combined regex lets the
+// interleave walker dispatch per-kind in a single pass.
+const MESSAGE_MARKER_RE = /\[(img|file|dir):([^\]]+)\]/g
 
-/** Render user message content with inline image chips interleaved with text. */
+function fileBasename(p: string): string {
+  const clean = p.replace(/\/+$/, '')
+  const idx = clean.lastIndexOf('/')
+  return idx >= 0 ? clean.slice(idx + 1) : clean
+}
+
+function fileIconFor(name: string) {
+  const renderType = classifyUpload(undefined, name)
+  if (renderType === 'image') return ImageIcon
+  if (renderType === 'xlsx') return FileSpreadsheet
+  if (renderType === 'pdf' || renderType === 'docx' || renderType === 'markdown') return FileText
+  if (renderType === 'code') return FileText
+  return FileIcon
+}
+
+function openFileArtifact(relPath: string) {
+  const active = projectStore
+    .getState()
+    .projects.find((p) => p.id === projectStore.getState().activeProjectId)
+  const workspaceRoot = active?.workspacePath
+  if (!workspaceRoot) return
+  const absPath = relPath.startsWith('/')
+    ? relPath
+    : `${workspaceRoot.replace(/\/$/, '')}/${relPath}`
+  const name = fileBasename(relPath) || relPath
+  const renderType = classifyUpload(undefined, relPath) ?? 'code'
+  const id = `upload:${absPath}`
+  artifactStore.getState().addArtifact({
+    id,
+    type: 'file',
+    source: 'upload',
+    renderType,
+    filename: name,
+    filepath: absPath,
+    sourcePath: absPath,
+    language: '',
+    content: '',
+    toolCallId: id,
+    timestamp: Date.now(),
+  })
+  artifactStore.getState().setArtifactPanelOpen(true)
+  artifactStore.getState().setActiveArtifact(id)
+}
+
+function navigateToFolder(relPath: string) {
+  const active = projectStore
+    .getState()
+    .projects.find((p) => p.id === projectStore.getState().activeProjectId)
+  const workspaceRoot = active?.workspacePath
+  if (!workspaceRoot) return
+  const absPath = relPath.startsWith('/')
+    ? relPath
+    : `${workspaceRoot.replace(/\/$/, '')}/${relPath}`
+  window.dispatchEvent(new CustomEvent('anton:navigate-files', { detail: { path: absPath } }))
+}
+
+/** Render user message content with inline chips for image / file / dir markers. */
 function UserMessageContent({ message }: { message: ChatMessage }) {
   const [viewerImage, setViewerImage] = useState<{ src: string; alt: string } | null>(null)
 
   const attachments = message.attachments
   const content = message.content
 
-  // No attachments — plain text
-  if (!attachments || attachments.length === 0) {
-    return <div className="message__text">{content}</div>
-  }
-
-  // Build lookup
   const attachmentMap = new Map(
-    attachments.map((a) => [a.id, { attachment: a, src: attachmentSrc(a) }]),
+    (attachments ?? []).map((a) => [a.id, { attachment: a, src: attachmentSrc(a) }]),
   )
 
-  // Check if content has [img:id] markers
-  const hasMarkers = IMG_MARKER_RE.test(content)
-  IMG_MARKER_RE.lastIndex = 0 // reset after test
+  // Scan for any marker kind. If there are none AND no attachments, it's
+  // pure text. If there are legacy attachments without markers, the old
+  // "chips appended" branch at the end handles that.
+  MESSAGE_MARKER_RE.lastIndex = 0
+  const hasAnyMarker = MESSAGE_MARKER_RE.test(content)
+  MESSAGE_MARKER_RE.lastIndex = 0
 
-  if (!hasMarkers) {
-    // Legacy: no markers, show chips after text
+  if (!hasAnyMarker) {
+    if (!attachments || attachments.length === 0) {
+      return <div className="message__text">{content}</div>
+    }
+    // Legacy: image attachments, no markers — show chips after the text.
     return (
       <>
         {content && <div className="message__text">{content}</div>}
@@ -75,34 +145,65 @@ function UserMessageContent({ message }: { message: ChatMessage }) {
     )
   }
 
-  // Parse content, splitting on [img:id] markers to interleave text + chips
+  // Walk the content, emitting text spans + typed chips.
   const elements: React.ReactNode[] = []
   let lastIndex = 0
   for (
-    let match = IMG_MARKER_RE.exec(content);
+    let match = MESSAGE_MARKER_RE.exec(content);
     match !== null;
-    match = IMG_MARKER_RE.exec(content)
+    match = MESSAGE_MARKER_RE.exec(content)
   ) {
-    // Text before the marker
     if (match.index > lastIndex) {
       elements.push(<span key={`t-${lastIndex}`}>{content.slice(lastIndex, match.index)}</span>)
     }
 
-    // Image chip
-    const id = match[1]
-    const entry = attachmentMap.get(id)
-    if (entry) {
+    const kind = match[1] as 'img' | 'file' | 'dir'
+    const value = match[2] ?? ''
+
+    if (kind === 'img') {
+      const entry = attachmentMap.get(value)
+      if (entry) {
+        elements.push(
+          <button
+            key={`img-${value}`}
+            type="button"
+            className="message__image-chip"
+            onClick={() =>
+              entry.src && setViewerImage({ src: entry.src, alt: entry.attachment.name })
+            }
+          >
+            <FileImage size={14} strokeWidth={1.5} className="message__image-chip-icon" />
+            <span className="message__image-chip-name">{entry.attachment.name}</span>
+          </button>,
+        )
+      }
+    } else if (kind === 'file') {
+      const name = fileBasename(value) || value
+      const Icon = fileIconFor(name)
       elements.push(
         <button
-          key={`img-${id}`}
+          key={`file-${value}-${match.index}`}
           type="button"
-          className="message__image-chip"
-          onClick={() =>
-            entry.src && setViewerImage({ src: entry.src, alt: entry.attachment.name })
-          }
+          className="message__file-chip"
+          title={value}
+          onClick={() => openFileArtifact(value)}
         >
-          <FileImage size={14} strokeWidth={1.5} className="message__image-chip-icon" />
-          <span className="message__image-chip-name">{entry.attachment.name}</span>
+          <Icon size={14} strokeWidth={1.5} className="message__file-chip-icon" />
+          <span className="message__file-chip-name">{name}</span>
+        </button>,
+      )
+    } else if (kind === 'dir') {
+      const name = fileBasename(value) || value
+      elements.push(
+        <button
+          key={`dir-${value}-${match.index}`}
+          type="button"
+          className="message__file-chip message__file-chip--folder"
+          title={value}
+          onClick={() => navigateToFolder(value)}
+        >
+          <Folder size={14} strokeWidth={1.5} className="message__file-chip-icon" />
+          <span className="message__file-chip-name">{name}</span>
         </button>,
       )
     }
@@ -110,7 +211,6 @@ function UserMessageContent({ message }: { message: ChatMessage }) {
     lastIndex = match.index + match[0].length
   }
 
-  // Trailing text
   if (lastIndex < content.length) {
     elements.push(<span key={`t-${lastIndex}`}>{content.slice(lastIndex)}</span>)
   }

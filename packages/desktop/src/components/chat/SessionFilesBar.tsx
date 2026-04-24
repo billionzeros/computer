@@ -10,6 +10,7 @@ import {
   ChevronDown,
   Database,
   FileCode,
+  FileSpreadsheet,
   FileText,
   FolderOpen,
   Globe,
@@ -26,6 +27,10 @@ function artifactIcon(a: Artifact) {
   if (a.renderType === 'markdown') return FileText
   if (a.renderType === 'svg') return ImageIcon
   if (a.renderType === 'mermaid') return Database
+  if (a.renderType === 'xlsx') return FileSpreadsheet
+  if (a.renderType === 'docx') return FileText
+  if (a.renderType === 'pdf') return FileText
+  if (a.renderType === 'image') return ImageIcon
   return FileText
 }
 
@@ -34,6 +39,10 @@ function artifactExtLabel(a: Artifact): string {
   if (a.renderType === 'svg') return 'SVG'
   if (a.renderType === 'markdown') return 'MD'
   if (a.renderType === 'mermaid') return 'MMD'
+  if (a.renderType === 'xlsx') return 'XLSX'
+  if (a.renderType === 'docx') return 'DOCX'
+  if (a.renderType === 'pdf') return 'PDF'
+  if (a.renderType === 'image') return 'IMG'
   const lang = (a.language || '').toLowerCase()
   if (lang === 'typescript' || lang === 'ts') return 'TS'
   if (lang === 'tsx') return 'TSX'
@@ -82,6 +91,29 @@ function SessionFileThumb({ artifact }: { artifact: Artifact }) {
       />
     )
   }
+  if (
+    artifact.renderType === 'docx' ||
+    artifact.renderType === 'xlsx' ||
+    artifact.renderType === 'pdf' ||
+    artifact.renderType === 'image'
+  ) {
+    // Binary preview: we don't have inline bytes here (content is empty).
+    // Show a subtle icon-block so the row is still scannable. Live
+    // thumbnails can come later once we wire fs_read_bytes into the
+    // sidebar (expensive per item; defer until someone asks).
+    const Icn = artifactIcon(artifact)
+    return (
+      <div className="sf-thumb sf-thumb--doc">
+        <div
+          className="sf-thumb__doc-title"
+          style={{ display: 'flex', alignItems: 'center', gap: 6 }}
+        >
+          <Icn size={14} strokeWidth={1.5} />
+          <span>{artifactExtLabel(artifact)}</span>
+        </div>
+      </div>
+    )
+  }
   if (artifact.renderType === 'code') {
     const peek = (artifact.content || '').split('\n').slice(0, 6).join('\n')
     return (
@@ -104,6 +136,40 @@ function SessionFileThumb({ artifact }: { artifact: Artifact }) {
         <span style={{ width: '40%' }} />
       </div>
     </div>
+  )
+}
+
+function SessionFileRow({
+  artifact,
+  active,
+  onOpen,
+}: {
+  artifact: Artifact
+  active: boolean
+  onOpen: (id: string) => void
+}) {
+  const Icn = artifactIcon(artifact)
+  return (
+    <button
+      type="button"
+      className={`sfb__pop-item${active ? ' active' : ''}`}
+      onClick={() => onOpen(artifact.id)}
+    >
+      <div className="sfb__pop-thumb">
+        <SessionFileThumb artifact={artifact} />
+      </div>
+      <div className="sfb__pop-body">
+        <div className="sfb__pop-row">
+          <Icn size={11} strokeWidth={1.5} className="sfb__pop-icn" />
+          <span className="sfb__pop-name">{artifactTitle(artifact)}</span>
+        </div>
+        <div className="sfb__pop-meta">
+          <span>{artifactExtLabel(artifact)}</span>
+          <span>·</span>
+          <span>{fmtAgoShort(artifact.timestamp)} ago</span>
+        </div>
+      </div>
+    </button>
   )
 }
 
@@ -135,6 +201,19 @@ export function SessionFilesBar() {
       .slice()
       .sort((a, b) => b.timestamp - a.timestamp)
   }, [allArtifacts, activeConversation?.sessionId, activeConversationId])
+
+  // Split by source so users can distinguish what they uploaded vs.
+  // what the agent generated. Uploads section renders first because it's
+  // usually smaller and the user-authored items should be more visible.
+  const { uploads, agentArtifacts } = useMemo(() => {
+    const uploads: Artifact[] = []
+    const agentArtifacts: Artifact[] = []
+    for (const a of list) {
+      if (a.source === 'upload') uploads.push(a)
+      else agentArtifacts.push(a)
+    }
+    return { uploads, agentArtifacts }
+  }, [list])
 
   useEffect(() => {
     if (!open) return
@@ -183,33 +262,36 @@ export function SessionFilesBar() {
             <span className="sfb__pop-count">{list.length}</span>
           </div>
           <div className="sfb__pop-list">
-            {list.map((a) => {
-              const Icn = artifactIcon(a)
-              const active = a.id === activeArtifactId
-              return (
-                <button
-                  key={a.id}
-                  type="button"
-                  className={`sfb__pop-item${active ? ' active' : ''}`}
-                  onClick={() => openArtifact(a.id)}
-                >
-                  <div className="sfb__pop-thumb">
-                    <SessionFileThumb artifact={a} />
-                  </div>
-                  <div className="sfb__pop-body">
-                    <div className="sfb__pop-row">
-                      <Icn size={11} strokeWidth={1.5} className="sfb__pop-icn" />
-                      <span className="sfb__pop-name">{artifactTitle(a)}</span>
-                    </div>
-                    <div className="sfb__pop-meta">
-                      <span>{artifactExtLabel(a)}</span>
-                      <span>·</span>
-                      <span>{fmtAgoShort(a.timestamp)} ago</span>
-                    </div>
-                  </div>
-                </button>
-              )
-            })}
+            {uploads.length > 0 && (
+              <div className="sfb__pop-section">
+                <div className="sfb__pop-section-label">
+                  Uploads <span className="sfb__pop-section-count">{uploads.length}</span>
+                </div>
+                {uploads.map((a) => (
+                  <SessionFileRow
+                    key={a.id}
+                    artifact={a}
+                    active={a.id === activeArtifactId}
+                    onOpen={openArtifact}
+                  />
+                ))}
+              </div>
+            )}
+            {agentArtifacts.length > 0 && (
+              <div className="sfb__pop-section">
+                <div className="sfb__pop-section-label">
+                  Artifacts <span className="sfb__pop-section-count">{agentArtifacts.length}</span>
+                </div>
+                {agentArtifacts.map((a) => (
+                  <SessionFileRow
+                    key={a.id}
+                    artifact={a}
+                    active={a.id === activeArtifactId}
+                    onOpen={openArtifact}
+                  />
+                ))}
+              </div>
+            )}
           </div>
         </div>
       )}

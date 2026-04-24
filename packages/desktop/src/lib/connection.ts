@@ -524,6 +524,12 @@ export class Connection {
     this.send(Channel.FILESYNC, { type: 'fs_read', path, ...(encoding && { encoding }) })
   }
 
+  /** Dedicated binary read for artifact previews (docx/xlsx/pdf/image bytes).
+   *  Server returns base64-encoded content + sniffed MIME + size. Cap 500MB. */
+  sendFilesystemReadBytes(path: string) {
+    this.send(Channel.FILESYNC, { type: 'fs_read_bytes', path })
+  }
+
   sendFilesystemMkdir(path: string) {
     this.send(Channel.FILESYNC, { type: 'fs_mkdir', path })
   }
@@ -540,13 +546,16 @@ export class Connection {
     handler: (
       entries: { name: string; type: 'file' | 'dir' | 'link'; size: string }[],
       error?: string,
+      /** Path the list was requested for (echoed back by the server). */
+      path?: string,
     ) => void,
   ) {
     // Filesystem channel messages aren't in the protocol union yet — use raw listener
     return this.onRawMessage((channel, payload) => {
       if (channel === Channel.FILESYNC && payload.type === 'fs_list_response') {
+        const path = payload.path as string | undefined
         if (payload.error) {
-          handler([], payload.error as string)
+          handler([], payload.error as string, path)
         } else {
           handler(
             (payload.entries || []) as {
@@ -554,6 +563,8 @@ export class Connection {
               type: 'file' | 'dir' | 'link'
               size: string
             }[],
+            undefined,
+            path,
           )
         }
       }
@@ -580,6 +591,28 @@ export class Connection {
           payload.encoding as string | undefined,
           payload.mimeType as string | undefined,
         )
+      }
+    })
+  }
+
+  onFilesystemReadBytesResponse(
+    handler: (payload: {
+      path: string
+      content: string // base64
+      mimeType?: string
+      size?: number
+      error?: string
+    }) => void,
+  ) {
+    return this.onRawMessage((channel, payload) => {
+      if (channel === Channel.FILESYNC && payload.type === 'fs_read_bytes_response') {
+        handler({
+          path: payload.path as string,
+          content: (payload.content as string) ?? '',
+          mimeType: payload.mimeType as string | undefined,
+          size: payload.size as number | undefined,
+          error: payload.error as string | undefined,
+        })
       }
     })
   }

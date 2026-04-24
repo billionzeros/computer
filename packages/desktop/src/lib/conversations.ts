@@ -114,8 +114,19 @@ export function autoTitle(messages: ChatMessage[]): string {
   const firstUser = messages.find((m) => m.role === 'user')
   if (!firstUser) return 'New conversation'
 
-  // Strip image placeholders [img:...] so they don't leak into titles
-  const text = firstUser.content.replace(/\[img:[^\]]+\]/g, '').trim()
+  // Strip attachment markers so they don't leak into titles. For file/dir
+  // markers we keep the basename as readable text so a title like
+  // "Review anton-pitch.md" still reads naturally; for image markers we
+  // drop them entirely (the separate attachments[] array carries the name
+  // for the image-only fallback below).
+  const text = firstUser.content
+    .replace(/\[img:[^\]]+\]/g, '')
+    .replace(/\[(file|dir):([^\]]+)\]/g, (_full, _kind, path: string) => {
+      const clean = path.replace(/\/+$/, '')
+      const idx = clean.lastIndexOf('/')
+      return idx >= 0 ? clean.slice(idx + 1) : clean
+    })
+    .trim()
   if (!text) {
     if (firstUser.attachments?.length) {
       return firstUser.attachments.length === 1

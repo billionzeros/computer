@@ -10,7 +10,9 @@
  */
 
 import { execSync } from 'node:child_process'
+import * as nodeFs from 'node:fs'
 import { arch, type as osType, platform, release, userInfo } from 'node:os'
+import * as nodePath from 'node:path'
 import type {
   AgentConfig,
   PersistedSession,
@@ -38,47 +40,135 @@ import type {
   TokenUsage,
 } from '@anton/protocol'
 
-// ── Inline image marker parsing ───────────────────────────────────────────────
+// ── Inline marker parsing ─────────────────────────────────────────────────────
 
 const IMG_MARKER_RE = /\[img:([^\]]+)\]/g
+const FILE_DIR_MARKER_RE = /\[(file|dir):([^\]]+)\]/g
+
+// Folder-listing threshold per spec §6.2: inline listing for small folders,
+// path-only (with count) for large ones so we don't bloat the prompt.
+const FOLDER_INLINE_LIMIT = 20
+
+function escapeXmlAttr(s: string): string {
+  return s
+    .replace(/&/g, '&amp;')
+    .replace(/"/g, '&quot;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+}
+
+function basenameOfRef(p: string): string {
+  const clean = p.replace(/\/+$/, '')
+  const idx = clean.lastIndexOf('/')
+  return idx >= 0 ? clean.slice(idx + 1) : clean
+}
 
 /**
- * Build an interleaved content array from a message containing `[img:id]` markers.
- * Falls back to text-first + appended images when no markers are present.
+ * Translate `[file:relPath]` and `[dir:relPath]` markers to XML-tagged
+ * references that the model can unambiguously parse. Adds absolute path
+ * so the agent's `read` / `bash` tools can operate directly. For folders
+ * with ≤20 items, inlines a shallow listing to save the agent a tool call.
+ *
+ * Missing files / folders are tagged with `missing="true"` so the model
+ * can decide whether to surface the problem or route around it.
+ *
+ * Any provided `workspaceRoot` must already be an absolute path. When
+ * omitted, paths are left relative and marked unresolved so the agent can
+ * still attempt them with its own cwd.
+ *
+ * Uses static ESM imports for node:fs/path — the Node runtime has these
+ * loaded already, so there's no real cost vs. lazy import, and it keeps
+ * the translator synchronous (callers don't have to become async).
+ */
+function translateFileDirMarkers(text: string, workspaceRoot?: string): string {
+  return text.replace(FILE_DIR_MARKER_RE, (_full, kind: string, relPath: string) => {
+    const name = basenameOfRef(relPath) || relPath
+    const nameAttr = escapeXmlAttr(name)
+    // Resolve absolute path. If the marker already carries an absolute path,
+    // trust it; otherwise join with the workspace root.
+    let abs = relPath
+    if (workspaceRoot && !relPath.startsWith('/')) {
+      abs = nodePath.join(workspaceRoot, relPath)
+    }
+    const pathAttr = escapeXmlAttr(abs)
+
+    if (kind === 'file') {
+      let missing = false
+      try {
+        const st = nodeFs.statSync(abs)
+        if (!st.isFile()) missing = true
+      } catch {
+        missing = true
+      }
+      return `<file_ref name="${nameAttr}" path="${pathAttr}"${missing ? ' missing="true"' : ''}/>`
+    }
+
+    // Folder reference: try to list entries shallowly.
+    try {
+      const dirents = nodeFs.readdirSync(abs, { withFileTypes: true })
+      const visible = dirents
+        .filter((e) => !e.name.startsWith('.'))
+        .sort((a, b) => a.name.localeCompare(b.name))
+      const count = visible.length
+      if (count <= FOLDER_INLINE_LIMIT) {
+        const listing = visible.map((e) => (e.isDirectory() ? `${e.name}/` : e.name)).join(', ')
+        return `<dir_ref name="${nameAttr}" path="${pathAttr}/" item_count="${count}">\nContents (${count} item${count === 1 ? '' : 's'}): ${escapeXmlAttr(listing)}\n</dir_ref>`
+      }
+      return `<dir_ref name="${nameAttr}" path="${pathAttr}/" item_count="${count}"/>`
+    } catch {
+      return `<dir_ref name="${nameAttr}" path="${pathAttr}/" missing="true"/>`
+    }
+  })
+}
+
+/**
+ * Build an interleaved content array from a message containing inline markers:
+ *   - `[img:id]`  → image content block sourced from `attachments`
+ *   - `[file:p]`  → inline `<file_ref .../>` tag with absolute path
+ *   - `[dir:p]`   → inline `<dir_ref ...>...</dir_ref>` tag, optional shallow listing
+ *
+ * File/dir translation runs first; the resulting text is then fed through
+ * the image-marker interleaver so images remain proper image blocks
+ * (for vision), while docs/sheets/pdfs travel as path references the
+ * model resolves via its own `read` / `bash` tools.
  */
 function buildInterleavedContent(
   text: string,
   attachments: ChatImageAttachmentInput[],
+  workspaceRoot?: string,
 ): (TextContent | ImageContent)[] {
+  // Step 1 — expand [file:...] / [dir:...] markers into the message text.
+  const translated = translateFileDirMarkers(text, workspaceRoot)
+
   if (attachments.length === 0) {
-    return [{ type: 'text', text }]
+    return [{ type: 'text', text: translated }]
   }
 
   const attachmentMap = new Map(attachments.map((a) => [a.id, a]))
 
-  // Check for markers
+  // Step 2 — interleave image markers in the translated text.
   IMG_MARKER_RE.lastIndex = 0
-  if (!IMG_MARKER_RE.test(text)) {
-    // No markers — fall back to text + all images appended (backward compat)
-    const content: (TextContent | ImageContent)[] = [{ type: 'text', text }]
+  if (!IMG_MARKER_RE.test(translated)) {
+    // No image markers — fall back to text + all images appended (backward compat).
+    const content: (TextContent | ImageContent)[] = [{ type: 'text', text: translated }]
     for (const a of attachments) {
       content.push({ type: 'image', data: a.data, mimeType: a.mimeType })
     }
     return content
   }
 
-  // Parse markers and build interleaved blocks
   IMG_MARKER_RE.lastIndex = 0
   const content: (TextContent | ImageContent)[] = []
   const usedIds = new Set<string>()
   let lastIndex = 0
-  for (let match = IMG_MARKER_RE.exec(text); match !== null; match = IMG_MARKER_RE.exec(text)) {
-    // Text before the marker
+  for (
+    let match = IMG_MARKER_RE.exec(translated);
+    match !== null;
+    match = IMG_MARKER_RE.exec(translated)
+  ) {
     if (match.index > lastIndex) {
-      content.push({ type: 'text', text: text.slice(lastIndex, match.index) })
+      content.push({ type: 'text', text: translated.slice(lastIndex, match.index) })
     }
-
-    // Image block
     const id = match[1]
     const attachment = attachmentMap.get(id)
     if (attachment) {
@@ -89,19 +179,16 @@ function buildInterleavedContent(
       })
       usedIds.add(id)
     }
-
     lastIndex = match.index + match[0].length
   }
 
-  // Trailing text
-  if (lastIndex < text.length) {
-    const trailing = text.slice(lastIndex)
+  if (lastIndex < translated.length) {
+    const trailing = translated.slice(lastIndex)
     if (trailing.trim()) {
       content.push({ type: 'text', text: trailing })
     }
   }
 
-  // Append any attachments that weren't referenced by markers
   for (const a of attachments) {
     if (!usedIds.has(a.id)) {
       content.push({ type: 'image', data: a.data, mimeType: a.mimeType })
@@ -991,7 +1078,7 @@ export class Session {
     })
 
     try {
-      const content = buildInterleavedContent(userMessage, attachments)
+      const content = buildInterleavedContent(userMessage, attachments, this.workspacePath)
 
       this.piAgent
         .prompt({ role: 'user', content, timestamp: Date.now() })
@@ -1314,7 +1401,7 @@ export class Session {
    */
   steer(message: string, attachments: ChatImageAttachmentInput[] = []) {
     const wrapped = `<user_steering>\nThe user sent this message while you were working. Briefly acknowledge it (1-2 sentences), share your thought on how it affects your current task, then continue your work incorporating this new context.\n\nUser message: "${message}"\n</user_steering>`
-    const content = buildInterleavedContent(wrapped, attachments)
+    const content = buildInterleavedContent(wrapped, attachments, this.workspacePath)
     this.piAgent.steer({
       role: 'user',
       content,
