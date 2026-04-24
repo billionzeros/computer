@@ -367,7 +367,12 @@ function doConnect(): Promise<net.Socket> {
         method?: string
         result?: { ok?: boolean }
         error?: { message?: string }
-        params?: { _progressToken?: string | number; message?: string; progress?: number; reason?: string }
+        params?: {
+          _progressToken?: string | number
+          message?: string
+          progress?: number
+          reason?: string
+        }
       }
       try {
         msg = JSON.parse(line)
@@ -528,9 +533,7 @@ function sendResponse(id: string | number | null, result: unknown): void {
 }
 
 function sendError(id: string | number | null, code: number, message: string): void {
-  process.stdout.write(
-    `${JSON.stringify({ jsonrpc: '2.0', id, error: { code, message } })}\n`,
-  )
+  process.stdout.write(`${JSON.stringify({ jsonrpc: '2.0', id, error: { code, message } })}\n`)
 }
 
 async function handleRequest(msg: {

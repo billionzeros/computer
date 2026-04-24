@@ -424,8 +424,7 @@ const cases: Case[] = [
       const aEvicts = onEvictCalls.filter((c) => c.id === 'a').length
       if (aEvicts !== 0) return `onEvict fired for 'a' ${aEvicts}x despite id reuse, expected 0`
       const bEvicts = onEvictCalls.filter((c) => c.id === 'b' && c.session === bSession).length
-      if (bEvicts !== 1)
-        return `onEvict should have fired exactly once for 'b', got ${bEvicts}`
+      if (bEvicts !== 1) return `onEvict should have fired exactly once for 'b', got ${bEvicts}`
       return null
     },
   },

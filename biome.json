@@ -47,6 +47,7 @@
         "packages/mobile/**",
         "packages/agent-config/**",
         "packages/agent-core/src/evals/**",
+        "packages/agent-core/src/__fixtures__/**",
         "packages/agent-core/src/harness/__fixtures__/**"
       ],
       "linter": {

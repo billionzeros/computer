@@ -29,7 +29,7 @@ interface AccountState {
 
 function loadName(): string {
   const saved = localStorage.getItem('anton-account.name')
-  return saved && saved.trim() ? saved : DEFAULT_NAME
+  return saved?.trim() ? saved : DEFAULT_NAME
 }
 
 function loadColor(): AccountColorId {

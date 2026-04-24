@@ -44,14 +44,17 @@
   "pnpm": {
     "onlyBuiltDependencies": [
       "better-sqlite3"
-    ],
-    "overrides": {
-      "@sinclair/typebox": "0.34.48"
-    }
+    ]
   },
   "license": "Apache-2.0",
   "repository": {
     "type": "git",
     "url": "https://github.com/billionzeros/computer"
-  }
+  },
+  "overrides": {
+    "@sinclair/typebox": "0.34.48"
+  },
+  "workspaces": [
+    "packages/*"
+  ]
 }

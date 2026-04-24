@@ -23,7 +23,7 @@
  *     transitions to lost without waiting on any outstanding request.
  */
 
-import { spawn, type ChildProcess } from 'node:child_process'
+import { type ChildProcess, spawn } from 'node:child_process'
 import { existsSync, mkdtempSync, rmSync } from 'node:fs'
 import * as net from 'node:net'
 import { tmpdir } from 'node:os'

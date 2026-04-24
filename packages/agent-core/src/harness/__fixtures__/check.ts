@@ -990,9 +990,7 @@ try {
     const assistantEntries = entries.filter((e) => e.role === 'assistant')
     if (assistantEntries.length !== 1) {
       rtFailed++
-      console.error(
-        `✗ legacy-mirror: expected 1 assistant entry, got ${assistantEntries.length}`,
-      )
+      console.error(`✗ legacy-mirror: expected 1 assistant entry, got ${assistantEntries.length}`)
     } else if (assistantEntries[0].content !== ' artifact is now saved.') {
       rtFailed++
       console.error(
@@ -1140,11 +1138,7 @@ const mirrorSurface: RenderSurface = {
     const dir = pathJoin(process.env.HOME ?? tmpdir(), '.anton', 'conversations', sessionId)
     mkdirSync(dir, { recursive: true })
     const lines = msgs.map((m) => JSON.stringify(m)).join('\n')
-    writeFileSync(
-      pathJoin(dir, 'messages.jsonl'),
-      lines.length > 0 ? `${lines}\n` : '',
-      'utf-8',
-    )
+    writeFileSync(pathJoin(dir, 'messages.jsonl'), lines.length > 0 ? `${lines}\n` : '', 'utf-8')
     const entries = _readHarnessHistory(sessionId)
     return entries
       .filter((e) => e.role === 'assistant' && !e.isThinking && !e.toolName)
@@ -1269,9 +1263,9 @@ for (const c of crossSurfaceCases) {
         if (!sameAcross) {
           xsurfaceFailed++
           console.error(`✗ cross-surface[full]: ${c.name} — surfaces diverge`)
-          console.error(`  desktop:`, d)
-          console.error(`  webhook:`, w)
-          console.error(`  mirror: `, m)
+          console.error('  desktop:', d)
+          console.error('  webhook:', w)
+          console.error('  mirror: ', m)
         } else {
           console.log(`✓ cross-surface[full]: ${c.name}`)
         }

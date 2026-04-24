@@ -175,6 +175,7 @@ export function SessionFilesBar() {
         <ChevronDown size={10} strokeWidth={1.5} className="sfb__chev" />
       </button>
       {open && (
+        // biome-ignore lint/a11y/useSemanticElements: inline popover, not a true <dialog> (no modal/ESC/focus-trap semantics)
         <div className="sfb__pop" role="dialog" aria-label="Files in this task">
           <div className="sfb__pop-head">
             <FolderOpen size={11} strokeWidth={1.5} />

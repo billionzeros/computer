@@ -23,10 +23,10 @@ import { existsSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import {
+  type McpSpawnConfig,
   buildMcpSpawnConfig,
   getExpectedShimVersion,
   probeMcpShim,
-  type McpSpawnConfig,
 } from '../mcp-spawn-config.js'
 
 // Resolve the compiled shim path from the source location. The probe

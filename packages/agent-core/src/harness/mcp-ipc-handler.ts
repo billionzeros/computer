@@ -33,7 +33,7 @@
 import { existsSync, unlinkSync } from 'node:fs'
 import * as net from 'node:net'
 import { createInterface } from 'node:readline'
-import { createLogger, type Logger } from '@anton/logger'
+import { type Logger, createLogger } from '@anton/logger'
 
 const log = createLogger('mcp-ipc')
 const shimLog = createLogger('mcp-shim')
@@ -179,12 +179,7 @@ export function createMcpIpcServer(socketPath: string, provider: IpcToolProvider
         const claimedToken = request.params?.token as string | undefined
 
         if (!claimedSession || !claimedToken) {
-          sendError(
-            conn,
-            request.id ?? null,
-            -32001,
-            'unauthenticated: missing sessionId or token',
-          )
+          sendError(conn, request.id ?? null, -32001, 'unauthenticated: missing sessionId or token')
           conn.destroy()
           clearTimeout(authTimer)
           return
@@ -320,12 +315,7 @@ export function createMcpIpcServer(socketPath: string, provider: IpcToolProvider
                 }
               : undefined
 
-            const toolResult = await provider.executeTool(
-              sessionId,
-              toolName,
-              toolArgs,
-              onProgress,
-            )
+            const toolResult = await provider.executeTool(sessionId, toolName, toolArgs, onProgress)
             log.info(
               {
                 sessionId,
@@ -480,10 +470,7 @@ function handleShimLog(sessionId: string, params: ShimLogParams | undefined): vo
   }
 }
 
-function pickLevel(
-  logger: Logger,
-  level: 'debug' | 'info' | 'warn' | 'error',
-): Logger['info'] {
+function pickLevel(logger: Logger, level: 'debug' | 'info' | 'warn' | 'error'): Logger['info'] {
   switch (level) {
     case 'debug':
       return logger.debug.bind(logger)
@@ -508,10 +495,7 @@ function safeWrite(conn: net.Socket, frame: string): void {
   try {
     conn.write(`${frame}\n`)
   } catch (err) {
-    log.debug(
-      { err: (err as Error).message },
-      'IPC frame write failed — peer likely gone',
-    )
+    log.debug({ err: (err as Error).message }, 'IPC frame write failed — peer likely gone')
   }
 }
 

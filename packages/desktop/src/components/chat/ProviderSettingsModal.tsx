@@ -147,11 +147,7 @@ export function ProviderSettingsModal({ provider, onClose }: Props) {
           <div className="pform__section-label" id="pform-key-label">
             API key
           </div>
-          <form
-            onSubmit={saveKey}
-            className="pform__key"
-            aria-labelledby="pform-key-label"
-          >
+          <form onSubmit={saveKey} className="pform__key" aria-labelledby="pform-key-label">
             <input
               type="password"
               className="pform__key-input"

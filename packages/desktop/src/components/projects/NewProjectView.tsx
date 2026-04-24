@@ -1,12 +1,4 @@
-import {
-  ArrowLeft,
-  Code,
-  CornerDownLeft,
-  FileText,
-  FolderOpen,
-  MapPin,
-  Search,
-} from 'lucide-react'
+import { ArrowLeft, Code, CornerDownLeft, FileText, FolderOpen, MapPin, Search } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { projectStore } from '../../lib/store/projectStore.js'
 import { uiStore } from '../../lib/store/uiStore.js'

@@ -5,9 +5,9 @@ import { isProviderReady } from '../../lib/providers.js'
 import type { ProviderInfo } from '../../lib/store.js'
 import { sessionStore } from '../../lib/store/sessionStore.js'
 import {
+  type ModelTag,
   classifyModelTag,
   formatModelName,
-  type ModelTag,
   providerDisplayName,
   providerIcons,
 } from './model-utils.js'

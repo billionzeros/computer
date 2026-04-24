@@ -132,11 +132,7 @@ export function RoutinesView() {
       projectId,
     })
 
-    store.setDraftInput(
-      convId,
-      "I want to create a new routine. It should ",
-      [],
-    )
+    store.setDraftInput(convId, 'I want to create a new routine. It should ', [])
     store.switchConversation(convId)
     uiStore.getState().setActiveView('home')
   }, [])

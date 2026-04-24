@@ -177,6 +177,7 @@ export function HarnessSetupModal({ provider, onClose }: Props) {
         {progress?.message && (
           <div
             className={`prov-modal__status${progress.success === false ? ' is-error' : ''}`}
+            // biome-ignore lint/a11y/useSemanticElements: div carries block layout + status styling; <output> would require restyling
             role="status"
           >
             {progress.message}

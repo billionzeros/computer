@@ -285,96 +285,98 @@ export function Sidebar({ onViewChange, onOpenSettings }: Props) {
             <ChevronDown size={13} strokeWidth={1.5} className="sb-project__chev" />
           </button>
 
-          {projectMenuOpen && projectMenuPos && createPortal(
-            <div
-              ref={projectMenuRef}
-              className="sb-project-menu fade-in"
-              style={{ position: 'fixed', top: projectMenuPos.top, left: projectMenuPos.left }}
-            >
-              <div className="sb-project-menu__label">Projects</div>
-              <div className="sb-project-menu__list">
-                {[...projects]
-                  .sort((a, b) => {
-                    if ((b.isDefault ? 1 : 0) !== (a.isDefault ? 1 : 0)) {
-                      return (b.isDefault ? 1 : 0) - (a.isDefault ? 1 : 0)
-                    }
-                    return projectLastActive(b.id) - projectLastActive(a.id)
-                  })
-                  .map((p) => {
-                    const isActive = p.id === activeProjectId
-                    const taskCount = projectTaskCount(p.id)
-                    const lastActive = projectLastActive(p.id)
-                    const lastLabel = lastActive ? formatRelativeTime(lastActive) : null
-                    return (
-                      <button
-                        key={p.id}
-                        type="button"
-                        aria-current={isActive ? 'true' : undefined}
-                        className={`sb-project-menu__item${isActive ? ' active' : ''}`}
-                        onClick={() => {
-                          setActiveProject(p.id)
-                          setProjectMenuOpen(false)
-                        }}
-                      >
-                        <div className="sb-project-menu__icon">
-                          {p.isDefault ? (
-                            <Monitor size={12} strokeWidth={1.5} />
-                          ) : (
-                            <FolderOpen size={12} strokeWidth={1.5} />
-                          )}
-                        </div>
-                        <div className="sb-project-menu__text">
-                          <div className="sb-project-menu__row">
-                            <span className="sb-project-menu__name">{p.name}</span>
-                          </div>
-                          <div className="sb-project-menu__meta">
-                            <span>
-                              {taskCount} file{taskCount === 1 ? '' : 's'}
-                            </span>
-                            {lastLabel && (
-                              <>
-                                <span className="sb-project-menu__sep">·</span>
-                                <span>{lastLabel}</span>
-                              </>
+          {projectMenuOpen &&
+            projectMenuPos &&
+            createPortal(
+              <div
+                ref={projectMenuRef}
+                className="sb-project-menu fade-in"
+                style={{ position: 'fixed', top: projectMenuPos.top, left: projectMenuPos.left }}
+              >
+                <div className="sb-project-menu__label">Projects</div>
+                <div className="sb-project-menu__list">
+                  {[...projects]
+                    .sort((a, b) => {
+                      if ((b.isDefault ? 1 : 0) !== (a.isDefault ? 1 : 0)) {
+                        return (b.isDefault ? 1 : 0) - (a.isDefault ? 1 : 0)
+                      }
+                      return projectLastActive(b.id) - projectLastActive(a.id)
+                    })
+                    .map((p) => {
+                      const isActive = p.id === activeProjectId
+                      const taskCount = projectTaskCount(p.id)
+                      const lastActive = projectLastActive(p.id)
+                      const lastLabel = lastActive ? formatRelativeTime(lastActive) : null
+                      return (
+                        <button
+                          key={p.id}
+                          type="button"
+                          aria-current={isActive ? 'true' : undefined}
+                          className={`sb-project-menu__item${isActive ? ' active' : ''}`}
+                          onClick={() => {
+                            setActiveProject(p.id)
+                            setProjectMenuOpen(false)
+                          }}
+                        >
+                          <div className="sb-project-menu__icon">
+                            {p.isDefault ? (
+                              <Monitor size={12} strokeWidth={1.5} />
+                            ) : (
+                              <FolderOpen size={12} strokeWidth={1.5} />
                             )}
                           </div>
-                        </div>
-                        {isActive && (
-                          <Check size={12} strokeWidth={2} className="sb-project-menu__check" />
-                        )}
-                      </button>
-                    )
-                  })}
-              </div>
-              <div className="sb-project-menu__divider" />
-              <button
-                type="button"
-                className="sb-project-menu__action"
-                onClick={() => {
-                  setProjectMenuOpen(false)
-                  requestAnimationFrame(() => {
-                    window.dispatchEvent(new CustomEvent('anton:create-project'))
-                  })
-                }}
-              >
-                <Plus size={12} strokeWidth={1.5} />
-                <span>New project</span>
-                <span className="sb-project-menu__kbd">⇧⌘P</span>
-              </button>
-              <button
-                type="button"
-                className="sb-project-menu__action"
-                onClick={() => {
-                  setProjectMenuOpen(false)
-                  setActiveView('projects')
-                }}
-              >
-                <SlidersHorizontal size={12} strokeWidth={1.5} />
-                <span>Manage projects</span>
-              </button>
-            </div>,
-            document.body,
-          )}
+                          <div className="sb-project-menu__text">
+                            <div className="sb-project-menu__row">
+                              <span className="sb-project-menu__name">{p.name}</span>
+                            </div>
+                            <div className="sb-project-menu__meta">
+                              <span>
+                                {taskCount} file{taskCount === 1 ? '' : 's'}
+                              </span>
+                              {lastLabel && (
+                                <>
+                                  <span className="sb-project-menu__sep">·</span>
+                                  <span>{lastLabel}</span>
+                                </>
+                              )}
+                            </div>
+                          </div>
+                          {isActive && (
+                            <Check size={12} strokeWidth={2} className="sb-project-menu__check" />
+                          )}
+                        </button>
+                      )
+                    })}
+                </div>
+                <div className="sb-project-menu__divider" />
+                <button
+                  type="button"
+                  className="sb-project-menu__action"
+                  onClick={() => {
+                    setProjectMenuOpen(false)
+                    requestAnimationFrame(() => {
+                      window.dispatchEvent(new CustomEvent('anton:create-project'))
+                    })
+                  }}
+                >
+                  <Plus size={12} strokeWidth={1.5} />
+                  <span>New project</span>
+                  <span className="sb-project-menu__kbd">⇧⌘P</span>
+                </button>
+                <button
+                  type="button"
+                  className="sb-project-menu__action"
+                  onClick={() => {
+                    setProjectMenuOpen(false)
+                    setActiveView('projects')
+                  }}
+                >
+                  <SlidersHorizontal size={12} strokeWidth={1.5} />
+                  <span>Manage projects</span>
+                </button>
+              </div>,
+              document.body,
+            )}
         </div>
 
         {/* New task */}

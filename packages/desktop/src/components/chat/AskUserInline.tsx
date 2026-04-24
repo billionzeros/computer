@@ -342,6 +342,7 @@ function PublishConfirmCard({
               if (e.key === 'Enter' && slugValid) onConfirm(slugTrimmed)
               if (e.key === 'Escape') onCancel()
             }}
+            // biome-ignore lint/a11y/noAutofocus: inline confirm card — focusing the slug input on mount is the intended UX
             autoFocus
             aria-label="URL slug"
           />
