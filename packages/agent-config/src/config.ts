@@ -408,11 +408,13 @@ export const DEFAULT_PROVIDERS: ProvidersMap = {
     ],
   },
   'claude-code': {
-    models: ['claude-sonnet-4-6', 'claude-opus-4-6'],
+    // Harness CLI model IDs — passed as-is to the `claude` binary.
+    models: ['claude-sonnet-4-6', 'claude-opus-4-6', 'claude-haiku-4-5'],
     type: 'harness',
   },
   codex: {
-    models: ['gpt-5.4', 'o3'],
+    // Harness CLI model IDs — passed as-is to the `codex` binary.
+    models: ['gpt-5.4', 'gpt-5.4-mini', 'o3'],
     type: 'harness',
   },
 }

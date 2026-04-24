@@ -9,6 +9,7 @@ import { FileBrowser } from './components/FileBrowser.js'
 import { ForceUpdateGate } from './components/ForceUpdateGate.js'
 import { MachineInfoPanel } from './components/MachineInfoPanel.js'
 import { OnboardingTour } from './components/OnboardingTour.js'
+import { ProtocolMismatchBanner } from './components/ProtocolMismatchBanner.js'
 import { RoutineChat } from './components/RoutineChat.js'
 import { SidePanel } from './components/SidePanel.js'
 import { Sidebar } from './components/Sidebar.js'
@@ -311,6 +312,7 @@ export function App() {
           {/* Update notification overlay */}
           <UpdateBanner />
           <DesktopUpdateBanner />
+          <ProtocolMismatchBanner />
 
           {/* Reconnecting banner */}
           {isDisconnected && !isDisconnectedForUpdate && (

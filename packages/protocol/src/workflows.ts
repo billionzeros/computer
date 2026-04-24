@@ -211,6 +211,12 @@ export interface WorkflowAgentRef {
   scripts?: string[]
   /** Agent-specific cron schedule (overrides workflow-level trigger for this agent) */
   schedule?: string
+  /** Preferred provider this agent should run on (e.g. "anthropic", "openrouter").
+   *  Authors pin this when their prompt depends on a specific model's capabilities
+   *  (e.g. reliable tool calling). User can still override after install. */
+  preferredProvider?: string
+  /** Preferred model ID (e.g. "claude-sonnet-4.6"). Paired with preferredProvider. */
+  preferredModel?: string
 }
 
 // ── Installed workflow state ────────────────────────────────────────

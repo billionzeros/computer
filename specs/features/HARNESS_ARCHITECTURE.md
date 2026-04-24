@@ -179,7 +179,9 @@ Enumerated per session from `connectorManager.getAllTools(surface)`. One tool pe
 
 - `sub_agent` — CLI has its own subagent primitive.
 - `shell`, `read`, `write`, `edit`, `glob`, `grep`, `git`, `http_api`, `browser`, `artifact` — CLI's native tools handle these; re-exposing would collide.
-- `shared_state`, `routine`/scheduling — deferred; workflow-agent-internal + scheduler coordination still to be wired.
+- `shared_state` — deferred; workflow-agent-internal coordination still to be wired.
+
+Routine dispatch is **not** a tool — it arrives via `AgentManager.runAgent()` → `SendMessageHandler`. When the dispatched agent's provider is a harness (`codex`, `claude-code`), `server.ts` builds an ephemeral harness session with `background: true` (no `onAskUser`, no `session_created` broadcast, no `conversation` pool slot) and runs the turn. Scheduler coordination is wired the same way as the Pi SDK path.
 
 Extension rule: **edit `buildAntonCoreTools()` or the relevant `tools/<name>.ts` factory — never inline a tool in `tool-registry.ts`.**
 

@@ -5516,6 +5516,61 @@ button {
   color: var(--text);
 }
 
+.protocol-mismatch-banner {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 10px 16px;
+  background: color-mix(in oklch, var(--warning) 14%, var(--bg-strong));
+  border-bottom: 1px solid var(--border);
+  color: var(--text);
+  font-size: 13px;
+  z-index: 50;
+}
+
+.protocol-mismatch-banner > svg {
+  flex-shrink: 0;
+  color: var(--warning);
+  margin-top: 2px;
+}
+
+.protocol-mismatch-banner__body {
+  flex: 1;
+  min-width: 0;
+}
+
+.protocol-mismatch-banner__title {
+  font-weight: 500;
+  color: var(--text);
+}
+
+.protocol-mismatch-banner__detail {
+  color: var(--text-muted);
+  font-size: 12px;
+  line-height: 1.4;
+  margin-top: 2px;
+}
+
+.protocol-mismatch-banner__dismiss {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.protocol-mismatch-banner__dismiss:hover {
+  background: var(--bg-elevated);
+  color: var(--text);
+}
+
 /* ═══════════════════════════════════════════════════════════════════
    DESKTOP UPDATE BANNER (small, dismissable, floats at top)
    ═══════════════════════════════════════════════════════════════════ */
@@ -25793,7 +25848,7 @@ button {
   color: var(--accent);
 }
 .sfb__count {
-  font-family: 'JetBrains Mono', ui-monospace, monospace;
+  font-family: "JetBrains Mono", ui-monospace, monospace;
   font-size: 9.5px;
   padding: 1px 5px;
   background: var(--bg-elev-2);
@@ -25845,7 +25900,7 @@ button {
 }
 .sfb__pop-count {
   margin-left: auto;
-  font-family: 'JetBrains Mono', ui-monospace, monospace;
+  font-family: "JetBrains Mono", ui-monospace, monospace;
   font-size: 10px;
   padding: 1px 5px;
   background: var(--bg-elev-2);
@@ -25951,7 +26006,7 @@ button {
 .sf-thumb--code {
   background: var(--bg);
   padding: 4px 6px;
-  font-family: 'JetBrains Mono', ui-monospace, monospace;
+  font-family: "JetBrains Mono", ui-monospace, monospace;
   font-size: 7.5px;
   line-height: 1.35;
   color: var(--text-3);
@@ -25964,7 +26019,7 @@ button {
   overflow: hidden;
 }
 .sf-thumb--code::after {
-  content: '';
+  content: "";
   position: absolute;
   inset: auto 0 0 0;
   height: 18px;

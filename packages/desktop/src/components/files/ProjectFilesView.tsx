@@ -22,6 +22,7 @@ import {
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { connection } from '../../lib/connection.js'
 import { artifactStore } from '../../lib/store/artifactStore.js'
+import { connectionStore } from '../../lib/store/connectionStore.js'
 import { projectStore } from '../../lib/store/projectStore.js'
 import { uiStore } from '../../lib/store/uiStore.js'
 
@@ -137,11 +138,15 @@ export function ProjectFilesView() {
   const activeProjectId = projectStore((s) => s.activeProjectId)
   const projects = projectStore((s) => s.projects)
   const activeProject = projects.find((p) => p.id === activeProjectId)
-  const startDir = activeProject?.workspacePath || '/root'
+  const initPhase = connectionStore((s) => s.initPhase)
+  // Never guess at a startDir: an unknown workspacePath used to fall back to
+  // `/root`, which EACCES on any non-root agent-server. Render an explicit
+  // waiting state instead and don't dispatch fs_list until the real path lands.
+  const startDir = activeProject?.workspacePath ?? null
 
-  const [cwd, setCwd] = useState(startDir)
+  const [cwd, setCwd] = useState<string>(startDir ?? '')
   const [entries, setEntries] = useState<FileEntry[]>([])
-  const [loading, setLoading] = useState(true)
+  const [loading, setLoading] = useState(startDir !== null)
   const [error, setError] = useState<string | null>(null)
   const [showHidden, _setShowHidden] = useState(false)
   const [search, setSearch] = useState('')
@@ -174,6 +179,7 @@ export function ProjectFilesView() {
 
   // Breadcrumbs
   const breadcrumbs = useMemo(() => {
+    if (!startDir) return []
     const rootLabel = activeProject?.name || 'Files'
     const crumbs: { label: string; path: string }[] = [{ label: rootLabel, path: startDir }]
     if (cwd !== startDir && cwd.startsWith(`${startDir}/`)) {
@@ -209,6 +215,7 @@ export function ProjectFilesView() {
   )
 
   const refresh = useCallback(() => {
+    if (!cwd) return
     setLoading(true)
     setError(null)
     uiStore.getState().sendFilesystemList(cwd, showHidden)
@@ -234,6 +241,7 @@ export function ProjectFilesView() {
   // new additions (not on unrelated field updates to existing
   // artifacts, e.g. publish status).
   useEffect(() => {
+    if (!cwd) return
     let prevCount = artifactStore.getState().artifacts.length
     const unsub = artifactStore.subscribe((state) => {
       const artifacts = state.artifacts
@@ -328,7 +336,7 @@ export function ProjectFilesView() {
   }, [loading])
 
   useEffect(() => {
-    listDir(startDir)
+    if (startDir) listDir(startDir)
   }, [listDir, startDir])
 
   useEffect(() => {
@@ -471,7 +479,40 @@ export function ProjectFilesView() {
     [handleUpload],
   )
 
-  const canGoUp = cwd !== startDir
+  const canGoUp = startDir !== null && cwd !== startDir
+  // Treat "startDir changed but cwd hasn't caught up yet" as loading. This
+  // closes the one-frame gap where `loading` is still false but cwd points
+  // outside the new startDir tree (initial null→real, or project switch).
+  // We explicitly allow subdirectories of startDir so that normal navigation
+  // (e.g. into `${startDir}/subfolder`) doesn't keep the loader stuck on.
+  const cwdWithinStartDir =
+    startDir !== null && (cwd === startDir || cwd.startsWith(`${startDir}/`))
+  const awaitingInitialFetch = startDir !== null && !cwdWithinStartDir
+  const showLoader = loading || awaitingInitialFetch
+
+  // Until the active project (and therefore its workspacePath) is known,
+  // show an explicit waiting state rather than guessing a directory — a
+  // guess like `/root` EACCES on any non-root agent-server.
+  if (!startDir) {
+    const stillSyncing = initPhase !== 'ready'
+    return (
+      <div className="fl-main">
+        <div className="fl-empty">
+          {stillSyncing ? (
+            <>
+              <Loader2 size={20} strokeWidth={1.5} className="spin" />
+              <div style={{ marginTop: 10 }}>Loading projects…</div>
+            </>
+          ) : (
+            <>
+              <FolderOpen size={32} strokeWidth={1} />
+              <div style={{ marginTop: 10 }}>Select a project to browse its files.</div>
+            </>
+          )}
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div
@@ -618,14 +659,14 @@ export function ProjectFilesView() {
           </div>
 
           <div className="fl-list">
-            {loading && (
+            {showLoader && (
               <div className="fl-empty">
                 <Loader2 size={20} strokeWidth={1.5} className="spin" />
               </div>
             )}
-            {error && <div className="fl-empty">{error}</div>}
+            {error && !showLoader && <div className="fl-empty">{error}</div>}
 
-            {canGoUp && !loading && !error && (
+            {canGoUp && !showLoader && !error && (
               <button
                 type="button"
                 className="fl-row is-folder fl-row--parent"
@@ -690,7 +731,7 @@ export function ProjectFilesView() {
               </div>
             )}
 
-            {!loading && !error && visibleEntries.length === 0 && !newFolderOpen && !canGoUp && (
+            {!showLoader && !error && visibleEntries.length === 0 && !newFolderOpen && !canGoUp && (
               <div className="fl-empty">
                 <FolderOpen size={32} strokeWidth={1} />
                 <div style={{ marginTop: 10 }}>
@@ -743,85 +784,81 @@ export function ProjectFilesView() {
         {selected && (
           <aside className="fl-preview">
             <div className="fl-preview__thumb">
-                {previewLoading ? (
-                  <Loader2 size={20} strokeWidth={1.5} className="spin" />
-                ) : previewError ? (
-                  <div
+              {previewLoading ? (
+                <Loader2 size={20} strokeWidth={1.5} className="spin" />
+              ) : previewError ? (
+                <div
+                  style={{
+                    color: 'var(--danger)',
+                    fontSize: 12,
+                    textAlign: 'center',
+                    padding: 20,
+                  }}
+                >
+                  {previewError}
+                </div>
+              ) : preview !== null ? (
+                previewIsImage ? (
+                  <img
+                    src={`data:${getMimeType(selected.name)};base64,${preview}`}
+                    alt={selected.name}
                     style={{
-                      color: 'var(--danger)',
-                      fontSize: 12,
-                      textAlign: 'center',
-                      padding: 20,
+                      maxWidth: '100%',
+                      maxHeight: 260,
+                      objectFit: 'contain',
+                      borderRadius: 6,
+                    }}
+                  />
+                ) : (
+                  <pre
+                    style={{
+                      fontFamily: 'var(--font-mono)',
+                      fontSize: 9.5,
+                      lineHeight: 1.5,
+                      color: 'var(--text-3)',
+                      maxHeight: 260,
+                      overflow: 'hidden',
+                      width: '100%',
+                      margin: 0,
+                      whiteSpace: 'pre',
                     }}
                   >
-                    {previewError}
-                  </div>
-                ) : preview !== null ? (
-                  previewIsImage ? (
-                    <img
-                      src={`data:${getMimeType(selected.name)};base64,${preview}`}
-                      alt={selected.name}
-                      style={{
-                        maxWidth: '100%',
-                        maxHeight: 260,
-                        objectFit: 'contain',
-                        borderRadius: 6,
-                      }}
-                    />
-                  ) : (
-                    <pre
-                      style={{
-                        fontFamily: 'var(--font-mono)',
-                        fontSize: 9.5,
-                        lineHeight: 1.5,
-                        color: 'var(--text-3)',
-                        maxHeight: 260,
-                        overflow: 'hidden',
-                        width: '100%',
-                        margin: 0,
-                        whiteSpace: 'pre',
-                      }}
-                    >
-                      {preview.slice(0, 2000)}
-                    </pre>
-                  )
-                ) : (
-                  iconFor(selected)
+                    {preview.slice(0, 2000)}
+                  </pre>
+                )
+              ) : (
+                iconFor(selected)
+              )}
+            </div>
+            <div className="fl-preview__info">
+              <div className="fl-preview__name">{selected.name}</div>
+              <div className="fl-preview__kind">
+                {iconFor(selected)}
+                <span>{kindLabel(selected)}</span>
+                {selected.size && (
+                  <>
+                    <span className="fl-preview__sep">·</span>
+                    <span>{selected.size}</span>
+                  </>
                 )}
               </div>
-              <div className="fl-preview__info">
-                <div className="fl-preview__name">{selected.name}</div>
-                <div className="fl-preview__kind">
-                  {iconFor(selected)}
-                  <span>{kindLabel(selected)}</span>
-                  {selected.size && (
-                    <>
-                      <span className="fl-preview__sep">·</span>
-                      <span>{selected.size}</span>
-                    </>
-                  )}
-                </div>
-                <dl className="fl-preview__meta">
-                  <dt>Path</dt>
-                  <dd>{resolvePath(selected.name)}</dd>
-                </dl>
-                <div className="fl-preview__actions">
-                  {isPreviewable(selected.name) && (
-                    <button
-                      type="button"
-                      className="fl-btn"
-                      onClick={() => handleRowClick(selected)}
-                    >
-                      <Eye size={12} strokeWidth={1.5} />
-                      Reload preview
-                    </button>
-                  )}
-                  <button type="button" className="fl-btn" onClick={handleDelete}>
-                    <Trash2 size={12} strokeWidth={1.5} />
-                    Delete
+              <dl className="fl-preview__meta">
+                <dt>Path</dt>
+                <dd>{resolvePath(selected.name)}</dd>
+              </dl>
+              <div className="fl-preview__actions">
+                {isPreviewable(selected.name) && (
+                  <button type="button" className="fl-btn" onClick={() => handleRowClick(selected)}>
+                    <Eye size={12} strokeWidth={1.5} />
+                    Reload preview
                   </button>
-                </div>
+                )}
+                <button type="button" className="fl-btn" onClick={handleDelete}>
+                  <Trash2 size={12} strokeWidth={1.5} />
+                  Delete
+                </button>
               </div>
+            </div>
           </aside>
         )}
       </div>

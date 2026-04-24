@@ -19,12 +19,28 @@ import {
   saveProjectInstructions,
   saveWorkflowUserConfig,
 } from '@anton/agent-config'
+import { createLogger } from '@anton/logger'
 import type { InstalledWorkflow, WorkflowManifest } from '@anton/protocol'
 import type { AgentManager } from '../agents/agent-manager.js'
 import { WorkflowStateDb } from './shared-state-db.js'
 
+const log = createLogger('workflow-installer')
+
+/**
+ * Callback that validates a routine's provider/model pair. Owned by
+ * server.ts (needs `this.config`); injected here to avoid reaching
+ * back into server internals from the installer.
+ */
+export type ProviderModelValidator = (
+  provider: string | undefined,
+  model: string | undefined,
+) => { ok: true } | { ok: false; error: string }
+
 export class WorkflowInstaller {
-  constructor(private agentManager: AgentManager) {}
+  constructor(
+    private agentManager: AgentManager,
+    private validateProviderModel?: ProviderModelValidator,
+  ) {}
 
   /**
    * Install a workflow from a source directory into a project.
@@ -155,15 +171,36 @@ export class WorkflowInstaller {
       const agentSchedule = ref.schedule || (ref.role === 'main' ? defaultSchedule : undefined)
       const agentName = ref.name || formatAgentName(key)
 
+      // Validate the workflow author's preferredProvider/preferredModel
+      // against the user's actual config. If the user doesn't have the
+      // provider installed or the model isn't recognised, drop the pair
+      // (with a warning) so the routine inherits config.defaults at run
+      // time. This is best-effort: install succeeds, and the routine
+      // can still run — just not on the exact model the author picked.
+      let provider = ref.preferredProvider
+      let model = ref.preferredModel
+      if (this.validateProviderModel && (provider || model)) {
+        const check = this.validateProviderModel(provider, model)
+        if (!check.ok) {
+          log.warn(
+            { workflowId, agentKey: key, provider, model, reason: check.error },
+            'workflow preferredProvider/preferredModel not usable on this host — dropping; routine will inherit config.defaults',
+          )
+          provider = undefined
+          model = undefined
+        }
+      }
+
       const agentSession = this.agentManager.createAgent(projectId, {
         name: agentName,
         description: ref.description || manifest.description,
         instructions: `[Workflow Agent: ${key}] Instructions loaded from workflow at runtime.`,
         schedule: agentSchedule,
+        provider,
+        model,
+        workflowId,
+        workflowAgentKey: key,
       })
-
-      agentSession.agent.workflowId = workflowId
-      agentSession.agent.workflowAgentKey = key
 
       saveAgentMetadata(projectId, agentSession.sessionId, agentSession.agent)
       agentSessionIds.push(agentSession.sessionId)

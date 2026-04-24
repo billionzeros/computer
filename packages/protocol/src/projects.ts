@@ -67,6 +67,12 @@ export interface RoutineMetadata {
   description: string
   /** The prompt/instructions the routine executes on each run */
   instructions: string
+  /** Provider this routine runs on (e.g. "anthropic", "openrouter", "codex", "claude-code").
+   *  Unset → inherit config.defaults.provider at run time. */
+  provider?: string
+  /** Model this routine runs on (e.g. "claude-sonnet-4.6", "minimax/minimax-m2.7", "gpt-5.4").
+   *  Unset → inherit config.defaults.model at run time. */
+  model?: string
   /** If this routine was created from a workflow, the workflow ID */
   workflowId?: string
   /** Key in the workflow manifest's agents map (e.g., "orchestrator", "lead-scorer") */
