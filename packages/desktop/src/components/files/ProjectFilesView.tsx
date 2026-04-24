@@ -20,7 +20,9 @@ import {
   X,
 } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { classifyUpload } from '../../lib/artifacts.js'
 import { connection } from '../../lib/connection.js'
+import { useStore } from '../../lib/store.js'
 import { artifactStore } from '../../lib/store/artifactStore.js'
 import { projectStore } from '../../lib/store/projectStore.js'
 import { uiStore } from '../../lib/store/uiStore.js'
@@ -331,6 +333,25 @@ export function ProjectFilesView() {
     listDir(startDir)
   }, [listDir, startDir])
 
+  // Folder pills in the composer emit `anton:navigate-files` when clicked.
+  // Navigate to the requested path, but only if it's inside the current
+  // project workspace — defense against cross-project leakage.
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const detail = (e as CustomEvent).detail as { path?: string } | undefined
+      const target = detail?.path
+      if (!target) return
+      // Allow navigation to startDir itself or any descendant.
+      const normalized = target.replace(/\/+$/, '')
+      const allowed =
+        normalized === startDir || normalized.startsWith(`${startDir}/`)
+      if (!allowed) return
+      listDir(normalized)
+    }
+    window.addEventListener('anton:navigate-files', handler)
+    return () => window.removeEventListener('anton:navigate-files', handler)
+  }, [listDir, startDir])
+
   useEffect(() => {
     refresh()
   }, [refresh])
@@ -445,11 +466,37 @@ export function ProjectFilesView() {
 
   const handleUpload = useCallback(
     (files: FileList) => {
+      const convId =
+        useStore.getState().getActiveConversation()?.sessionId ??
+        useStore.getState().activeConversationId ??
+        undefined
       for (const file of Array.from(files)) {
         const reader = new FileReader()
         reader.onload = () => {
           const base64 = (reader.result as string).split(',')[1] || ''
-          connection.sendFilesystemWrite(resolvePath(file.name), base64, 'base64')
+          const targetPath = resolvePath(file.name)
+          connection.sendFilesystemWrite(targetPath, base64, 'base64')
+
+          // Mirror the composer upload flow so the file shows in the
+          // session's "Uploads" sidebar section and is previewable.
+          // addArtifact dedupes by filepath.
+          const renderType = classifyUpload(file.type || undefined, file.name) ?? 'code'
+          const uploadId = `upload:${targetPath}`
+          artifactStore.getState().addArtifact({
+            id: uploadId,
+            type: 'file',
+            source: 'upload',
+            renderType,
+            filename: file.name,
+            filepath: targetPath,
+            sourcePath: targetPath,
+            mimeType: file.type || undefined,
+            language: '',
+            content: '',
+            toolCallId: uploadId,
+            timestamp: Date.now(),
+            conversationId: convId,
+          })
         }
         reader.readAsDataURL(file)
       }

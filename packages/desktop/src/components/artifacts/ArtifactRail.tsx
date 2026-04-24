@@ -1,4 +1,14 @@
-import { Braces, FileCode, Network, Sparkles, SquareCode, X } from 'lucide-react'
+import {
+  Braces,
+  FileCode,
+  FileSpreadsheet,
+  FileText,
+  ImageIcon,
+  Network,
+  Sparkles,
+  SquareCode,
+  X,
+} from 'lucide-react'
 import { useState } from 'react'
 import type { ArtifactRenderType } from '../../lib/artifacts.js'
 import { artifactStore } from '../../lib/store/artifactStore.js'
@@ -9,6 +19,10 @@ const TYPE_ICONS: Record<ArtifactRenderType, typeof Sparkles> = {
   markdown: FileCode,
   svg: SquareCode,
   mermaid: Network,
+  docx: FileText,
+  xlsx: FileSpreadsheet,
+  pdf: FileText,
+  image: ImageIcon,
 }
 
 const TYPE_LABELS: Record<ArtifactRenderType, string> = {
@@ -17,6 +31,10 @@ const TYPE_LABELS: Record<ArtifactRenderType, string> = {
   markdown: 'Markdown',
   svg: 'SVG',
   mermaid: 'Diagram',
+  docx: 'Document',
+  xlsx: 'Spreadsheet',
+  pdf: 'PDF',
+  image: 'Image',
 }
 
 export function ArtifactRail() {

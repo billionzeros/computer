@@ -2,7 +2,28 @@ import type { ChatMessage } from './store.js'
 
 // ── Types ───────────────────────────────────────────────────────────
 
-export type ArtifactRenderType = 'code' | 'markdown' | 'html' | 'svg' | 'mermaid'
+export type ArtifactRenderType =
+  | 'code'
+  | 'markdown'
+  | 'html'
+  | 'svg'
+  | 'mermaid'
+  | 'docx'
+  | 'xlsx'
+  | 'pdf'
+  | 'image'
+
+/** Render types whose content is binary and must be fetched via sourcePath. */
+export const BINARY_RENDER_TYPES: ReadonlySet<ArtifactRenderType> = new Set([
+  'docx',
+  'xlsx',
+  'pdf',
+  'image',
+])
+
+export function isBinaryRenderType(t: ArtifactRenderType): boolean {
+  return BINARY_RENDER_TYPES.has(t)
+}
 
 export interface Artifact {
   id: string
@@ -12,6 +33,7 @@ export interface Artifact {
   filename?: string
   filepath?: string
   language: string
+  /** Text content for string-backed artifacts. Empty for binary kinds. */
   content: string
   toolCallId: string
   timestamp: number
@@ -23,6 +45,12 @@ export interface Artifact {
   conversationId?: string
   /** Project this artifact belongs to */
   projectId?: string
+  /** Origin of the artifact. Defaults to 'agent' when omitted. */
+  source?: 'agent' | 'upload'
+  /** Workspace-relative path for binary/upload artifacts. Fetched lazily via fs_read_bytes. */
+  sourcePath?: string
+  /** MIME type for binary artifacts (sniffed server-side where possible). */
+  mimeType?: string
 }
 
 const TYPE_LABELS: Record<ArtifactRenderType, string> = {
@@ -31,6 +59,10 @@ const TYPE_LABELS: Record<ArtifactRenderType, string> = {
   markdown: 'Markdown',
   svg: 'SVG',
   mermaid: 'Diagram',
+  docx: 'Document',
+  xlsx: 'Spreadsheet',
+  pdf: 'PDF',
+  image: 'Image',
 }
 
 const TYPE_EXTENSIONS: Record<ArtifactRenderType, string> = {
@@ -39,6 +71,10 @@ const TYPE_EXTENSIONS: Record<ArtifactRenderType, string> = {
   markdown: 'md',
   svg: 'svg',
   mermaid: 'md',
+  docx: 'docx',
+  xlsx: 'xlsx',
+  pdf: 'pdf',
+  image: 'png',
 }
 
 export function getArtifactTypeLabel(renderType: ArtifactRenderType): string {
@@ -121,6 +157,98 @@ function languageToRenderType(language: string): ArtifactRenderType {
   if (language === 'markdown') return 'markdown'
   if (language === 'html') return 'html'
   return 'code'
+}
+
+// ── MIME classification ─────────────────────────────────────────────
+
+/** Map MIME types to their canonical artifact render type.
+ *  Intended for classifying user-uploaded files. Returns null when unknown
+ *  so callers can fall back to path-extension inspection or 'code'. */
+export function classifyMime(mime: string | undefined): ArtifactRenderType | null {
+  if (!mime) return null
+  const m = mime.toLowerCase().split(';')[0]?.trim() ?? ''
+
+  // Documents
+  if (
+    m === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' ||
+    m === 'application/msword'
+  ) {
+    return 'docx'
+  }
+
+  // Spreadsheets
+  if (
+    m === 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' ||
+    m === 'application/vnd.ms-excel'
+  ) {
+    return 'xlsx'
+  }
+
+  if (m === 'application/pdf') return 'pdf'
+
+  if (m.startsWith('image/')) {
+    // SVG is XML and already has a render path; keep it on the text side.
+    if (m === 'image/svg+xml') return 'svg'
+    return 'image'
+  }
+
+  if (m === 'text/markdown' || m === 'text/x-markdown') return 'markdown'
+  if (m === 'text/html') return 'html'
+  if (m === 'text/csv' || m === 'text/tab-separated-values') return 'code'
+  if (m.startsWith('text/')) return 'code'
+
+  if (m === 'application/json' || m === 'application/xml') return 'code'
+
+  return null
+}
+
+/** Known file-extension fallback for mime classification (used when MIME is
+ *  missing or generic, e.g., application/octet-stream). */
+export function classifyPathExtension(path: string): ArtifactRenderType | null {
+  const lower = path.toLowerCase()
+  const ext = lower.split('.').pop() ?? ''
+  switch (ext) {
+    case 'docx':
+    case 'doc':
+      return 'docx'
+    case 'xlsx':
+    case 'xls':
+      return 'xlsx'
+    case 'pdf':
+      return 'pdf'
+    case 'png':
+    case 'jpg':
+    case 'jpeg':
+    case 'gif':
+    case 'webp':
+    case 'avif':
+    case 'bmp':
+    case 'ico':
+    case 'heic':
+    case 'heif':
+      return 'image'
+    case 'md':
+    case 'mdx':
+      return 'markdown'
+    case 'html':
+    case 'htm':
+      return 'html'
+    case 'svg':
+      return 'svg'
+    case 'csv':
+    case 'tsv':
+    case 'json':
+    case 'txt':
+    case 'log':
+      return 'code'
+    default:
+      return null
+  }
+}
+
+/** Combined classifier: MIME first, then path extension. */
+export function classifyUpload(mime: string | undefined, path: string): ArtifactRenderType | null {
+  return classifyMime(mime) ?? classifyPathExtension(path)
 }
 
 // ── Artifact extraction ─────────────────────────────────────────────

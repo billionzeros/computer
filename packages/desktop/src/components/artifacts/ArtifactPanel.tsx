@@ -5,8 +5,10 @@ import {
   Copy,
   Download,
   Eye,
+  FileSpreadsheet,
   FileText,
   Globe,
+  ImageIcon,
   Link,
   Network,
   PanelRight,
@@ -16,12 +18,21 @@ import {
 } from 'lucide-react'
 import { type ComponentType, useCallback, useEffect, useMemo, useState } from 'react'
 import type { Artifact, ArtifactRenderType } from '../../lib/artifacts.js'
-import { getArtifactFileExtension, getArtifactTypeLabel } from '../../lib/artifacts.js'
+import {
+  getArtifactFileExtension,
+  getArtifactTypeLabel,
+  isBinaryRenderType,
+} from '../../lib/artifacts.js'
+import { connection } from '../../lib/connection.js'
 import { artifactStore } from '../../lib/store/artifactStore.js'
 import { connectionStore } from '../../lib/store/connectionStore.js'
 import { HighlightedBlock, MarkdownRenderer } from '../chat/MarkdownRenderer.js'
 import { ArtifactEmptyState } from './ArtifactEmptyState.js'
+import { DocxRenderer } from './DocxRenderer.js'
+import { ImageRenderer } from './ImageRenderer.js'
+import { PdfRenderer } from './PdfRenderer.js'
 import { PublishModal } from './PublishModal.js'
+import { XlsxRenderer } from './XlsxRenderer.js'
 
 type IconCmp = ComponentType<{ size?: number; strokeWidth?: number; className?: string }>
 
@@ -31,6 +42,10 @@ const TYPE_ICONS: Record<ArtifactRenderType, IconCmp> = {
   markdown: FileText,
   svg: SquareCode,
   mermaid: Network,
+  docx: FileText,
+  xlsx: FileSpreadsheet,
+  pdf: FileText,
+  image: ImageIcon,
 }
 
 function iconFor(type: ArtifactRenderType): IconCmp {
@@ -120,6 +135,30 @@ function ArtifactBody({
           <MarkdownRenderer content={artifact.content} />
         </div>
       )
+    case 'docx':
+      return artifact.sourcePath ? (
+        <DocxRenderer sourcePath={artifact.sourcePath} filename={artifact.filename} />
+      ) : (
+        <MissingSourcePath />
+      )
+    case 'xlsx':
+      return artifact.sourcePath ? (
+        <XlsxRenderer sourcePath={artifact.sourcePath} filename={artifact.filename} />
+      ) : (
+        <MissingSourcePath />
+      )
+    case 'pdf':
+      return artifact.sourcePath ? (
+        <PdfRenderer sourcePath={artifact.sourcePath} filename={artifact.filename} />
+      ) : (
+        <MissingSourcePath />
+      )
+    case 'image':
+      return artifact.sourcePath ? (
+        <ImageRenderer sourcePath={artifact.sourcePath} filename={artifact.filename} />
+      ) : (
+        <MissingSourcePath />
+      )
     default:
       return (
         <div className="art-panel__code">
@@ -127,6 +166,17 @@ function ArtifactBody({
         </div>
       )
   }
+}
+
+function MissingSourcePath() {
+  return (
+    <div className="art-panel__failure">
+      <div className="art-panel__failure-title">This artifact is missing a source path.</div>
+      <div className="art-panel__failure-hint">
+        Binary artifacts require a workspace path to fetch bytes.
+      </div>
+    </div>
+  )
 }
 
 // ── Main panel ────────────────────────────────────────────────────
@@ -171,12 +221,24 @@ export function ArtifactPanelContent() {
     return active.publishedUrl
   }, [active?.publishedUrl, domain])
 
+  const isBinary = active ? isBinaryRenderType(active.renderType) : false
+
   const handleCopy = useCallback(() => {
     if (!active) return
+    if (isBinary) {
+      // For binary artifacts (docx/xlsx/pdf/image), copy the workspace path —
+      // copying raw bytes to the clipboard as text isn't useful.
+      if (active.sourcePath) {
+        navigator.clipboard?.writeText(active.sourcePath)
+        setCopied(true)
+        setTimeout(() => setCopied(false), 1500)
+      }
+      return
+    }
     navigator.clipboard?.writeText(active.content)
     setCopied(true)
     setTimeout(() => setCopied(false), 1500)
-  }, [active])
+  }, [active, isBinary])
 
   const handleCopyUrl = useCallback(() => {
     if (!fullPublishedUrl) return
@@ -189,6 +251,41 @@ export function ArtifactPanelContent() {
     if (!active) return
     const ext = getArtifactFileExtension(active.renderType, active.language)
     const filename = active.filename || `${active.title || 'artifact'}.${ext}`
+
+    // Binary artifacts (docx/xlsx/pdf/image): fetch bytes from the workspace
+    // and serve via Blob URL. Text artifacts retain the existing fast path.
+    if (isBinary) {
+      if (!active.sourcePath) return
+      let unsub: (() => void) | undefined
+      const timeout = window.setTimeout(() => {
+        unsub?.()
+      }, 30_000)
+      unsub = connection.onFilesystemReadBytesResponse((payload) => {
+        if (payload.path !== active.sourcePath) return
+        window.clearTimeout(timeout)
+        unsub?.()
+        if (payload.error || !payload.content) return
+        try {
+          const binary = atob(payload.content)
+          const bytes = new Uint8Array(binary.length)
+          for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i)
+          const blob = new Blob([bytes.buffer], {
+            type: payload.mimeType || active.mimeType || 'application/octet-stream',
+          })
+          const url = URL.createObjectURL(blob)
+          const a = document.createElement('a')
+          a.href = url
+          a.download = filename
+          a.click()
+          URL.revokeObjectURL(url)
+        } catch {
+          // Best-effort: ignore decode errors; user can open via artifact panel directly.
+        }
+      })
+      connection.sendFilesystemReadBytes(active.sourcePath)
+      return
+    }
+
     const blob = new Blob([active.content], { type: 'text/plain' })
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
@@ -196,7 +293,19 @@ export function ArtifactPanelContent() {
     a.download = filename
     a.click()
     URL.revokeObjectURL(url)
-  }, [active])
+  }, [active, isBinary])
+
+  // Renderer failure states dispatch `anton:request-download` so the user
+  // can fall back to a raw-file download. Wire to the existing handler.
+  useEffect(() => {
+    const onDownload = (e: Event) => {
+      const detail = (e as CustomEvent).detail as { path?: string; filename?: string }
+      if (!detail?.path || !active || detail.path !== active.sourcePath) return
+      handleDownload()
+    }
+    window.addEventListener('anton:request-download', onDownload)
+    return () => window.removeEventListener('anton:request-download', onDownload)
+  }, [active, handleDownload])
 
   if (visibleTabs.length === 0 || !active) {
     return <ArtifactEmptyState />
