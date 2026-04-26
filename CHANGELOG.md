@@ -10,6 +10,13 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versioning: [S
 
 ---
 
+## [2.1.1] - 2026-04-26
+
+### Features
+- Parallel deep research connector + web_research canonical tool (#14)
+- add GPT-5.5 to Codex subscription and Anton API (#13)
+---
+
 ## [2.1.0] - 2026-04-25
 
 ### Features
@@ -729,7 +736,8 @@ Maintenance release.
 
 ---
 
-[Unreleased]: https://github.com/billionzeros/computer/compare/v2.1.0...HEAD
+[Unreleased]: https://github.com/billionzeros/computer/compare/v2.1.1...HEAD
+[2.1.1]: https://github.com/billionzeros/computer/compare/v$(changelog.match(/## [(d+.d+.d+)]/g)[1].match(/d+.d+.d+/)[0])...v2.1.1
 [2.1.0]: https://github.com/billionzeros/computer/compare/v$(changelog.match(/## [(d+.d+.d+)]/g)[1].match(/d+.d+.d+/)[0])...v2.1.0
 [2.0.3]: https://github.com/billionzeros/computer/compare/v$(changelog.match(/## [(d+.d+.d+)]/g)[1].match(/d+.d+.d+/)[0])...v2.0.3
 [2.0.2]: https://github.com/billionzeros/computer/compare/v$(changelog.match(/## [(d+.d+.d+)]/g)[1].match(/d+.d+.d+/)[0])...v2.0.2

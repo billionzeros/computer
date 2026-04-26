@@ -1,12 +1,12 @@
 {
-  "version": "2.1.0",
-  "gitHash": "8df09ce",
+  "version": "2.1.1",
+  "gitHash": "",
   "releaseUrl": "https://github.com/billionzeros/computer/releases",
-  "changelog": "Features:\n- multi-format file attachments with @-mentions and preview renderers (#12)\n\nFixes:\n- pnpm lock\n- workspace safety net — no more /root EACCES, atomic writes, version handshake (#11)\n\nChores:\n- clean up biome lint + format across repo\n\nOther:\n- feat(desktop): remove new-project attachments, add text-file creator in files view (#10)\n- feat(desktop): reasoning effort pill + provider modal redesign + onboarding tour (#9)\n- fix(desktop): honor real harness readiness in provider UI (#8)\n- fix(harness): persist session title to meta.json across reloads (#7)",
-  "publishedAt": "2026-04-24T21:05:53.180Z",
-  "cli": "https://github.com/billionzeros/computer/releases/download/v2.1.0/anton-cli.mjs",
+  "changelog": "Features:\n- Parallel deep research connector + web_research canonical tool (#14)\n- add GPT-5.5 to Codex subscription and Anton API (#13)",
+  "publishedAt": "2026-04-26T12:44:48.780Z",
+  "cli": "https://github.com/billionzeros/computer/releases/download/v2.1.1/anton-cli.mjs",
   "sidecar": {
-    "linux-arm64": "https://github.com/billionzeros/computer/releases/download/v2.1.0/anton-sidecar-linux-arm64",
-    "linux-amd64": "https://github.com/billionzeros/computer/releases/download/v2.1.0/anton-sidecar-linux-amd64"
+    "linux-arm64": "https://github.com/billionzeros/computer/releases/download/v2.1.1/anton-sidecar-linux-arm64",
+    "linux-amd64": "https://github.com/billionzeros/computer/releases/download/v2.1.1/anton-sidecar-linux-amd64"
   }
 }
