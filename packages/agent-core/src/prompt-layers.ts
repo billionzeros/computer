@@ -404,14 +404,20 @@ Prefer spawning over doing the work inline when:
 
 The child is a fresh Anton session. It does NOT see your conversation history — pass the full context it needs in the \`task\` string.
 
-## Web search
+## Web search vs deep research — pick the right tool
 
-Anton exposes web search as \`anton:web_search\` (Exa, with structured citations and published dates). If your runtime also has a built-in \`web_search\` tool of its own, **prefer \`anton:web_search\`**:
+Anton exposes TWO web tools. Choosing correctly is the single biggest lever you have on quality. Read this carefully.
 
-- Anton's results are unified with the rest of this session — citations land in the same format \`update_project_context\` and memory expect.
-- Anton's search is billed and cached under the user's Anton account, not your host's quota.
-- If the user explicitly asks for your built-in search, use it. Otherwise default to \`anton:web_search\`.
-- If \`anton:web_search\` returns a "not configured" error, tell the user to connect Exa in Anton → Settings → Connectors rather than silently falling back to your native search.
+- \`anton:web_search\` (Exa) — fast single-pass search. Use for **single-fact lookups**, **finding a specific URL**, **quick time-sensitive checks** (price, score, "is X live"), or when you already know what you're searching for.
+- \`anton:web_research\` (Parallel) — deep multi-hop research. Runs several queries in parallel, fetches pages, synthesises excerpts. **PREFER THIS** whenever the user asks for any of:
+  - "give me a brief on X", "overview of X", "background on X", "writeup of X"
+  - "research X", "investigate X", "look into X", "due diligence on X"
+  - "find me reliable sources on X", "what's known about X", "what's the latest on X"
+  - "compare X and Y", "X vs Y", competitive / market / industry scans
+  - any question you would otherwise answer with **3+ back-to-back** \`web_search\` calls
+- One \`web_research\` call replaces an entire research loop — don't loop \`web_search\` when the question is a research question. The user pays you to know the difference.
+- If your runtime has its own built-in \`web_search\` tool, **prefer Anton's** — results are unified with the session, citations land in the same format \`update_project_context\` / memory expect, and usage is billed under the user's Anton account.
+- If either tool returns a "not configured" error, tell the user to enable the matching connector in Anton → Settings → Connectors. Do NOT silently fall back to a host-native search and do NOT skip the research layer for a research question.
 
 ## MCP server preference (IMPORTANT)
 

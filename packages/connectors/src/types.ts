@@ -63,6 +63,20 @@ export interface DirectConnector {
    */
   readonly surfaces?: ConnectorSurface[]
 
+  /**
+   * For "proxy-style" connectors that route their requests through a
+   * Cloudflare Worker (e.g. Exa via search-proxy, Parallel via
+   * research-proxy): the canonical base URL of that proxy. Anton's
+   * agent-core canonical wrappers (`web_search`, `web_research`) use
+   * this — paired with the OAuth-resolved bearer token for the same
+   * connector id — to delegate without re-implementing the connector's
+   * HTTP layer or learning about credential storage themselves.
+   *
+   * Connectors that talk to a vendor API directly (Slack, Gmail, etc.)
+   * leave this undefined — there is no "proxy" to point Anton-core at.
+   */
+  readonly proxyBaseUrl?: string
+
   /** Receive all configuration. Called on activation and on runtime config updates. */
   configure(config: ConnectorEnv): void
 

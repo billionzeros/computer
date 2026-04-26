@@ -124,11 +124,20 @@ export interface SessionState {
   // composer sent last (Pi SDK + Codex both honor per-turn updates).
   thinkingLevel: ThinkingLevel | null
 
+  // Composer mode toggles. Sticky across turns — user clears explicitly.
+  // researchMode: when true, the next send carries `mode: 'research'` to
+  // the server, which prepends a turn-level system hint biasing the model
+  // toward `web_research` over `web_search`.
+  researchMode: boolean
+
   // Session readiness
   resolver?: () => void
 }
 
-export function createSessionState(partial?: Partial<SessionState>): SessionState {
+export function createSessionState(
+  sessionId?: string,
+  partial?: Partial<SessionState>,
+): SessionState {
   return {
     status: 'idle',
     statusDetail: null,
@@ -155,8 +164,75 @@ export function createSessionState(partial?: Partial<SessionState>): SessionStat
     isLoadingOlder: false,
     assistantMsgId: null,
     thinkingLevel: null,
+    // Rehydrate from the localStorage-backed map so a session that had
+    // research mode on before reload comes back with it on. Without this
+    // the persisted flag is silently dropped the moment any update path
+    // creates a fresh SessionState entry.
+    researchMode: sessionId ? _researchModeMap[sessionId] === true : false,
     ...partial,
   }
+}
+
+// ── Research-mode persistence ─────────────────────────────────────
+//
+// Persist each conversation's `researchMode` flag in localStorage so the
+// pill state survives reloads, matching Claude's behaviour. Stored as a
+// single JSON blob `{ [sessionId]: true }` keyed only on `true` values to
+// keep the blob small (false = absent).
+//
+// In-memory cache: `_researchModeMap` is loaded once at module init and
+// kept in sync with localStorage on every `toggleResearchMode` call.
+// Reads (`getPersistedResearchMode`) hit the cache — O(1), no JSON parse,
+// no storage I/O — so they're safe to call from a Zustand selector that
+// runs on every store update without causing render-time pressure.
+
+const RESEARCH_MODE_KEY = 'anton.researchMode'
+
+function readPersistedMap(): Record<string, true> {
+  try {
+    const raw = localStorage.getItem(RESEARCH_MODE_KEY)
+    return raw ? (JSON.parse(raw) as Record<string, true>) : {}
+  } catch {
+    return {}
+  }
+}
+
+const _researchModeMap: Record<string, true> = readPersistedMap()
+
+function flushResearchModeMap(): void {
+  try {
+    localStorage.setItem(RESEARCH_MODE_KEY, JSON.stringify(_researchModeMap))
+  } catch {
+    /* quota / unavailable — ignore */
+  }
+}
+
+export function getPersistedResearchMode(sessionId: string): boolean {
+  return _researchModeMap[sessionId] === true
+}
+
+/**
+ * If a Research toggle was made before this session existed (staged on
+ * `pendingResearchMode`), migrate it onto the session's flag and clear
+ * the pending state. No-op when there's nothing pending or the session
+ * already has the flag set.
+ */
+function consumePendingResearchModeFor(
+  sessionId: string,
+  get: () => SessionStoreState,
+  set: (partial: Partial<SessionStoreState>) => void,
+): void {
+  const state = get()
+  if (!state.pendingResearchMode) return
+  const sessionState = state.sessionStates.get(sessionId)
+  if (sessionState?.researchMode) {
+    set({ pendingResearchMode: false })
+    return
+  }
+  state.updateSessionState(sessionId, { researchMode: true })
+  _researchModeMap[sessionId] = true
+  flushResearchModeMap()
+  set({ pendingResearchMode: false })
 }
 
 // ── Store interface ───────────────────────────────────────────────
@@ -204,6 +280,11 @@ interface SessionStoreState {
   // Consolidated per-session state (ALL transient state lives here)
   sessionStates: Map<string, SessionState>
 
+  // Research mode toggled before a session exists (e.g. on the hero
+  // composer). Migrated onto the session's per-session flag at first
+  // send. Not persisted across reloads — only the per-session map is.
+  pendingResearchMode: boolean
+
   // ── Actions ──────────────────────────────────────────────────
 
   // Connection
@@ -218,6 +299,14 @@ interface SessionStoreState {
   setEffortLevel: (level: EffortLevel) => void
   cycleEffortLevel: () => EffortLevel
   setSessionThinkingLevel: (sessionId: string, level: ThinkingLevel) => void
+  /**
+   * Toggle Research mode. Pass the active session id when one exists so
+   * the flag is stored per-session (and persisted to localStorage).
+   * Pass `null` from the hero composer where no session exists yet —
+   * the flag is staged on `pendingResearchMode` and migrated onto the
+   * session at first send.
+   */
+  toggleResearchMode: (sessionId: string | null) => boolean
 
   // Per-session state (the ONLY way to read/write session-specific data)
   getSessionState: (sessionId: string) => SessionState
@@ -312,6 +401,7 @@ export const sessionStore = create<SessionStoreState>((set, get) => {
   return {
     connectionStatus: 'disconnected',
     currentSessionId: null,
+    pendingResearchMode: false,
     currentProvider: savedModel?.provider ?? 'anthropic',
     currentModel: savedModel?.model ?? 'claude-sonnet-4-6',
     sessions: [],
@@ -366,16 +456,36 @@ export const sessionStore = create<SessionStoreState>((set, get) => {
       connection.sendSessionSetThinkingLevel(sessionId, level)
     },
 
+    toggleResearchMode: (sessionId) => {
+      // No active session yet (hero composer): stage on the root pending
+      // flag. The next send migrates it onto the new session's state.
+      if (!sessionId) {
+        const next = !get().pendingResearchMode
+        set({ pendingResearchMode: next })
+        return next
+      }
+      const prev = get().getSessionState(sessionId).researchMode
+      const next = !prev
+      get().updateSessionState(sessionId, { researchMode: next })
+      if (next) {
+        _researchModeMap[sessionId] = true
+      } else {
+        delete _researchModeMap[sessionId]
+      }
+      flushResearchModeMap()
+      return next
+    },
+
     // ── Per-session state ─────────────────────────────────────
 
     getSessionState: (sessionId) => {
-      return get().sessionStates.get(sessionId) ?? createSessionState()
+      return get().sessionStates.get(sessionId) ?? createSessionState(sessionId)
     },
 
     updateSessionState: (sessionId, updates) => {
       set((s) => {
         const states = new Map(s.sessionStates)
-        const current = states.get(sessionId) ?? createSessionState()
+        const current = states.get(sessionId) ?? createSessionState(sessionId)
         states.set(sessionId, { ...current, ...updates })
         return { sessionStates: states }
       })
@@ -386,6 +496,13 @@ export const sessionStore = create<SessionStoreState>((set, get) => {
       if (existingTimeout) {
         clearTimeout(existingTimeout)
         _stuckTimeouts.delete(sessionId)
+      }
+
+      // Drop the persisted research-mode flag too — otherwise deleted
+      // sessions accumulate in localStorage forever.
+      if (_researchModeMap[sessionId]) {
+        delete _researchModeMap[sessionId]
+        flushResearchModeMap()
       }
 
       set((s) => {
@@ -478,7 +595,7 @@ export const sessionStore = create<SessionStoreState>((set, get) => {
     registerPendingSession: (id) => {
       return new Promise<void>((resolve) => {
         const states = new Map(get().sessionStates)
-        const current = states.get(id) ?? createSessionState()
+        const current = states.get(id) ?? createSessionState(id)
         states.set(id, { ...current, resolver: resolve })
         set({ sessionStates: states })
       })
@@ -545,16 +662,23 @@ export const sessionStore = create<SessionStoreState>((set, get) => {
     setHarnessSetupProgress: (id, progress) =>
       set((s) => ({ harnessSetupProgress: { ...s.harnessSetupProgress, [id]: progress } })),
     sendAiMessage: (text, attachments) => {
-      connection.sendAiMessage(text, attachments)
+      const sid = get().currentSessionId
+      // Migrate any pre-session pending flag onto this session before
+      // reading it, so the very first send after toggling Research on
+      // the hero composer actually carries `mode: 'research'`.
+      if (sid) consumePendingResearchModeFor(sid, get, set)
+      const mode = sid && get().getSessionState(sid).researchMode ? 'research' : undefined
+      connection.sendAiMessage(text, attachments, mode ? { mode } : undefined)
       // Optimistic: show working state immediately instead of waiting for server event.
       // Centralized here so every call site gets it automatically.
-      const sid = get().currentSessionId
       if (sid && get().connectionStatus === 'connected') {
         get().setSessionStatus(sid, 'working')
       }
     },
     sendAiMessageToSession: (text, sessionId, attachments) => {
-      connection.sendAiMessageToSession(text, sessionId, attachments)
+      consumePendingResearchModeFor(sessionId, get, set)
+      const mode = get().getSessionState(sessionId).researchMode ? 'research' : undefined
+      connection.sendAiMessageToSession(text, sessionId, attachments, mode ? { mode } : undefined)
       if (get().connectionStatus === 'connected') {
         get().setSessionStatus(sessionId, 'working')
       }

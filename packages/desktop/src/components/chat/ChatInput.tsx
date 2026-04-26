@@ -14,7 +14,12 @@ import type { ChatImageAttachment } from '../../lib/store.js'
 import { useIsCurrentSessionWorking, useStore } from '../../lib/store.js'
 import { artifactStore } from '../../lib/store/artifactStore.js'
 import { projectStore } from '../../lib/store/projectStore.js'
-import { type EffortLevel, effortLabel, sessionStore } from '../../lib/store/sessionStore.js'
+import {
+  type EffortLevel,
+  effortLabel,
+  getPersistedResearchMode,
+  sessionStore,
+} from '../../lib/store/sessionStore.js'
 import {
   classifyMimeFamily,
   resolveInitialFolder,
@@ -24,7 +29,7 @@ import { DestinationPicker, type DestinationPickerResult } from '../files/Destin
 import { MentionDropdown } from '../mentions/MentionDropdown.js'
 import { AskUserInline } from './AskUserInline.js'
 import { ComposerAddMenu } from './ComposerAddMenu.js'
-import { ConnectorBanner, ConnectorPill } from './ConnectorToolbar.js'
+import { ConnectorBanner } from './ConnectorToolbar.js'
 import { ModelSelector } from './ModelSelector.js'
 import type { RichInputHandle } from './RichInput.js'
 import { RichInput } from './RichInput.js'
@@ -159,6 +164,14 @@ export function ChatInput({
   const currentProvider = sessionStore((s) => s.currentProvider)
   const currentModel = sessionStore((s) => s.currentModel)
   const showEffortPill = supportsReasoningEffort(currentProvider, currentModel)
+  // Research mode is per-session once a session exists, and falls back to
+  // the root-level `pendingResearchMode` flag pre-session (hero composer).
+  const researchMode = sessionStore((s) => {
+    const sid = s.currentSessionId
+    if (!sid) return s.pendingResearchMode
+    const state = s.sessionStates.get(sid)
+    return state ? state.researchMode : getPersistedResearchMode(sid)
+  })
   const richInputRef = useRef<RichInputHandle>(null)
   const imageInputRef = useRef<HTMLInputElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -753,7 +766,37 @@ export function ChatInput({
               >
                 <Plus size={12} strokeWidth={1.8} />
               </button>
-              <ConnectorPill />
+              {researchMode && (
+                <button
+                  type="button"
+                  className="composer__pill composer__pill--research-active"
+                  aria-label="Research mode on — click to turn off"
+                  aria-pressed={true}
+                  data-tooltip="Research mode on — click to turn off"
+                  onClick={() => {
+                    const sid = sessionStore.getState().currentSessionId
+                    sessionStore.getState().toggleResearchMode(sid)
+                  }}
+                >
+                  <svg
+                    width={14}
+                    height={14}
+                    viewBox="0 0 16 16"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth={1.6}
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    aria-hidden="true"
+                    focusable="false"
+                  >
+                    <circle cx="7" cy="7" r="5" />
+                    <line x1="10.7" y1="10.7" x2="14" y2="14" />
+                    <polyline points="4.6,8 6.2,6.4 7.6,7.6 9.4,5.6" />
+                  </svg>
+                  <span>Research</span>
+                </button>
+              )}
               {showEffortPill && (
                 <button
                   type="button"

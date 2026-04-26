@@ -1730,6 +1730,18 @@ export const CONNECTOR_REGISTRY: ConnectorRegistryEntry[] = [
     featured: true,
   },
   {
+    id: 'parallel-research',
+    name: 'Deep Research',
+    description:
+      'Multi-hop web research powered by Parallel. Issues several queries, synthesises page-level excerpts, and returns research-grade results with citations.',
+    icon: '🧭',
+    category: 'productivity',
+    type: 'oauth',
+    oauthProvider: 'webresearch',
+    requiredEnv: [],
+    featured: true,
+  },
+  {
     id: 'polymarket',
     name: 'Polymarket',
     description: 'Read Polymarket markets/orderbooks and track a public wallet portfolio.',

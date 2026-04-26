@@ -11,6 +11,7 @@ export { GmailConnector } from './gmail/index.js'
 export { NotionConnector } from './notion/index.js'
 export { TelegramConnector } from './telegram/index.js'
 export { ExaConnector } from './exa/index.js'
+export { ParallelConnector } from './parallel/index.js'
 export { GoogleCalendarConnector } from './google-calendar/index.js'
 export { GoogleDriveConnector } from './google-drive/index.js'
 export { LinearConnector } from './linear/index.js'
@@ -35,6 +36,7 @@ import { GranolaConnector } from './granola/index.js'
 import { LinearConnector } from './linear/index.js'
 import { LinkedInConnector } from './linkedin/index.js'
 import { NotionConnector } from './notion/index.js'
+import { ParallelConnector } from './parallel/index.js'
 import { PolymarketConnector } from './polymarket/index.js'
 import { SlackBotConnector, SlackUserConnector } from './slack/index.js'
 import { TelegramConnector } from './telegram/index.js'
@@ -49,6 +51,7 @@ export const CONNECTOR_FACTORIES: Record<string, ConnectorFactory> = {
   notion: () => new NotionConnector(),
   telegram: () => new TelegramConnector(),
   'exa-search': () => new ExaConnector(),
+  'parallel-research': () => new ParallelConnector(),
   'google-calendar': () => new GoogleCalendarConnector(),
   'google-drive': () => new GoogleDriveConnector(),
   linear: () => new LinearConnector(),

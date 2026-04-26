@@ -153,6 +153,13 @@ export interface HarnessSessionContext {
    * single `title_update` SessionEvent. Undefined = tool hidden.
    */
   onSetTitle?: (title: string) => void
+  /**
+   * Resolves `{ baseUrl, token }` for proxy-style connectors. Server
+   * provides this via its credential-store + connector-manager union.
+   * Used by anton-core canonical wrappers (`web_search`, `web_research`)
+   * to delegate without learning about OAuth or the credential store.
+   */
+  resolveProviderToken?: import('../tools/factories.js').ProviderTokenResolver
 }
 
 export interface AntonToolRegistryOpts {
@@ -216,6 +223,7 @@ export class AntonToolRegistry implements IpcToolProvider {
       onSetTitle: ctx?.onSetTitle,
       browserCallbacks: ctx?.browserCallbacks,
       domain: ctx?.domain,
+      resolveProviderToken: ctx?.resolveProviderToken,
       // Harness path gets spawn_sub_agent with live MCP progress.
       includeHarnessMcpTools: true,
     })

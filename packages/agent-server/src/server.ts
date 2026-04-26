@@ -1922,11 +1922,14 @@ export class AgentServer {
             'Steering session',
           )
         } else {
-          // Session not active — treat as a regular message
+          // Session not active — treat as a regular message. Forward
+          // mode so a research-mode steer that falls back here still
+          // gets the turn-level research hint.
           await this.handleChatMessage({
             content: msg.content,
             sessionId: msg.sessionId,
             attachments: msg.attachments,
+            mode: msg.mode,
           })
         }
         break
@@ -2313,6 +2316,7 @@ export class AgentServer {
       projectId: harnessProjectId,
       workspacePath: cwd,
       surface: surfaceLabel,
+      resolveProviderToken: this.resolveProviderToken,
       onActivateWorkflow: harnessProjectId ? this.buildActivateWorkflowHandler() : undefined,
       // Background runs (routines) must not interrupt the desktop user
       // with an ask_user prompt. Return empty answers immediately so the
@@ -4544,6 +4548,7 @@ export class AgentServer {
       projectType: project?.type,
       onJobAction: projectId ? this.buildAgentActionHandler(sessionId) : undefined,
       onActivateWorkflow: projectId && !isAgent ? this.buildActivateWorkflowHandler() : undefined,
+      resolveProviderToken: this.resolveProviderToken,
       onSharedState:
         agentWorkflowId && projectId
           ? this.buildSharedStateHandler(agentWorkflowId, agentWorkflowKey)
@@ -4641,6 +4646,65 @@ export class AgentServer {
         default:
           return `Unknown operation: ${input.operation}`
       }
+    }
+  }
+
+  /**
+   * Resolves a connector's `{ baseUrl, token }` for proxy-style connectors
+   * (Exa via search-proxy, Parallel via research-proxy). Anton-core's
+   * canonical wrappers (`web_search`, `web_research`) call this so they
+   * don't have to embed OAuth or credential-store logic.
+   *
+   * Two paths, tried in order:
+   *
+   *   1. **API-key** — connector config row has `apiKey` + `baseUrl` set
+   *      directly (the `type: 'api'` form: user pasted creds via the
+   *      Connector form). Use as-is.
+   *   2. **OAuth** — connector class declares a `proxyBaseUrl` AND the
+   *      credential store has a token under this connector id. Combine.
+   *
+   * Returns null when neither path resolves: connector disabled, missing,
+   * or no auth available yet. Calling tool surfaces a setup message.
+   *
+   * Generalized — any future proxy-style connector that declares
+   * `proxyBaseUrl` on its class works automatically with no edits here.
+   */
+  private resolveProviderToken: import('@anton/agent-core').ProviderTokenResolver = async (
+    connectorId,
+  ) => {
+    const conn = getConnectors(this.config).find((c) => c.id === connectorId && c.enabled)
+    if (!conn) return null
+
+    // 1. API-key path (manually pasted creds).
+    if (conn.apiKey && conn.baseUrl) {
+      return { baseUrl: conn.baseUrl, token: conn.apiKey }
+    }
+
+    // 2. OAuth path: connector class knows its proxy URL; credential
+    //    store knows its token. Pair them.
+    const live = this.connectorManager.getConnector(connectorId)
+    const proxyBaseUrl = live?.proxyBaseUrl
+    if (!proxyBaseUrl) return null
+    if (!this.oauthFlow.hasToken(connectorId)) return null
+    try {
+      const raw = await this.oauthFlow.getToken(connectorId)
+      // The OAuth proxy historically issues a compound `proxyUrl|token`
+      // for the search/research providers — the connector HTTP clients
+      // (exa/api.ts, parallel/api.ts) split on `|`. The canonical
+      // wrappers in agent-core just slap the token into a Bearer
+      // header, so we have to unpack the same shape here or auth fails
+      // with `Bearer https://search.antoncomputer.in|abc123`.
+      const sep = raw.indexOf('|')
+      if (sep > 0) {
+        return { baseUrl: raw.slice(0, sep), token: raw.slice(sep + 1) }
+      }
+      return { baseUrl: proxyBaseUrl, token: raw }
+    } catch (err) {
+      log.warn(
+        { connectorId, err: (err as Error).message },
+        'resolveProviderToken: oauth getToken failed',
+      )
+      return null
     }
   }
 
@@ -4936,8 +5000,24 @@ export class AgentServer {
     content: string
     sessionId?: string
     attachments?: { id: string; name: string; mimeType: string; data: string; sizeBytes: number }[]
+    mode?: 'research'
   }): Promise<number> {
     const sessionId = msg.sessionId || DEFAULT_SESSION_ID
+
+    // Composer mode toggles. When the user has Research mode on, prepend a
+    // turn-level system note before the user's text so the model treats this
+    // turn as a deep research turn (prefer web_research over web_search,
+    // plan multi-source/multi-hop, do not loop quick searches). Hint is
+    // bracketed and short — visible enough that the model can't ignore it,
+    // small enough that it doesn't drown the user's intent.
+    let chatContent = msg.content
+    if (msg.mode === 'research') {
+      const RESEARCH_TURN_HINT =
+        '[Research mode: ON — for THIS turn, treat the user message as a deep research request. ' +
+        'Strongly prefer `web_research` over `web_search`. Plan multi-source / multi-hop work; ' +
+        'do not loop quick searches. Cite sources.]'
+      chatContent = `${RESEARCH_TURN_HINT}\n\n${msg.content}`
+    }
 
     // Auto-create default session if it doesn't exist
     let session = this.sessions.get(sessionId)
@@ -5081,7 +5161,7 @@ export class AgentServer {
       let lastProjectSummary: string | undefined
       let writingStatusSent = false
 
-      for await (const event of session.processMessage(msg.content, msg.attachments || [])) {
+      for await (const event of session.processMessage(chatContent, msg.attachments || [])) {
         eventCount++
 
         // ── Text events: buffer instead of sending immediately ──
@@ -6223,7 +6303,7 @@ export class AgentServer {
 
     // Build provider-specific extra params
     let extraParams: Record<string, string> | undefined
-    if (entry?.oauthProvider === 'websearch') {
+    if (entry?.oauthProvider === 'websearch' || entry?.oauthProvider === 'webresearch') {
       let domain = process.env.ANTON_HOST
       if (!domain && process.env.OAUTH_CALLBACK_BASE_URL) {
         try {

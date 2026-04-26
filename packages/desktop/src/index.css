@@ -1659,54 +1659,26 @@ button {
   color: rgb(248, 210, 178);
 }
 
-.composer__pill-label {
-  font-size: 11.5px;
-  color: var(--text-3);
+/* Research-on pill — only rendered when research mode is active. Mirrors
+   Claude.ai's composer affordance: blue background + blue text + click
+   to disable. The neutral/off state isn't a pill at all (it lives inside
+   the + menu instead), so there's no `.composer__pill--research` rule
+   to render an idle pill. */
+.composer__pill--research-active {
+  gap: 6px;
+  padding: 4px 10px 4px 8px;
+  background: rgba(82, 137, 240, 0.14);
+  border-color: rgba(82, 137, 240, 0.32);
+  color: rgb(140, 180, 248);
 }
-
-.composer__pill-chevron {
-  color: var(--text-4);
-  margin-left: 2px;
+.composer__pill--research-active:hover {
+  background: rgba(82, 137, 240, 0.2);
+  border-color: rgba(82, 137, 240, 0.5);
+  color: rgb(170, 200, 255);
 }
-
-/* Stacked connector avatars in the pill */
-.conn-stack {
-  display: inline-flex;
-  align-items: center;
-}
-
-.conn-stack__av {
-  width: 14px;
-  height: 14px;
-  border-radius: 3px;
-  overflow: hidden;
-  display: grid;
-  place-items: center;
-  font-size: 8px;
-  font-weight: 600;
-  color: #fff;
-  margin-left: -3px;
-  box-shadow: 0 0 0 1.5px var(--bg-elev-1);
+.composer__pill--research-active svg {
+  color: currentColor;
   flex-shrink: 0;
-  background: var(--bg-elev-3);
-}
-
-.conn-stack__av > svg,
-.conn-stack__av > img {
-  width: 100%;
-  height: 100%;
-  display: block;
-}
-
-.conn-stack__av:first-child {
-  margin-left: 0;
-}
-
-.conn-stack__count {
-  font-size: 10.5px;
-  color: var(--text-3);
-  margin-left: 5px;
-  font-family: "JetBrains Mono", ui-monospace, monospace;
 }
 
 /* ── Model button ──────────────────────────────────────────────────── */
@@ -2106,178 +2078,6 @@ button {
 .composer__send--stop:hover:not(:disabled) {
   background: var(--danger, #c25450);
   opacity: 0.9;
-}
-
-/* ── Connector Pill (inline in toolbar) ────────────────── */
-.connector-pill-wrap {
-  position: relative;
-  display: flex;
-  align-items: center;
-  gap: 2px;
-}
-
-.connector-pill {
-  display: inline-flex;
-  align-items: center;
-  gap: 0;
-  padding: 3px 6px;
-  border-radius: 8px;
-  height: 26px;
-  border: 1px solid rgba(var(--overlay), 0.12);
-  background: rgba(var(--overlay), 0.04);
-  cursor: pointer;
-  transition: background 0.15s;
-}
-
-.connector-pill:hover {
-  background: rgba(var(--overlay), 0.08);
-}
-
-.connector-pill__icon {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 16px;
-  height: 16px;
-}
-
-.connector-pill__icon + .connector-pill__icon {
-  margin-left: -2px;
-}
-
-.connector-pill__more {
-  font-size: 11px;
-  color: var(--text-subtle);
-  margin-left: 4px;
-}
-
-/* ── Connector Dropdown (from pill) ───────────────────── */
-.connector-dropdown {
-  width: 320px;
-  max-height: 460px;
-  overflow-y: auto;
-  background: var(--bg-elevated);
-  border: 1px solid rgba(var(--overlay), 0.1);
-  border-radius: 12px;
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
-  padding: 4px 0;
-}
-
-.connector-dropdown__item {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 10px 16px;
-  cursor: default;
-}
-
-.connector-dropdown__item:hover {
-  background: rgba(var(--overlay), 0.04);
-}
-
-.connector-dropdown__item-left {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
-
-.connector-dropdown__item-name {
-  font-size: 14px;
-  color: var(--text);
-}
-
-.connector-dropdown__item-connect {
-  font-size: 13px;
-  color: var(--text-subtle);
-  cursor: pointer;
-}
-
-.connector-dropdown__item--unconnected {
-  width: 100%;
-  background: none;
-  border: none;
-  font: inherit;
-  cursor: pointer;
-}
-
-.connector-dropdown__item-connect:hover {
-  color: var(--text);
-}
-
-/* Toggle switch */
-.connector-dropdown__toggle {
-  position: relative;
-  display: inline-block;
-  width: 36px;
-  height: 20px;
-  cursor: pointer;
-}
-
-.connector-dropdown__toggle input {
-  opacity: 0;
-  width: 0;
-  height: 0;
-  position: absolute;
-}
-
-.connector-dropdown__toggle-track {
-  position: absolute;
-  inset: 0;
-  border-radius: 10px;
-  background: rgba(var(--overlay), 0.15);
-  transition: background 0.2s;
-}
-
-.connector-dropdown__toggle-track::after {
-  content: "";
-  position: absolute;
-  width: 14px;
-  height: 14px;
-  border-radius: 50%;
-  background: white;
-  top: 3px;
-  left: 3px;
-  transition: transform 0.2s;
-}
-
-.connector-dropdown__toggle input:checked + .connector-dropdown__toggle-track {
-  background: #3b82f6;
-}
-
-.connector-dropdown__toggle input:checked + .connector-dropdown__toggle-track::after {
-  transform: translateX(16px);
-}
-
-.connector-dropdown__footer {
-  border-top: 1px solid rgba(var(--overlay), 0.08);
-  padding: 4px 0;
-}
-
-.connector-dropdown__footer-btn {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  width: 100%;
-  padding: 10px 16px;
-  border: none;
-  background: none;
-  color: var(--text-muted);
-  font-size: 14px;
-  cursor: pointer;
-  text-align: left;
-}
-
-.connector-dropdown__footer-btn:hover {
-  background: rgba(var(--overlay), 0.04);
-  color: var(--text);
-}
-
-.connector-dropdown__footer-count {
-  font-size: 12px;
-  color: var(--text-subtle);
-  background: rgba(var(--overlay), 0.08);
-  padding: 1px 6px;
-  border-radius: 8px;
 }
 
 /* ── Connector Banner (below composer box) ────────────── */
@@ -26144,35 +25944,102 @@ button {
   border-radius: 1px;
 }
 
-/* ── Composer Add Menu (Add Images / Add Files) ─────────────────── */
+/* ── Composer Add Menu ──────────────────────────────────────────── */
 .composer-add-menu {
   display: flex;
   flex-direction: column;
-  min-width: 200px;
-  padding: 4px;
+  min-width: 300px;
+  padding: 6px;
   background: var(--bg-elev-2);
   border: 1px solid var(--border-strong);
-  border-radius: 10px;
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.4);
+  border-radius: 12px;
+  box-shadow: 0 12px 36px rgba(0, 0, 0, 0.45), 0 2px 6px rgba(0, 0, 0, 0.25);
   color: var(--text);
+  font-size: 13px;
+}
+.composer-add-menu__section {
+  display: flex;
+  flex-direction: column;
+}
+.composer-add-menu__divider {
+  height: 1px;
+  margin: 6px 4px;
+  background: var(--border);
 }
 .composer-add-menu__item {
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 8px 10px;
+  gap: 12px;
+  width: 100%;
+  height: 34px;
+  padding: 0 10px;
   border: 0;
-  border-radius: 6px;
+  border-radius: 8px;
   background: transparent;
   color: var(--text);
   font-size: 13px;
+  line-height: 1;
   text-align: left;
   cursor: pointer;
+  transition: background 0.1s;
+}
+.composer-add-menu__item > svg {
+  flex: 0 0 auto;
+  color: var(--text-2, var(--text));
+}
+.composer-add-menu__item > span {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .composer-add-menu__item:hover,
 .composer-add-menu__item:focus-visible {
   background: var(--bg-elev-3);
   outline: none;
+}
+.composer-add-menu__item--active {
+  color: var(--accent, #3b82f6);
+}
+.composer-add-menu__item--active > svg {
+  color: var(--accent, #3b82f6);
+}
+.composer-add-menu__item--active:hover {
+  background: rgba(59, 130, 246, 0.08);
+}
+.composer-add-menu__check {
+  flex: 0 0 auto;
+  color: var(--accent, #3b82f6);
+}
+
+/* "Manage connectors": leading icon + label + trailing brand-icon stack
+   so users read "connectors = applications" at a glance. The stack is
+   intentionally bare — no chip ring or background — so it reads as a
+   subtle pile, not pasted-on logos. */
+.composer-add-menu__icon-strip {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  padding-left: 8px;
+}
+.composer-add-menu__icon-strip-item {
+  width: 16px;
+  height: 16px;
+  display: inline-grid;
+  place-items: center;
+  border-radius: 3px;
+  margin-left: -3px;
+  overflow: hidden;
+}
+.composer-add-menu__icon-strip-item:first-child {
+  margin-left: 0;
+}
+.composer-add-menu__icon-strip-item > svg,
+.composer-add-menu__icon-strip-item > img {
+  width: 14px;
+  height: 14px;
+  display: block;
 }
 
 /* ── Destination Picker modal ───────────────────────────────────── */

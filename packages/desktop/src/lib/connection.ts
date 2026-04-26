@@ -149,8 +149,17 @@ export class Connection {
     this.ws.send(encodeFrame(channel, message))
   }
 
-  sendAiMessage(content: string, attachments?: ChatImageAttachmentInput[]) {
-    this.send(Channel.AI, { type: 'message', content, attachments })
+  sendAiMessage(
+    content: string,
+    attachments?: ChatImageAttachmentInput[],
+    opts?: { mode?: 'research' },
+  ) {
+    this.send(Channel.AI, {
+      type: 'message',
+      content,
+      attachments,
+      ...(opts?.mode ? { mode: opts.mode } : {}),
+    })
   }
 
   sendTerminalData(sessionId: string, data: string) {
@@ -227,8 +236,15 @@ export class Connection {
     content: string,
     sessionId: string,
     attachments?: ChatImageAttachmentInput[],
+    opts?: { mode?: 'research' },
   ) {
-    this.send(Channel.AI, { type: 'message', content, sessionId, attachments })
+    this.send(Channel.AI, {
+      type: 'message',
+      content,
+      sessionId,
+      attachments,
+      ...(opts?.mode ? { mode: opts.mode } : {}),
+    })
   }
 
   sendSteerMessage(content: string, sessionId: string, attachments?: ChatImageAttachmentInput[]) {
