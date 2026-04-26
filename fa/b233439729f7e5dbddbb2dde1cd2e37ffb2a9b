@@ -1,0 +1,105 @@
+packages/agent-core/src/tools/web-research.ts
+  84b172d07d043907 1-80,82-131
+  a238083d00c8fbe0 81
+packages/agent-core/src/tools/factories.ts
+  84b172d07d043907 23,44-67,131-138,154-162
+packages/agent-core/src/tools/anton-web-search.ts
+  84b172d07d043907 2-5,7-15,17-20,27-28,32-33,38,44,81-86,91-92
+packages/connectors/src/types.ts
+  84b172d07d043907 66-79
+packages/protocol/src/messages.ts
+  a238083d00c8fbe0 459-460,469-470
+packages/desktop/src/lib/connection.ts
+  84b172d07d043907 152-162,239,241-247
+packages/agent-server/src/server.ts
+  a238083d00c8fbe0 1925-1927,1932,4690-4701
+  84b172d07d043907 2319,4551,4652-4689,4702-4710,5003,5007-5021,5164,6306
+packages/agent-core/src/agent.ts
+  84b172d07d043907 207-214,577
+packages/agent-core/src/tools/anton-web-research.ts
+  84b172d07d043907 1-102
+packages/desktop/src/index.css
+  e0c37735021bb510 1662-1672,1674-1677,1679-1680,25951-25952,25955-25956,25958,25966,25972,25974-25975,25977,25981,25984-25988,26005-26007,26016-26022,26024,26026-26032,26035-26042
+  84b172d07d043907 25947,25960-25965,25967,25973,25989-25995,26002-26004,26008-26015,26023,26025,26033-26034
+packages/desktop/src/components/chat/ComposerAddMenu.tsx
+  e0c37735021bb510 1,4-7,18-40,43-65,91-95,112-129,132-203
+packages/agent-core/src/index.ts
+  84b172d07d043907 66-71
+packages/connectors/src/parallel/index.ts
+  84b172d07d043907 1-46
+packages/desktop/src/components/chat/ChatInput.tsx
+  e0c37735021bb510 20,32,167-174,769-799
+  84b172d07d043907 17-19,21-22
+packages/connectors/src/parallel/api.ts
+  84b172d07d043907 1-96
+packages/desktop/src/components/chat/ConnectorToolbar.tsx
+  e0c37735021bb510 1-2
+packages/desktop/src/components/connectors/ConnectorIcons.tsx
+  84b172d07d043907 251-272,313
+packages/connectors/src/index.ts
+  84b172d07d043907 14,39,54
+packages/agent-config/src/config.ts
+  84b172d07d043907 1732-1742
+packages/agent-core/src/session.ts
+  84b172d07d043907 2476-2482,2518,2601-2602,2636
+packages/desktop/src/lib/store/sessionStore.ts
+  84b172d07d043907 127-132,176-211,459,467-478,665,670-671,680-681
+  a238083d00c8fbe0 137-140,167-171,482,488,501-507,598
+  e0c37735021bb510 214-237,283-287,302-309,404,460-466,666-669,679
+packages/connectors/src/exa/index.ts
+  84b172d07d043907 12-17
+packages/connectors/src/parallel/tools.ts
+  84b172d07d043907 1-111
+packages/agent-core/src/prompt-layers.ts
+  84b172d07d043907 407-420
+packages/agent-core/src/harness/tool-registry.ts
+  84b172d07d043907 156-162,226
+packages/agent-config/prompts/system.md
+  84b172d07d043907 17-18
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.3.4",
+  "base_commit_sha": "fab233439729f7e5dbddbb2dde1cd2e37ffb2a9b",
+  "prompts": {
+    "84b172d07d043907": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "245a2589-b9fd-464f-aa0d-9adb4d44d8fa",
+        "model": "claude-opus-4-7"
+      },
+      "human_author": "Om Gupta",
+      "messages": [],
+      "total_additions": 1133,
+      "total_deletions": 178,
+      "accepted_lines": 851,
+      "overriden_lines": 0
+    },
+    "a238083d00c8fbe0": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "fb848b5d-76ca-48ed-b69a-0be607d1c471",
+        "model": "claude-opus-4-7"
+      },
+      "human_author": "Om Gupta",
+      "messages": [],
+      "total_additions": 40,
+      "total_deletions": 8,
+      "accepted_lines": 40,
+      "overriden_lines": 0
+    },
+    "e0c37735021bb510": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "58257bf4-2044-472d-b6db-d486764e37f2",
+        "model": "claude-opus-4-7"
+      },
+      "human_author": "Om Gupta",
+      "messages": [],
+      "total_additions": 28188,
+      "total_deletions": 712,
+      "accepted_lines": 303,
+      "overriden_lines": 0
+    }
+  }
+}
