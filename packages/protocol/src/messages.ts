@@ -456,6 +456,8 @@ export interface AiUserMessage {
   content: string
   sessionId?: string // target session (defaults to "default")
   attachments?: ChatImageAttachmentInput[]
+  /** Composer-mode hint. 'research' biases the model toward web_research. */
+  mode?: 'research'
 }
 
 // Steering: user sends a message while the agent is actively working
@@ -464,6 +466,8 @@ export interface AiSteerMessage {
   content: string
   sessionId?: string
   attachments?: ChatImageAttachmentInput[]
+  /** See AiUserMessage.mode — propagated when a steer falls back to a regular message. */
+  mode?: 'research'
 }
 
 /** Client requests cancellation of the active turn */

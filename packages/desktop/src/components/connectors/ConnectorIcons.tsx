@@ -248,6 +248,28 @@ function ExaSearchIcon({ size = 24 }: { size?: number }) {
   )
 }
 
+function ParallelResearchIcon({ size = 24 }: { size?: number }) {
+  // Parallel's brand mark — a sphere of horizontal stripes (platform.parallel.ai).
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <defs>
+        <clipPath id="parallelSphere">
+          <circle cx="12" cy="12" r="9" />
+        </clipPath>
+      </defs>
+      <g clipPath="url(#parallelSphere)">
+        <rect x="0" y="4.25" width="24" height="1.1" rx="0.55" fill="currentColor" />
+        <rect x="0" y="7" width="24" height="1.4" rx="0.7" fill="currentColor" />
+        <rect x="0" y="9.85" width="24" height="1.6" rx="0.8" fill="currentColor" />
+        <rect x="0" y="12.7" width="24" height="1.6" rx="0.8" fill="currentColor" />
+        <rect x="0" y="15.55" width="24" height="1.4" rx="0.7" fill="currentColor" />
+        <rect x="0" y="18.3" width="24" height="1.1" rx="0.55" fill="currentColor" />
+      </g>
+      <circle cx="12" cy="12" r="9" stroke="currentColor" strokeWidth="1" fill="none" />
+    </svg>
+  )
+}
+
 function AirtableIcon({ size = 24 }: { size?: number }) {
   return (
     <svg width={size} height={size} viewBox="0 0 24 24" fill="none" aria-hidden="true">
@@ -288,6 +310,7 @@ function LinkedInIcon({ size = 24 }: { size?: number }) {
 const ICON_MAP: Record<string, (props: { size?: number }) => JSX.Element> = {
   brave: BraveIcon,
   'exa-search': ExaSearchIcon,
+  'parallel-research': ParallelResearchIcon,
   telegram: TelegramIcon,
   gmail: GmailIcon,
   'google-calendar': GoogleCalendarIcon,

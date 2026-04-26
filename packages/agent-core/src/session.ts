@@ -2473,6 +2473,13 @@ export function createSession(
     workflowMetadata?: { workflowId: string; agentKey: string; promptVersion: string }
     /** Where the session is talking — Slack/Telegram/desktop. Omit for desktop. */
     surface?: SurfaceInfo
+    /**
+     * Resolves `{ baseUrl, token }` for proxy-style connectors. Threaded
+     * into Pi SDK's tool callbacks so anton-core canonical wrappers
+     * (`web_search`, `web_research`) can reach the credential store +
+     * connector-class proxy URLs without learning about either layer.
+     */
+    resolveProviderToken?: import('./tools/factories.js').ProviderTokenResolver
   },
 ): Session {
   const provider = opts?.provider || config.defaults.provider
@@ -2508,6 +2515,7 @@ export function createSession(
     onJobAction: opts?.onJobAction,
     onDeliverResult: opts?.onDeliverResult,
     domain: opts?.domain,
+    resolveProviderToken: opts?.resolveProviderToken,
     getParentForkContext: () => {
       const s = sessionRef.session
       if (!s) return undefined
@@ -2590,6 +2598,8 @@ export function resumeSession(
     agentMemory?: string
     /** Where the session is talking — Slack/Telegram/desktop. Omit for desktop. */
     surface?: SurfaceInfo
+    /** See createSession opts — same field, plumbed for resumed sessions. */
+    resolveProviderToken?: import('./tools/factories.js').ProviderTokenResolver
   },
 ): Session | null {
   const basePath = opts?.projectId ? getProjectSessionsDir(opts.projectId) : undefined
@@ -2623,6 +2633,7 @@ export function resumeSession(
     projectId: opts?.projectId,
     onJobAction: opts?.onJobAction,
     onDeliverResult: opts?.onDeliverResult,
+    resolveProviderToken: opts?.resolveProviderToken,
     getParentForkContext: () => {
       const s = sessionRef.session
       if (!s) return undefined

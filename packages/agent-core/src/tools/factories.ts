@@ -20,6 +20,7 @@
 import type { AgentTool } from '@mariozechner/pi-agent-core'
 import type { AskUserHandler } from '../agent.js'
 import { type ActivateWorkflowHandler, buildActivateWorkflowTool } from './activate-workflow.js'
+import { buildAntonWebResearchTool } from './anton-web-research.js'
 import { buildAntonWebSearchTool } from './anton-web-search.js'
 import { buildArtifactTool } from './artifact-factory.js'
 import { buildAskUserTool } from './ask-user.js'
@@ -39,6 +40,30 @@ import { type SetSessionTitleHandler, buildSetSessionTitleTool } from './set-ses
 import { buildSpawnSubAgentTool } from './spawn-sub-agent.js'
 import { buildTaskTrackerTool } from './task-tracker-factory.js'
 import { buildUpdateProjectContextTool } from './update-project-context.js'
+
+/**
+ * Resolved provider for a proxy-style connector — base URL of the proxy
+ * worker plus the bearer token to send. Returned by `ProviderTokenResolver`,
+ * consumed by anton-core canonical tools (`web_search`, `web_research`).
+ */
+export interface ResolvedProviderToken {
+  baseUrl: string
+  token: string
+}
+
+/**
+ * Resolves a connector's `{ baseUrl, token }` pair on demand. Implemented
+ * server-side as the union of two paths — API-key from the connector
+ * config row (for `type: 'api'` connectors with manually-pasted creds) OR
+ * OAuth token from the credential store paired with the connector class's
+ * `proxyBaseUrl`. Anton-core wrappers don't know which path was used; they
+ * just call the resolver and get back enough to make an HTTP request.
+ *
+ * Returns null when the connector is disabled, missing, or has no
+ * resolvable credentials yet — the calling tool surfaces a setup message
+ * to the user instead of a half-formed request.
+ */
+export type ProviderTokenResolver = (connectorId: string) => Promise<ResolvedProviderToken | null>
 
 export interface AntonCoreToolContext {
   /**
@@ -103,6 +128,14 @@ export interface AntonCoreToolContext {
    * tool hidden (Pi SDK path, which uses its own `generateAITitle`).
    */
   onSetTitle?: SetSessionTitleHandler
+  /**
+   * Resolves a connector's proxy URL + bearer token on demand. Used by
+   * `web_search` (delegates to `exa-search`) and `web_research` (delegates
+   * to `parallel-research`) so they don't have to embed OAuth /
+   * credential-store knowledge in agent-core. Server wires this; when
+   * undefined the canonical wrappers return a "not configured" message.
+   */
+  resolveProviderToken?: ProviderTokenResolver
 }
 
 /**
@@ -118,10 +151,15 @@ export function buildAntonCoreTools(ctx: AntonCoreToolContext = {}): AgentTool[]
     buildNotificationTool(),
     buildPublishTool({ domain: ctx.domain, askUser: ctx.onAskUser }),
     // Exposed to every harness surface as `anton:web_search` via the
-    // MCP shim. The tool self-resolves the Exa connector from config;
-    // if no connector is configured, it returns a setup message instead
-    // of failing opaquely.
-    buildAntonWebSearchTool(),
+    // MCP shim. Delegates to whichever auth path the `exa-search`
+    // connector uses (API-key or OAuth) via `resolveProviderToken`. When
+    // no resolver is wired (or no connector is enabled) the tool returns
+    // a setup message instead of failing opaquely.
+    buildAntonWebSearchTool({ resolveProviderToken: ctx.resolveProviderToken }),
+    // Sibling of web_search backed by the Parallel research-proxy. Use
+    // for deep multi-hop research; web_search is faster for simple
+    // lookups. Same resolver pattern as web_search.
+    buildAntonWebResearchTool({ resolveProviderToken: ctx.resolveProviderToken }),
     // Renders rich content in the desktop side panel. Pi SDK has the
     // same tool inline in agent.ts; both paths emit the artifact
     // SessionEvent (Pi SDK via Session.detectArtifact, harness via the

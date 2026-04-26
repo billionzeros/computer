@@ -1,61 +1,47 @@
 /**
- * `anton:web_search` — exposes Anton's Exa-backed web search as an
- * AgentTool so it can be registered in `buildAntonCoreTools()` and
- * served over MCP to every harness (Codex, Claude Code, …).
+ * `anton:web_search` — Anton's canonical web-search tool. Independent of
+ * which provider sits behind it (today: Exa via search-proxy). Stable
+ * name + uniform citation marker so prompts and downstream tools
+ * (`update_project_context`, memory) don't drift when we swap providers.
  *
- * Why a separate file from the Pi SDK registration at
- * `agent.ts:1374-1435`:
+ * Behaviour:
+ *   - Resolves the active provider via `ctx.resolveProviderToken('exa-search')`.
+ *     The server-side resolver knows about both API-key and OAuth auth
+ *     paths; this file does not. When the resolver returns null (no
+ *     connector enabled, no token), the tool surfaces a setup message
+ *     rather than failing opaquely.
+ *   - Delegates the HTTP call to `executeWebSearch` in `./web-search.ts`,
+ *     which formats results with the `<!-- citations:... -->` marker
+ *     the rest of Anton expects.
  *
- *   - The Pi SDK registration builds the tool conditionally against
- *     the Pi SDK agent's `tools[]` array and respects the presence of
- *     an `exa_search` connector MCP tool (which the connector manager
- *     may inject) to avoid a duplicate.
- *   - This factory builds the same tool with the same semantics, but
- *     without that connector-dedup branch — the harness-MCP path
- *     doesn't go through the ConnectorManager MCP plane, so there's
- *     no collision to avoid.
- *
- * Both surfaces call `executeWebSearch` from `./web-search.ts`, so
- * behavior is identical for callers that reach either path.
+ * Why a wrapper at all (vs. just exposing the connector's `exa_search`):
+ * the wrapper provides a provider-stable canonical name AND uniform
+ * citation formatting. See the comment in `factories.ts` for the
+ * delegation contract.
  */
 
-import { loadConfig } from '@anton/agent-config'
 import { createLogger } from '@anton/logger'
 import type { AgentTool } from '@mariozechner/pi-agent-core'
 import { Type } from '@mariozechner/pi-ai'
 import { defineTool, toolResult } from './_helpers.js'
-import { type SearchProvider, executeWebSearch } from './web-search.js'
+import type { ProviderTokenResolver } from './factories.js'
+import { executeWebSearch } from './web-search.js'
 
 const log = createLogger('anton-web-search')
 
-/**
- * Read the Exa connector from the current config. Returns null if
- * there's no configured / enabled connector so the tool can return
- * a helpful setup message instead of failing opaquely.
- */
-function resolveExaProvider(): SearchProvider | null {
-  try {
-    const config = loadConfig()
-    const exa = config.connectors?.find(
-      (c) => c.id === 'exa-search' && c.enabled && c.baseUrl && c.apiKey,
-    )
-    if (!exa?.baseUrl || !exa?.apiKey) return null
-    return { baseUrl: exa.baseUrl, token: exa.apiKey }
-  } catch (err) {
-    log.warn({ err: (err as Error).message }, 'failed to load config for web_search')
-    return null
-  }
+interface BuildOpts {
+  resolveProviderToken?: ProviderTokenResolver
 }
 
 /**
  * Build the AgentTool. Called by `buildAntonCoreTools()` so the same
- * tool definition goes to Pi SDK (when we migrate) and harness MCP.
+ * tool definition goes to Pi SDK and harness MCP.
  *
  * Name is `web_search` at the Anton level. Codex sees it as
  * `anton:web_search` because Codex prefixes tools by the originating
  * MCP server name when rendering them to the model.
  */
-export function buildAntonWebSearchTool(): AgentTool {
+export function buildAntonWebSearchTool(opts: BuildOpts = {}): AgentTool {
   return defineTool({
     name: 'web_search',
     label: 'Web Search',
@@ -92,13 +78,18 @@ export function buildAntonWebSearchTool(): AgentTool {
       ),
     }),
     async execute(_toolCallId, params) {
-      const provider = resolveExaProvider()
+      const provider = opts.resolveProviderToken
+        ? await opts.resolveProviderToken('exa-search').catch((err) => {
+            log.warn({ err: (err as Error).message }, 'resolveProviderToken threw')
+            return null
+          })
+        : null
       if (!provider) {
         return toolResult(
           'Web search is not configured. To enable it:\n\n' +
             '1. Open Anton → Settings → Connectors.\n' +
-            '2. Find "Web Search (Exa)" and click Connect.\n' +
-            '3. Enter your Exa API key.\n\n' +
+            '2. Find "Web Search" and click Connect.\n' +
+            "3. Authorize through Anton's search proxy.\n\n" +
             'Without the connector, you can still fetch specific URLs via ' +
             'the browser tool if you already have them.',
           true,

@@ -204,6 +204,14 @@ export interface ToolCallbacks {
   onDeliverResult?: DeliverResultHandler
   /** Domain for this agent (e.g. "slug.antoncomputer.in"). Used by the publish tool. */
   domain?: string
+  /**
+   * Resolves a connector's `{ baseUrl, token }` for proxy-style connectors
+   * (Exa via search-proxy, Parallel via research-proxy). Wired by the
+   * server to its credential-store + connector-manager union; agent-core
+   * has no direct access to either, so this callback is the bridge.
+   * Anton's canonical wrappers (`web_search`, `web_research`) call it.
+   */
+  resolveProviderToken?: import('./tools/factories.js').ProviderTokenResolver
   /** Callback when the browser tool updates its state (screenshot, URL, action). */
   onBrowserState?: (state: {
     url: string
@@ -566,6 +574,7 @@ export function buildTools(
       projectId: callbacks?.projectId,
       onActivateWorkflow: callbacks?.onActivateWorkflow,
       domain: callbacks?.domain,
+      resolveProviderToken: callbacks?.resolveProviderToken,
     }),
 
     // ── Todo ────────────────────────────────────────────────────────

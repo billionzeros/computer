@@ -9,6 +9,12 @@ export class ExaConnector implements DirectConnector {
   readonly capabilitySummary =
     'Web search with citations, page-content extraction, structured answers'
   readonly capabilityExample = 'exa_search'
+  // Default base URL for the Anton-team-owned search-proxy. The connector's
+  // own HTTP client (ExaAPI) accepts a compound `proxyUrl|proxyToken` token
+  // for self-hosted proxy overrides; this constant is what `web_search`
+  // (anton-core canonical wrapper) uses when delegating through OAuth, where
+  // only a bare bearer token comes back from the credential store.
+  readonly proxyBaseUrl = 'https://search.antoncomputer.in'
 
   private api = new ExaAPI()
   private tools: AgentTool[] = []
