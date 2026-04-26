@@ -1,6 +1,6 @@
 {
   "version": "2.1.1",
-  "gitHash": "",
+  "gitHash": "6ae4a9c",
   "releaseUrl": "https://github.com/billionzeros/computer/releases",
   "changelog": "Features:\n- Parallel deep research connector + web_research canonical tool (#14)\n- add GPT-5.5 to Codex subscription and Anton API (#13)",
   "publishedAt": "2026-04-26T12:44:48.780Z",
