@@ -385,7 +385,6 @@ function PublishConfirmCard({
 export function AskUserInline({ questions, onSubmit }: Props) {
   const [answers, setAnswers] = useState<Record<string, string>>({})
   const [customInputs, setCustomInputs] = useState<Record<string, string>>({})
-  const [showCustom, setShowCustom] = useState<Record<string, boolean>>({})
 
   // ── Specialized cards for agent operations ──
   if (questions.length === 1) {
@@ -435,40 +434,31 @@ export function AskUserInline({ questions, onSubmit }: Props) {
   }
 
   // ── Generic rendering ──
+  // A question is "answered" only when committed to `answers`. Typing into the
+  // custom input is draft state — it does not advance the flow until the user
+  // explicitly submits via Enter or the arrow button.
 
-  const handleCustom = (question: string) => {
-    setShowCustom((prev) => ({ ...prev, [question]: true }))
-    setAnswers((prev) => ({ ...prev, [question]: '' }))
-  }
+  const answeredCount = questions.filter((q) => answers[q.question]).length
 
-  // Auto-submit when all questions have answers (and there are answers)
-  const checkAutoSubmit = (
-    newAnswers: Record<string, string>,
-    newCustom: Record<string, string>,
-  ) => {
-    const done = questions.every((q) => newAnswers[q.question] || newCustom[q.question]?.trim())
+  const commitAnswer = (question: string, value: string) => {
+    const trimmed = value.trim()
+    if (!trimmed) return
+    const newAnswers = { ...answers, [question]: trimmed }
+    setAnswers(newAnswers)
+    const done = questions.every((q) => newAnswers[q.question])
     if (done) {
-      const final: Record<string, string> = {}
-      for (const q of questions) {
-        final[q.question] = newCustom[q.question]?.trim() || newAnswers[q.question] || ''
-      }
-      // Small delay so user sees their selection
-      setTimeout(() => onSubmit(final), 300)
+      onSubmit(newAnswers)
     }
   }
 
-  const handleSelectAndCheck = (question: string, label: string) => {
-    const newAnswers = { ...answers, [question]: label }
-    const newCustom = { ...customInputs, [question]: '' }
-    setAnswers(newAnswers)
-    setCustomInputs(newCustom)
-    setShowCustom((prev) => ({ ...prev, [question]: false }))
-    checkAutoSubmit(newAnswers, newCustom)
+  const handleSelect = (question: string, label: string) => {
+    setCustomInputs((prev) => ({ ...prev, [question]: '' }))
+    commitAnswer(question, label)
   }
 
-  const answeredCount = questions.filter(
-    (q) => answers[q.question] || customInputs[q.question]?.trim(),
-  ).length
+  const handleSubmitCustom = (question: string) => {
+    commitAnswer(question, customInputs[question] || '')
+  }
 
   return (
     <div className="ix ix--accent">
@@ -499,24 +489,18 @@ export function AskUserInline({ questions, onSubmit }: Props) {
 
       <div className="ix__body">
         {(() => {
-          // Render only the first unanswered question — questions flow
-          // one at a time. Answered ones advance the progress dots in
-          // the header, and once all are done the ix__done block below
-          // fires the auto-submit.
-          const currentIndex = questions.findIndex(
-            (q) => !(answers[q.question] || customInputs[q.question]?.trim()),
-          )
+          const currentIndex = questions.findIndex((q) => !answers[q.question])
           if (currentIndex === -1) return null
 
           const q = questions[currentIndex]
-          const qi = currentIndex
           const options = (q.options ?? []).map(normalizeOption)
-          const isCustom = showCustom[q.question]
+          const customValue = customInputs[q.question] || ''
+          const customValid = customValue.trim().length > 0
 
           return (
             <div key={q.question}>
               <div className="ix__q">
-                <div className="ix__q-num">Q{qi + 1}</div>
+                <div className="ix__q-num">Q{currentIndex + 1}</div>
                 <div className="ix__q-text">{q.question}</div>
               </div>
 
@@ -526,7 +510,7 @@ export function AskUserInline({ questions, onSubmit }: Props) {
                     key={opt.label}
                     type="button"
                     className="ix__opt"
-                    onClick={() => handleSelectAndCheck(q.question, opt.label)}
+                    onClick={() => handleSelect(q.question, opt.label)}
                   >
                     <span className="ix__opt-kbd">{i + 1}</span>
                     <span className="ix__opt-text">{opt.label}</span>
@@ -538,30 +522,30 @@ export function AskUserInline({ questions, onSubmit }: Props) {
               {q.allowFreeText !== false && (
                 <div className="ix__custom">
                   <div className="ix__custom-label">
-                    {isCustom ? 'Your answer' : 'Or write your own answer'}
+                    {options.length > 0 ? 'Or write your own answer' : 'Your answer'}
                   </div>
                   <div className="ix__custom-row">
                     <input
                       type="text"
                       className="ix__custom-input"
                       placeholder="Type a different answer…"
-                      value={customInputs[q.question] || ''}
-                      onFocus={() => handleCustom(q.question)}
+                      value={customValue}
                       onChange={(e) => {
                         setCustomInputs((prev) => ({ ...prev, [q.question]: e.target.value }))
                       }}
                       onKeyDown={(e) => {
-                        if (e.key === 'Enter' && customInputs[q.question]?.trim()) {
-                          checkAutoSubmit(answers, customInputs)
+                        if (e.key === 'Enter' && customValid) {
+                          e.preventDefault()
+                          handleSubmitCustom(q.question)
                         }
                       }}
                     />
                     <button
                       type="button"
-                      aria-label="Submit custom answer"
-                      className={`ix__custom-send${customInputs[q.question]?.trim() ? '' : ' ix__custom-send--off'}`}
-                      onClick={() => checkAutoSubmit(answers, customInputs)}
-                      disabled={!customInputs[q.question]?.trim()}
+                      aria-label="Submit answer"
+                      className={`ix__custom-send${customValid ? '' : ' ix__custom-send--off'}`}
+                      onClick={() => handleSubmitCustom(q.question)}
+                      disabled={!customValid}
                     >
                       <svg
                         width="12"
@@ -586,20 +570,6 @@ export function AskUserInline({ questions, onSubmit }: Props) {
           )
         })()}
 
-        {answeredCount === questions.length && (
-          <div className="ix__done">
-            <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-              <path
-                d="M3 8.5l3 3 7-7"
-                stroke="currentColor"
-                strokeWidth="1.8"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              />
-            </svg>
-            Got it — thanks. Continuing…
-          </div>
-        )}
       </div>
     </div>
   )
