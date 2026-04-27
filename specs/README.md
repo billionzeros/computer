@@ -14,6 +14,7 @@ Core system architecture, protocols, and data models.
 | [SPEC.md](architecture/SPEC.md) | Connection protocol spec — ports, auth, message contract |
 | [API.md](architecture/API.md) | WebSocket API reference — wire format, channels, all message types |
 | [SESSIONS.md](architecture/SESSIONS.md) | Session persistence, JSONL storage, compaction, search |
+| [SESSION_LOG.md](architecture/SESSION_LOG.md) | **Proposed** — append-only session event log + multi-client SessionChannel; replaces parts of SESSIONS, CONCURRENT_CONVERSATIONS, text-stream-buffer |
 | [CONCURRENT_CONVERSATIONS.md](architecture/CONCURRENT_CONVERSATIONS.md) | Multi-session architecture, WebSocket routing |
 | [PROVIDERS.md](architecture/PROVIDERS.md) | Supported AI providers matrix, auth methods, model lists |
 | [WEBHOOK_ROUTER.md](architecture/WEBHOOK_ROUTER.md) | Unified webhook routing for inbound integrations |
