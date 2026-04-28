@@ -11,7 +11,6 @@ import {
   ImageIcon,
   Link,
   Network,
-  PanelRight,
   Settings2,
   SquareCode,
   X,
@@ -317,102 +316,117 @@ export function ArtifactPanelContent() {
 
   return (
     <aside className="art-panel">
-      {/* Tab strip */}
-      <div className="art-panel__tabs">
-        {visibleTabs.map((a) => {
-          const Tab = iconFor(a.renderType)
-          const title = a.title || a.filename || 'Untitled'
-          const isActive = a.id === active.id
-          return (
+      {/* Unified header — title on the left, actions + close on the right */}
+      <header className="art-panel__bar">
+        <div className="art-panel__bar-left">
+          <ActiveIcon size={15} strokeWidth={1.5} className="art-panel__icon" />
+          <span className="art-panel__title" title={activeTitle}>
+            {activeTitle}
+          </span>
+          <span className="art-panel__type">{getArtifactTypeLabel(active.renderType)}</span>
+        </div>
+        <div className="art-panel__bar-right">
+          {canToggle && (
             <button
-              key={a.id}
               type="button"
-              className={`art-tab${isActive ? ' active' : ''}`}
-              onClick={() => setActiveArtifact(a.id)}
-              title={title}
+              className={`art-panel__icn${mode === 'source' ? ' on' : ''}`}
+              onClick={() => setMode((m) => (m === 'preview' ? 'source' : 'preview'))}
+              aria-label={mode === 'preview' ? 'View source' : 'View preview'}
+              title={mode === 'preview' ? 'View source' : 'View preview'}
             >
-              <Tab size={12} strokeWidth={1.5} />
-              <span className="art-tab__name">{title}</span>
-              <span
-                className="art-tab__close"
-                // biome-ignore lint/a11y/useSemanticElements: can't nest a <button> inside the outer tab <button>; role=button + keydown gives the same a11y
-                role="button"
-                tabIndex={0}
-                aria-label="Close tab"
-                onClick={(e) => {
-                  e.stopPropagation()
-                  closeArtifactTab(a.id)
-                }}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter' || e.key === ' ') {
-                    e.stopPropagation()
-                    e.preventDefault()
-                    closeArtifactTab(a.id)
-                  }
-                }}
-              >
-                <X size={10} strokeWidth={2} />
-              </span>
+              {mode === 'preview' ? (
+                <Code2 size={14} strokeWidth={1.5} />
+              ) : (
+                <Eye size={14} strokeWidth={1.5} />
+              )}
             </button>
-          )
-        })}
-        <div className="art-panel__tabs-sp" />
-        <button
-          type="button"
-          className="art-panel__dismiss"
-          onClick={() => setArtifactPanelOpen(false)}
-          title="Close panel"
-          aria-label="Close panel"
-        >
-          <PanelRight size={14} strokeWidth={1.5} />
-        </button>
-      </div>
-
-      {/* Header */}
-      <div className="art-panel__head">
-        <ActiveIcon size={14} strokeWidth={1.5} className="art-panel__icon" />
-        <span className="art-panel__title">{activeTitle}</span>
-        <span className="art-panel__type">{getArtifactTypeLabel(active.renderType)}</span>
-      </div>
-
-      {/* Actions */}
-      <div className="art-panel__actions">
-        {canToggle && (
+          )}
           <button
             type="button"
-            className={`art-panel__a${mode === 'source' ? ' on' : ''}`}
-            onClick={() => setMode((m) => (m === 'preview' ? 'source' : 'preview'))}
+            className="art-panel__icn"
+            onClick={handleCopy}
+            aria-label={copied ? 'Copied' : 'Copy'}
+            title={copied ? 'Copied' : 'Copy'}
           >
-            {mode === 'preview' ? (
-              <Code2 size={12} strokeWidth={1.5} />
-            ) : (
-              <Eye size={12} strokeWidth={1.5} />
-            )}
-            <span>{mode === 'preview' ? 'Source' : 'Preview'}</span>
+            {copied ? <Check size={14} strokeWidth={1.5} /> : <Copy size={14} strokeWidth={1.5} />}
           </button>
-        )}
-        <button type="button" className="art-panel__a" onClick={handleCopy}>
-          {copied ? <Check size={12} strokeWidth={1.5} /> : <Copy size={12} strokeWidth={1.5} />}
-          <span>{copied ? 'Copied' : 'Copy'}</span>
-        </button>
-        <button type="button" className="art-panel__a" onClick={handleDownload}>
-          <Download size={12} strokeWidth={1.5} />
-          <span>Download</span>
-        </button>
-        <span className="art-panel__a-sp" />
-        <button
-          type="button"
-          className={`art-panel__a${active.publishedUrl ? '' : ' art-panel__a--primary'}`}
-          onClick={() => openPublishModal(active.id)}
-        >
-          {active.publishedUrl ? (
-            <Settings2 size={12} strokeWidth={1.5} />
-          ) : (
-            <Globe size={12} strokeWidth={1.5} />
-          )}
-          <span>{active.publishedUrl ? 'Manage' : 'Publish'}</span>
-        </button>
-      </div>
+          <button
+            type="button"
+            className="art-panel__icn"
+            onClick={handleDownload}
+            aria-label="Download"
+            title="Download"
+          >
+            <Download size={14} strokeWidth={1.5} />
+          </button>
+          <button
+            type="button"
+            className={`art-panel__icn${active.publishedUrl ? '' : ' art-panel__icn--accent'}`}
+            onClick={() => openPublishModal(active.id)}
+            aria-label={active.publishedUrl ? 'Manage publication' : 'Publish'}
+            title={active.publishedUrl ? 'Manage publication' : 'Publish'}
+          >
+            {active.publishedUrl ? (
+              <Settings2 size={14} strokeWidth={1.5} />
+            ) : (
+              <Globe size={14} strokeWidth={1.5} />
+            )}
+          </button>
+          <span className="art-panel__bar-divider" aria-hidden="true" />
+          <button
+            type="button"
+            className="art-panel__icn"
+            onClick={() => setArtifactPanelOpen(false)}
+            aria-label="Close panel"
+            title="Close panel"
+          >
+            <X size={14} strokeWidth={1.5} />
+          </button>
+        </div>
+      </header>
+
+      {/* Tab strip — only shown when multiple artifacts are open */}
+      {visibleTabs.length > 1 && (
+        <div className="art-panel__tabs">
+          {visibleTabs.map((a) => {
+            const Tab = iconFor(a.renderType)
+            const title = a.title || a.filename || 'Untitled'
+            const isActive = a.id === active.id
+            return (
+              <button
+                key={a.id}
+                type="button"
+                className={`art-tab${isActive ? ' active' : ''}`}
+                onClick={() => setActiveArtifact(a.id)}
+                title={title}
+              >
+                <Tab size={12} strokeWidth={1.5} />
+                <span className="art-tab__name">{title}</span>
+                <span
+                  className="art-tab__close"
+                  // biome-ignore lint/a11y/useSemanticElements: can't nest a <button> inside the outer tab <button>; role=button + keydown gives the same a11y
+                  role="button"
+                  tabIndex={0}
+                  aria-label="Close tab"
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    closeArtifactTab(a.id)
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.stopPropagation()
+                      e.preventDefault()
+                      closeArtifactTab(a.id)
+                    }
+                  }}
+                >
+                  <X size={10} strokeWidth={2} />
+                </span>
+              </button>
+            )
+          })}
+        </div>
+      )}
 
       {/* Published banner */}
       {active.publishedUrl && (

@@ -27,6 +27,9 @@ import { artifactStore } from '../../lib/store/artifactStore.js'
 import { connectionStore } from '../../lib/store/connectionStore.js'
 import { projectStore } from '../../lib/store/projectStore.js'
 import { uiStore } from '../../lib/store/uiStore.js'
+import { DocxRenderer } from '../artifacts/DocxRenderer.js'
+import { PdfRenderer } from '../artifacts/PdfRenderer.js'
+import { XlsxRenderer } from '../artifacts/XlsxRenderer.js'
 
 interface FileEntry {
   name: string
@@ -58,7 +61,10 @@ const CODE_EXTS = new Set([
   'svelte',
 ])
 const DATA_EXTS = new Set(['json', 'yaml', 'yml', 'csv', 'xml', 'toml', 'sql'])
-const TEXT_EXTS = new Set(['md', 'txt', 'log', 'pdf', 'doc', 'docx'])
+const TEXT_EXTS = new Set(['md', 'txt', 'log'])
+// Rich documents are previewed via dedicated renderers (mammoth/sheetjs/pdfjs),
+// not as raw UTF-8 — otherwise their binary container shows up as gibberish.
+const DOC_EXTS = new Set(['docx', 'doc', 'xlsx', 'xls', 'pdf'])
 const IMAGE_EXTS = new Set([
   'png',
   'jpg',
@@ -73,12 +79,13 @@ const IMAGE_EXTS = new Set([
   'heif',
 ])
 
-function getCategory(name: string): 'code' | 'data' | 'text' | 'image' | 'other' {
+function getCategory(name: string): 'code' | 'data' | 'text' | 'image' | 'doc' | 'other' {
   const ext = name.split('.').pop()?.toLowerCase() || ''
   if (CODE_EXTS.has(ext)) return 'code'
   if (DATA_EXTS.has(ext)) return 'data'
   if (TEXT_EXTS.has(ext)) return 'text'
   if (IMAGE_EXTS.has(ext)) return 'image'
+  if (DOC_EXTS.has(ext)) return 'doc'
   return 'other'
 }
 
@@ -89,6 +96,16 @@ function isPreviewable(name: string): boolean {
 
 function isImageFile(name: string): boolean {
   return getCategory(name) === 'image'
+}
+
+type DocRenderType = 'docx' | 'xlsx' | 'pdf'
+
+function getDocRenderType(name: string): DocRenderType | null {
+  const ext = name.split('.').pop()?.toLowerCase() || ''
+  if (ext === 'docx' || ext === 'doc') return 'docx'
+  if (ext === 'xlsx' || ext === 'xls') return 'xlsx'
+  if (ext === 'pdf') return 'pdf'
+  return null
 }
 
 function getMimeType(name: string): string {
@@ -121,6 +138,8 @@ function iconFor(entry: { name: string; type: 'file' | 'dir' | 'link' }) {
       return <FileText size={15} strokeWidth={1.5} />
     case 'image':
       return <Image size={15} strokeWidth={1.5} />
+    case 'doc':
+      return <FileText size={15} strokeWidth={1.5} />
     default:
       return <File size={15} strokeWidth={1.5} />
   }
@@ -351,8 +370,7 @@ export function ProjectFilesView() {
       if (!target) return
       // Allow navigation to startDir itself or any descendant.
       const normalized = target.replace(/\/+$/, '')
-      const allowed =
-        normalized === startDir || normalized.startsWith(`${startDir}/`)
+      const allowed = normalized === startDir || normalized.startsWith(`${startDir}/`)
       if (!allowed) return
       listDir(normalized)
     }
@@ -401,6 +419,16 @@ export function ProjectFilesView() {
       return
     }
     setSelected(entry)
+    // Rich doc renderers (DocxRenderer/XlsxRenderer/PdfRenderer) fetch their
+    // own bytes via useWorkspaceBytes — skip the text/base64 read path so the
+    // binary container doesn't get streamed back as a corrupted UTF-8 string.
+    if (getDocRenderType(entry.name)) {
+      setPreview(null)
+      setPreviewLoading(false)
+      setPreviewError(null)
+      setPreviewIsImage(false)
+      return
+    }
     if (isPreviewable(entry.name)) {
       const path = resolvePath(entry.name)
       const image = isImageFile(entry.name)
@@ -828,86 +856,97 @@ export function ProjectFilesView() {
         </div>
 
         {/* Preview pane — only render once a file is selected */}
-        {selected && (
-          <aside className="fl-preview">
-            <div className="fl-preview__thumb">
-              {previewLoading ? (
-                <Loader2 size={20} strokeWidth={1.5} className="spin" />
-              ) : previewError ? (
+        {selected &&
+          (() => {
+            const docType = getDocRenderType(selected.name)
+            const docPath = resolvePath(selected.name)
+            const ext = selected.name.split('.').pop()?.toLowerCase() || ''
+            const previewable = isPreviewable(selected.name)
+            return (
+              <aside className="fl-preview">
+                {/* Premium header bar — matches the artifact panel style */}
+                <header className="fl-preview__bar">
+                  <div className="fl-preview__bar-left">
+                    <span className="fl-preview__bar-icon">{iconFor(selected)}</span>
+                    <span className="fl-preview__bar-title" title={resolvePath(selected.name)}>
+                      {selected.name}
+                    </span>
+                    {ext && <span className="fl-preview__bar-type">.{ext.toUpperCase()}</span>}
+                  </div>
+                  <div className="fl-preview__bar-right">
+                    {previewable && (
+                      <button
+                        type="button"
+                        className="fl-preview__icn"
+                        onClick={() => handleRowClick(selected)}
+                        title="Reload preview"
+                        aria-label="Reload preview"
+                      >
+                        <Eye size={14} strokeWidth={1.5} />
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      className="fl-preview__icn fl-preview__icn--danger"
+                      onClick={handleDelete}
+                      title="Delete"
+                      aria-label="Delete"
+                    >
+                      <Trash2 size={14} strokeWidth={1.5} />
+                    </button>
+                    <span className="fl-preview__bar-divider" aria-hidden="true" />
+                    <button
+                      type="button"
+                      className="fl-preview__icn"
+                      onClick={() => setSelected(null)}
+                      title="Close preview"
+                      aria-label="Close preview"
+                    >
+                      <X size={14} strokeWidth={1.5} />
+                    </button>
+                  </div>
+                </header>
+
+                {/* Body — the actual preview content fills the panel */}
                 <div
-                  style={{
-                    color: 'var(--danger)',
-                    fontSize: 12,
-                    textAlign: 'center',
-                    padding: 20,
-                  }}
+                  className={`fl-preview__body${docType ? ' fl-preview__body--doc' : ''}${previewIsImage ? ' fl-preview__body--image' : ''}`}
                 >
-                  {previewError}
+                  {docType ? (
+                    docType === 'docx' ? (
+                      <DocxRenderer sourcePath={docPath} filename={selected.name} />
+                    ) : docType === 'xlsx' ? (
+                      <XlsxRenderer sourcePath={docPath} filename={selected.name} />
+                    ) : (
+                      <PdfRenderer sourcePath={docPath} filename={selected.name} />
+                    )
+                  ) : previewLoading ? (
+                    <div className="fl-preview__center">
+                      <Loader2 size={20} strokeWidth={1.5} className="spin" />
+                    </div>
+                  ) : previewError ? (
+                    <div className="fl-preview__center fl-preview__error">{previewError}</div>
+                  ) : preview !== null ? (
+                    previewIsImage ? (
+                      <div className="fl-preview__center">
+                        <img
+                          src={`data:${getMimeType(selected.name)};base64,${preview}`}
+                          alt={selected.name}
+                          className="fl-preview__image"
+                        />
+                      </div>
+                    ) : (
+                      <pre className="fl-preview__text">{preview}</pre>
+                    )
+                  ) : (
+                    <div className="fl-preview__center fl-preview__placeholder">
+                      {iconFor(selected)}
+                      <span>{kindLabel(selected)}</span>
+                    </div>
+                  )}
                 </div>
-              ) : preview !== null ? (
-                previewIsImage ? (
-                  <img
-                    src={`data:${getMimeType(selected.name)};base64,${preview}`}
-                    alt={selected.name}
-                    style={{
-                      maxWidth: '100%',
-                      maxHeight: 260,
-                      objectFit: 'contain',
-                      borderRadius: 6,
-                    }}
-                  />
-                ) : (
-                  <pre
-                    style={{
-                      fontFamily: 'var(--font-mono)',
-                      fontSize: 9.5,
-                      lineHeight: 1.5,
-                      color: 'var(--text-3)',
-                      maxHeight: 260,
-                      overflow: 'hidden',
-                      width: '100%',
-                      margin: 0,
-                      whiteSpace: 'pre',
-                    }}
-                  >
-                    {preview.slice(0, 2000)}
-                  </pre>
-                )
-              ) : (
-                iconFor(selected)
-              )}
-            </div>
-            <div className="fl-preview__info">
-              <div className="fl-preview__name">{selected.name}</div>
-              <div className="fl-preview__kind">
-                {iconFor(selected)}
-                <span>{kindLabel(selected)}</span>
-                {selected.size && (
-                  <>
-                    <span className="fl-preview__sep">·</span>
-                    <span>{selected.size}</span>
-                  </>
-                )}
-              </div>
-              <dl className="fl-preview__meta">
-                <dt>Path</dt>
-                <dd>{resolvePath(selected.name)}</dd>
-              </dl>
-              <div className="fl-preview__actions">
-                {isPreviewable(selected.name) && (
-                  <button type="button" className="fl-btn" onClick={() => handleRowClick(selected)}>
-                    <Eye size={12} strokeWidth={1.5} />
-                    Reload preview
-                  </button>
-                )}
-                <button type="button" className="fl-btn" onClick={handleDelete}>
-                  <Trash2 size={12} strokeWidth={1.5} />
-                  Delete
-                </button>
-              </div>
-            </div>
-          </aside>
-        )}
+              </aside>
+            )
+          })()}
       </div>
 
       {dragging && (

@@ -131,20 +131,8 @@ export function SidePanel() {
         </div>
       )}
 
-      {/* Single-view close button for artifacts */}
-      {!showTabs && activeView === 'artifacts' && (
-        <div className="side-panel__header-bar">
-          <span className="side-panel__header-title">Artifacts</span>
-          <button
-            type="button"
-            className="side-panel__close"
-            onClick={() => setArtifactPanelOpen(false)}
-            aria-label="Close panel"
-          >
-            <X size={14} strokeWidth={1.5} />
-          </button>
-        </div>
-      )}
+      {/* Artifacts view owns its own premium header (title + actions + close);
+          no generic side-panel header needed in single-view mode. */}
 
       {/* Single-view close button for context */}
       {!showTabs && activeView === 'context' && (
