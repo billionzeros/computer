@@ -255,7 +255,7 @@ export function classifyUpload(mime: string | undefined, path: string): Artifact
 
 export function extractArtifact(
   toolCallMsg: ChatMessage,
-  toolResultMsg: ChatMessage,
+  _toolResultMsg: ChatMessage,
 ): Artifact | null {
   const toolName = toolCallMsg.toolName
   const toolInput = toolCallMsg.toolInput
@@ -301,22 +301,10 @@ export function extractArtifact(
     }
   }
 
-  // Large shell outputs
-  if (toolName === 'shell' && toolResultMsg.content && toolResultMsg.content.length > 500) {
-    const cmd = (toolInput.command as string) || 'output'
-    const shortCmd = cmd.length > 40 ? `${cmd.slice(0, 37)}...` : cmd
-
-    return {
-      id: `artifact_${toolCallMsg.id}_${Date.now()}`,
-      type: 'output',
-      renderType: 'code',
-      filename: shortCmd,
-      language: 'text',
-      content: toolResultMsg.content,
-      toolCallId: toolCallMsg.id,
-      timestamp: Date.now(),
-    }
-  }
+  // Shell command outputs are surfaced inline as expandable tool-call chips,
+  // not as artifacts — promoting every long stdout into a pinned "Code" card
+  // (e.g. `pip install …`, `python3 -c "…"`) is noisy and conflates terminal
+  // runs with first-class agent outputs.
 
   return null
 }
