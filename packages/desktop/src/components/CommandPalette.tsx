@@ -236,14 +236,6 @@ export function CommandPalette({ open, onClose, onOpenSettings, onNewProject }: 
       },
       {
         kind: 'view',
-        id: 'v:skills',
-        label: 'Patterns',
-        hint: 'Interaction refs',
-        icon: Sparkles,
-        run: () => setActiveView('skills'),
-      },
-      {
-        kind: 'view',
         id: 'v:projects',
         label: 'Projects',
         hint: 'Manage machines',

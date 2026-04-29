@@ -8,9 +8,9 @@ import {
   Folder,
   Image as ImageIcon,
 } from 'lucide-react'
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { classifyUpload } from '../../lib/artifacts.js'
-import type { ChatImageAttachment } from '../../lib/store.js'
+import type { ChatImageAttachment, CitationSource } from '../../lib/store.js'
 import { type ChatMessage, useStore } from '../../lib/store.js'
 import { artifactStore } from '../../lib/store/artifactStore.js'
 import { projectStore } from '../../lib/store/projectStore.js'
@@ -232,6 +232,30 @@ function UserMessageContent({ message }: { message: ChatMessage }) {
 
 export function MessageBubble({ message, isLastThinking }: Props) {
   const citations = useStore((s) => s.citations.get(message.id))
+  // For assistant final answers, the model may reference citations across
+  // multiple web_search calls in the turn — but only the most-recent batch
+  // is attached to this message id. Aggregate all citations stored on the
+  // active conversation so any [N] reference in the answer can resolve to
+  // a real source. Earlier batches win on index collisions, since later
+  // batches typically restart numbering.
+  const allCitations = useStore((s) => s.citations)
+  const conversationMessages = useStore((s) => s.getActiveConversation()?.messages ?? [])
+  const lookupCitations = useMemo<CitationSource[] | undefined>(() => {
+    if (message.role !== 'assistant' || message.isThinking) return citations
+    const byIndex = new Map<number, CitationSource>()
+    for (const m of conversationMessages) {
+      const list = allCitations.get(m.id)
+      if (!list) continue
+      for (const c of list) {
+        if (!byIndex.has(c.index)) byIndex.set(c.index, c)
+      }
+    }
+    if (citations) {
+      for (const c of citations) byIndex.set(c.index, c)
+    }
+    if (byIndex.size === 0) return citations
+    return Array.from(byIndex.values()).sort((a, b) => a.index - b.index)
+  }, [message.role, message.isThinking, citations, allCitations, conversationMessages])
   const isAgentWorking = useActiveSessionState((s) => s.status === 'working')
 
   return (
@@ -254,7 +278,7 @@ export function MessageBubble({ message, isLastThinking }: Props) {
       {message.role === 'assistant' && !message.isThinking && (
         <div className="message__surface message__surface--assistant">
           {citations && citations.length > 0 && <SourceCards sources={citations} />}
-          <MarkdownRenderer content={message.content} citations={citations} />
+          <MarkdownRenderer content={message.content} citations={lookupCitations} />
         </div>
       )}
 

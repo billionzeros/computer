@@ -569,7 +569,6 @@ export function AskUserInline({ questions, onSubmit }: Props) {
             </div>
           )
         })()}
-
       </div>
     </div>
   )

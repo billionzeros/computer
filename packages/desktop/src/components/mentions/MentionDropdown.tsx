@@ -258,7 +258,9 @@ export function MentionDropdown({
   const parent = onNavigateUp ? parentScope(query) : null
   let globalIndex = 0
   return createPortal(
-    <div ref={rootRef} className="mention-dropdown" style={style} role="listbox">
+    // biome-ignore lint/a11y/useSemanticElements: native <select> can't be portaled with custom item rendering
+    // biome-ignore lint/a11y/useFocusableInteractive: focus stays in the editor; arrow keys are handled there
+    <div ref={rootRef} className="mention-dropdown" style={style} role="listbox" tabIndex={-1}>
       {parent !== null && (
         <button
           type="button"
@@ -297,8 +299,10 @@ export function MentionDropdown({
               return (
                 <div
                   key={item.id}
+                  // biome-ignore lint/a11y/useSemanticElements: <option> can't host nested buttons for the split row
                   role="option"
                   aria-selected={isActive}
+                  tabIndex={-1}
                   data-mention-active={isActive || undefined}
                   className={`mention-dropdown__row${isActive ? ' mention-dropdown__row--active' : ''}${isFolder ? ' mention-dropdown__row--folder' : ''}`}
                   onMouseEnter={() => {

@@ -406,10 +406,14 @@ export class CodexHarnessSession {
       queue.done = true
     }
 
+    let lastErrorMessage: string | null = null
     try {
       while (!queue.done || queue.events.length > 0) {
         if (queue.events.length > 0) {
           const ev = queue.events.shift()!
+          if (ev.type === 'error') {
+            lastErrorMessage = (ev as { message?: string }).message ?? ''
+          }
           turnEvents.push(ev)
           yield ev
         } else if (!queue.done) {
@@ -419,7 +423,10 @@ export class CodexHarnessSession {
         }
       }
 
-      if (queue.error) {
+      // The RPC's top-level `error` channel and the `turn/start` rejection
+      // are two ways the same underlying failure surfaces. Suppress the
+      // post-loop yield if the queue already emitted a matching error.
+      if (queue.error && queue.error.message !== lastErrorMessage) {
         const errEv: SessionEvent = {
           type: 'error',
           message: queue.error.message,

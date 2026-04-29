@@ -62,6 +62,7 @@ function sanitizeFilename(name: string): string {
   // Strip path separators and control chars. Collapse whitespace. No leading dots.
   let s = name
     .replace(/[\\/]/g, '_')
+    // biome-ignore lint/suspicious/noControlCharactersInRegex: stripping ASCII control chars is the intent
     .replace(/[\u0000-\u001f]/g, '')
     .trim()
   s = s.replace(/^\.+/, '')
@@ -253,6 +254,7 @@ export function DestinationPicker({
   // `position: fixed` overlay positioning — it would otherwise anchor to
   // the transformed ancestor instead of the viewport.
   return createPortal(
+    // biome-ignore lint/a11y/useSemanticElements: native <dialog> requires showModal()/JS lifecycle; this overlay is portal-rendered and managed via React state
     <div className="dp-modal__overlay" role="dialog" aria-modal="true" aria-label="Save file">
       <div
         ref={modalRef}
@@ -286,7 +288,6 @@ export function DestinationPicker({
             // as-is; renaming requires single-file invocation.
             <div className="dp-batch-list">
               {files.map((f, i) => (
-                // biome-ignore lint/suspicious/noArrayIndexKey: list ordering is stable within a picker invocation
                 <div key={`${f.name}-${i}`} className="dp-batch-item">
                   <FileIcon size={13} strokeWidth={1.5} className="dp-batch-item__icon" />
                   <span className="dp-batch-item__name">{f.name}</span>

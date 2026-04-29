@@ -3,8 +3,12 @@ import { Brain, ChevronRight, Code, PanelRight, Workflow } from 'lucide-react'
 import type { ReactNode } from 'react'
 import { useEffect, useMemo, useState } from 'react'
 import { artifactStore } from '../../lib/store/artifactStore.js'
+import { parseCitationSources } from '../../lib/store/handlers/citationParser.js'
 import { ArtifactCard } from './ArtifactCard.js'
+import { SourceCards } from './SourceCards.js'
 import type { ToolAction } from './groupMessages.js'
+
+const SEARCH_TOOLS = new Set(['web_search', 'exa_search', 'exa_find_similar', 'web_research'])
 
 // ── Tool type labels & helpers ─────────────────────────────────────
 
@@ -77,6 +81,8 @@ function getToolTypeLabel(toolName: string, toolInput?: Record<string, unknown>)
       return 'Search'
     case 'exa_search':
       return 'Search'
+    case 'web_research':
+      return 'Research'
     case 'exa_find_similar':
       return 'Similar'
     default:
@@ -168,7 +174,8 @@ function getToolTarget(toolName: string, toolInput?: Record<string, unknown>): s
     case 'sub_agent':
       return (toolInput.task as string) || null
     case 'web_search':
-    case 'exa_search': {
+    case 'exa_search':
+    case 'web_research': {
       const query = (toolInput.query as string) || ''
       if (!query) return null
       const trimmed = query.length > 60 ? `${query.slice(0, 57)}...` : query
@@ -231,7 +238,8 @@ function getToolMeta(
     }
     case 'web_search':
     case 'exa_search':
-    case 'exa_find_similar': {
+    case 'exa_find_similar':
+    case 'web_research': {
       const resultMatches = resultContent.match(/\burl\b/gi)
       if (resultMatches && resultMatches.length > 0) {
         const count = resultMatches.length
@@ -301,6 +309,13 @@ function ActionChip({ action }: ActionChipProps) {
   const [showFullResult, setShowFullResult] = useState(false)
   const displayedResult = showFullResult ? resultContent : resultLines.slice(0, 6).join('\n')
 
+  const isSearchTool = SEARCH_TOOLS.has(toolName)
+  const searchSources = useMemo(
+    () => (isSearchTool && resultContent && !isError ? parseCitationSources(resultContent) : []),
+    [isSearchTool, resultContent, isError],
+  )
+  const showSourceCards = isSearchTool && searchSources.length > 0
+
   const toggle = () => {
     if (hasResult) setOpen((o) => !o)
   }
@@ -367,18 +382,24 @@ function ActionChip({ action }: ActionChipProps) {
                 {meta}
               </div>
             )}
-            <pre className="conv-chip__result">{displayedResult}</pre>
-            {isLongResult && (
-              <button
-                type="button"
-                className="conv-chip__more"
-                onClick={(e) => {
-                  e.stopPropagation()
-                  setShowFullResult(!showFullResult)
-                }}
-              >
-                {showFullResult ? 'Show less' : 'Show more'}
-              </button>
+            {showSourceCards ? (
+              <SourceCards sources={searchSources} />
+            ) : (
+              <>
+                <pre className="conv-chip__result">{displayedResult}</pre>
+                {isLongResult && (
+                  <button
+                    type="button"
+                    className="conv-chip__more"
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      setShowFullResult(!showFullResult)
+                    }}
+                  >
+                    {showFullResult ? 'Show less' : 'Show more'}
+                  </button>
+                )}
+              </>
             )}
           </div>
         </div>
