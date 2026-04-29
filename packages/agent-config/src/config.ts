@@ -237,6 +237,12 @@ export interface SkillConfig {
   // Prompt (loaded from SKILL.md body)
   prompt: string
   whenToUse?: string
+  argumentHint?: string
+  arguments?: string[]
+  paths?: string[]
+  disableModelInvocation?: boolean
+  userInvocable?: boolean
+  version?: string
 
   // Execution
   context?: 'inline' | 'fork'

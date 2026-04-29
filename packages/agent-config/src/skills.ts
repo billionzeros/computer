@@ -14,7 +14,8 @@
  */
 
 import { existsSync, mkdirSync, readFileSync, readdirSync, statSync, writeFileSync } from 'node:fs'
-import { join } from 'node:path'
+import { dirname, join } from 'node:path'
+import { fileURLToPath } from 'node:url'
 import { parse as parseYaml } from 'yaml'
 import type { SkillAssets, SkillConfig, SkillParameter } from './config.js'
 import { getAntonDir } from './config.js'
@@ -24,6 +25,12 @@ function skillsDir(): string {
   _skillsDir ??= join(getAntonDir(), 'skills')
   return _skillsDir
 }
+
+// Builtin skills ship with the package. Resolved relative to this file so the
+// path works for both `dist/skills.js` (built) and `src/skills.ts` (dev).
+const __skills_dirname = dirname(fileURLToPath(import.meta.url))
+const BUILTIN_SKILLS_DIR = join(__skills_dirname, '..', 'builtin-skills')
+
 let _exampleSkillsSeeded = false
 
 /**
@@ -49,6 +56,31 @@ function parseFrontmatter(content: string): { frontmatter: Record<string, unknow
   }
 }
 
+function asStringArray(value: unknown): string[] | undefined {
+  if (Array.isArray(value)) {
+    const items = value.map((v) => String(v).trim()).filter(Boolean)
+    return items.length > 0 ? items : undefined
+  }
+  if (typeof value === 'string') {
+    const items = value
+      .split(/[\n,]/)
+      .map((v) => v.trim())
+      .filter(Boolean)
+    return items.length > 0 ? items : undefined
+  }
+  return undefined
+}
+
+function asBoolean(value: unknown): boolean | undefined {
+  if (typeof value === 'boolean') return value
+  if (typeof value === 'string') {
+    const normalized = value.trim().toLowerCase()
+    if (['true', 'yes', '1', 'on'].includes(normalized)) return true
+    if (['false', 'no', '0', 'off'].includes(normalized)) return false
+  }
+  return undefined
+}
+
 const KNOWN_ASSET_DIRS = ['agents', 'scripts', 'references', 'assets', 'canvas-fonts'] as const
 
 /**
@@ -63,7 +95,9 @@ function scanSkillAssets(dirPath: string): SkillAssets | undefined {
     if (!existsSync(subdirPath) || !statSync(subdirPath).isDirectory()) continue
 
     try {
-      const files = readdirSync(subdirPath).filter((f) => !f.startsWith('.'))
+      const files = readdirSync(subdirPath).filter(
+        (f) => !f.startsWith('.') && f !== '__pycache__' && f !== 'node_modules',
+      )
       if (files.length === 0) continue
 
       hasAny = true
@@ -100,10 +134,20 @@ function loadSkillDir(dirPath: string, source: 'builtin' | 'user' | 'project'): 
       category: frontmatter.category as string | undefined,
       featured: frontmatter.featured as boolean | undefined,
       prompt: body,
-      whenToUse: (frontmatter.when_to_use as string) || undefined,
+      whenToUse:
+        (frontmatter.when_to_use as string) || (frontmatter.whenToUse as string) || undefined,
+      argumentHint:
+        (frontmatter['argument-hint'] as string) ||
+        (frontmatter.argumentHint as string) ||
+        undefined,
+      arguments: asStringArray(frontmatter.arguments),
+      paths: asStringArray(frontmatter.paths),
+      disableModelInvocation: asBoolean(frontmatter['disable-model-invocation']),
+      userInvocable: asBoolean(frontmatter['user-invocable']),
+      version: frontmatter.version as string | undefined,
       context: (frontmatter.context as 'inline' | 'fork') || 'inline',
-      allowedTools: frontmatter['allowed-tools'] as string[] | undefined,
-      tools: frontmatter.tools as string[] | undefined,
+      allowedTools: asStringArray(frontmatter['allowed-tools']),
+      tools: asStringArray(frontmatter.tools),
       schedule: frontmatter.schedule as string | undefined,
       model: frontmatter.model as string | undefined,
       source,
@@ -120,27 +164,50 @@ function loadSkillDir(dirPath: string, source: 'builtin' | 'user' | 'project'): 
 }
 
 /**
- * Load all skills from ~/.anton/skills/.
- * Scans for directories containing SKILL.md.
+ * Load all skills from the builtin directory and ~/.anton/skills/.
+ *
+ * Builtin skills (shipped with the package) are loaded first. User skills
+ * with the same `name` override the builtin entry — power users can replace
+ * a stock skill by dropping a directory of the same name into ~/.anton/skills.
+ *
  * Also loads legacy .yaml files for backward compat.
  */
 export function loadSkills(): SkillConfig[] {
   if (!existsSync(skillsDir())) {
     mkdirSync(skillsDir(), { recursive: true })
   }
-  // Always ensure built-in skills exist (idempotent — won't overwrite existing)
-  createExampleSkills()
+  // Development/demo only. Production should not silently add a large
+  // set of generic example skills that the model then has to consider
+  // on every turn.
+  if (process.env.ANTON_SEED_EXAMPLE_SKILLS === '1') {
+    createExampleSkills()
+  }
 
-  const entries = readdirSync(skillsDir())
-  const skills: SkillConfig[] = []
+  // Keyed by skill name so user skills can override builtins.
+  const byName = new Map<string, SkillConfig>()
 
-  for (const entry of entries) {
+  // Layer 1: builtin skills shipped with the package.
+  if (existsSync(BUILTIN_SKILLS_DIR)) {
+    for (const entry of readdirSync(BUILTIN_SKILLS_DIR)) {
+      const fullPath = join(BUILTIN_SKILLS_DIR, entry)
+      try {
+        if (!statSync(fullPath).isDirectory()) continue
+      } catch {
+        continue
+      }
+      const skill = loadSkillDir(fullPath, 'builtin')
+      if (skill) byName.set(skill.name, skill)
+    }
+  }
+
+  // Layer 2: user skills in ~/.anton/skills/. Same-name entries replace builtins.
+  for (const entry of readdirSync(skillsDir())) {
     const fullPath = join(skillsDir(), entry)
 
     // Directory-based skills (new format)
     if (statSync(fullPath).isDirectory()) {
-      const skill = loadSkillDir(fullPath, 'builtin')
-      if (skill) skills.push(skill)
+      const skill = loadSkillDir(fullPath, 'user')
+      if (skill) byName.set(skill.name, skill)
       continue
     }
 
@@ -149,8 +216,9 @@ export function loadSkills(): SkillConfig[] {
       try {
         const raw = readFileSync(fullPath, 'utf-8')
         const parsed = parseYaml(raw) as Record<string, unknown>
-        skills.push({
-          name: (parsed.name as string) || entry,
+        const name = (parsed.name as string) || entry
+        byName.set(name, {
+          name,
           description: (parsed.description as string) || '',
           prompt: (parsed.prompt as string) || '',
           schedule: parsed.schedule as string | undefined,
@@ -163,7 +231,7 @@ export function loadSkills(): SkillConfig[] {
     }
   }
 
-  return skills
+  return [...byName.values()]
 }
 
 /**

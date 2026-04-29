@@ -575,6 +575,7 @@ export function buildTools(
       onActivateWorkflow: callbacks?.onActivateWorkflow,
       domain: callbacks?.domain,
       resolveProviderToken: callbacks?.resolveProviderToken,
+      getSkills: () => config.skills,
     }),
 
     // ── Todo ────────────────────────────────────────────────────────

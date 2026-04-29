@@ -9,15 +9,18 @@
  * `--append-system-prompt` (Claude) / `-c instructions=…` (Codex),
  * layered on top of the CLI's own core prompt.
  *
- * Session-only layers (workspace rules, user rules, active skills,
- * project type guidelines, reference knowledge, current context with
- * platform/OS/sudo) live inline in session.ts — those don't apply to
- * harness CLIs because the CLI has its own equivalents.
+ * Session-only layers (workspace rules, user rules, project type
+ * guidelines, reference knowledge, current context with platform/OS/sudo)
+ * live inline in session.ts — those don't apply to harness CLIs because
+ * the CLI has its own equivalents.
  */
 
-import { loadCoreSystemPrompt } from '@anton/agent-config'
+import { type SkillConfig, loadCoreSystemPrompt } from '@anton/agent-config'
+import { createLogger } from '@anton/logger'
 import type { MemoryData } from './context.js'
 import type { SurfaceInfo } from './session.js'
+
+const skillsLog = createLogger('skills-prompt')
 
 // ── Shared helper ───────────────────────────────────────────────────
 
@@ -197,6 +200,281 @@ export function renderSurfaceBlock(surface: SurfaceInfo): string {
   return lines.join('\n')
 }
 
+// ── Skills ─────────────────────────────────────────────────────────
+
+const SKILL_STOPWORDS = new Set([
+  'a',
+  'an',
+  'and',
+  'any',
+  'are',
+  'as',
+  'at',
+  'be',
+  'by',
+  'can',
+  'do',
+  'does',
+  'for',
+  'from',
+  'has',
+  'have',
+  'if',
+  'in',
+  'into',
+  'is',
+  'it',
+  'like',
+  'of',
+  'on',
+  'or',
+  'should',
+  'similar',
+  'the',
+  'these',
+  'this',
+  'to',
+  'use',
+  'user',
+  'wants',
+  'when',
+  'whenever',
+  'with',
+])
+
+const DEFAULT_SKILL_CATALOG_CHAR_BUDGET = 8000
+const MAX_SKILL_DESC_CHARS = 250
+
+function normalizeSkillText(text: string): string {
+  return text.toLowerCase().replace(/[_-]+/g, ' ').replace(/\s+/g, ' ').trim()
+}
+
+function skillTokens(text: string): Set<string> {
+  const normalized = normalizeSkillText(text)
+  const tokens = normalized.match(/[a-z0-9][a-z0-9.+#-]{1,}/g) ?? []
+  return new Set(tokens.filter((token) => token.length > 2 && !SKILL_STOPWORDS.has(token)))
+}
+
+function quotedSkillPhrases(text: string): string[] {
+  const phrases: string[] = []
+  const re = /['"`]([^'"`\n]{2,60})['"`]/g
+  for (let match = re.exec(text); match; match = re.exec(text)) {
+    const phrase = normalizeSkillText(match[1])
+    if (phrase) phrases.push(phrase)
+  }
+  return phrases
+}
+
+function fileExtensions(text: string): string[] {
+  const extensions = new Set<string>()
+  const re = /\.[a-z0-9]{1,12}\b/gi
+  for (let match = re.exec(text); match; match = re.exec(text)) {
+    extensions.add(match[0].toLowerCase())
+  }
+  return [...extensions]
+}
+
+function skillTriggerText(skill: SkillConfig): string {
+  return [skill.name, skill.description, skill.whenToUse].filter(Boolean).join('\n')
+}
+
+function scoreSkillForMessage(skill: SkillConfig, userMessage: string): number {
+  const normalizedMessage = normalizeSkillText(userMessage)
+  if (!normalizedMessage) return 0
+
+  const triggerText = skillTriggerText(skill)
+  const normalizedName = normalizeSkillText(skill.name)
+  const commandName = normalizedName.replace(/\s+/g, '-')
+  let score = 0
+
+  if (
+    normalizedMessage.includes(`/${commandName}`) ||
+    normalizedMessage.includes(`skill: ${normalizedName}`) ||
+    normalizedMessage.includes(`use ${normalizedName} skill`)
+  ) {
+    score += 25
+  }
+
+  if (normalizedName && normalizedMessage.includes(normalizedName)) {
+    score += 10
+  }
+
+  for (const ext of fileExtensions(triggerText)) {
+    if (normalizedMessage.includes(ext)) score += 12
+  }
+
+  for (const phrase of quotedSkillPhrases(triggerText)) {
+    if (normalizedMessage.includes(phrase)) score += phrase.includes(' ') ? 10 : 7
+  }
+
+  const messageTokens = skillTokens(userMessage)
+  const triggerTokens = skillTokens(triggerText)
+  const nameTokens = skillTokens(skill.name)
+
+  for (const token of messageTokens) {
+    if (nameTokens.has(token)) score += 5
+    if (triggerTokens.has(token)) score += 2
+  }
+
+  return score
+}
+
+export interface ActiveSkillsLayerOpts {
+  skills?: SkillConfig[]
+  userMessage?: string
+  maxAutoActivatedSkills?: number
+  catalogCharBudget?: number
+}
+
+export interface SkillMatch {
+  skill: SkillConfig
+  score: number
+}
+
+export function selectRelevantSkillsForMessage(
+  skills: SkillConfig[] | undefined,
+  userMessage: string | undefined,
+  maxAutoActivatedSkills = 2,
+): SkillMatch[] {
+  if (!skills || skills.length === 0 || !userMessage?.trim()) return []
+
+  return skills
+    .map((skill) => ({ skill, score: scoreSkillForMessage(skill, userMessage) }))
+    .filter((match) => match.score >= 7)
+    .sort((a, b) => b.score - a.score || a.skill.name.localeCompare(b.skill.name))
+    .slice(0, maxAutoActivatedSkills)
+}
+
+function truncateText(text: string, maxChars: number): string {
+  if (text.length <= maxChars) return text
+  if (maxChars <= 1) return text.slice(0, maxChars)
+  return `${text.slice(0, maxChars - 1).trimEnd()}…`
+}
+
+function skillDescription(skill: SkillConfig, maxChars = MAX_SKILL_DESC_CHARS): string {
+  const parts = [skill.description, skill.whenToUse ? `When to use: ${skill.whenToUse}` : '']
+    .filter(Boolean)
+    .join(' - ')
+  return truncateText(parts || 'No description provided.', maxChars)
+}
+
+function formatSkillCatalog(
+  skills: SkillConfig[],
+  selected: SkillMatch[],
+  budget = DEFAULT_SKILL_CATALOG_CHAR_BUDGET,
+): string {
+  const selectedNames = new Set(selected.map((match) => match.skill.name))
+  const ordered = [
+    ...selected.map((match) => match.skill),
+    ...skills
+      .filter((skill) => !selectedNames.has(skill.name))
+      .sort(
+        (a, b) =>
+          Number(b.featured ?? false) - Number(a.featured ?? false) || a.name.localeCompare(b.name),
+      ),
+  ]
+  const lines: string[] = []
+  let used = 0
+
+  for (const skill of ordered) {
+    const suffix = skill.argumentHint ? ` Args: ${skill.argumentHint}` : ''
+    const line = `- ${skill.name}: ${skillDescription(skill)}${suffix}`
+    const cost = line.length + (lines.length > 0 ? 1 : 0)
+    if (lines.length > 0 && used + cost > budget) break
+    lines.push(line)
+    used += cost
+  }
+
+  const omitted = ordered.length - lines.length
+  if (omitted > 0) {
+    const namesLine = `...${omitted} more skill${omitted === 1 ? '' : 's'} omitted from this prompt budget. Use the skill tool with an exact skill name if the user references one.`
+    if (used + namesLine.length + 1 <= budget || lines.length === 0) lines.push(namesLine)
+  }
+
+  return lines.join('\n')
+}
+
+/**
+ * Active skills layer — shared by Pi SDK and harness sessions.
+ *
+ * The model gets a compact catalog every turn so it knows skills exist,
+ * but full SKILL.md bodies are injected only for deterministic matches
+ * against the current user message. This keeps large skills such as DOCX
+ * available without dumping every long playbook into every prompt.
+ */
+export function buildActiveSkillsLayer(opts: ActiveSkillsLayerOpts): string {
+  const skills =
+    opts.skills?.filter(
+      (skill) => !skill.disableModelInvocation && (skill.prompt.trim() || skill.description.trim()),
+    ) ?? []
+  if (skills.length === 0) return ''
+
+  const selected = selectRelevantSkillsForMessage(
+    skills,
+    opts.userMessage,
+    opts.maxAutoActivatedSkills,
+  )
+
+  if (opts.userMessage?.trim()) {
+    skillsLog.debug(
+      {
+        userMessagePreview: opts.userMessage.slice(0, 80),
+        catalogSize: skills.length,
+        autoActivated: selected.map((m) => ({ name: m.skill.name, score: m.score })),
+      },
+      'skills layer rendered',
+    )
+  }
+
+  const catalog = formatSkillCatalog(skills, selected, opts.catalogCharBudget)
+
+  const selectedBlock =
+    selected.length > 0
+      ? selected
+          .map(({ skill, score }) => `- ${skill.name} (score ${score}): ${skillDescription(skill)}`)
+          .join('\n\n')
+      : 'No specific skill was preselected for this turn. Still check the catalog before deciding no skill applies.'
+
+  return systemReminder(
+    'Active Skills',
+    `Anton skills are reusable task playbooks. The listing below is metadata only; full skill content is loaded by the \`skill\` tool (MCP runtimes may expose it as \`anton:skill\`).
+
+When the current request matches a skill's name, description, "when to use" text, file extension, or slash-command reference, calling the skill tool is a blocking requirement before you answer or start the task. Never mention that a skill exists without invoking it. If a skill tool result is already present in the current turn, follow those loaded instructions directly instead of calling the skill again.
+
+## Recommended for this turn
+${selectedBlock}
+
+## Skill Catalog
+${catalog}`,
+  )
+}
+
+/**
+ * Dynamic connector capability layer for Pi SDK sessions. Harness sessions
+ * use buildHarnessCapabilityBlock because their tools are namespaced via MCP.
+ */
+export function buildActiveConnectorsLayer(liveConnectors?: LiveConnectorSummary[]): string {
+  if (!liveConnectors || liveConnectors.length === 0) return ''
+  const list = liveConnectors
+    .map((connector) => {
+      const summary = connector.capabilitySummary ? ` — ${connector.capabilitySummary}` : ''
+      const example = connector.capabilityExample
+        ? ` (tool: \`${connector.capabilityExample}\`)`
+        : ''
+      return `- **${connector.name}**${summary}${example}`
+    })
+    .join('\n')
+
+  return systemReminder(
+    'Active Anton Connectors',
+    `The user has authenticated these services in Anton right now. Their tools are live in this session:
+
+${list}
+
+Use these connector tools directly when the user asks to read, search, create, update, or summarize information from the matching service. Do NOT claim you lack access to a listed service. If the user asks about a service not listed here, tell them to add it in Anton Settings -> Connectors.`,
+  )
+}
+
 // ── Memory guidelines (sourced from system.md) ─────────────────────
 
 let _memoryGuidelinesCache: string | null = null
@@ -369,6 +647,7 @@ Anton extends your native tools (filesystem, shell, code editing) with persisten
 - **\`notification\`** — alert the user through Anton's desktop or mobile app when a long task completes or something needs attention.
 - **\`database\`** — structured storage at \`~/.anton/data.db\`. Use for anything that benefits from SQL (lists, tables, history).
 - **\`publish\`** — share content at a public URL. Use instead of hand-rolling HTML or asking the user to host something themselves.
+- **\`skill\`** — load a reusable Anton skill's full instructions when the "Active Skills" block says one matches. Call this before answering when a relevant skill exists.
 - **Connector tools** (names vary: \`slack_*\`, \`github_*\`, \`linear_*\`, \`gmail_*\`, etc.) — reach the user's connected services. Anton handles OAuth; never ask the user for tokens or API keys for these.
 - **\`update_project_context\`** — when a project is attached AND meaningful work was done this session, call this exactly once near the end with a short \`session_summary\`.
 - **\`activate_workflow\`** — after the user explicitly approves a workflow suggestion from the "Available Workflows" block below.
@@ -445,6 +724,8 @@ export interface HarnessContextPromptOpts {
   agentInstructions?: string
   agentMemory?: string
   availableWorkflows?: WorkflowEntry[]
+  skills?: SkillConfig[]
+  userMessage?: string
 }
 
 /**
@@ -472,6 +753,7 @@ export function buildHarnessContextPrompt(opts: HarnessContextPromptOpts): strin
     buildMemoryLayer(opts.memoryData),
     buildProjectMemoryInstructionsLayer(opts.projectId),
     buildAgentContextLayer(opts.agentInstructions, opts.agentMemory),
+    buildActiveSkillsLayer({ skills: opts.skills, userMessage: opts.userMessage }),
     buildWorkflowsLayer(opts.availableWorkflows),
   ]
     .filter(Boolean)

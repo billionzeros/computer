@@ -2411,6 +2411,8 @@ export class AgentServer {
         agentInstructions,
         agentMemory,
         availableWorkflows: this.getAvailableWorkflowsForPrompt(),
+        skills: this.getActiveSkillsForPrompt(),
+        userMessage,
       })
 
       // Inject the replay seed ONCE, on the first turn only. From turn
@@ -4226,6 +4228,17 @@ export class AgentServer {
    * Loaded once from builtin registry, cached for the server lifetime.
    */
   private _workflowCatalog: { name: string; description: string; whenToUse: string }[] | null = null
+  private getActiveSkillsForPrompt() {
+    try {
+      const skills = loadSkills()
+      this.config.skills = skills
+      return skills
+    } catch (err) {
+      log.warn({ err }, 'failed to load skills for prompt')
+      return this.config.skills ?? []
+    }
+  }
+
   private getAvailableWorkflowsForPrompt(): {
     name: string
     description: string
@@ -4503,6 +4516,7 @@ export class AgentServer {
   ) {
     const project = projectId ? loadProject(projectId) : undefined
     const isAgent = sessionId.startsWith('agent--')
+    this.getActiveSkillsForPrompt()
 
     // Load agent instructions and workflow metadata
     let agentInstructions = extra?.agentInstructions
@@ -4561,6 +4575,7 @@ export class AgentServer {
       agentInstructions,
       agentMemory,
       availableWorkflows: this.getAvailableWorkflowsForPrompt(),
+      liveConnectors: this.collectLiveConnectorsForPrompt(),
       workflowMetadata:
         agentWorkflowId && agentWorkflowKey && agentInstructions
           ? {
@@ -5100,6 +5115,14 @@ export class AgentServer {
     })
 
     log.info({ sessionId, content: msg.content.slice(0, 50) }, 'Processing message')
+
+    // Skills are file-backed and users/agents can add them while Anton is
+    // running. Refresh before every Pi SDK turn so auto-activation sees
+    // newly created SKILL.md packages without requiring a server restart.
+    if (!isHarnessSession(session)) {
+      this.getActiveSkillsForPrompt()
+      session.setLiveConnectors(this.collectLiveConnectorsForPrompt())
+    }
 
     // Load conversation context on first message (cross-conversation matching uses message text)
     // Skip for harness sessions — they manage their own context

@@ -37,6 +37,7 @@ import { buildNotificationTool } from './notification.js'
 import { buildPublishTool } from './publish.js'
 import { buildRoutineTool } from './routine-factory.js'
 import { type SetSessionTitleHandler, buildSetSessionTitleTool } from './set-session-title.js'
+import { buildSkillTool } from './skill-factory.js'
 import { buildSpawnSubAgentTool } from './spawn-sub-agent.js'
 import { buildTaskTrackerTool } from './task-tracker-factory.js'
 import { buildUpdateProjectContextTool } from './update-project-context.js'
@@ -136,6 +137,8 @@ export interface AntonCoreToolContext {
    * undefined the canonical wrappers return a "not configured" message.
    */
   resolveProviderToken?: ProviderTokenResolver
+  /** Returns currently installed skills. Defaults to loading from disk. */
+  getSkills?: () => import('@anton/agent-config').SkillConfig[]
 }
 
 /**
@@ -176,6 +179,10 @@ export function buildAntonCoreTools(ctx: AntonCoreToolContext = {}): AgentTool[]
     // uses to drive the desktop browser sidebar — when undefined, the
     // tool still supports the lightweight fetch/extract operations.
     buildBrowserTool(ctx.browserCallbacks),
+    // Loads full SKILL.md instructions on demand. The prompt layer only
+    // carries a compact metadata listing, so this tool is the bridge from
+    // "a skill matches" to "the model has the actual playbook".
+    buildSkillTool({ getSkills: ctx.getSkills }),
     // Session-scoped work plan. Codex emits its own plan items which
     // the harness session translates directly; Claude Code has no
     // equivalent native surface, so this MCP tool is the only path
