@@ -272,6 +272,9 @@ import {
 } from './compaction.js'
 import { type ContextInfo, type MemoryData, assembleConversationContext } from './context.js'
 import {
+  type LiveConnectorSummary,
+  buildActiveConnectorsLayer,
+  buildActiveSkillsLayer,
   buildAgentContextLayer,
   buildMemoryLayer,
   buildProjectMemoryInstructionsLayer,
@@ -463,8 +466,10 @@ export class Session {
   private memoryData?: MemoryData
   private agentInstructions?: string
   private availableWorkflows?: { name: string; description: string; whenToUse: string }[]
+  private liveConnectors?: LiveConnectorSummary[]
   private agentMemory?: string
   private firstMessage?: string
+  private latestUserMessage?: string
   public contextInfo?: ContextInfo
   private surface?: SurfaceInfo
   private systemPromptOverride?: string // fork children: use parent's rendered prompt
@@ -513,6 +518,7 @@ export class Session {
     agentInstructions?: string // standing instructions for scheduled agents (injected into system prompt)
     agentMemory?: string // persistent memory from previous runs (injected into system prompt)
     availableWorkflows?: { name: string; description: string; whenToUse: string }[] // workflow catalog for auto-suggestion
+    liveConnectors?: LiveConnectorSummary[] // connector catalog for auto-use guidance
     lastTasks?: PersistedTaskItem[] // restored task state from persistence
     subAgentHistory?: PersistedSubAgentHistoryEntry[] // replay-only sub-agent UI events
     // Safety limits
@@ -544,6 +550,7 @@ export class Session {
     this.agentInstructions = opts.agentInstructions
     this.agentMemory = opts.agentMemory
     this.availableWorkflows = opts.availableWorkflows
+    this.liveConnectors = opts.liveConnectors
     this._lastTasks = opts.lastTasks || []
     this.subAgentHistory = opts.subAgentHistory || []
     // If resuming with incomplete tasks, flag for context injection on next message
@@ -959,6 +966,12 @@ export class Session {
     if (initialTitle) {
       events.push({ type: 'title_update', title: initialTitle })
     }
+
+    // Refresh per-turn prompt layers that depend on the current request,
+    // especially automatic skill activation. Without this, Pi SDK sessions
+    // only match skills against the first user message in a conversation.
+    this.latestUserMessage = trimmedMessage
+    this.piAgent.setSystemPrompt(this.getSystemPrompt())
 
     let resolveNext: (() => void) | null = null
     let done = false
@@ -1395,12 +1408,20 @@ export class Session {
     this.log.info({ toolCount: newTools.length }, 'refreshed tools')
   }
 
+  /** Update connector prompt summaries after connector state changes. */
+  setLiveConnectors(liveConnectors: LiveConnectorSummary[]): void {
+    this.liveConnectors = liveConnectors
+    this.piAgent.setSystemPrompt(this.getSystemPrompt())
+  }
+
   /**
    * Steer the agent mid-run with a user message.
    * The message is queued and delivered after the current tool execution.
    */
   steer(message: string, attachments: ChatImageAttachmentInput[] = []) {
     const wrapped = `<user_steering>\nThe user sent this message while you were working. Briefly acknowledge it (1-2 sentences), share your thought on how it affects your current task, then continue your work incorporating this new context.\n\nUser message: "${message}"\n</user_steering>`
+    this.latestUserMessage = message
+    this.piAgent.setSystemPrompt(this.getSystemPrompt())
     const content = buildInterleavedContent(wrapped, attachments, this.workspacePath)
     this.piAgent.steer({
       role: 'user',
@@ -2364,6 +2385,7 @@ export class Session {
     prompt += buildMemoryLayer(this.memoryData)
     prompt += buildProjectMemoryInstructionsLayer(this.projectId)
     prompt += buildAgentContextLayer(this.agentInstructions, this.agentMemory)
+    prompt += buildActiveConnectorsLayer(this.liveConnectors)
 
     // Layer 7: Project type guidelines (code.md, document.md, etc.)
     if (this.projectType) {
@@ -2382,14 +2404,11 @@ export class Session {
       prompt += systemReminder('Reference Knowledge', refs)
     }
 
-    // Layer 9: Active skills
-    if (this.config.skills.length > 0) {
-      let skillBlock = ''
-      for (const skill of this.config.skills) {
-        skillBlock += `### ${skill.name}\n${skill.description}\n${skill.prompt}\n\n`
-      }
-      prompt += systemReminder('Active Skills', skillBlock)
-    }
+    // Layer 9: Active skills — catalog plus auto-selected SKILL.md bodies.
+    prompt += buildActiveSkillsLayer({
+      skills: this.config.skills,
+      userMessage: this.latestUserMessage ?? this.firstMessage,
+    })
 
     // Shared layer — wording lives in prompt-layers.ts.
     prompt += buildWorkflowsLayer(this.availableWorkflows)
@@ -2469,6 +2488,8 @@ export function createSession(
     agentMemory?: string
     /** Available workflow catalog for auto-suggestion in system prompt */
     availableWorkflows?: { name: string; description: string; whenToUse: string }[]
+    /** Active connector capability summaries for prompt guidance */
+    liveConnectors?: LiveConnectorSummary[]
     /** Workflow metadata for Braintrust tracing (workflow ID, agent key, prompt version) */
     workflowMetadata?: { workflowId: string; agentKey: string; promptVersion: string }
     /** Where the session is talking — Slack/Telegram/desktop. Omit for desktop. */
@@ -2550,6 +2571,7 @@ export function createSession(
     agentInstructions: opts?.agentInstructions,
     agentMemory: opts?.agentMemory,
     availableWorkflows: opts?.availableWorkflows,
+    liveConnectors: opts?.liveConnectors,
     maxDurationMs: opts?.maxDurationMs,
     workflowMetadata: opts?.workflowMetadata,
     surface: opts?.surface,
@@ -2596,6 +2618,8 @@ export function resumeSession(
     maxDurationMs?: number
     agentInstructions?: string
     agentMemory?: string
+    /** Active connector capability summaries for prompt guidance */
+    liveConnectors?: LiveConnectorSummary[]
     /** Where the session is talking — Slack/Telegram/desktop. Omit for desktop. */
     surface?: SurfaceInfo
     /** See createSession opts — same field, plumbed for resumed sessions. */
@@ -2670,6 +2694,7 @@ export function resumeSession(
     projectType: opts?.projectType,
     agentInstructions: opts?.agentInstructions,
     agentMemory: opts?.agentMemory,
+    liveConnectors: opts?.liveConnectors,
     lastTasks: persisted.lastTasks,
     maxDurationMs: opts?.maxDurationMs,
     surface: opts?.surface,

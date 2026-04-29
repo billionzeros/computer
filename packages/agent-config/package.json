@@ -6,7 +6,8 @@
   "types": "dist/index.d.ts",
   "files": [
     "dist",
-    "prompts"
+    "prompts",
+    "builtin-skills"
   ],
   "scripts": {
     "dev": "tsc --watch",

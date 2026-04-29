@@ -354,6 +354,8 @@ console.log(`All ${registryCases.length} registry checks passed`)
 // this fails loudly before a Pi SDK prompt regression ships.
 
 import {
+  buildActiveConnectorsLayer as _buildActiveConnectorsLayer,
+  buildActiveSkillsLayer as _buildActiveSkillsLayer,
   buildAgentContextLayer as _buildAgentContextLayer,
   buildHarnessContextPrompt as _buildHarnessContextPrompt,
   buildHarnessIdentityBlock as _buildHarnessIdentityBlock,
@@ -362,7 +364,9 @@ import {
   buildProjectMemoryInstructionsLayer as _buildProjectMemoryInstructionsLayer,
   buildSurfaceLayer as _buildSurfaceLayer,
   buildWorkflowsLayer as _buildWorkflowsLayer,
+  selectRelevantSkillsForMessage as _selectRelevantSkillsForMessage,
 } from '../../prompt-layers.js'
+import { buildSkillTool as _buildSkillTool } from '../../tools/skill-factory.js'
 
 interface LayerSnapshot {
   name: string
@@ -546,6 +550,7 @@ const identityCases: IdentityCase[] = [
         '`notification`',
         '`database`',
         '`publish`',
+        '`skill`',
         '`update_project_context`',
         '`activate_workflow`',
       ]
@@ -657,6 +662,106 @@ if (memFailed > 0) {
 }
 
 console.log(`All ${memCases.length} memory-guidelines checks passed`)
+
+// ── Active skills layer checks ─────────────────────────────────────
+
+const docxSkill = {
+  name: 'docx',
+  description:
+    "Use this skill whenever the user wants to create, read, edit, or manipulate Word documents (.docx files). Triggers include: any mention of 'Word doc', 'word document', '.docx', 'report', 'memo', or 'letter'.",
+  prompt: 'DOCX playbook body. Always set page size explicitly.',
+  whenToUse: 'When the user is working with Word documents or .docx files.',
+  context: 'inline' as const,
+  source: 'user' as const,
+  skillDir: '/tmp/skills/docx',
+}
+
+const spreadsheetSkill = {
+  name: 'spreadsheet',
+  description: 'Use for xlsx files, CSV cleanup, and spreadsheet formulas.',
+  prompt: 'Spreadsheet playbook body.',
+  context: 'inline' as const,
+  source: 'user' as const,
+}
+
+const activeSkillMatches = _selectRelevantSkillsForMessage(
+  [docxSkill, spreadsheetSkill],
+  'Please polish this .docx report and keep tracked changes intact.',
+)
+if (activeSkillMatches[0]?.skill.name !== 'docx') {
+  console.error('✗ skills: expected docx to auto-match .docx report request')
+  process.exit(1)
+}
+console.log('✓ skills: deterministic trigger matching')
+
+const activeSkillsBlock = _buildActiveSkillsLayer({
+  skills: [docxSkill, spreadsheetSkill],
+  userMessage: 'Please polish this .docx report.',
+})
+if (
+  !activeSkillsBlock.includes('# Active Skills') ||
+  !activeSkillsBlock.includes('## Recommended for this turn') ||
+  !activeSkillsBlock.includes('- docx (score') ||
+  activeSkillsBlock.includes('DOCX playbook body') ||
+  !activeSkillsBlock.includes('## Skill Catalog')
+) {
+  console.error('✗ skills: active skills layer should include metadata, not full body')
+  process.exit(1)
+}
+console.log('✓ skills: metadata listing stays compact')
+
+const harnessSkillsPrompt = _buildHarnessContextPrompt({
+  skills: [docxSkill],
+  userMessage: 'Create a Word document proposal.',
+})
+if (
+  !harnessSkillsPrompt.includes('calling the skill tool is a blocking requirement') ||
+  !harnessSkillsPrompt.includes('- docx (score') ||
+  harnessSkillsPrompt.includes('[SKILL ACTIVATED: docx]')
+) {
+  console.error('✗ skills: harness context prompt did not steer skill tool invocation')
+  process.exit(1)
+}
+console.log('✓ skills: harness prompt steers skill tool invocation')
+
+const skillTool = _buildSkillTool({ getSkills: () => [docxSkill, spreadsheetSkill] })
+const skillToolResult = await skillTool.execute(
+  'tool-test-skill',
+  { skill: 'docx', args: 'proposal.docx' },
+  undefined,
+  undefined,
+)
+const skillToolText = skillToolResult.content
+  .filter((chunk): chunk is { type: 'text'; text: string } => chunk.type === 'text')
+  .map((chunk) => chunk.text)
+  .join('\n')
+if (
+  !skillToolText.includes('[SKILL ACTIVATED: docx]') ||
+  !skillToolText.includes('DOCX playbook body') ||
+  !skillToolText.includes('proposal.docx')
+) {
+  console.error('✗ skills: skill tool did not load full skill prompt')
+  process.exit(1)
+}
+console.log('✓ skills: skill tool loads full body on demand')
+
+const connectorBlock = _buildActiveConnectorsLayer([
+  {
+    id: 'google-calendar',
+    name: 'Google Calendar',
+    capabilitySummary: 'read and manage calendar events',
+    capabilityExample: 'google_calendar_list_events',
+  },
+])
+if (
+  !connectorBlock.includes('# Active Anton Connectors') ||
+  !connectorBlock.includes('Google Calendar') ||
+  !connectorBlock.includes('google_calendar_list_events')
+) {
+  console.error('✗ connectors: active connector layer missing Calendar capability')
+  process.exit(1)
+}
+console.log('✓ connectors: Pi SDK connector capability layer')
 
 // ── Mirror synthesizer tests ───────────────────────────────────────
 // Pure-function coverage of synthesizeHarnessTurn. No disk I/O.
