@@ -1,0 +1,73 @@
+packages/agent-config/builtin-skills/docx/scripts/unpack.py
+  71f1c5ebd7d504ef 1-166
+packages/agent-config/builtin-skills/pptx/SKILL.md
+  71f1c5ebd7d504ef 1-230
+packages/agent-core/src/harness/__fixtures__/check.ts
+  71f1c5ebd7d504ef 357-358,367,369,553,666-764
+packages/agent-config/builtin-skills/.gitignore
+  71f1c5ebd7d504ef 1-3
+packages/agent-core/src/tools/skill-factory.ts
+  71f1c5ebd7d504ef 10-120
+packages/agent-server/src/server.ts
+  71f1c5ebd7d504ef 2414-2415,4231-4241,4519,4578,5119-5125
+packages/agent-core/src/tools/factories.ts
+  71f1c5ebd7d504ef 40,140-141,182-185
+packages/agent-config/src/skills.ts
+  71f1c5ebd7d504ef 17-18,28-33,59-83,98-100,137-147,149-150,167-172,179-184,186-187,189-204,209-210,219-221,234
+packages/agent-core/src/session.ts
+  71f1c5ebd7d504ef 275-277,469,472,521,553,970-975,1411-1416,1423-1424,2388,2407-2411,2491-2492,2574,2621-2622,2697
+packages/agent-core/src/agent.ts
+  71f1c5ebd7d504ef 578
+packages/agent-config/builtin-skills/docx/SKILL.md
+  71f1c5ebd7d504ef 1-301
+packages/agent-config/builtin-skills/docx/scripts/accept_changes.py
+  71f1c5ebd7d504ef 1-184
+packages/agent-config/builtin-skills/pptx/scripts/thumbnails.py
+  71f1c5ebd7d504ef 1-134
+packages/agent-config/package.json
+  71f1c5ebd7d504ef 9-10
+packages/agent-config/builtin-skills/xlsx/scripts/recalc.py
+  71f1c5ebd7d504ef 1-151
+packages/agent-core/src/prompt-layers.ts
+  71f1c5ebd7d504ef 19,23,418-428
+  d939eb21eee2ed56 12-15,18,203-417,429-477,650,727-728,756
+packages/agent-config/builtin-skills/xlsx/SKILL.md
+  71f1c5ebd7d504ef 1-240
+packages/agent-config/builtin-skills/pdf/SKILL.md
+  71f1c5ebd7d504ef 1-282
+packages/agent-config/builtin-skills/docx/scripts/pack.py
+  71f1c5ebd7d504ef 1-143
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.3.4",
+  "base_commit_sha": "2a86c1887f238ba687e6e8b0c659ec07d29045e1",
+  "prompts": {
+    "71f1c5ebd7d504ef": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "33b849c2-c867-4bae-a8bb-c8f2468a3368",
+        "model": "claude-opus-4-7"
+      },
+      "human_author": "Om Gupta",
+      "messages": [],
+      "total_additions": 4836,
+      "total_deletions": 247,
+      "accepted_lines": 2078,
+      "overriden_lines": 8
+    },
+    "d939eb21eee2ed56": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019dd317-7163-7843-bac7-281ebcceaf78",
+        "model": "gpt-5.5"
+      },
+      "human_author": "Om Gupta",
+      "messages": [],
+      "total_additions": 303,
+      "total_deletions": 35,
+      "accepted_lines": 273,
+      "overriden_lines": 0
+    }
+  }
+}
