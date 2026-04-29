@@ -956,7 +956,10 @@ export class Session {
     // Emit the truncated-user-question title up front so the UI has a title
     // for the whole first turn. The AI-generated title (if any) is emitted
     // again at the end only when it differs — see the aiTitlePromise block.
-    if (initialTitle) {
+    // Skip the emit when the regex fell back to the literal 'New conversation'
+    // sentinel — broadcasting it would clobber the client's local autoTitle
+    // with a worse default for greeting-only first messages like "hi".
+    if (initialTitle && initialTitle.toLowerCase() !== 'new conversation') {
       events.push({ type: 'title_update', title: initialTitle })
     }
 
@@ -1205,12 +1208,15 @@ export class Session {
       // Close the trace span in normal flow
       closeTraceSpan()
 
+      const resolved = this.resolvedModel as unknown as
+        | { provider?: string; id?: string }
+        | undefined
       yield {
         type: 'done',
         usage: this.lastTurnUsage,
         cumulativeUsage: this.getCumulativeUsage(),
-        provider: (this.resolvedModel as unknown as { provider: string }).provider,
-        model: (this.resolvedModel as unknown as { id: string }).id,
+        provider: resolved?.provider ?? this.provider,
+        model: resolved?.id ?? this.model,
       }
     } finally {
       // Safety net: ensure trace span is always closed, even on generator abort or exception
@@ -1374,7 +1380,12 @@ export class Session {
    * keeps all messages, next LLM call uses the new model.
    */
   switchModel(provider: string, model: string): void {
-    const newModel = resolveModel(provider, model) as Model<Api>
+    const newModel = resolveModel(provider, model)
+    if (!newModel) {
+      throw new Error(
+        `Unknown model "${model}" for provider "${provider}". Model IDs must exactly match pi SDK's registry. For openrouter, use format like "anthropic/claude-sonnet-4.6". For anton, use the model name directly like "gpt-4.1" or "claude-sonnet-4.6".`,
+      )
+    }
     this.piAgent.setModel(newModel)
     this.resolvedModel = newModel
     this.provider = provider

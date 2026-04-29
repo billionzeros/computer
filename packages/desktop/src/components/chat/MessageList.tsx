@@ -10,7 +10,8 @@ import { SubAgentGroup } from './SubAgentGroup.js'
 import { TaskChecklist } from './TaskChecklist.js'
 import { TaskSection } from './TaskSection.js'
 import { ThinkingIndicator } from './ThinkingIndicator.js'
-import { groupMessages } from './groupMessages.js'
+import { TurnProgress } from './TurnProgress.js'
+import { type GroupedItem, groupMessages } from './groupMessages.js'
 
 interface Props {
   messages: ChatMessage[]
@@ -53,12 +54,102 @@ function TaskChecklistInline() {
   return <TaskChecklist tasks={currentTasks} />
 }
 
+type RenderEntry =
+  | { kind: 'turn'; key: string; items: GroupedItem[]; isWorking: boolean }
+  | { kind: 'leaf'; key: string; item: GroupedItem }
+
+function isWorkItem(item: GroupedItem): boolean {
+  if (item.type === 'actions' || item.type === 'task_section' || item.type === 'sub_agent') {
+    return true
+  }
+  if (item.type === 'message') {
+    const m = item.message
+    if (m.role === 'assistant' && m.isThinking) return true
+    // Intermediate assistant narrations that didn't get folded into a task_section
+    // (long-ish prose between tool calls). They belong inside the work log.
+    if (m.role === 'assistant' && !m.isThinking) return true
+  }
+  return false
+}
+
+function buildRenderQueue(grouped: GroupedItem[], isAgentWorking: boolean): RenderEntry[] {
+  // Step 1: identify the LAST assistant non-thinking message in each "turn"
+  // (a turn ends at a user/system message). That message is the final answer
+  // and renders OUTSIDE the TurnProgress wrapper.
+  const finalAnswerIndices = new Set<number>()
+  let lastAssistantIdx = -1
+  for (let i = 0; i < grouped.length; i++) {
+    const item = grouped[i]
+    if (item.type !== 'message') continue
+    const m = item.message
+    if (m.role === 'user' || m.role === 'system') {
+      if (lastAssistantIdx >= 0) finalAnswerIndices.add(lastAssistantIdx)
+      lastAssistantIdx = -1
+    } else if (m.role === 'assistant' && !m.isThinking) {
+      lastAssistantIdx = i
+    }
+  }
+  // Close the trailing turn only when the agent has stopped — otherwise it
+  // might still emit more text and we don't want to "lock in" an early answer.
+  if (lastAssistantIdx >= 0 && !isAgentWorking) {
+    finalAnswerIndices.add(lastAssistantIdx)
+  }
+
+  // Step 2: walk and bucket into a render queue
+  const queue: RenderEntry[] = []
+  let buffer: GroupedItem[] = []
+  const flush = () => {
+    if (buffer.length === 0) return
+    const first = buffer[0]
+    const id = first.type === 'message' ? first.message.id : first.id
+    queue.push({ kind: 'turn', key: `turn_${id}`, items: buffer, isWorking: false })
+    buffer = []
+  }
+
+  for (let i = 0; i < grouped.length; i++) {
+    const item = grouped[i]
+    const isFinal = finalAnswerIndices.has(i)
+    const isUserOrSystem =
+      item.type === 'message' && (item.message.role === 'user' || item.message.role === 'system')
+    const isToolLeaf = item.type === 'message' && item.message.role === 'tool'
+
+    if (isUserOrSystem || isFinal || isToolLeaf) {
+      flush()
+      const id = item.type === 'message' ? item.message.id : item.id
+      queue.push({ kind: 'leaf', key: id, item })
+      continue
+    }
+
+    if (isWorkItem(item)) {
+      buffer.push(item)
+    } else {
+      // Unknown bucket — render as a leaf to be safe.
+      flush()
+      const id = item.type === 'message' ? item.message.id : item.id
+      queue.push({ kind: 'leaf', key: id, item })
+    }
+  }
+
+  // Trailing buffer is the in-progress turn; mark it as working iff the agent is.
+  if (buffer.length > 0) {
+    const first = buffer[0]
+    const id = first.type === 'message' ? first.message.id : first.id
+    queue.push({ kind: 'turn', key: `turn_${id}`, items: buffer, isWorking: isAgentWorking })
+  }
+
+  return queue
+}
+
 export function MessageList({ messages }: Props) {
   const containerRef = useRef<HTMLDivElement>(null)
   const bottomRef = useRef<HTMLDivElement>(null)
   const [showScrollBtn, setShowScrollBtn] = useState(false)
   const agentStatus = useRoutineStatus()
   const grouped = useMemo(() => groupMessages(messages), [messages])
+  const renderQueue = useMemo(
+    () => buildRenderQueue(grouped, agentStatus === 'working'),
+    [grouped, agentStatus],
+  )
 
   // Pagination: load older messages on scroll-to-top
   const activeSessionId = useStore((s) => s.getActiveConversation()?.sessionId)
@@ -170,20 +261,15 @@ export function MessageList({ messages }: Props) {
           </div>
         )}
         <AnimatePresence mode="popLayout">
-          {grouped.map((item, idx) => {
-            if (item.type === 'message') {
-              // A thinking block streams only if nothing follows it — meaning
-              // the model is still in its thinking phase. Once any response text,
-              // tool call, or new user message appears after it, this turn's thinking is done.
-              const hasAnythingAfter = grouped.slice(idx + 1).length > 0
-              const isLastThinking = item.message.isThinking && !hasAnythingAfter
+          {renderQueue.map((entry) => {
+            if (entry.kind === 'turn') {
               return (
-                <MessageBubble
-                  key={item.message.id}
-                  message={item.message}
-                  isLastThinking={isLastThinking}
-                />
+                <TurnProgress key={entry.key} items={entry.items} isWorking={entry.isWorking} />
               )
+            }
+            const { item } = entry
+            if (item.type === 'message') {
+              return <MessageBubble key={item.message.id} message={item.message} />
             }
             if (item.type === 'task_section') {
               return (
@@ -192,7 +278,6 @@ export function MessageList({ messages }: Props) {
                   title={item.title}
                   actions={item.actions}
                   done={item.done}
-                  defaultExpanded={idx === grouped.length - 1 && agentStatus === 'working'}
                 />
               )
             }
@@ -206,17 +291,10 @@ export function MessageList({ messages }: Props) {
                   actions={item.actions}
                   progressContent={item.progressContent}
                   result={item.result}
-                  defaultExpanded={idx === grouped.length - 1 && agentStatus === 'working'}
                 />
               )
             }
-            return (
-              <ActionsGroup
-                key={item.id}
-                actions={item.actions}
-                defaultExpanded={idx === grouped.length - 1 && agentStatus === 'working'}
-              />
-            )
+            return <ActionsGroup key={item.id} actions={item.actions} />
           })}
         </AnimatePresence>
         <TaskChecklistInline />

@@ -156,7 +156,7 @@ export function ComposerAddMenu({ open, onClose, onAddImages, onAddFiles, anchor
         </button>
       </div>
 
-      <div className="composer-add-menu__divider" role="separator" />
+      <hr className="composer-add-menu__divider" />
       <div className="composer-add-menu__section">
         <button
           type="button"
@@ -178,7 +178,7 @@ export function ComposerAddMenu({ open, onClose, onAddImages, onAddFiles, anchor
         </button>
       </div>
 
-      <div className="composer-add-menu__divider" role="separator" />
+      <hr className="composer-add-menu__divider" />
       <div className="composer-add-menu__section">
         <button
           type="button"

@@ -15,7 +15,6 @@ import {
   RefreshCw,
   Search,
   SlidersHorizontal,
-  Sparkles,
   SquareCheck,
   Terminal as TerminalIcon,
   X,
@@ -39,15 +38,7 @@ interface Props {
   onOpenMachineInfo: () => void
 }
 
-type NavId =
-  | 'tasks'
-  | 'memory'
-  | 'routines'
-  | 'files'
-  | 'pages'
-  | 'customize'
-  | 'workflows'
-  | 'skills'
+type NavId = 'tasks' | 'memory' | 'routines' | 'files' | 'pages' | 'customize' | 'workflows'
 
 const NAV: { id: NavId; label: string; icon: typeof SquareCheck }[] = [
   { id: 'tasks', label: 'Tasks', icon: SquareCheck },
@@ -57,7 +48,6 @@ const NAV: { id: NavId; label: string; icon: typeof SquareCheck }[] = [
   { id: 'pages', label: 'Pages', icon: Globe },
   { id: 'customize', label: 'Customize', icon: Zap },
   { id: 'workflows', label: 'Workflows', icon: Network },
-  { id: 'skills', label: 'Patterns', icon: Sparkles },
 ]
 
 export function Sidebar({ onViewChange, onOpenSettings }: Props) {
@@ -139,9 +129,13 @@ export function Sidebar({ onViewChange, onOpenSettings }: Props) {
   const projectUsesTLS = currentMachine?.useTLS ?? false
 
   // Live per-project task counts (more accurate than stats.sessionCount).
+  // Mirrors the Recent filter: only count conversations the user has actually
+  // worked on (has messages OR a real title), so empty scratch buffers from
+  // repeated "New task" clicks don't inflate the per-project file count.
   const taskCountByProject = useMemo(() => {
     const m = new Map<string, number>()
     for (const c of conversations) {
+      if (c.messages.length === 0 && c.title === 'New conversation') continue
       const key = c.projectId ?? '__none__'
       m.set(key, (m.get(key) ?? 0) + 1)
     }
@@ -164,28 +158,34 @@ export function Sidebar({ onViewChange, onOpenSettings }: Props) {
   const isJustNow = activeLastActive && Date.now() - activeLastActive < 60_000
 
   const recentTasks = useMemo(() => {
-    return [...conversations]
-      .filter((c) => !c.projectId || c.projectId === activeProjectId)
-      .sort((a, b) => b.updatedAt - a.updatedAt)
-      .slice(0, 12)
-      .map((c) => ({
-        id: c.id,
-        title: sanitizeTitle(c.title || 'New conversation'),
-        status:
-          c.messages.length === 0
-            ? ('idle' as const)
-            : c.messages.some((m) => m.isError)
-              ? ('error' as const)
-              : c.messages[c.messages.length - 1]?.role === 'user'
-                ? ('working' as const)
-                : ('completed' as const),
-      }))
+    return (
+      [...conversations]
+        .filter((c) => !c.projectId || c.projectId === activeProjectId)
+        // Hide *truly* empty scratch conversations from Recent. After a reload,
+        // saveConversations strips messages from storage, so messages.length
+        // alone isn't a reliable "is empty" signal — fall back to the title:
+        // a fresh conversation has the default 'New conversation' title until
+        // the first user message triggers autoTitle().
+        .filter((c) => c.messages.length > 0 || c.title !== 'New conversation')
+        .sort((a, b) => b.updatedAt - a.updatedAt)
+        .slice(0, 12)
+        .map((c) => ({
+          id: c.id,
+          title: sanitizeTitle(c.title || 'New conversation'),
+          status: c.messages.some((m) => m.isError)
+            ? ('error' as const)
+            : c.messages[c.messages.length - 1]?.role === 'user'
+              ? ('working' as const)
+              : ('completed' as const),
+        }))
+    )
   }, [conversations, activeProjectId])
 
   const handleNewTask = () => {
-    // Create a fresh empty conversation and land on Home so StreamHome renders.
-    // We must pre-create rather than null out activeConversationId because sync
-    // reconciliation (reconcileActiveConversationId) falls back to conversations[0].
+    // Always create a fresh empty conversation and land on Home so StreamHome
+    // renders. Empty conversations are filtered out of Recent so they don't
+    // pollute the sidebar — the home composer is the source of truth for
+    // "what's the new task".
     const sessionId = `sess_${Date.now().toString(36)}`
     const ss = sessionStore.getState()
     const projectId = activeProjectId ?? undefined
@@ -200,7 +200,13 @@ export function Sidebar({ onViewChange, onOpenSettings }: Props) {
 
   const handleOpenTask = (id: string) => {
     switchConversation(id)
-    setActiveView('chat')
+    // Empty conversations should land on the home composer (default page),
+    // not a blank chat view. Mirror the Recent filter: after a reload,
+    // saveConversations strips messages from storage, so messages.length
+    // alone isn't a reliable "is empty" signal — fall back to the title.
+    const target = conversations.find((c) => c.id === id)
+    const isEmpty = !!target && target.messages.length === 0 && target.title === 'New conversation'
+    setActiveView(isEmpty ? 'home' : 'chat')
     onViewChange('agent')
   }
 
