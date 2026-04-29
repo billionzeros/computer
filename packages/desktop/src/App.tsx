@@ -31,7 +31,6 @@ import { ProjectList } from './components/projects/ProjectList.js'
 import { RoutinesView } from './components/routines/RoutinesView.js'
 import { SettingsModal } from './components/settings/SettingsModal.js'
 import { UsageModal } from './components/settings/UsageModal.js'
-import { SkillsPanel } from './components/skills/SkillsPanel.js'
 import { WorkflowsPage } from './components/workflows/WorkflowsPage.js'
 import { connection } from './lib/connection.js'
 import { sanitizeTitle } from './lib/conversations.js'
@@ -431,7 +430,6 @@ export function App() {
             )}
             {activeView === 'files' && <ProjectFilesView />}
             {activeView === 'connectors' && <ConnectorsView />}
-            {activeView === 'skills' && <SkillsPanel />}
             {activeView === 'customize' && <CustomizeView />}
             {activeView === 'workflows' && <WorkflowsPage />}
             {activeView === 'pages' && <PagesView />}

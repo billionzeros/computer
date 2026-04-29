@@ -5,8 +5,8 @@ interface Props {
 }
 
 export function SourceCards({ sources }: Props) {
-  // Show up to 12 sources max
-  const visible = sources.slice(0, 12)
+  // Show up to 6 sources max — keeps the row short; horizontal scroll handles the rest
+  const visible = sources.slice(0, 6)
 
   return (
     <div className="source-cards">

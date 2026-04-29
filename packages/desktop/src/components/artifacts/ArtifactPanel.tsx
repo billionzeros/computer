@@ -255,14 +255,14 @@ export function ArtifactPanelContent() {
     // and serve via Blob URL. Text artifacts retain the existing fast path.
     if (isBinary) {
       if (!active.sourcePath) return
-      let unsub: (() => void) | undefined
+      const sub: { off?: () => void } = {}
       const timeout = window.setTimeout(() => {
-        unsub?.()
+        sub.off?.()
       }, 30_000)
-      unsub = connection.onFilesystemReadBytesResponse((payload) => {
+      sub.off = connection.onFilesystemReadBytesResponse((payload) => {
         if (payload.path !== active.sourcePath) return
         window.clearTimeout(timeout)
-        unsub?.()
+        sub.off?.()
         if (payload.error || !payload.content) return
         try {
           const binary = atob(payload.content)

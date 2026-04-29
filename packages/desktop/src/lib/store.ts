@@ -136,7 +136,6 @@ interface AppState {
       | 'files'
       | 'connectors'
       | 'developer'
-      | 'skills'
       | 'workflows'
       | 'projects',
   ) => void
@@ -823,6 +822,16 @@ export const useStore = create<AppState>((set, get) => {
       set((state) => {
         const conversations = state.conversations.map((c) => {
           if (c.sessionId !== sessionId) return c
+          // Don't downgrade an already-meaningful local title back to the
+          // 'New conversation' sentinel — some agents emit this as their
+          // fallback when generation fails on greeting-only messages.
+          if (
+            title.toLowerCase() === 'new conversation' &&
+            c.title &&
+            c.title.toLowerCase() !== 'new conversation'
+          ) {
+            return c
+          }
           return { ...c, title, updatedAt: Date.now() }
         })
         saveConversations(conversations)

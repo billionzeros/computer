@@ -141,7 +141,6 @@ export type ActiveView =
   | 'connectors'
   | 'customize'
   | 'developer'
-  | 'skills'
   | 'workflows'
   | 'pages'
   | 'projects'
