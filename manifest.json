@@ -1,6 +1,6 @@
 {
   "version": "2.1.2",
-  "gitHash": "",
+  "gitHash": "0dfc144",
   "releaseUrl": "https://github.com/billionzeros/computer/releases",
   "changelog": "Features:\n- auto-activated skills + builtin document-creation packages (#19)\n\nOther:\n- fix(attachments): persist images on disk + lazy-load chips on demand (#20)\n- feat(chat): collapsible turn progress + per-turn source cards (#18)\n- fix(artifacts): premium split panel + render docx/pdf/xlsx in files view (#17)\n- fix(ask-user): commit answers only on explicit submit (#16)\n- docs(spec): session log architecture — append-only log + multi-client channel (#15)",
   "publishedAt": "2026-04-30T23:32:47.011Z",
