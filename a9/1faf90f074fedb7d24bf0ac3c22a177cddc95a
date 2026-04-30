@@ -1,0 +1,117 @@
+packages/desktop/src/index.css
+  928a506671f2f7d3 799-800,813-818,820-822,825-826,830-852,3337-3366
+  7ab719aa45920b6c 3617-3680
+packages/protocol/src/messages.ts
+  928a506671f2f7d3 257-270,1455
+  7ab719aa45920b6c 366-385,1460-1461
+packages/desktop/src/components/customize/CustomizeView.tsx
+  127d010cd9d01431 1,6
+packages/desktop/src/components/chat/ProviderSettingsModal.tsx
+  d36862993842cbfd 1,191
+packages/desktop/src/components/Sidebar.tsx
+  928a506671f2f7d3 14,61,78-82,220-255,472-477,479-547
+packages/desktop/src/lib/store.ts
+  928a506671f2f7d3 183,843-857
+packages/agent-config/src/attachments.test.ts
+  7ab719aa45920b6c 1-170
+packages/agent-config/tsconfig.json
+  c8b597cec4893692 13-14
+packages/agent-server/src/server.ts
+  7ab719aa45920b6c 24,65,169-185,1762-1765,3416-3469
+  928a506671f2f7d3 63,1750-1753,3215-3281
+packages/desktop/src/lib/connection.ts
+  928a506671f2f7d3 223-231
+packages/desktop/src/lib/attachmentDiskCache.ts
+  7ab719aa45920b6c 1-115,117-141,143-195
+packages/desktop/src/components/home/TasksListView.tsx
+  928a506671f2f7d3 1-2,29,36-39,78-113,188,190-257,263,265-266,268,270-283
+packages/agent-core/src/session.ts
+  7ab719aa45920b6c 1556-1561,1567,1569-1570,1573-1584
+packages/desktop/src/components/chat/MessageBubble.tsx
+  7ab719aa45920b6c 1,10-11,15,29,33-40,42-49,61-63,71-78,83-84,86-103,168-174,176,181,199-206,236-237,239,241-244,300,337
+vitest.config.ts
+  7ab719aa45920b6c 1-9
+packages/desktop/src/lib/attachments.ts
+  7ab719aa45920b6c 1-309
+packages/desktop/src/components/chat/MessageList.tsx
+  7ab719aa45920b6c 272-278
+packages/agent-config/src/config.ts
+  7ab719aa45920b6c 8,14,310-315,360,809-833,922-937,1151
+  928a506671f2f7d3 1339-1352
+package.json
+  7ab719aa45920b6c 27-29,36-37
+packages/desktop/src/lib/store/sessionStore.ts
+  928a506671f2f7d3 336,621
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.3.4",
+  "base_commit_sha": "a91faf90f074fedb7d24bf0ac3c22a177cddc95a",
+  "prompts": {
+    "127d010cd9d01431": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "b5c962d6-2d1b-459c-9034-fa71ab005e07",
+        "model": "claude-opus-4-7"
+      },
+      "human_author": "Om Gupta",
+      "messages": [],
+      "total_additions": 2,
+      "total_deletions": 27,
+      "accepted_lines": 2,
+      "overriden_lines": 0
+    },
+    "7ab719aa45920b6c": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "dddb2f81-2587-4633-8feb-881f3092a215",
+        "model": "claude-opus-4-7"
+      },
+      "human_author": "Om Gupta",
+      "messages": [],
+      "total_additions": 4261,
+      "total_deletions": 537,
+      "accepted_lines": 3721,
+      "overriden_lines": 21
+    },
+    "928a506671f2f7d3": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "b71c9633-f33c-4240-8f35-042873cc22b8",
+        "model": "claude-opus-4-7"
+      },
+      "human_author": "Om Gupta",
+      "messages": [],
+      "total_additions": 486,
+      "total_deletions": 85,
+      "accepted_lines": 473,
+      "overriden_lines": 0
+    },
+    "c8b597cec4893692": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "1a62c3cb-dff2-4a5d-a35c-0319c14f9174",
+        "model": "<synthetic>"
+      },
+      "human_author": "Om Gupta",
+      "messages": [],
+      "total_additions": 2,
+      "total_deletions": 1,
+      "accepted_lines": 2,
+      "overriden_lines": 0
+    },
+    "d36862993842cbfd": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "80407047-65c3-4054-b3a8-95a735240cc3",
+        "model": "claude-opus-4-7"
+      },
+      "human_author": "Om Gupta",
+      "messages": [],
+      "total_additions": 2,
+      "total_deletions": 34,
+      "accepted_lines": 2,
+      "overriden_lines": 0
+    }
+  }
+}
