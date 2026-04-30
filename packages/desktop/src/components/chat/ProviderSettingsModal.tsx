@@ -1,4 +1,4 @@
-import { ArrowRight, Check, ChevronDown, Plus, RotateCcw, X } from 'lucide-react'
+import { ArrowRight, Check, ChevronDown, RotateCcw, X } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { ProviderInfo } from '../../lib/store.js'
 import { sessionStore } from '../../lib/store/sessionStore.js'
@@ -19,9 +19,7 @@ export function ProviderSettingsModal({ provider, onClose }: Props) {
   const [apiKey, setApiKey] = useState('')
   const [keySaved, setKeySaved] = useState(false)
   const [models, setModels] = useState<string[]>([])
-  const [newModel, setNewModel] = useState('')
   const [modelsOpen, setModelsOpen] = useState(false)
-  const addInputRef = useRef<HTMLInputElement>(null)
   const relistTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const savedFlagTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
@@ -43,7 +41,6 @@ export function ProviderSettingsModal({ provider, onClose }: Props) {
       setModels([...provider.models])
       setApiKey('')
       setKeySaved(false)
-      setNewModel('')
       setModelsOpen(false)
     }
   }, [providerName])
@@ -85,8 +82,6 @@ export function ProviderSettingsModal({ provider, onClose }: Props) {
   const icon = providerIcons[live.name]
   const label = providerDisplayName(live.name)
   const connected = live.hasApiKey || keySaved
-  const trimmedNew = newModel.trim()
-  const canAdd = trimmedNew.length > 0 && !models.includes(trimmedNew)
 
   const saveKey = (e: React.FormEvent) => {
     e.preventDefault()
@@ -101,14 +96,6 @@ export function ProviderSettingsModal({ provider, onClose }: Props) {
       setKeySaved(false)
       savedFlagTimer.current = null
     }, 1800)
-  }
-
-  const addModel = (e: React.FormEvent) => {
-    e.preventDefault()
-    if (!canAdd) return
-    commitModels([...models, trimmedNew])
-    setNewModel('')
-    addInputRef.current?.focus()
   }
 
   const removeModel = (id: string) => {
@@ -201,9 +188,7 @@ export function ProviderSettingsModal({ provider, onClose }: Props) {
             <div id="pform-models-panel" className="pform__panel">
               <ul className="pform__list">
                 {models.length === 0 && (
-                  <li className="pform__empty">
-                    No models yet. Add one below or reset to defaults.
-                  </li>
+                  <li className="pform__empty">No models yet. Reset to defaults to restore them.</li>
                 )}
                 {models.map((m) => {
                   const tag = classifyModelTag(m)
@@ -228,23 +213,6 @@ export function ProviderSettingsModal({ provider, onClose }: Props) {
                   )
                 })}
               </ul>
-
-              <form onSubmit={addModel} className="pform__add">
-                <Plus size={13} strokeWidth={2} className="pform__add-plus" aria-hidden="true" />
-                <input
-                  ref={addInputRef}
-                  type="text"
-                  className="pform__add-input"
-                  placeholder="Add model id"
-                  value={newModel}
-                  onChange={(e) => setNewModel(e.target.value)}
-                  spellCheck={false}
-                  aria-label="New model id"
-                />
-                <button type="submit" className="pform__add-btn" disabled={!canAdd}>
-                  Add
-                </button>
-              </form>
 
               {defaultsAvailable && !isAtDefaults && (
                 <button type="button" onClick={resetDefaults} className="pform__reset">

@@ -11,6 +11,7 @@ import {
   Monitor,
   Network,
   PanelLeft,
+  Pencil,
   Plus,
   RefreshCw,
   Search,
@@ -57,6 +58,7 @@ export function Sidebar({ onViewChange, onOpenSettings }: Props) {
   const switchConversation = useStore((s) => s.switchConversation)
   const newConversation = useStore((s) => s.newConversation)
   const deleteConversation = useStore((s) => s.deleteConversation)
+  const renameConversation = useStore((s) => s.renameConversation)
   const conversations = useStore((s) => s.conversations)
   const activeConversationId = useStore((s) => s.activeConversationId)
   const sidebarCollapsed = uiStore((s) => s.sidebarCollapsed)
@@ -72,6 +74,11 @@ export function Sidebar({ onViewChange, onOpenSettings }: Props) {
   const projectWrapRef = useRef<HTMLDivElement | null>(null)
   const projectMenuRef = useRef<HTMLDivElement | null>(null)
   const [projectMenuPos, setProjectMenuPos] = useState<{ top: number; left: number } | null>(null)
+
+  const [editingTaskId, setEditingTaskId] = useState<string | null>(null)
+  const [editingTaskValue, setEditingTaskValue] = useState('')
+  const editInputRef = useRef<HTMLInputElement | null>(null)
+  const cancelEditRef = useRef(false)
 
   useLayoutEffect(() => {
     if (!projectMenuOpen) {
@@ -208,6 +215,42 @@ export function Sidebar({ onViewChange, onOpenSettings }: Props) {
     const isEmpty = !!target && target.messages.length === 0 && target.title === 'New conversation'
     setActiveView(isEmpty ? 'home' : 'chat')
     onViewChange('agent')
+  }
+
+  useEffect(() => {
+    if (editingTaskId && editInputRef.current) {
+      editInputRef.current.focus()
+      editInputRef.current.select()
+    }
+  }, [editingTaskId])
+
+  const startEditTask = (id: string, currentTitle: string) => {
+    cancelEditRef.current = false
+    setEditingTaskId(id)
+    setEditingTaskValue(currentTitle)
+  }
+
+  const cancelEditTask = () => {
+    cancelEditRef.current = true
+    setEditingTaskId(null)
+    setEditingTaskValue('')
+  }
+
+  const commitEditTask = () => {
+    if (cancelEditRef.current) {
+      cancelEditRef.current = false
+      return
+    }
+    const id = editingTaskId
+    if (!id) return
+    const trimmed = editingTaskValue.trim()
+    const original = recentTasks.find((t) => t.id === id)?.title
+    if (trimmed && trimmed !== original) {
+      // Optimistic local update + WebSocket persist to the server.
+      renameConversation(id, trimmed)
+    }
+    setEditingTaskId(null)
+    setEditingTaskValue('')
   }
 
   const sidebarWidth = sidebarCollapsed ? 'var(--sidebar-width-collapsed)' : 'var(--sidebar-width)'
@@ -426,34 +469,82 @@ export function Sidebar({ onViewChange, onOpenSettings }: Props) {
             {recentTasks.length === 0 ? (
               <div className="sb-history-empty">No tasks yet</div>
             ) : (
-              recentTasks.map((t) => (
-                <div
-                  key={t.id}
-                  className={`sb-history-item${activeConversationId === t.id ? ' active' : ''}`}
-                >
-                  <button
-                    type="button"
-                    className="sb-history-row"
-                    onClick={() => handleOpenTask(t.id)}
-                    title={t.title}
+              recentTasks.map((t) => {
+                const isEditing = editingTaskId === t.id
+                return (
+                  <div
+                    key={t.id}
+                    className={`sb-history-item${activeConversationId === t.id ? ' active' : ''}${isEditing ? ' editing' : ''}`}
                   >
-                    <span className={`sb-history-dot ${t.status}`} aria-hidden />
-                    <span className="sb-history-title">{t.title}</span>
-                  </button>
-                  <button
-                    type="button"
-                    className="sb-history-close"
-                    onClick={(e) => {
-                      e.stopPropagation()
-                      deleteConversation(t.id)
-                    }}
-                    aria-label="Remove task"
-                    title="Remove from recent"
-                  >
-                    <X size={11} strokeWidth={1.75} />
-                  </button>
-                </div>
-              ))
+                    {isEditing ? (
+                      <div className="sb-history-row sb-history-row--editing">
+                        <span className={`sb-history-dot ${t.status}`} aria-hidden />
+                        <input
+                          ref={editInputRef}
+                          type="text"
+                          className="sb-history-edit-input"
+                          value={editingTaskValue}
+                          onChange={(e) => setEditingTaskValue(e.target.value)}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter') {
+                              e.preventDefault()
+                              editInputRef.current?.blur()
+                            } else if (e.key === 'Escape') {
+                              e.preventDefault()
+                              cancelEditTask()
+                            }
+                          }}
+                          onBlur={commitEditTask}
+                          maxLength={120}
+                          aria-label="Rename task"
+                        />
+                      </div>
+                    ) : (
+                      <button
+                        type="button"
+                        className="sb-history-row"
+                        onClick={() => handleOpenTask(t.id)}
+                        onDoubleClick={(e) => {
+                          e.preventDefault()
+                          startEditTask(t.id, t.title)
+                        }}
+                        title={t.title}
+                      >
+                        <span className={`sb-history-dot ${t.status}`} aria-hidden />
+                        <span className="sb-history-title">{t.title}</span>
+                      </button>
+                    )}
+                    {!isEditing && (
+                      <>
+                        <button
+                          type="button"
+                          className="sb-history-edit"
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            startEditTask(t.id, t.title)
+                          }}
+                          aria-label="Rename task"
+                          title="Rename"
+                        >
+                          <Pencil size={11} strokeWidth={1.75} />
+                        </button>
+                        <button
+                          type="button"
+                          className="sb-history-close"
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            deleteConversation(t.id)
+                          }}
+                          aria-label="Remove task"
+                          title="Remove from recent"
+                        >
+                          <X size={11} strokeWidth={1.75} />
+                        </button>
+                      </>
+                    )}
+                  </div>
+                )
+              })
             )}
           </div>
         </div>

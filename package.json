@@ -24,14 +24,17 @@
     "typecheck:cli": "pnpm --filter @anton/cli typecheck",
     "typecheck:desktop": "pnpm --filter @anton/desktop typecheck",
     "typecheck:protocol": "pnpm --filter @anton/protocol typecheck",
-    "verify": "pnpm typecheck && pnpm check",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "verify": "pnpm typecheck && pnpm check && pnpm test",
     "deploy": "./deploy/sync.sh",
     "dev": "pnpm protocol:build && concurrently \"pnpm agent:dev\" \"pnpm desktop:dev\"",
     "dev:local": "ANTON_LOCAL=1 pnpm dev"
   },
   "devDependencies": {
     "@biomejs/biome": "^1.9.0",
-    "esbuild": "^0.27.4"
+    "esbuild": "^0.27.4",
+    "vitest": "^3"
   },
   "keywords": [
     "ai",

@@ -21,6 +21,7 @@ import {
   unlinkSync,
   writeFileSync,
 } from 'node:fs'
+import { readFile } from 'node:fs/promises'
 import { createServer as createHttpServer } from 'node:http'
 import { createServer as createHttpsServer } from 'node:https'
 import { join, resolve } from 'node:path'
@@ -59,7 +60,9 @@ import {
   loadProjects,
   loadUserRules,
   onSyncChange,
+  refreshSessionIndex,
   removePublished,
+  resolveSessionImagePath,
   saveConfig,
   saveProjectInstructions,
   savePublishedMeta,
@@ -162,6 +165,23 @@ import { WorkflowInstaller } from './workflows/workflow-installer.js'
 const log = createLogger('server')
 
 const DEFAULT_SESSION_ID = 'default'
+
+const IMAGE_MIME_BY_EXT: Record<string, string> = {
+  jpg: 'image/jpeg',
+  jpeg: 'image/jpeg',
+  png: 'image/png',
+  webp: 'image/webp',
+  gif: 'image/gif',
+  svg: 'image/svg+xml',
+  bmp: 'image/bmp',
+  heic: 'image/heic',
+  heif: 'image/heif',
+}
+
+function mimeTypeFromExt(filePath: string): string {
+  const ext = filePath.toLowerCase().split('.').pop() || ''
+  return IMAGE_MIME_BY_EXT[ext] || 'application/octet-stream'
+}
 
 /**
  * Buffers text chunks from the AI stream and flushes them on a timer (~80ms)
@@ -1727,12 +1747,20 @@ export class AgentServer {
         void this.handleSessionDestroy(msg)
         break
 
+      case 'session_rename':
+        this.handleSessionRename(msg)
+        break
+
       case 'session_provider_switch':
         void this.handleSessionProviderSwitch(msg)
         break
 
       case 'session_history':
         this.handleSessionHistory(msg)
+        break
+
+      case 'request_attachment':
+        void this.handleRequestAttachment(msg)
         break
 
       case 'session_set_thinking_level':
@@ -3184,6 +3212,73 @@ export class AgentServer {
     log.info({ sessionId: msg.id, idReused }, 'Session destroyed')
   }
 
+  /**
+   * User-initiated rename. Persists the new title to meta.json,
+   * refreshes the global sync index for cross-restart durability, and
+   * pushes a `title_update` so live clients update immediately.
+   *
+   * Mirrors the auto-titling flow used by `set_session_title`: in-memory
+   * `setTitle` (when the session is loaded), `writeHarnessSessionTitle`
+   * for the on-disk write, and a broadcast `title_update` event.
+   */
+  private handleSessionRename(msg: { id: string; title: string }) {
+    const trimmed = (msg.title || '').trim().slice(0, 200)
+    if (!trimmed) return
+
+    // Resolve project scope before touching any state. peek() avoids
+    // resurrecting a torn-down session.
+    const session = this.sessions.peek(msg.id)
+    const projectId =
+      (session && !isHarnessSession(session) ? session.contextInfo?.projectId : undefined) ??
+      this.extractProjectId(msg.id)
+
+    // Update the live session's in-memory title so the next turn's
+    // prompts and persisted mirror lines see the user's chosen value.
+    // Both HarnessSession and CodexHarnessSession expose setTitle.
+    if (session) {
+      const s = session as { setTitle?: (t: string) => void }
+      if (typeof s.setTitle === 'function') {
+        try {
+          s.setTitle(trimmed)
+        } catch (err) {
+          log.warn({ err, sessionId: msg.id }, 'live setTitle failed during rename')
+        }
+      }
+    }
+
+    // Persist to meta.json. Same writer as set_session_title — handles
+    // both project-scoped and global session paths, no-op if meta is
+    // missing.
+    try {
+      writeHarnessSessionTitle({
+        sessionId: msg.id,
+        projectId,
+        title: trimmed,
+      })
+    } catch (err) {
+      log.warn({ err, sessionId: msg.id }, 'failed to persist user rename')
+      return
+    }
+
+    // Bump the global sync index so reconnecting clients receive the
+    // new title via the regular session_sync delta path. No-op for
+    // project-scoped sessions (they don't live in this index).
+    if (!projectId) {
+      try {
+        refreshSessionIndex(msg.id)
+      } catch (err) {
+        log.warn({ err, sessionId: msg.id }, 'failed to refresh sync index after rename')
+      }
+    }
+
+    // Broadcast to every connected client (matches the auto-title push).
+    this.sendToClient(Channel.AI, {
+      type: 'title_update',
+      sessionId: msg.id,
+      title: trimmed,
+    })
+  }
+
   private handleSessionHistory(msg: {
     id: string
     before?: number
@@ -3314,6 +3409,61 @@ export class AgentServer {
         message: `Failed to get session history: ${(err as Error).message}`,
         sessionId: msg.id,
       })
+    }
+  }
+
+  /**
+   * Stream image attachment bytes back to the client on demand.
+   *
+   * History payloads carry only metadata (id, name, mimeType, storagePath,
+   * sizeBytes); the renderer fetches the actual bytes through this handler
+   * when it needs to render a chip thumbnail / hover preview / full viewer.
+   * Keeps WS payloads small and lets the client cache blob URLs locally.
+   */
+  private async handleRequestAttachment(msg: {
+    id: string
+    sessionId: string
+    storagePath: string
+  }): Promise<void> {
+    const sendError = (error: string) => {
+      this.sendToClient(Channel.AI, {
+        type: 'attachment_data',
+        id: msg.id,
+        error,
+      })
+    }
+
+    const absolutePath = resolveSessionImagePath(msg.sessionId, msg.storagePath)
+    if (!absolutePath) {
+      sendError('invalid_path')
+      return
+    }
+    if (!existsSync(absolutePath)) {
+      sendError('not_found')
+      return
+    }
+
+    try {
+      // Async read so a burst of chip mounts in a long history doesn't
+      // serialize the event loop on readFileSync calls.
+      const buffer = await readFile(absolutePath)
+      this.sendToClient(Channel.AI, {
+        type: 'attachment_data',
+        id: msg.id,
+        mimeType: mimeTypeFromExt(absolutePath),
+        data: buffer.toString('base64'),
+        sizeBytes: buffer.byteLength,
+      })
+    } catch (err: unknown) {
+      log.warn(
+        {
+          sessionId: msg.sessionId,
+          storagePath: msg.storagePath,
+          error: (err as Error).message,
+        },
+        'Failed to read attachment from disk',
+      )
+      sendError('read_failed')
     }
   }
 

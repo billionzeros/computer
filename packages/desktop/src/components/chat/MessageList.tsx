@@ -269,7 +269,13 @@ export function MessageList({ messages }: Props) {
             }
             const { item } = entry
             if (item.type === 'message') {
-              return <MessageBubble key={item.message.id} message={item.message} />
+              return (
+                <MessageBubble
+                  key={item.message.id}
+                  message={item.message}
+                  sessionId={activeSessionId}
+                />
+              )
             }
             if (item.type === 'task_section') {
               return (

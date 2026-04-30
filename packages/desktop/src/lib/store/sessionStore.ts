@@ -333,6 +333,7 @@ interface SessionStoreState {
     },
   ) => void
   destroySession: (sessionId: string) => void
+  renameSession: (sessionId: string, title: string) => void
   switchSessionProvider: (sessionId: string, provider: string, model: string) => void
   requestSessionHistory: (sessionId: string, opts?: { before?: number; limit?: number }) => void
   sendConfirmResponse: (id: string, approved: boolean) => void
@@ -617,6 +618,7 @@ export const sessionStore = create<SessionStoreState>((set, get) => {
       get().updateSessionState(sessionId, { thinkingLevel })
     },
     destroySession: (sessionId) => connection.sendSessionDestroy(sessionId),
+    renameSession: (sessionId, title) => connection.sendSessionRename(sessionId, title),
     switchSessionProvider: (sessionId, provider, model) =>
       connection.sendSessionProviderSwitch(sessionId, provider, model),
     requestSessionHistory: (sessionId, opts) => {

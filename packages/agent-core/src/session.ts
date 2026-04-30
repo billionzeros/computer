@@ -1553,32 +1553,35 @@ export class Session {
       messageIndex: number,
     ): SessionImageAttachment[] | undefined => {
       if (!Array.isArray(content)) return undefined
+      // History payloads only carry metadata. The renderer fetches bytes
+      // on demand via the request_attachment WS message, so we never
+      // serialize base64 data into history responses — that kept ~1MB per
+      // image resident on the wire and in client memory for every page.
+      // The LLM-facing path (piAgent.state.messages) still carries `data`
+      // because it's hydrated at resume time directly from disk.
       const attachments = content
         .filter(
           (block) =>
             block.type === 'image' &&
             typeof block.mimeType === 'string' &&
-            typeof block.data === 'string',
+            (typeof block.data === 'string' || typeof block.storagePath === 'string'),
         )
-        .map((block, index) => ({
-          id:
+        .map((block, index) => {
+          const storagePath =
             typeof block.storagePath === 'string'
               ? block.storagePath
-              : inferStoragePath(messageIndex, index, block),
-          name:
-            typeof block.name === 'string'
-              ? block.name
-              : typeof block.storagePath === 'string'
-                ? block.storagePath.split('/').pop() || `image-${index + 1}`
-                : `image-${index + 1}`,
-          mimeType: block.mimeType!,
-          storagePath:
-            typeof block.storagePath === 'string'
-              ? block.storagePath
-              : inferStoragePath(messageIndex, index, block),
-          sizeBytes: typeof block.sizeBytes === 'number' ? block.sizeBytes : 0,
-          data: block.data,
-        }))
+              : inferStoragePath(messageIndex, index, block)
+          return {
+            id: storagePath,
+            name:
+              typeof block.name === 'string' && block.name.length > 0
+                ? block.name
+                : storagePath.split('/').pop() || `image-${index + 1}`,
+            mimeType: block.mimeType!,
+            storagePath,
+            sizeBytes: typeof block.sizeBytes === 'number' ? block.sizeBytes : 0,
+          }
+        })
       return attachments.length > 0 ? attachments : undefined
     }
 
