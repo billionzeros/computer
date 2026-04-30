@@ -1,5 +1,5 @@
-import { Pause, Search, Trash2 } from 'lucide-react'
-import { useMemo, useState } from 'react'
+import { Pause, Pencil, Search, Trash2 } from 'lucide-react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { sanitizeTitle } from '../../lib/conversations.js'
 import type { ChatImageAttachment } from '../../lib/store.js'
 import { useStore } from '../../lib/store.js'
@@ -26,12 +26,17 @@ export function TasksListView() {
   const activeProjectId = projectStore((s) => s.activeProjectId)
   const switchConversation = useStore((s) => s.switchConversation)
   const deleteConversation = useStore((s) => s.deleteConversation)
+  const renameConversation = useStore((s) => s.renameConversation)
   const setActiveView = uiStore((s) => s.setActiveView)
   const sessionStates = sessionStore((s) => s.sessionStates)
   const sendCancelTurn = sessionStore((s) => s.sendCancelTurn)
   const newConversation = useStore((s) => s.newConversation)
   const [query, setQuery] = useState('')
   const [showSearch, setShowSearch] = useState(false)
+  const [editingId, setEditingId] = useState<string | null>(null)
+  const [editingValue, setEditingValue] = useState('')
+  const editInputRef = useRef<HTMLInputElement | null>(null)
+  const cancelEditRef = useRef(false)
 
   const rows = useMemo(() => {
     const inProject = allConversations.filter(
@@ -68,6 +73,42 @@ export function TasksListView() {
   const handleOpen = (id: string) => {
     switchConversation(id)
     setActiveView('chat')
+  }
+
+  useEffect(() => {
+    if (editingId && editInputRef.current) {
+      editInputRef.current.focus()
+      editInputRef.current.select()
+    }
+  }, [editingId])
+
+  const startEdit = (id: string, currentTitle: string) => {
+    cancelEditRef.current = false
+    setEditingId(id)
+    setEditingValue(currentTitle)
+  }
+
+  const cancelEdit = () => {
+    cancelEditRef.current = true
+    setEditingId(null)
+    setEditingValue('')
+  }
+
+  const commitEdit = () => {
+    if (cancelEditRef.current) {
+      cancelEditRef.current = false
+      return
+    }
+    const id = editingId
+    if (!id) return
+    const trimmed = editingValue.trim()
+    const original = rows.find((r) => r.id === id)?.title
+    if (trimmed && trimmed !== original) {
+      // Optimistic local update + WebSocket persist to the server.
+      renameConversation(id, trimmed)
+    }
+    setEditingId(null)
+    setEditingValue('')
   }
 
   const startNewTask = (text: string, attachments?: ChatImageAttachment[]) => {
@@ -144,49 +185,102 @@ export function TasksListView() {
         ) : (
           rows.map((r) => {
             const working = r.status === 'working'
+            const isEditing = editingId === r.id
             return (
-              <div key={r.id} className={`tasks-row${working ? ' tasks-row--working' : ''}`}>
-                <button type="button" className="tasks-row__main" onClick={() => handleOpen(r.id)}>
-                  <span className={`tasks-row__dot tasks-row__dot--${r.status}`} aria-hidden />
-                  <span className="tasks-row__title">{r.title}</span>
-                  {working && (
-                    <>
-                      <span className="tasks-row__sep" aria-hidden>
-                        ›
-                      </span>
-                      <span className="tasks-row__status">Running now</span>
-                    </>
-                  )}
-                </button>
-                <span className="tasks-row__time">{formatRelative(r.updatedAt)}</span>
-                <div className="tasks-row__actions">
-                  {working && r.sessionId && (
+              <div
+                key={r.id}
+                className={`tasks-row${working ? ' tasks-row--working' : ''}${isEditing ? ' tasks-row--editing' : ''}`}
+              >
+                {isEditing ? (
+                  <div className="tasks-row__main tasks-row__main--editing">
+                    <span className={`tasks-row__dot tasks-row__dot--${r.status}`} aria-hidden />
+                    <input
+                      ref={editInputRef}
+                      type="text"
+                      className="tasks-row__edit-input"
+                      value={editingValue}
+                      onChange={(e) => setEditingValue(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                          e.preventDefault()
+                          editInputRef.current?.blur()
+                        } else if (e.key === 'Escape') {
+                          e.preventDefault()
+                          cancelEdit()
+                        }
+                      }}
+                      onBlur={commitEdit}
+                      maxLength={120}
+                      aria-label="Rename task"
+                    />
+                  </div>
+                ) : (
+                  <button
+                    type="button"
+                    className="tasks-row__main"
+                    onClick={() => handleOpen(r.id)}
+                    onDoubleClick={(e) => {
+                      e.preventDefault()
+                      startEdit(r.id, r.title)
+                    }}
+                  >
+                    <span className={`tasks-row__dot tasks-row__dot--${r.status}`} aria-hidden />
+                    <span className="tasks-row__title">{r.title}</span>
+                    {working && (
+                      <>
+                        <span className="tasks-row__sep" aria-hidden>
+                          ›
+                        </span>
+                        <span className="tasks-row__status">Running now</span>
+                      </>
+                    )}
+                  </button>
+                )}
+                {!isEditing && (
+                  <span className="tasks-row__time">{formatRelative(r.updatedAt)}</span>
+                )}
+                {!isEditing && (
+                  <div className="tasks-row__actions">
+                    {working && r.sessionId && (
+                      <button
+                        type="button"
+                        className="tasks-row__action"
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          if (r.sessionId) sendCancelTurn(r.sessionId)
+                        }}
+                        aria-label="Pause task"
+                        title="Pause task"
+                      >
+                        <Pause size={14} strokeWidth={1.5} />
+                      </button>
+                    )}
                     <button
                       type="button"
                       className="tasks-row__action"
                       onClick={(e) => {
                         e.stopPropagation()
-                        if (r.sessionId) sendCancelTurn(r.sessionId)
+                        startEdit(r.id, r.title)
                       }}
-                      aria-label="Pause task"
-                      title="Pause task"
+                      aria-label="Rename task"
+                      title="Rename task"
                     >
-                      <Pause size={14} strokeWidth={1.5} />
+                      <Pencil size={14} strokeWidth={1.5} />
                     </button>
-                  )}
-                  <button
-                    type="button"
-                    className="tasks-row__action"
-                    onClick={(e) => {
-                      e.stopPropagation()
-                      deleteConversation(r.id)
-                    }}
-                    aria-label="Delete task"
-                    title="Delete task"
-                  >
-                    <Trash2 size={14} strokeWidth={1.5} />
-                  </button>
-                </div>
+                    <button
+                      type="button"
+                      className="tasks-row__action"
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        deleteConversation(r.id)
+                      }}
+                      aria-label="Delete task"
+                      title="Delete task"
+                    >
+                      <Trash2 size={14} strokeWidth={1.5} />
+                    </button>
+                  </div>
+                )}
               </div>
             )
           })

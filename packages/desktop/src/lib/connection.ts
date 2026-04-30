@@ -220,6 +220,16 @@ export class Connection {
   }
 
   /**
+   * User-initiated rename of a session. Server persists to meta.json,
+   * refreshes the sync index, and broadcasts `title_update` to all
+   * connected clients (this client included — the echo is harmless and
+   * keeps server and optimistic local state aligned).
+   */
+  sendSessionRename(id: string, title: string) {
+    this.send(Channel.AI, { type: 'session_rename', id, title })
+  }
+
+  /**
    * Swap the provider/model of an existing harness (BYOS) session.
    * Server tears down the running CLI, rebuilds with the new provider,
    * and seeds the new CLI with a replay of the mirrored conversation.

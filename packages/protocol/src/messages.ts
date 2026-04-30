@@ -254,6 +254,21 @@ export interface SessionDestroyMessage {
 }
 
 /**
+ * Client → Server: user-initiated rename of a session.
+ *
+ * Server persists the new title to the session's meta.json, refreshes
+ * the global sync index (so reconnecting clients get the update via
+ * the regular session_sync delta path), and broadcasts a `title_update`
+ * push so live clients update immediately. Empty / whitespace-only
+ * titles are ignored. Server side normalizes (trim + length cap).
+ */
+export interface SessionRenameMessage {
+  type: 'session_rename'
+  id: string
+  title: string
+}
+
+/**
  * Client asks the server to swap the provider/model of an existing
  * harness session without losing its conversation history. Server
  * tears down the current HarnessSession, spawns a new one keyed on
@@ -346,6 +361,26 @@ export interface SessionImageAttachment {
   storagePath: string
   sizeBytes: number
   data?: string
+}
+
+export interface RequestAttachmentMessage {
+  type: 'request_attachment'
+  /** Correlation id echoed in attachment_data response. */
+  id: string
+  sessionId: string
+  /** Path relative to the session dir, must start with `images/`. */
+  storagePath: string
+}
+
+export interface AttachmentDataMessage {
+  type: 'attachment_data'
+  /** Echoes RequestAttachmentMessage.id. */
+  id: string
+  mimeType?: string
+  /** Base64-encoded bytes. Absent when an error occurred. */
+  data?: string
+  sizeBytes?: number
+  error?: string
 }
 
 // Provider management
@@ -1417,10 +1452,13 @@ export type AiMessage =
   | SessionSyncPush
   | SessionDestroyMessage
   | SessionDestroyedMessage
+  | SessionRenameMessage
   | SessionProviderSwitchMessage
   | SessionProviderSwitchedMessage
   | SessionHistoryMessage
   | SessionHistoryResponse
+  | RequestAttachmentMessage
+  | AttachmentDataMessage
   | ContextInfoMessage
   // Provider management
   | ProvidersListMessage

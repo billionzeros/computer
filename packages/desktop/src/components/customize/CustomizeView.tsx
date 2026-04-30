@@ -1,38 +1,14 @@
-import { Plug, Puzzle, Settings2, Sparkles } from 'lucide-react'
+import { Plug, Sparkles } from 'lucide-react'
 import { useState } from 'react'
 import { ConnectorsView } from '../connectors/ConnectorsView.js'
 import { SkillsPanel } from '../skills/SkillsPanel.js'
 
-type Tab = 'skills' | 'connectors' | 'plugins'
+type Tab = 'skills' | 'connectors'
 
 const TABS: { id: Tab; label: string; icon: typeof Sparkles }[] = [
   { id: 'skills', label: 'Skills', icon: Sparkles },
   { id: 'connectors', label: 'Connectors', icon: Plug },
-  { id: 'plugins', label: 'Plugins', icon: Puzzle },
 ]
-
-function PluginsEmpty() {
-  return (
-    <div className="cust-detail">
-      <div className="cust-detail__head">
-        <div className="cust-detail__glyph">
-          <Puzzle size={18} strokeWidth={1.5} />
-        </div>
-        <div>
-          <h1 className="cust-detail__title">Plugins</h1>
-          <p className="cust-detail__desc">
-            Extend Anton with community plugins. This area is reserved — plugin distribution isn't
-            wired up yet.
-          </p>
-        </div>
-      </div>
-      <div className="cust-detail__empty">
-        <Settings2 size={22} strokeWidth={1.2} />
-        <div style={{ marginTop: 10 }}>No plugins installed.</div>
-      </div>
-    </div>
-  )
-}
 
 export function CustomizeView() {
   const [tab, setTab] = useState<Tab>('skills')
@@ -59,7 +35,6 @@ export function CustomizeView() {
 
       {tab === 'skills' && <SkillsPanel />}
       {tab === 'connectors' && <ConnectorsView />}
-      {tab === 'plugins' && <PluginsEmpty />}
     </div>
   )
 }

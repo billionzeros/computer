@@ -180,6 +180,7 @@ interface AppState {
   requestSessionHistory: (sessionId: string) => void
   loadOlderMessages: (sessionId: string) => void
   updateConversationTitle: (sessionId: string, title: string) => void
+  renameConversation: (id: string, title: string) => void
 
   // Session readiness (delegates to sessionStore)
   registerPendingSession: (id: string) => Promise<void>
@@ -837,6 +838,21 @@ export const useStore = create<AppState>((set, get) => {
         saveConversations(conversations)
         return { conversations }
       })
+    },
+
+    renameConversation: (id, title) => {
+      const trimmed = title.trim().slice(0, 200)
+      if (!trimmed) return
+      const conv = get().conversations.find((c) => c.id === id)
+      const sessionId = conv?.sessionId ?? id
+      // Optimistic local update — keeps the UI responsive while the
+      // server round-trips. The server's `title_update` echo will pass
+      // through this same path again (idempotent: same value, no
+      // visible change).
+      get().updateConversationTitle(sessionId, trimmed)
+      // Persist on the server: writes meta.json + refreshes the sync
+      // index so reconnecting clients pick up the rename.
+      sessionStore.getState().renameSession(sessionId, trimmed)
     },
 
     registerPendingSession: (id) => {

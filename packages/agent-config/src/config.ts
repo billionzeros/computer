@@ -5,12 +5,13 @@ import {
   mkdirSync,
   readFileSync,
   readdirSync,
+  renameSync,
   rmSync,
   unlinkSync,
   writeFileSync,
 } from 'node:fs'
 import { homedir, hostname } from 'node:os'
-import { dirname, join } from 'node:path'
+import { dirname, join, resolve, sep } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { parse as parseYaml, stringify as stringifyYaml } from 'yaml'
 import { copyImageToWorkspace } from './image-storage.js'
@@ -306,7 +307,12 @@ export interface ConnectorConfig {
 
 // ── Paths ───────────────────────────────────────────────────────────
 
-const ANTON_DIR = join(homedir(), '.anton')
+// `ANTON_DIR` env var lets tests (and unusual deployments) point persistence
+// at a non-default root without monkey-patching homedir().
+const ANTON_DIR =
+  typeof process.env.ANTON_DIR === 'string' && process.env.ANTON_DIR.length > 0
+    ? process.env.ANTON_DIR
+    : join(homedir(), '.anton')
 const CONFIG_PATH = join(ANTON_DIR, 'config.yaml')
 const ENV_FILE_PATH = join(ANTON_DIR, 'agent.env')
 const CONVERSATIONS_DIR = join(ANTON_DIR, 'conversations')
@@ -351,7 +357,7 @@ export const DEFAULT_PROVIDERS: ProvidersMap = {
   },
   openai: {
     apiKey: process.env.OPENAI_API_KEY || '',
-    models: ['gpt-4o'],
+    models: ['gpt-5.5', 'gpt-5.4', 'gpt-4o'],
   },
   google: {
     apiKey: process.env.GOOGLE_API_KEY || '',
@@ -800,6 +806,31 @@ function sessionImagesDir(id: string): string {
   return join(sessionDir(id), 'images')
 }
 
+/**
+ * Resolve a session-relative attachment storagePath to an absolute file path,
+ * with traversal protection. Returns null for any malformed or escaping input.
+ *
+ * Why: both inputs come from the client and are read directly off disk —
+ * without this guard, `images/../../foo` (or `..` / empty-string sessionId)
+ * would let an attacker reach files outside the session's images dir.
+ */
+export function resolveSessionImagePath(sessionId: string, storagePath: string): string | null {
+  // sessionId guard — must be a non-empty string with no path syntax.
+  if (typeof sessionId !== 'string' || sessionId.length === 0) return null
+  if (sessionId.includes('\0') || sessionId.includes('/') || sessionId.includes('\\')) return null
+  if (sessionId === '.' || sessionId === '..') return null
+
+  if (typeof storagePath !== 'string' || storagePath.length === 0) return null
+  if (storagePath.includes('\0')) return null
+  const normalized = storagePath.replaceAll('\\', '/')
+  if (!normalized.startsWith('images/')) return null
+
+  const imagesBase = resolve(sessionImagesDir(sessionId))
+  const resolved = resolve(sessionDir(sessionId), normalized)
+  if (resolved !== imagesBase && !resolved.startsWith(imagesBase + sep)) return null
+  return resolved
+}
+
 function clearSessionImages(id: string): void {
   const dir = sessionImagesDir(id)
   if (!existsSync(dir)) return
@@ -888,8 +919,22 @@ function serializeSessionContent(
     const absolutePath = join(sessionDir(sessionId), relativePath)
     const imageBuffer = Buffer.from(value.data, 'base64')
 
-    // Always write to session images dir (safety net)
-    writeFileSync(absolutePath, imageBuffer)
+    // Atomic write: tmp + rename. A crash mid-write could otherwise leave
+    // a zero-byte file at the final path that hydrateSessionContent would
+    // try to load as a real image.
+    const tmpPath = `${absolutePath}.${randomBytes(6).toString('hex')}.tmp`
+    writeFileSync(tmpPath, imageBuffer)
+    try {
+      renameSync(tmpPath, absolutePath)
+    } catch {
+      // Cleanup on rename failure (e.g. cross-device); fall back to direct write.
+      try {
+        unlinkSync(tmpPath)
+      } catch {
+        /* ignore */
+      }
+      writeFileSync(absolutePath, imageBuffer)
+    }
 
     // Dual-write to workspace .uploads/ if available
     const sanitizedName =
@@ -1103,10 +1148,7 @@ export function loadSession(id: string, basePath?: string): PersistedSession | n
             .trim()
             .split('\n')
             .filter(Boolean)
-            .map((l) => {
-              const parsed = JSON.parse(l)
-              return hydrateSessionContent(id, parsed) || parsed
-            })
+            .map((l) => hydrateSessionMessage(id, JSON.parse(l) as SessionMessage))
         : []
       let compactionState: PersistedSession['compactionState'] | undefined
       const compPath = join(dir, 'compaction.json')
@@ -1292,6 +1334,20 @@ export function archiveSession(id: string): boolean {
   writeFileSync(metaPath(id), JSON.stringify(meta, null, 2), 'utf-8')
   updateIndex(meta)
   return true
+}
+
+/**
+ * Re-publish an existing session's meta into the global sync index.
+ *
+ * Used when a side-channel writer (e.g. `writeHarnessSessionTitle` after
+ * a user-initiated rename) updates meta.json directly: that path does
+ * not pass through `updateIndex`, so connected clients would otherwise
+ * miss the change until reconnect. No-op for project-scoped sessions
+ * (their meta lives outside this index).
+ */
+export function refreshSessionIndex(id: string): void {
+  const meta = loadSessionMeta(id)
+  if (meta) updateIndex(meta)
 }
 
 /** Clean expired sessions */

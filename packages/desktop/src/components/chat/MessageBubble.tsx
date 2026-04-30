@@ -1,4 +1,4 @@
-import { motion } from 'framer-motion'
+import { AnimatePresence, motion } from 'framer-motion'
 import {
   AlertTriangle,
   File as FileIcon,
@@ -7,9 +7,12 @@ import {
   FileText,
   Folder,
   Image as ImageIcon,
+  ImageOff,
+  Loader2,
 } from 'lucide-react'
 import { useMemo, useState } from 'react'
 import { classifyUpload } from '../../lib/artifacts.js'
+import { useAttachmentBlobUrl } from '../../lib/attachments.js'
 import type { ChatImageAttachment, CitationSource } from '../../lib/store.js'
 import { type ChatMessage, useStore } from '../../lib/store.js'
 import { artifactStore } from '../../lib/store/artifactStore.js'
@@ -23,11 +26,81 @@ import { ToolCallBlock } from './ToolCallBlock.js'
 
 interface Props {
   message: ChatMessage
+  sessionId?: string
   isLastThinking?: boolean
 }
 
-function attachmentSrc(attachment: ChatImageAttachment): string | undefined {
-  return attachment.data ? `data:${attachment.mimeType};base64,${attachment.data}` : undefined
+interface ImageAttachmentChipProps {
+  attachment: ChatImageAttachment
+  sessionId: string | undefined
+  onOpen: (src: string, alt: string) => void
+}
+
+function ImageAttachmentChip({ attachment, sessionId, onOpen }: ImageAttachmentChipProps) {
+  const [hover, setHover] = useState(false)
+  const { url, loading, error } = useAttachmentBlobUrl(
+    sessionId,
+    attachment.storagePath,
+    attachment.mimeType,
+    attachment.data,
+  )
+
+  const leadingIcon = url ? (
+    <img src={url} alt={attachment.name} className="message__image-chip-thumb" draggable={false} />
+  ) : loading ? (
+    <Loader2
+      size={14}
+      strokeWidth={1.75}
+      className="message__image-chip-icon message__image-chip-icon--spin"
+    />
+  ) : error ? (
+    <ImageOff
+      size={14}
+      strokeWidth={1.5}
+      className="message__image-chip-icon message__image-chip-icon--error"
+    />
+  ) : (
+    <FileImage size={14} strokeWidth={1.5} className="message__image-chip-icon" />
+  )
+
+  const title = error ? `Image unavailable (${error})` : attachment.name
+  const buttonClass = error
+    ? 'message__image-chip message__image-chip--error'
+    : 'message__image-chip'
+
+  return (
+    <span
+      className="message__image-chip-wrap"
+      onMouseEnter={() => setHover(true)}
+      onMouseLeave={() => setHover(false)}
+    >
+      <button
+        type="button"
+        className={buttonClass}
+        title={title}
+        disabled={!url}
+        aria-disabled={!url}
+        onClick={() => url && onOpen(url, attachment.name)}
+      >
+        {leadingIcon}
+        <span className="message__image-chip-name">{attachment.name}</span>
+      </button>
+      <AnimatePresence>
+        {hover && url && (
+          <motion.span
+            key="preview"
+            initial={{ opacity: 0, y: 4 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: 4 }}
+            transition={{ duration: 0.12 }}
+            className="message__image-chip-preview"
+          >
+            <img src={url} alt={attachment.name} draggable={false} />
+          </motion.span>
+        )}
+      </AnimatePresence>
+    </span>
+  )
 }
 
 // Matches [img:id], [file:path], [dir:path] — three marker kinds the composer
@@ -92,15 +165,20 @@ function navigateToFolder(relPath: string) {
 }
 
 /** Render user message content with inline chips for image / file / dir markers. */
-function UserMessageContent({ message }: { message: ChatMessage }) {
+function UserMessageContent({
+  message,
+  sessionId,
+}: {
+  message: ChatMessage
+  sessionId: string | undefined
+}) {
   const [viewerImage, setViewerImage] = useState<{ src: string; alt: string } | null>(null)
+  const openViewer = (src: string, alt: string) => setViewerImage({ src, alt })
 
   const attachments = message.attachments
   const content = message.content
 
-  const attachmentMap = new Map(
-    (attachments ?? []).map((a) => [a.id, { attachment: a, src: attachmentSrc(a) }]),
-  )
+  const attachmentMap = new Map((attachments ?? []).map((a) => [a.id, a]))
 
   // Scan for any marker kind. If there are none AND no attachments, it's
   // pure text. If there are legacy attachments without markers, the old
@@ -118,20 +196,14 @@ function UserMessageContent({ message }: { message: ChatMessage }) {
       <>
         {content && <div className="message__text">{content}</div>}
         <div className="message__inline-chips">
-          {attachments.map((attachment) => {
-            const src = attachmentMap.get(attachment.id)?.src
-            return (
-              <button
-                key={attachment.id}
-                type="button"
-                className="message__image-chip"
-                onClick={() => src && setViewerImage({ src, alt: attachment.name })}
-              >
-                <FileImage size={14} strokeWidth={1.5} className="message__image-chip-icon" />
-                <span className="message__image-chip-name">{attachment.name}</span>
-              </button>
-            )
-          })}
+          {attachments.map((attachment) => (
+            <ImageAttachmentChip
+              key={attachment.id}
+              attachment={attachment}
+              sessionId={sessionId}
+              onOpen={openViewer}
+            />
+          ))}
         </div>
         {viewerImage && (
           <ImageViewer
@@ -161,20 +233,15 @@ function UserMessageContent({ message }: { message: ChatMessage }) {
     const value = match[2] ?? ''
 
     if (kind === 'img') {
-      const entry = attachmentMap.get(value)
-      if (entry) {
+      const attachment = attachmentMap.get(value)
+      if (attachment) {
         elements.push(
-          <button
+          <ImageAttachmentChip
             key={`img-${value}`}
-            type="button"
-            className="message__image-chip"
-            onClick={() =>
-              entry.src && setViewerImage({ src: entry.src, alt: entry.attachment.name })
-            }
-          >
-            <FileImage size={14} strokeWidth={1.5} className="message__image-chip-icon" />
-            <span className="message__image-chip-name">{entry.attachment.name}</span>
-          </button>,
+            attachment={attachment}
+            sessionId={sessionId}
+            onOpen={openViewer}
+          />,
         )
       }
     } else if (kind === 'file') {
@@ -230,7 +297,7 @@ function UserMessageContent({ message }: { message: ChatMessage }) {
   )
 }
 
-export function MessageBubble({ message, isLastThinking }: Props) {
+export function MessageBubble({ message, sessionId, isLastThinking }: Props) {
   const citations = useStore((s) => s.citations.get(message.id))
   // For assistant final answers, the model may reference citations across
   // multiple web_search calls in the turn — but only the most-recent batch
@@ -267,7 +334,7 @@ export function MessageBubble({ message, isLastThinking }: Props) {
     >
       {message.role === 'user' && (
         <div className="message__surface message__surface--user">
-          <UserMessageContent message={message} />
+          <UserMessageContent message={message} sessionId={sessionId} />
         </div>
       )}
 
