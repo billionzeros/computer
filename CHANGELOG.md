@@ -10,6 +10,19 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versioning: [S
 
 ---
 
+## [2.1.2] - 2026-05-01
+
+### Features
+- auto-activated skills + builtin document-creation packages (#19)
+
+### Other
+- fix(attachments): persist images on disk + lazy-load chips on demand (#20)
+- feat(chat): collapsible turn progress + per-turn source cards (#18)
+- fix(artifacts): premium split panel + render docx/pdf/xlsx in files view (#17)
+- fix(ask-user): commit answers only on explicit submit (#16)
+- docs(spec): session log architecture — append-only log + multi-client channel (#15)
+---
+
 ## [2.1.1] - 2026-04-26
 
 ### Features
@@ -736,7 +749,8 @@ Maintenance release.
 
 ---
 
-[Unreleased]: https://github.com/billionzeros/computer/compare/v2.1.1...HEAD
+[Unreleased]: https://github.com/billionzeros/computer/compare/v2.1.2...HEAD
+[2.1.2]: https://github.com/billionzeros/computer/compare/v$(changelog.match(/## [(d+.d+.d+)]/g)[1].match(/d+.d+.d+/)[0])...v2.1.2
 [2.1.1]: https://github.com/billionzeros/computer/compare/v$(changelog.match(/## [(d+.d+.d+)]/g)[1].match(/d+.d+.d+/)[0])...v2.1.1
 [2.1.0]: https://github.com/billionzeros/computer/compare/v$(changelog.match(/## [(d+.d+.d+)]/g)[1].match(/d+.d+.d+/)[0])...v2.1.0
 [2.0.3]: https://github.com/billionzeros/computer/compare/v$(changelog.match(/## [(d+.d+.d+)]/g)[1].match(/d+.d+.d+/)[0])...v2.0.3

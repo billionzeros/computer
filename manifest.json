@@ -1,12 +1,12 @@
 {
-  "version": "2.1.1",
-  "gitHash": "6ae4a9c",
+  "version": "2.1.2",
+  "gitHash": "",
   "releaseUrl": "https://github.com/billionzeros/computer/releases",
-  "changelog": "Features:\n- Parallel deep research connector + web_research canonical tool (#14)\n- add GPT-5.5 to Codex subscription and Anton API (#13)",
-  "publishedAt": "2026-04-26T12:44:48.780Z",
-  "cli": "https://github.com/billionzeros/computer/releases/download/v2.1.1/anton-cli.mjs",
+  "changelog": "Features:\n- auto-activated skills + builtin document-creation packages (#19)\n\nOther:\n- fix(attachments): persist images on disk + lazy-load chips on demand (#20)\n- feat(chat): collapsible turn progress + per-turn source cards (#18)\n- fix(artifacts): premium split panel + render docx/pdf/xlsx in files view (#17)\n- fix(ask-user): commit answers only on explicit submit (#16)\n- docs(spec): session log architecture — append-only log + multi-client channel (#15)",
+  "publishedAt": "2026-04-30T23:32:47.011Z",
+  "cli": "https://github.com/billionzeros/computer/releases/download/v2.1.2/anton-cli.mjs",
   "sidecar": {
-    "linux-arm64": "https://github.com/billionzeros/computer/releases/download/v2.1.1/anton-sidecar-linux-arm64",
-    "linux-amd64": "https://github.com/billionzeros/computer/releases/download/v2.1.1/anton-sidecar-linux-amd64"
+    "linux-arm64": "https://github.com/billionzeros/computer/releases/download/v2.1.2/anton-sidecar-linux-arm64",
+    "linux-amd64": "https://github.com/billionzeros/computer/releases/download/v2.1.2/anton-sidecar-linux-amd64"
   }
 }
