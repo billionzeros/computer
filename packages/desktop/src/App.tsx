@@ -1,5 +1,5 @@
 import { AnimatePresence } from 'framer-motion'
-import { Code, MoreHorizontal, Ticket } from 'lucide-react'
+import { Code, Ticket } from 'lucide-react'
 import { useCallback, useEffect, useState } from 'react'
 import { ActivityDock } from './components/ActivityDock.js'
 import { CommandPalette } from './components/CommandPalette.js'
@@ -393,23 +393,8 @@ export function App() {
                         <span>{formatTokens(sessionUsage.totalTokens)}</span>
                       </button>
                     )}
-                    <button
-                      type="button"
-                      className="workspace-topbar__action-btn"
-                      onClick={() => setShowMachineInfo(true)}
-                      aria-label="More options"
-                    >
-                      <MoreHorizontal size={18} strokeWidth={1.5} />
-                    </button>
                   </>
                 )}
-                <div
-                  className={`workspace-topbar__status${status === 'connected' ? '' : ' workspace-topbar__status--idle'}`}
-                  title={status}
-                >
-                  <span className="workspace-topbar__pulse" aria-hidden />
-                  <span>{status === 'connected' ? 'Connected' : 'Reconnecting'}</span>
-                </div>
               </div>
             </header>
           )}
