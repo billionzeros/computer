@@ -511,6 +511,23 @@ export interface AiCancelTurnMessage {
   sessionId?: string
 }
 
+/** Client sends thumbs up/down feedback on an assistant message. Server logs to Braintrust. */
+export interface AiFeedbackMessage {
+  type: 'feedback'
+  messageId: string
+  sessionId?: string
+  value: 'up' | 'down'
+}
+
+/** Client requests regeneration of the last assistant turn. Server pops the last
+ *  assistant turn from the session/CLI history and re-runs inference on the prior
+ *  user message. */
+export interface AiRegenerateMessage {
+  type: 'regenerate'
+  messageId: string
+  sessionId?: string
+}
+
 export interface AiSteerAckMessage {
   type: 'steer_ack'
   content: string
@@ -693,6 +710,10 @@ export interface AiDoneMessage {
   cumulativeUsage?: TokenUsage
   provider?: string
   model?: string
+  /** Server-assigned id for the assistant message produced by this turn.
+   *  Clients should adopt this as the message id so feedback (thumbs
+   *  up/down) can be correlated to the right Braintrust span server-side. */
+  messageId?: string
 }
 
 export interface AiErrorMessage {
@@ -1478,6 +1499,8 @@ export type AiMessage =
   | AiSteerMessage
   | AiSteerAckMessage
   | AiCancelTurnMessage
+  | AiFeedbackMessage
+  | AiRegenerateMessage
   | AiThinkingMessage
   | AiTextMessage
   | AiToolCallMessage

@@ -103,6 +103,29 @@ export function logScore(
   })
 }
 
+/**
+ * Log feedback (e.g. thumbs up/down) against a span by its id. Works AFTER
+ * the span has been ended — Braintrust treats this as a post-hoc score on
+ * the persisted event.
+ */
+export function logSpanFeedback(
+  spanId: string,
+  scores: Record<string, number>,
+  metadata?: Record<string, unknown>,
+): void {
+  if (!tracingEnabled || !logger) return
+  try {
+    logger.logFeedback({
+      id: spanId,
+      scores,
+      ...(metadata ? { metadata } : {}),
+      source: 'app',
+    })
+  } catch (err) {
+    log.warn({ err, spanId }, 'logSpanFeedback failed')
+  }
+}
+
 // ── Cost estimation ──────────────────────────────────────────────────
 
 /** Price per million tokens: { input, output } in USD. */

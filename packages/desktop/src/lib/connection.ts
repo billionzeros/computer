@@ -192,6 +192,14 @@ export class Connection {
     this.send(Channel.AI, { type: 'ask_user_response', id, answers })
   }
 
+  sendFeedback(messageId: string, value: 'up' | 'down', sessionId?: string) {
+    this.send(Channel.AI, { type: 'feedback', messageId, value, sessionId })
+  }
+
+  sendRegenerate(messageId: string, sessionId?: string) {
+    this.send(Channel.AI, { type: 'regenerate', messageId, sessionId })
+  }
+
   // ── Session management ──────────────────────────────────────────
 
   sendSessionCreate(

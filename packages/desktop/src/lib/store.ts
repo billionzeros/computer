@@ -172,6 +172,15 @@ interface AppState {
     parentToolCallId: string,
   ) => void
   replaceAssistantText: (search: string, replacement: string, sessionId?: string) => void
+  /** Adopt a server-assigned message id on the in-progress assistant message
+   *  for `sessionId`. Sent on the `done` event so feedback can correlate to
+   *  the correct Braintrust span server-side. No-op if the session has no
+   *  tracked assistant message. */
+  adoptAssistantMessageId: (sessionId: string, serverMessageId: string) => void
+  /** Remove a message from its conversation by id. Used by the regenerate
+   *  flow to optimistically drop the old assistant message before the new
+   *  one streams in. */
+  removeMessage: (messageId: string, sessionId?: string) => void
   getActiveConversation: () => Conversation | null
   getActiveRoutineSession: () => import('@anton/protocol').RoutineSession | null
   findConversationBySession: (sessionId: string) => Conversation | undefined
@@ -693,6 +702,46 @@ export const useStore = create<AppState>((set, get) => {
         })
 
         return { conversations }
+      })
+    },
+
+    removeMessage: (messageId, sessionId) => {
+      set((state) => {
+        let mutated = false
+        const conversations = state.conversations.map((c) => {
+          if (sessionId ? c.sessionId !== sessionId : c.id !== state.activeConversationId) return c
+          const next = c.messages.filter((m) => m.id !== messageId)
+          if (next.length === c.messages.length) return c
+          mutated = true
+          return { ...c, messages: next, updatedAt: Date.now() }
+        })
+        return mutated ? { conversations } : state
+      })
+    },
+
+    adoptAssistantMessageId: (sessionId, serverMessageId) => {
+      set((state) => {
+        const oldId = state._sessionAssistantMsgIds.get(sessionId)
+        if (!oldId || oldId === serverMessageId) return state
+
+        let mutated = false
+        const conversations = state.conversations.map((c) => {
+          if (c.sessionId !== sessionId) return c
+          let touched = false
+          const messages = c.messages.map((m) => {
+            if (m.id !== oldId) return m
+            touched = true
+            return { ...m, id: serverMessageId }
+          })
+          if (!touched) return c
+          mutated = true
+          return { ...c, messages }
+        })
+        if (!mutated) return state
+
+        const nextMap = new Map(state._sessionAssistantMsgIds)
+        nextMap.set(sessionId, serverMessageId)
+        return { conversations, _sessionAssistantMsgIds: nextMap }
       })
     },
 

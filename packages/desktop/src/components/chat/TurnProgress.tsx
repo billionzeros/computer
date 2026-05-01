@@ -1,6 +1,6 @@
 import { AnimatePresence, motion } from 'framer-motion'
 import { ChevronRight } from 'lucide-react'
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import type { CitationSource } from '../../lib/store.js'
 import { parseCitationSources } from '../../lib/store/handlers/citationParser.js'
 import { ActionsGroup } from './ActionsGroup.js'
@@ -98,11 +98,20 @@ function collectSearchSources(items: GroupedItem[]): CitationSource[] {
 
 export function TurnProgress({ items, isWorking }: Props) {
   const [open, setOpen] = useState<boolean>(!!isWorking)
+  const userToggledRef = useRef(false)
 
-  // Auto-open while the agent is working; let the user collapse it once done.
+  // Open while working; auto-collapse once the assistant has written its
+  // reply to the main conversation. Skip the auto behavior once the user
+  // has manually toggled this turn so we respect their choice.
   useEffect(() => {
-    if (isWorking) setOpen(true)
+    if (userToggledRef.current) return
+    setOpen(!!isWorking)
   }, [isWorking])
+
+  const handleToggle = () => {
+    userToggledRef.current = true
+    setOpen((o) => !o)
+  }
 
   const title = deriveTitle(items, isWorking)
   const stepCount = countSteps(items)
@@ -126,7 +135,7 @@ export function TurnProgress({ items, isWorking }: Props) {
         </div>
       )}
 
-      <button type="button" className="turn-progress__header" onClick={() => setOpen((o) => !o)}>
+      <button type="button" className="turn-progress__header" onClick={handleToggle}>
         <span className="turn-progress__title">{title}</span>
         {stepCount > 0 && (
           <span className="turn-progress__count">

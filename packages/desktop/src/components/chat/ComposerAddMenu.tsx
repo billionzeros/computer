@@ -92,20 +92,24 @@ export function ComposerAddMenu({ open, onClose, onAddImages, onAddFiles, anchor
   // `filter` / `will-change` on a composer ancestor (StreamHome's
   // .home-stack uses translateY(-6%)) can't create a containing block
   // that would break `position: fixed`.
-  const ESTIMATED_MENU_HEIGHT = 220
+  const ESTIMATED_MENU_HEIGHT = 240
+  const ESTIMATED_MENU_WIDTH = 360
+  const VIEWPORT_PADDING = 8
   const spaceBelow = window.innerHeight - anchorRect.bottom
   const flipAbove = spaceBelow < ESTIMATED_MENU_HEIGHT + 16
+  const maxLeft = window.innerWidth - ESTIMATED_MENU_WIDTH - VIEWPORT_PADDING
+  const left = Math.max(VIEWPORT_PADDING, Math.min(anchorRect.left, maxLeft))
   const style: React.CSSProperties = flipAbove
     ? {
         position: 'fixed',
-        left: anchorRect.left,
-        bottom: window.innerHeight - anchorRect.top + 6,
+        left,
+        bottom: window.innerHeight - anchorRect.top + 8,
         zIndex: 50,
       }
     : {
         position: 'fixed',
-        left: anchorRect.left,
-        top: anchorRect.bottom + 6,
+        left,
+        top: anchorRect.bottom + 8,
         zIndex: 50,
       }
 
@@ -170,7 +174,7 @@ export function ComposerAddMenu({ open, onClose, onAddImages, onAddFiles, anchor
             <span className="composer-add-menu__icon-strip" aria-hidden="true">
               {previewIcons.map((c) => (
                 <span key={c.id} className="composer-add-menu__icon-strip-item">
-                  <ConnectorIcon id={c.id} size={14} />
+                  <ConnectorIcon id={c.id} size={16} />
                 </span>
               ))}
             </span>

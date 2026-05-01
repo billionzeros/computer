@@ -258,6 +258,14 @@ export function handleInteractionMessage(msg: AiMessage, ctx: MessageContext): b
         // Update cache with latest timestamp
         updateCacheEntry(doneSessionId, { updatedAt: Date.now() })
 
+        // Adopt the server-assigned message id (used to correlate thumbs
+        // up/down feedback with Braintrust spans) BEFORE we clear the
+        // tracking map — the action keys off `_sessionAssistantMsgIds`
+        // to find the in-progress assistant message.
+        if (typeof msg.messageId === 'string' && msg.messageId.length > 0) {
+          store.adoptAssistantMessageId(doneSessionId, msg.messageId)
+        }
+
         // Clear per-session message tracking in app store
         store._sessionAssistantMsgIds.delete(doneSessionId)
         store._sessionThinkingMsgIds.delete(doneSessionId)

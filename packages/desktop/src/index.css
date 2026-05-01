@@ -3464,8 +3464,8 @@ button {
   background: var(--bg-elev-1);
   border: 1px solid var(--border);
   color: var(--text);
-  font-size: 14px;
-  line-height: 1.5;
+  font-size: 15px;
+  line-height: 1.55;
   letter-spacing: -0.005em;
   text-wrap: pretty;
   white-space: pre-wrap;
@@ -3486,6 +3486,56 @@ button {
 
 .message__surface--assistant {
   padding-right: 24px;
+}
+
+.message__actions {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  margin-top: 10px;
+  margin-left: -6px;
+  opacity: 0.55;
+  transition: opacity 0.15s ease-out;
+}
+
+.message--assistant:hover .message__actions,
+.message__actions:focus-within {
+  opacity: 1;
+}
+
+.message__action-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-3);
+  cursor: pointer;
+  transition: background 0.12s ease-out, color 0.12s ease-out;
+}
+
+.message__action-btn:hover {
+  background: rgba(var(--overlay), 0.06);
+  color: var(--text);
+}
+
+.message__action-btn:focus-visible {
+  outline: 1px solid var(--border-focus);
+  outline-offset: 1px;
+}
+
+.message__action-btn--active {
+  color: var(--accent);
+  background: rgba(var(--overlay), 0.06);
+}
+
+.message__action-btn--active:hover {
+  color: var(--accent);
+  background: rgba(var(--overlay), 0.09);
 }
 
 .message__attachments {
@@ -5017,8 +5067,9 @@ button {
 
 .markdown-body {
   color: var(--text);
-  font-size: 15px;
-  line-height: 1.75;
+  font-size: 16px;
+  line-height: 1.65;
+  letter-spacing: -0.005em;
   overflow-wrap: anywhere;
   word-break: break-word;
 }
@@ -5039,23 +5090,23 @@ button {
 }
 
 .markdown-body__heading--h1 {
-  font-size: 24px;
-  margin-top: 18px;
+  font-size: 26px;
+  margin-top: 20px;
 }
 
 .markdown-body__heading--h2 {
-  font-size: 20px;
+  font-size: 21px;
   margin-top: 18px;
 }
 
 .markdown-body__heading--h3 {
-  font-size: 17px;
+  font-size: 18px;
   margin-top: 16px;
 }
 
 .markdown-body__list {
   margin-left: 20px;
-  color: var(--text-muted);
+  color: var(--text);
 }
 
 .markdown-body__list li + li {
@@ -5122,7 +5173,7 @@ button {
   border-radius: 8px;
   background: rgba(var(--overlay), 0.06);
   color: var(--text);
-  font-size: 13px;
+  font-size: 0.875em;
   font-family: var(--font-mono);
   overflow-wrap: anywhere;
   word-break: break-all;
@@ -26214,44 +26265,65 @@ button {
 .composer-add-menu {
   display: flex;
   flex-direction: column;
-  min-width: 300px;
+  min-width: 340px;
+  max-width: 380px;
   padding: 6px;
   background: var(--bg-elev-2);
   border: 1px solid var(--border-strong);
-  border-radius: 12px;
-  box-shadow: 0 12px 36px rgba(0, 0, 0, 0.45), 0 2px 6px rgba(0, 0, 0, 0.25);
+  border-radius: 14px;
+  box-shadow:
+    0 24px 64px rgba(0, 0, 0, 0.55),
+    0 6px 16px rgba(0, 0, 0, 0.32),
+    inset 0 1px 0 rgba(255, 255, 255, 0.04);
   color: var(--text);
-  font-size: 13px;
+  font-size: 13.5px;
+  animation: composer-add-menu-in 140ms cubic-bezier(0.2, 0.8, 0.2, 1);
+  transform-origin: top left;
+}
+@keyframes composer-add-menu-in {
+  from { opacity: 0; transform: translateY(-4px) scale(0.985); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
 }
 .composer-add-menu__section {
   display: flex;
   flex-direction: column;
+  gap: 1px;
 }
 .composer-add-menu__divider {
   height: 1px;
-  margin: 6px 4px;
-  background: var(--border);
+  margin: 5px 8px;
+  border: 0;
+  background: linear-gradient(
+    to right,
+    transparent,
+    var(--border-strong) 12%,
+    var(--border-strong) 88%,
+    transparent
+  );
 }
 .composer-add-menu__item {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 14px;
   width: 100%;
-  height: 34px;
-  padding: 0 10px;
+  height: 38px;
+  padding: 0 12px;
   border: 0;
-  border-radius: 8px;
+  border-radius: 10px;
   background: transparent;
   color: var(--text);
-  font-size: 13px;
+  font-size: 13.5px;
+  font-weight: 450;
+  letter-spacing: -0.005em;
   line-height: 1;
   text-align: left;
   cursor: pointer;
-  transition: background 0.1s;
+  transition: background 140ms ease, color 140ms ease;
 }
 .composer-add-menu__item > svg {
   flex: 0 0 auto;
   color: var(--text-2, var(--text));
+  transition: color 140ms ease;
 }
 .composer-add-menu__item > span {
   flex: 1;
@@ -26265,46 +26337,56 @@ button {
   background: var(--bg-elev-3);
   outline: none;
 }
+.composer-add-menu__item:hover > svg {
+  color: var(--text);
+}
 .composer-add-menu__item--active {
-  color: var(--accent, #3b82f6);
+  color: var(--accent);
 }
 .composer-add-menu__item--active > svg {
-  color: var(--accent, #3b82f6);
+  color: var(--accent);
 }
 .composer-add-menu__item--active:hover {
-  background: rgba(59, 130, 246, 0.08);
+  background: var(--accent-dim);
 }
 .composer-add-menu__check {
   flex: 0 0 auto;
-  color: var(--accent, #3b82f6);
+  color: var(--accent);
 }
 
 /* "Manage connectors": leading icon + label + trailing brand-icon stack
-   so users read "connectors = applications" at a glance. The stack is
-   intentionally bare — no chip ring or background — so it reads as a
-   subtle pile, not pasted-on logos. */
+   so users read "connectors = applications" at a glance. Chips carry a
+   ring in the menu's surface color so they read as a stacked pile,
+   not pasted-on logos. */
 .composer-add-menu__icon-strip {
   flex: 0 0 auto;
   display: inline-flex;
   align-items: center;
-  padding-left: 8px;
+  padding-left: 10px;
 }
 .composer-add-menu__icon-strip-item {
-  width: 16px;
-  height: 16px;
+  width: 20px;
+  height: 20px;
   display: inline-grid;
   place-items: center;
-  border-radius: 3px;
-  margin-left: -3px;
+  border-radius: 6px;
+  margin-left: -6px;
   overflow: hidden;
+  background: var(--bg-elev-2);
+  box-shadow: 0 0 0 1.5px var(--bg-elev-2);
+  transition: background 140ms ease, box-shadow 140ms ease, transform 140ms ease;
 }
 .composer-add-menu__icon-strip-item:first-child {
   margin-left: 0;
 }
+.composer-add-menu__item--connectors:hover .composer-add-menu__icon-strip-item {
+  background: var(--bg-elev-3);
+  box-shadow: 0 0 0 1.5px var(--bg-elev-3);
+}
 .composer-add-menu__icon-strip-item > svg,
 .composer-add-menu__icon-strip-item > img {
-  width: 14px;
-  height: 14px;
+  width: 16px;
+  height: 16px;
   display: block;
 }
 

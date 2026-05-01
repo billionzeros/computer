@@ -116,6 +116,7 @@ import {
   matchesSurface,
   probeMcpShim,
   readHarnessHistory,
+  readLastUserFromHarness,
   resolveModel,
   resumeSession,
   synthesizeHarnessTurn,
@@ -1994,6 +1995,26 @@ export class AgentServer {
           this.promptResolvers.get(msg.id)!(msg)
         }
         break
+
+      // ── Feedback (thumbs up/down) — relayed to Braintrust ──
+      case 'feedback': {
+        const fbSessionId = msg.sessionId || DEFAULT_SESSION_ID
+        const fbSession = this.sessions.get(fbSessionId)
+        if (fbSession && !isHarnessSession(fbSession) && msg.messageId) {
+          fbSession.logUserFeedback(msg.messageId, msg.value)
+        }
+        log.info(
+          { messageId: msg.messageId, sessionId: fbSessionId, value: msg.value },
+          'User feedback recorded',
+        )
+        break
+      }
+
+      // ── Regenerate last assistant turn ──
+      case 'regenerate': {
+        await this.handleRegenerate(msg as { messageId: string; sessionId?: string })
+        break
+      }
     }
   }
 
@@ -5328,6 +5349,12 @@ export class AgentServer {
       const turnStartMs = Date.now()
       let accumulatedText = ''
       let toolCallCount = 0
+      // Per-turn id for the assistant message produced by this turn. Sent
+      // back on the `done` event so the client adopts it as the message id;
+      // also paired with the Braintrust span (if tracing is on) so the
+      // feedback handler can later attach thumbs up/down to the right event.
+      const assistantMessageId = `m_${randomBytes(8).toString('base64url')}`
+      let spanRegistered = false
       // Track update_project_context tool call data
       const pendingToolNames = new Map<string, string>()
       let projectContextUpdate: { sessionSummary?: string; projectSummary?: string } | null = null
@@ -5341,6 +5368,16 @@ export class AgentServer {
         if (event.type === 'text') {
           accumulatedText += event.content
           textBuffer.push(event.content)
+          // First text of the turn — the trace span exists by now.
+          // Register the (messageId → spanId) mapping so feedback for this
+          // message can land on the right Braintrust event later.
+          if (!spanRegistered && !isHarnessSession(session)) {
+            const spanId = session.getCurrentSpanId()
+            if (spanId) {
+              session.registerAssistantMessage(assistantMessageId, spanId)
+              spanRegistered = true
+            }
+          }
 
           // Send "Writing response..." status only once per text block, not per token
           if (!writingStatusSent) {
@@ -5443,7 +5480,14 @@ export class AgentServer {
           }
         }
 
-        this.sendToClient(Channel.AI, { ...event, sessionId } as Record<string, unknown>)
+        // Stamp `done` with the per-turn assistantMessageId so the client
+        // can adopt it as the assistant message's id (used later when the
+        // user sends thumbs up/down feedback).
+        const outgoing =
+          event.type === 'done'
+            ? ({ ...event, sessionId, messageId: assistantMessageId } as Record<string, unknown>)
+            : ({ ...event, sessionId } as Record<string, unknown>)
+        this.sendToClient(Channel.AI, outgoing)
       }
 
       // Flush any remaining buffered text after the loop
@@ -5557,6 +5601,96 @@ export class AgentServer {
       })
     }
     return eventCount
+  }
+
+  // ── Regenerate handler ──────────────────────────────────────────
+  //
+  // Recovers the prior user message and re-feeds it via the normal
+  // chat pipeline so streaming, persistence, and project bookkeeping
+  // all stay in one place.
+  //
+  //   • Pi-SDK: truncates `piAgent.state.messages` back past the last
+  //     assistant turn so the regenerated answer replaces the old one
+  //     in conversation history (clean state).
+  //   • Codex: leaves the CLI's thread state alone and re-feeds the
+  //     same user text as a follow-up turn (no `thread/resume` RPC
+  //     exists). The previous assistant turn lingers in Codex's own
+  //     context but the user-facing UI swaps cleanly.
+  //   • Claude Code legacy harness: not supported (no kill-and-replay
+  //     story, no resume primitive).
+  private async handleRegenerate(msg: { messageId: string; sessionId?: string }): Promise<void> {
+    const sessionId = msg.sessionId || DEFAULT_SESSION_ID
+    const session = this.sessions.get(sessionId)
+    if (!session) {
+      this.sendToClient(Channel.AI, {
+        type: 'error',
+        code: 'session_not_found',
+        message: `Session not found: ${sessionId}`,
+        sessionId,
+      })
+      return
+    }
+
+    if (this.activeTurns.has(sessionId)) {
+      log.warn({ sessionId }, 'Regenerate ignored — turn already in flight')
+      return
+    }
+
+    let userText: string | null = null
+    let attachments: { id: string; name: string; mimeType: string; data: string; sizeBytes: number }[] = []
+
+    if (!isHarnessSession(session)) {
+      // Pi-SDK path: pop the last user→assistant turn off the agent's
+      // message array and re-feed the user content through the normal
+      // turn pipeline.
+      const prep = session.prepareRegenerate()
+      if (!prep) {
+        this.sendToClient(Channel.AI, {
+          type: 'error',
+          message: 'Nothing to regenerate yet.',
+          sessionId,
+        })
+        return
+      }
+      userText = prep.userText
+      attachments = prep.attachments
+    } else if (session instanceof CodexHarnessSession) {
+      // Codex harness: simulate regenerate by re-feeding the original
+      // user message as a new turn. Codex's app-server v2 protocol has
+      // no `thread/resume` / rewind RPC, and killing the subprocess
+      // would discard all prior context — so we leave the thread state
+      // alone and let Codex produce a fresh answer to the same question.
+      // Slight downside: the previous assistant turn stays in Codex's
+      // internal context window for future turns. The client UI
+      // optimistically removes the old assistant message so users see
+      // a clean swap.
+      const projectId = this.extractProjectId(sessionId)
+      const prep = readLastUserFromHarness(sessionId, projectId)
+      if (!prep || !prep.userText.trim()) {
+        this.sendToClient(Channel.AI, {
+          type: 'error',
+          message: 'Nothing to regenerate yet.',
+          sessionId,
+        })
+        return
+      }
+      userText = prep.userText
+    } else {
+      // Claude Code legacy harness — not yet supported.
+      this.sendToClient(Channel.AI, {
+        type: 'error',
+        message: 'Regenerate is not available on this provider yet.',
+        sessionId,
+      })
+      return
+    }
+
+    log.info({ sessionId, chars: userText.length }, 'Regenerating last assistant turn')
+    await this.handleChatMessage({
+      sessionId,
+      content: userText,
+      attachments: attachments.length > 0 ? attachments : undefined,
+    })
   }
 
   private async handleCompactCommand(session: Session, sessionId: string, content: string) {

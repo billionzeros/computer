@@ -289,6 +289,7 @@ import {
   estimateCost,
   hashPromptVersion,
   logScore,
+  logSpanFeedback,
   startChildTrace,
   startTrace,
 } from './tracing.js'
@@ -478,6 +479,13 @@ export class Session {
   private parentTraceSpan?: Span // when this is a sub-agent, inherit parent's span
   private workflowMetadata?: { workflowId: string; agentKey: string; promptVersion: string }
   currentTraceSpan?: Span // current turn's trace span (exposed for sub-agent threading)
+  // (messageId → Braintrust span id) for completed turns in this session.
+  // Bounded to the last 200 turns; older entries fall off the front when
+  // capacity is exceeded so long-lived sessions don't grow unbounded.
+  // Server assigns the messageId, registers it via `registerAssistantMessage`,
+  // and clients echo it back via the `feedback` protocol message.
+  private messageSpanIds: Map<string, string> = new Map()
+  private static readonly MESSAGE_SPAN_CAP = 200
   private _promptVersion?: string // hash of assembled system prompt
 
   // Safety limits
@@ -2305,6 +2313,113 @@ export class Session {
   /** Get a deep clone of the current conversation messages. Used by fork sub-agents. */
   getMessages(): unknown[] {
     return structuredClone(this.piAgent.state.messages)
+  }
+
+  /**
+   * Get the Braintrust span id for the current turn. Returns undefined if
+   * tracing is disabled or if called outside an active turn. Used by the
+   * server to register the (messageId → spanId) mapping when emitting the
+   * `done` event so feedback can be correlated post-hoc.
+   */
+  getCurrentSpanId(): string | undefined {
+    const span = this.currentTraceSpan as (Span & { id?: string }) | undefined
+    return typeof span?.id === 'string' ? span.id : undefined
+  }
+
+  /**
+   * Pair a server-assigned messageId with a Braintrust span id so the
+   * server's feedback handler can attach thumbs-up/down to the right
+   * event later. Pruned to MESSAGE_SPAN_CAP entries (oldest first).
+   */
+  registerAssistantMessage(messageId: string, spanId: string): void {
+    if (this.messageSpanIds.size >= Session.MESSAGE_SPAN_CAP) {
+      const firstKey = this.messageSpanIds.keys().next().value
+      if (firstKey !== undefined) this.messageSpanIds.delete(firstKey)
+    }
+    this.messageSpanIds.set(messageId, spanId)
+  }
+
+  /**
+   * Record thumbs-up/down user feedback for a specific assistant message.
+   * No-op when tracing is disabled or the messageId is unknown (e.g. session
+   * was resumed from disk and the in-memory map didn't survive the restart).
+   */
+  logUserFeedback(messageId: string, value: 'up' | 'down'): void {
+    const spanId = this.messageSpanIds.get(messageId)
+    if (!spanId) return
+    logSpanFeedback(spanId, {
+      user_feedback: value === 'up' ? 1 : 0,
+    })
+  }
+
+  /**
+   * Prepare the session for regenerating its last assistant response.
+   *
+   * Pops the last user→assistant pair from `piAgent.state.messages` and
+   * returns the user content (text + image attachments) so the caller can
+   * re-feed it via `processMessage`. Returns null if there's nothing to
+   * regenerate (no prior user turn).
+   *
+   * This does NOT call processMessage itself — that's the caller's job, so
+   * the existing event-streaming pipeline in the server stays in one place.
+   */
+  prepareRegenerate(): {
+    userText: string
+    attachments: ChatImageAttachmentInput[]
+  } | null {
+    type ContentBlock = {
+      type: string
+      text?: string
+      mimeType?: string
+      data?: string
+      name?: string
+      sizeBytes?: number
+    }
+    type RawMsg = { role: string; content?: string | ContentBlock[] }
+
+    const messages = this.piAgent.state.messages as RawMsg[]
+    let lastAssistantIdx = -1
+    for (let i = messages.length - 1; i >= 0; i--) {
+      if (messages[i].role === 'assistant') {
+        lastAssistantIdx = i
+        break
+      }
+    }
+    if (lastAssistantIdx < 0) return null
+
+    let lastUserIdx = -1
+    for (let i = lastAssistantIdx - 1; i >= 0; i--) {
+      if (messages[i].role === 'user') {
+        lastUserIdx = i
+        break
+      }
+    }
+    if (lastUserIdx < 0) return null
+
+    const userMsg = messages[lastUserIdx]
+    let userText = ''
+    const attachments: ChatImageAttachmentInput[] = []
+    if (typeof userMsg.content === 'string') {
+      userText = userMsg.content
+    } else if (Array.isArray(userMsg.content)) {
+      for (const block of userMsg.content) {
+        if (block.type === 'text') userText += block.text ?? ''
+        else if (block.type === 'image' && block.data && block.mimeType) {
+          attachments.push({
+            id: `regen-${attachments.length}`,
+            name: block.name ?? 'image',
+            mimeType: block.mimeType,
+            data: block.data,
+            sizeBytes: block.sizeBytes ?? 0,
+          })
+        }
+      }
+    }
+
+    // Truncate to before the last user message — caller will re-feed it.
+    this.piAgent.replaceMessages(messages.slice(0, lastUserIdx) as AgentMessage[])
+    this.persist()
+    return { userText, attachments }
   }
 
   /** Get the current tools array. Used by fork sub-agents. */
