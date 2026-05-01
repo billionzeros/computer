@@ -1,6 +1,8 @@
 import { AnimatePresence, motion } from 'framer-motion'
 import {
   AlertTriangle,
+  Check,
+  Copy,
   File as FileIcon,
   FileImage,
   FileSpreadsheet,
@@ -9,10 +11,14 @@ import {
   Image as ImageIcon,
   ImageOff,
   Loader2,
+  RotateCw,
+  ThumbsDown,
+  ThumbsUp,
 } from 'lucide-react'
-import { useMemo, useState } from 'react'
+import { useCallback, useMemo, useState } from 'react'
 import { classifyUpload } from '../../lib/artifacts.js'
 import { useAttachmentBlobUrl } from '../../lib/attachments.js'
+import { connection } from '../../lib/connection.js'
 import type { ChatImageAttachment, CitationSource } from '../../lib/store.js'
 import { type ChatMessage, useStore } from '../../lib/store.js'
 import { artifactStore } from '../../lib/store/artifactStore.js'
@@ -297,6 +303,93 @@ function UserMessageContent({
   )
 }
 
+type FeedbackValue = 'up' | 'down'
+
+function AssistantMessageActions({
+  message,
+  sessionId,
+}: {
+  message: ChatMessage
+  sessionId: string | undefined
+}) {
+  const [copied, setCopied] = useState(false)
+  const [feedback, setFeedback] = useState<FeedbackValue | null>(null)
+
+  const handleCopy = useCallback(() => {
+    navigator.clipboard.writeText(message.content).then(() => {
+      setCopied(true)
+      setTimeout(() => setCopied(false), 1500)
+    })
+  }, [message.content])
+
+  const handleFeedback = useCallback(
+    (value: FeedbackValue) => {
+      const next = feedback === value ? null : value
+      setFeedback(next)
+      if (next) connection.sendFeedback(message.id, next, sessionId)
+    },
+    [feedback, message.id, sessionId],
+  )
+
+  const handleRegenerate = useCallback(() => {
+    // Optimistically drop this assistant message so the new streaming
+    // answer replaces it cleanly instead of stacking next to it.
+    useStore.getState().removeMessage(message.id, sessionId)
+    connection.sendRegenerate(message.id, sessionId)
+  }, [message.id, sessionId])
+
+  return (
+    <div className="message__actions">
+      <button
+        type="button"
+        className="message__action-btn"
+        title={copied ? 'Copied' : 'Copy message'}
+        aria-label="Copy message"
+        onClick={handleCopy}
+      >
+        {copied ? <Check size={15} strokeWidth={1.5} /> : <Copy size={15} strokeWidth={1.5} />}
+      </button>
+      <button
+        type="button"
+        className={
+          feedback === 'up'
+            ? 'message__action-btn message__action-btn--active'
+            : 'message__action-btn'
+        }
+        title="Good response"
+        aria-label="Good response"
+        aria-pressed={feedback === 'up'}
+        onClick={() => handleFeedback('up')}
+      >
+        <ThumbsUp size={15} strokeWidth={1.5} />
+      </button>
+      <button
+        type="button"
+        className={
+          feedback === 'down'
+            ? 'message__action-btn message__action-btn--active'
+            : 'message__action-btn'
+        }
+        title="Bad response"
+        aria-label="Bad response"
+        aria-pressed={feedback === 'down'}
+        onClick={() => handleFeedback('down')}
+      >
+        <ThumbsDown size={15} strokeWidth={1.5} />
+      </button>
+      <button
+        type="button"
+        className="message__action-btn"
+        title="Regenerate response"
+        aria-label="Regenerate response"
+        onClick={handleRegenerate}
+      >
+        <RotateCw size={15} strokeWidth={1.5} />
+      </button>
+    </div>
+  )
+}
+
 export function MessageBubble({ message, sessionId, isLastThinking }: Props) {
   const citations = useStore((s) => s.citations.get(message.id))
   // For assistant final answers, the model may reference citations across
@@ -346,6 +439,9 @@ export function MessageBubble({ message, sessionId, isLastThinking }: Props) {
         <div className="message__surface message__surface--assistant">
           {citations && citations.length > 0 && <SourceCards sources={citations} />}
           <MarkdownRenderer content={message.content} citations={lookupCitations} />
+          {message.content.trim().length > 0 && !isAgentWorking && (
+            <AssistantMessageActions message={message} sessionId={sessionId} />
+          )}
         </div>
       )}
 

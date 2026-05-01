@@ -69,7 +69,7 @@ export {
   type ProviderTokenResolver,
   type ResolvedProviderToken,
 } from './tools/factories.js'
-export { initTracing, flushTraces, hashPromptVersion } from './tracing.js'
+export { initTracing, flushTraces, hashPromptVersion, logSpanFeedback } from './tracing.js'
 export { closeBrowserSession } from './tools/browser.js'
 export {
   type HarnessAdapter,
@@ -99,7 +99,9 @@ export {
   synthesizeHarnessTurn,
   ensureHarnessSessionInit,
   appendHarnessTurn,
+  popLastTurnFromHarness,
   readHarnessHistory,
+  readLastUserFromHarness,
   writeHarnessSessionTitle,
   buildReplaySeed,
   extractHarnessMemoriesFromMirror,

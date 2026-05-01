@@ -451,6 +451,112 @@ export function readHarnessHistory(sessionId: string, projectId?: string): Sessi
   return entries
 }
 
+// ── Regenerate helpers ─────────────────────────────────────────────
+
+/**
+ * Read the last user message text from `messages.jsonl` without mutating
+ * the file. Used by the Codex regenerate path: re-feeding the same user
+ * text as a fresh turn produces a regenerated assistant response while
+ * leaving the CLI's own thread state intact (we can't truncate Codex's
+ * internal history without a `thread/resume` RPC, which doesn't exist).
+ */
+export function readLastUserFromHarness(
+  sessionId: string,
+  projectId?: string,
+): { userText: string } | null {
+  const dir = resolveSessionDir(sessionId, projectId)
+  const msgsPath = join(dir, 'messages.jsonl')
+  if (!existsSync(msgsPath)) return null
+
+  let raw: string
+  try {
+    raw = readFileSync(msgsPath, 'utf-8')
+  } catch (err) {
+    log.warn({ err, sessionId }, 'failed to read messages.jsonl for regenerate')
+    return null
+  }
+
+  const lines = raw.split('\n').filter((l) => l.trim().length > 0)
+  for (let i = lines.length - 1; i >= 0; i--) {
+    let parsed: { role?: unknown; content?: unknown }
+    try {
+      parsed = JSON.parse(lines[i])
+    } catch {
+      continue
+    }
+    if (parsed.role !== 'user') continue
+    let userText = ''
+    if (typeof parsed.content === 'string') {
+      userText = parsed.content
+    } else if (Array.isArray(parsed.content)) {
+      const blocks = parsed.content as Array<{ type?: string; text?: string }>
+      userText = blocks
+        .filter((b) => b?.type === 'text' && typeof b.text === 'string')
+        .map((b) => b.text as string)
+        .join('')
+    }
+    return { userText }
+  }
+  return null
+}
+
+/**
+ * Pop the last user→assistant exchange from `messages.jsonl`, returning
+ * the user's text so the caller can re-feed it to a fresh CLI process.
+ *
+ * Walks backwards looking for the last `role:'user'` line, truncates the
+ * file to lines preceding it, and extracts the plain-text content. Tool
+ * messages between the user and assistant are dropped along with the
+ * assistant turn.
+ *
+ * Returns null if there's no prior user message — nothing to regenerate.
+ */
+export function popLastTurnFromHarness(
+  sessionId: string,
+  projectId?: string,
+): { userText: string } | null {
+  const dir = resolveSessionDir(sessionId, projectId)
+  const msgsPath = join(dir, 'messages.jsonl')
+  if (!existsSync(msgsPath)) return null
+
+  let raw: string
+  try {
+    raw = readFileSync(msgsPath, 'utf-8')
+  } catch (err) {
+    log.warn({ err, sessionId }, 'failed to read messages.jsonl for regenerate')
+    return null
+  }
+
+  const lines = raw.split('\n').filter((l) => l.trim().length > 0)
+  let lastUserIdx = -1
+  let userText = ''
+  for (let i = lines.length - 1; i >= 0; i--) {
+    let parsed: { role?: unknown; content?: unknown }
+    try {
+      parsed = JSON.parse(lines[i])
+    } catch {
+      continue
+    }
+    if (parsed.role !== 'user') continue
+    lastUserIdx = i
+    if (typeof parsed.content === 'string') {
+      userText = parsed.content
+    } else if (Array.isArray(parsed.content)) {
+      const textBlocks = parsed.content as Array<{ type?: string; text?: string }>
+      userText = textBlocks
+        .filter((b) => b?.type === 'text' && typeof b.text === 'string')
+        .map((b) => b.text as string)
+        .join('')
+    }
+    break
+  }
+  if (lastUserIdx < 0) return null
+
+  const truncated = lines.slice(0, lastUserIdx).join('\n')
+  writeFileSync(msgsPath, truncated.length > 0 ? `${truncated}\n` : '', 'utf-8')
+  return { userText }
+}
+
 // ── Internal helpers ───────────────────────────────────────────────
 
 function resolveSessionDir(sessionId: string, projectId?: string): string {
