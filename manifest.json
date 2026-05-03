@@ -1,12 +1,12 @@
 {
-  "version": "2.1.2",
-  "gitHash": "0dfc144",
+  "version": "2.1.3",
+  "gitHash": "",
   "releaseUrl": "https://github.com/billionzeros/computer/releases",
-  "changelog": "Features:\n- auto-activated skills + builtin document-creation packages (#19)\n\nOther:\n- fix(attachments): persist images on disk + lazy-load chips on demand (#20)\n- feat(chat): collapsible turn progress + per-turn source cards (#18)\n- fix(artifacts): premium split panel + render docx/pdf/xlsx in files view (#17)\n- fix(ask-user): commit answers only on explicit submit (#16)\n- docs(spec): session log architecture — append-only log + multi-client channel (#15)",
-  "publishedAt": "2026-04-30T23:32:47.011Z",
-  "cli": "https://github.com/billionzeros/computer/releases/download/v2.1.2/anton-cli.mjs",
+  "changelog": "Other:\n- feat(chat): readability polish + message actions, regenerate, feedback (#22)\n- chore(topbar): remove \"More options\" button and Connected status pill (#21)",
+  "publishedAt": "2026-05-03T09:16:29.667Z",
+  "cli": "https://github.com/billionzeros/computer/releases/download/v2.1.3/anton-cli.mjs",
   "sidecar": {
-    "linux-arm64": "https://github.com/billionzeros/computer/releases/download/v2.1.2/anton-sidecar-linux-arm64",
-    "linux-amd64": "https://github.com/billionzeros/computer/releases/download/v2.1.2/anton-sidecar-linux-amd64"
+    "linux-arm64": "https://github.com/billionzeros/computer/releases/download/v2.1.3/anton-sidecar-linux-arm64",
+    "linux-amd64": "https://github.com/billionzeros/computer/releases/download/v2.1.3/anton-sidecar-linux-amd64"
   }
 }

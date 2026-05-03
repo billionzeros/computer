@@ -10,6 +10,13 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versioning: [S
 
 ---
 
+## [2.1.3] - 2026-05-03
+
+### Other
+- feat(chat): readability polish + message actions, regenerate, feedback (#22)
+- chore(topbar): remove "More options" button and Connected status pill (#21)
+---
+
 ## [2.1.2] - 2026-05-01
 
 ### Features
@@ -749,7 +756,8 @@ Maintenance release.
 
 ---
 
-[Unreleased]: https://github.com/billionzeros/computer/compare/v2.1.2...HEAD
+[Unreleased]: https://github.com/billionzeros/computer/compare/v2.1.3...HEAD
+[2.1.3]: https://github.com/billionzeros/computer/compare/v$(changelog.match(/## [(d+.d+.d+)]/g)[1].match(/d+.d+.d+/)[0])...v2.1.3
 [2.1.2]: https://github.com/billionzeros/computer/compare/v$(changelog.match(/## [(d+.d+.d+)]/g)[1].match(/d+.d+.d+/)[0])...v2.1.2
 [2.1.1]: https://github.com/billionzeros/computer/compare/v$(changelog.match(/## [(d+.d+.d+)]/g)[1].match(/d+.d+.d+/)[0])...v2.1.1
 [2.1.0]: https://github.com/billionzeros/computer/compare/v$(changelog.match(/## [(d+.d+.d+)]/g)[1].match(/d+.d+.d+/)[0])...v2.1.0
