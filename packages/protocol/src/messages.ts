@@ -696,6 +696,42 @@ export interface AiTokenUpdateMessage {
   sessionId?: string
 }
 
+/**
+ * Per-category breakdown of a session's prompt budget. Drives the in-composer
+ * Context gauge + popover: Pi-SDK sessions report the full breakdown, harness
+ * sessions populate `messages` + `contextWindow` only and leave the rest at 0.
+ *
+ * `freeSpace` is derived on the client as
+ *   contextWindow − (systemPrompt + systemTools + mcpTools + skills
+ *                    + memoryFiles + messages + autocompactBuffer)
+ */
+export interface ContextBreakdown {
+  /** Model context window — max tokens the model accepts. */
+  contextWindow: number
+  /** Identity + workspace/user rules + current context + project + agent context. */
+  systemPrompt: number
+  /** Built-in tool schemas (shell, read/write/edit, glob, grep, web_search, etc.). */
+  systemTools: number
+  /** MCP server tool schemas + direct OAuth connector tools. */
+  mcpTools: number
+  /** Active Skills layer (catalog + auto-loaded skill bodies). */
+  skills: number
+  /** Memory layer (global + conversation + cross-conversation). */
+  memoryFiles: number
+  /** Conversation history (user + assistant + tool-result messages). */
+  messages: number
+  /** Reserved for autocompaction headroom — `contextWindow * (1 − threshold)`. */
+  autocompactBuffer: number
+  /** Pi SDK = full breakdown. Harness = messages-only fallback. */
+  source: 'pi-sdk' | 'harness'
+}
+
+export interface AiContextUpdateMessage {
+  type: 'context_update'
+  sessionId?: string
+  breakdown: ContextBreakdown
+}
+
 export interface AiTextReplaceMessage {
   type: 'text_replace'
   sessionId?: string
@@ -1514,6 +1550,7 @@ export type AiMessage =
   | AiArtifactMessage
   | AiTasksUpdateMessage
   | AiTokenUpdateMessage
+  | AiContextUpdateMessage
   | AiTextReplaceMessage
   | AiDoneMessage
   | AiErrorMessage
