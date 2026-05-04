@@ -1,0 +1,37 @@
+packages/agent-server/package.json
+  5f6fa262ac5de68d 13
+packages/agent-core/src/index.ts
+  5f6fa262ac5de68d 44
+packages/agent-server/src/server.ts
+  5f6fa262ac5de68d 47,96,102,878,2062,2143,2373-2380,2429,4670-4679,4692,4731-4734,4769-4845,5300,6139-6140,6151-6171,6272-6273,6712
+packages/agent-server/src/__fixtures__/check-session-options.ts
+  5f6fa262ac5de68d 1-313
+packages/agent-server/src/webhooks/agent-runner.ts
+  5f6fa262ac5de68d 15,23,42-46,48,1024-1031,1034,1036-1041,1056-1073,1080-1090
+packages/agent-config/src/config.ts
+  5f6fa262ac5de68d 1618-1640
+packages/agent-core/src/prompt-layers.ts
+  5f6fa262ac5de68d 47-62,66-67,69-72,77-94,96-104,809-810,840
+packages/agent-core/src/session.ts
+  5f6fa262ac5de68d 26,352,2670-2680,2683,2687,2690-2696,2897-2983,2987,3020-3023,3063,3089-3093,3098,3130-3133,3135,3174,3178-3179
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.3.4",
+  "base_commit_sha": "326e6ecd7286ed89e00ebc9440f73d2ed976af74",
+  "prompts": {
+    "5f6fa262ac5de68d": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "0926ea17-6d77-4e71-a1c0-3640fd400af1",
+        "model": "claude-opus-4-7"
+      },
+      "human_author": "Om Gupta",
+      "messages": [],
+      "total_additions": 776,
+      "total_deletions": 266,
+      "accepted_lines": 706,
+      "overriden_lines": 0
+    }
+  }
+}
