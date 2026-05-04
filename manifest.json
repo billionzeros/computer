@@ -1,6 +1,6 @@
 {
   "version": "2.1.4",
-  "gitHash": "",
+  "gitHash": "0fe0d17",
   "releaseUrl": "https://github.com/billionzeros/computer/releases",
   "changelog": "Other:\n- chore(tasks): remove \"Start a task\" composer from All tasks view (#24)\n- [codex] clarify web search action labels (#23)",
   "publishedAt": "2026-05-04T09:33:48.521Z",
