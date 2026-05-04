@@ -263,7 +263,7 @@ export function extractArtifact(
   if (!toolName || !toolInput) return null
 
   // Explicit artifact tool calls
-  if (toolName === 'artifact') {
+  if (toolName === 'artifact' || toolName === 'anton:artifact') {
     const artifactType = (toolInput.type as string) || 'code'
     const language =
       artifactType === 'code' ? (toolInput.language as string) || 'text' : artifactType
@@ -283,8 +283,12 @@ export function extractArtifact(
   }
 
   // File writes
-  if (toolName === 'filesystem' && toolInput.operation === 'write' && toolInput.content) {
-    const filepath = toolInput.path as string
+  if (
+    ((toolName === 'filesystem' && toolInput.operation === 'write' && toolInput.path) ||
+      (toolName === 'write' && toolInput.file_path)) &&
+    toolInput.content
+  ) {
+    const filepath = (toolInput.path || toolInput.file_path) as string
     const filename = filepath?.split('/').pop() || 'untitled'
     const language = getLanguageFromPath(filepath || '')
 
@@ -294,8 +298,28 @@ export function extractArtifact(
       renderType: languageToRenderType(language),
       filename,
       filepath,
+      sourcePath: filepath,
       language,
       content: toolInput.content as string,
+      toolCallId: toolCallMsg.id,
+      timestamp: Date.now(),
+    }
+  }
+
+  if (toolName === 'edit' && toolInput.file_path) {
+    const filepath = toolInput.file_path as string
+    const filename = filepath?.split('/').pop() || 'untitled'
+    const language = getLanguageFromPath(filepath || '')
+
+    return {
+      id: `artifact_${toolCallMsg.id}_${Date.now()}`,
+      type: 'file',
+      renderType: languageToRenderType(language),
+      filename,
+      filepath,
+      sourcePath: filepath,
+      language,
+      content: '',
       toolCallId: toolCallMsg.id,
       timestamp: Date.now(),
     }

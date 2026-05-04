@@ -5,6 +5,7 @@ import Markdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { highlightCode } from '../../lib/shiki.js'
 import type { CitationSource } from '../../lib/store.js'
+import { openWorkspaceFileArtifact, workspacePathFromHref } from '../../lib/workspaceArtifacts.js'
 
 function slugify(children: React.ReactNode): string {
   const text = extractText(children)
@@ -104,12 +105,17 @@ export function MarkdownRenderer({ content, citations }: Props) {
               const source = citations?.find((s) => s.index === index)
               return <CitationPill index={index} source={source} />
             }
+            const workspacePath = workspacePathFromHref(href)
             return (
               <a
                 href={href}
-                target="_blank"
-                rel="noopener noreferrer"
+                target={workspacePath ? undefined : '_blank'}
+                rel={workspacePath ? undefined : 'noopener noreferrer'}
                 className="markdown-body__link"
+                onClick={(e) => {
+                  if (!href) return
+                  if (openWorkspaceFileArtifact(href)) e.preventDefault()
+                }}
               >
                 {children}
               </a>

@@ -43,6 +43,9 @@ export function handleChatMessage(msg: AiMessage, ctx: MessageContext): boolean 
     case 'text': {
       // Invariant: text rendering must agree with the webhook runner and mirror.
       // See packages/agent-core/src/harness/__fixtures__/check.ts cross-surface test.
+      if (typeof msg.messageId === 'string' && msg.messageId.length > 0) {
+        return true
+      }
       const textContent = msg.content ?? ''
       if (!textContent) return true
       const textSessionId =
@@ -58,6 +61,37 @@ export function handleChatMessage(msg: AiMessage, ctx: MessageContext): boolean 
         useStore.getState()._sessionThinkingMsgIds.delete(textSessionId)
       }
       ctx.appendText(textContent)
+      return true
+    }
+
+    case 'assistant_start': {
+      const sid = msg.sessionId || ctx.msgSessionId
+      if (!sid || !msg.messageId) return true
+      useStore.getState().startAssistantStream(sid, msg.messageId)
+      const ss = sessionStore.getState()
+      if (!ss.getSessionState(sid).isStreaming) {
+        ss.updateSessionState(sid, { isStreaming: true })
+      }
+      return true
+    }
+
+    case 'assistant_delta': {
+      const sid = msg.sessionId || ctx.msgSessionId
+      const delta = msg.delta ?? ''
+      if (!sid || !msg.messageId || !delta) return true
+      const store = useStore.getState()
+      store.appendAssistantStreamDelta(sid, msg.messageId, delta)
+      const ss = sessionStore.getState()
+      if (!ss.getSessionState(sid).isStreaming) {
+        ss.updateSessionState(sid, { isStreaming: true })
+      }
+      return true
+    }
+
+    case 'assistant_done': {
+      const sid = msg.sessionId || ctx.msgSessionId
+      if (!sid || !msg.messageId) return true
+      useStore.getState().completeAssistantStream(sid, msg.messageId, msg.content)
       return true
     }
 

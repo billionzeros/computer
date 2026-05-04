@@ -93,8 +93,8 @@ import {
   ClaudeAdapter,
   CodexAdapter,
   CodexHarnessSession,
-  type HarnessSessionContext,
   HarnessSession,
+  type HarnessSessionContext,
   type LiveConnectorSummary,
   McpManager,
   type McpServerConfig,
@@ -119,6 +119,7 @@ import {
   isHarnessSession,
   matchesSurface,
   probeMcpShim,
+  readHarnessArtifacts,
   readHarnessHistory,
   readLastUserFromHarness,
   resolveModel,
@@ -3366,11 +3367,9 @@ export class AgentServer {
       // above (shouldn't happen — meta.json is authoritative), fall
       // back to reading its mirror so we never silently return empty.
       if (session && isHarnessSession(session)) {
-        const entries = readHarnessHistory(
-          msg.id,
-          this.harnessSessionContexts.get(msg.id)?.projectId,
-        )
-        this.sendHarnessHistoryPage(msg.id, entries, msg.before, limit, isFirstPage)
+        const projectId = this.harnessSessionContexts.get(msg.id)?.projectId
+        const entries = readHarnessHistory(msg.id, projectId)
+        this.sendHarnessHistoryPage(msg.id, entries, msg.before, limit, isFirstPage, projectId)
         return
       }
 
@@ -3559,7 +3558,7 @@ export class AgentServer {
       if (!provider || !this.isHarnessProvider(provider)) continue
 
       const entries = readHarnessHistory(sessionId, c.projectId)
-      this.sendHarnessHistoryPage(sessionId, entries, before, limit, isFirstPage)
+      this.sendHarnessHistoryPage(sessionId, entries, before, limit, isFirstPage, c.projectId)
       return true
     }
     return false
@@ -3578,6 +3577,7 @@ export class AgentServer {
     before: number | undefined,
     limit: number,
     _isFirstPage: boolean,
+    projectId?: string,
   ): void {
     const totalCount = entries.length
     const lastSeq = totalCount > 0 ? entries[totalCount - 1].seq : 0
@@ -3599,9 +3599,7 @@ export class AgentServer {
       lastSeq,
       totalCount,
       hasMore,
-      // No artifacts for harness sessions yet — we don't emit artifact
-      // events from the harness path. If/when we do, they'll be in the
-      // mirror and can be extracted here.
+      artifacts: _isFirstPage ? readHarnessArtifacts(sessionId, projectId) : undefined,
     })
   }
 
@@ -5468,10 +5466,87 @@ export class AgentServer {
     this.activeTurns.add(sessionId)
     let eventCount = 0
 
+    // Stable assistant stream ids are per contiguous text block, not per turn.
+    // Tool calls/results must stay in the transcript between assistant blocks.
+    let activeAssistantMessageId: string | null = null
+    let activeAssistantContent = ''
+    let lastAssistantMessageId: string | null = null
+    const registeredAssistantMessageIds = new Set<string>()
+    const hiddenUiTools = new Set(['ask_user', 'task_tracker', 'plan_confirm'])
+    const pendingToolNames = new Map<string, string>()
+    let accumulatedText = ''
+
+    const startAssistantStreamBlock = (): string => {
+      if (activeAssistantMessageId) return activeAssistantMessageId
+
+      activeAssistantMessageId = `m_${randomBytes(8).toString('base64url')}`
+      activeAssistantContent = ''
+      lastAssistantMessageId = activeAssistantMessageId
+      this.sendToClient(Channel.AI, {
+        type: 'assistant_start',
+        sessionId,
+        messageId: activeAssistantMessageId,
+      })
+      return activeAssistantMessageId
+    }
+
+    const finishAssistantStreamBlock = (): void => {
+      if (!activeAssistantMessageId) return
+
+      this.sendToClient(Channel.AI, {
+        type: 'assistant_done',
+        sessionId,
+        messageId: activeAssistantMessageId,
+        content: activeAssistantContent,
+      })
+      activeAssistantMessageId = null
+      activeAssistantContent = ''
+    }
+
+    const shouldFinishAssistantStreamBeforeEvent = (event: {
+      type: string
+      id?: string
+      name?: string
+    }): boolean => {
+      switch (event.type) {
+        case 'done':
+        case 'error':
+        case 'thinking':
+        case 'confirm':
+        case 'ask_user':
+        case 'plan_confirm':
+        case 'compaction':
+        case 'sub_agent_start':
+        case 'sub_agent_end':
+        case 'sub_agent_progress':
+          return true
+        case 'tool_call':
+          return !hiddenUiTools.has(event.name ?? '')
+        case 'tool_result':
+          return !hiddenUiTools.has(pendingToolNames.get(event.id ?? '') ?? '')
+        default:
+          return false
+      }
+    }
+
     // Buffer text chunks and flush every ~80ms (or before any non-text event)
     // Hoisted above try so catch/finally can access it
     const textBuffer = new TextStreamBuffer((text) => {
-      this.sendToClient(Channel.AI, { type: 'text', content: text, sessionId })
+      if (!text) return
+      const messageId = startAssistantStreamBlock()
+      activeAssistantContent += text
+      this.sendToClient(Channel.AI, {
+        type: 'assistant_delta',
+        sessionId,
+        messageId,
+        delta: text,
+      })
+      this.sendToClient(Channel.AI, {
+        type: 'text',
+        content: text,
+        sessionId,
+        messageId,
+      })
     })
 
     try {
@@ -5479,16 +5554,8 @@ export class AgentServer {
       // even if a throw fires between the two statements.
       this.sessions.pin(sessionId)
       const turnStartMs = Date.now()
-      let accumulatedText = ''
       let toolCallCount = 0
-      // Per-turn id for the assistant message produced by this turn. Sent
-      // back on the `done` event so the client adopts it as the message id;
-      // also paired with the Braintrust span (if tracing is on) so the
-      // feedback handler can later attach thumbs up/down to the right event.
-      const assistantMessageId = `m_${randomBytes(8).toString('base64url')}`
-      let spanRegistered = false
       // Track update_project_context tool call data
-      const pendingToolNames = new Map<string, string>()
       let projectContextUpdate: { sessionSummary?: string; projectSummary?: string } | null = null
       let lastProjectSummary: string | undefined
       let writingStatusSent = false
@@ -5498,16 +5565,18 @@ export class AgentServer {
 
         // ── Text events: buffer instead of sending immediately ──
         if (event.type === 'text') {
+          if (!event.content) continue
+          const messageId = startAssistantStreamBlock()
           accumulatedText += event.content
           textBuffer.push(event.content)
           // First text of the turn — the trace span exists by now.
           // Register the (messageId → spanId) mapping so feedback for this
           // message can land on the right Braintrust event later.
-          if (!spanRegistered && !isHarnessSession(session)) {
+          if (!registeredAssistantMessageIds.has(messageId) && !isHarnessSession(session)) {
             const spanId = session.getCurrentSpanId()
             if (spanId) {
-              session.registerAssistantMessage(assistantMessageId, spanId)
-              spanRegistered = true
+              session.registerAssistantMessage(messageId, spanId)
+              registeredAssistantMessageIds.add(messageId)
             }
           }
 
@@ -5526,6 +5595,9 @@ export class AgentServer {
 
         // ── Non-text event: force flush buffer to preserve ordering ──
         textBuffer.flush()
+        if (shouldFinishAssistantStreamBeforeEvent(event)) {
+          finishAssistantStreamBlock()
+        }
         writingStatusSent = false
 
         // Track tool call names for result matching
@@ -5617,13 +5689,18 @@ export class AgentServer {
         // user sends thumbs up/down feedback).
         const outgoing =
           event.type === 'done'
-            ? ({ ...event, sessionId, messageId: assistantMessageId } as Record<string, unknown>)
+            ? ({
+                ...event,
+                sessionId,
+                ...(lastAssistantMessageId ? { messageId: lastAssistantMessageId } : {}),
+              } as Record<string, unknown>)
             : ({ ...event, sessionId } as Record<string, unknown>)
         this.sendToClient(Channel.AI, outgoing)
       }
 
       // Flush any remaining buffered text after the loop
       textBuffer.destroy()
+      finishAssistantStreamBlock()
       const turnDurationMs = Date.now() - turnStartMs
       log.info(
         {
@@ -5709,6 +5786,7 @@ export class AgentServer {
       log.error({ sessionId, err: errMsg }, 'Session error')
       // Flush any buffered text before sending error so partial response isn't lost
       textBuffer.destroy()
+      finishAssistantStreamBlock()
       this.sendToClient(Channel.AI, {
         type: 'error',
         message: errMsg,
@@ -5718,6 +5796,7 @@ export class AgentServer {
       this.sendToClient(Channel.AI, {
         type: 'done',
         sessionId,
+        ...(lastAssistantMessageId ? { messageId: lastAssistantMessageId } : {}),
       })
     } finally {
       // Safety net: destroy is idempotent, ensures timer is cleared even if

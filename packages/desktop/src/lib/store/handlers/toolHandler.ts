@@ -143,6 +143,7 @@ export function handleToolMessage(msg: AiMessage, ctx: MessageContext): boolean 
         title: msg.title,
         filename: msg.filename,
         filepath: msg.filepath,
+        sourcePath: msg.filepath,
         language: msg.language || '',
         content: msg.content,
         toolCallId: `tc_${msg.toolCallId}`,

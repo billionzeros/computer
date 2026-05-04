@@ -1949,6 +1949,7 @@ export class Session {
       if (!call || !call.toolName) continue
 
       const toolInput = call.toolInput || {}
+      const resultLooksFailed = typeof e.content === 'string' && e.content.startsWith('Error:')
 
       // Explicit artifact tool
       if (call.toolName === 'artifact') {
@@ -1968,7 +1969,12 @@ export class Session {
       }
 
       // File writes (write tool)
-      if (call.toolName === 'write' && toolInput.file_path && toolInput.content) {
+      if (
+        call.toolName === 'write' &&
+        !resultLooksFailed &&
+        toolInput.file_path &&
+        toolInput.content
+      ) {
         const filepath = toolInput.file_path as string
         const filename = filepath?.split('/').pop() || 'untitled'
         const ext = filename.split('.').pop()?.toLowerCase() || ''
@@ -2002,6 +2008,54 @@ export class Session {
           filepath,
           language,
           content: toolInput.content as string,
+          toolCallId: `tc_${call.toolId}`,
+        })
+      }
+
+      // File edits (edit tool): the tool input carries the exact path but
+      // not the post-edit file contents. Read the current file so history
+      // reloads can reconstruct the same artifact the live stream showed.
+      if (call.toolName === 'edit' && !resultLooksFailed && toolInput.file_path) {
+        const filepath = toolInput.file_path as string
+        const filename = filepath?.split('/').pop() || 'untitled'
+        const ext = filename.split('.').pop()?.toLowerCase() || ''
+        const langMap: Record<string, string> = {
+          html: 'html',
+          css: 'css',
+          js: 'javascript',
+          ts: 'typescript',
+          tsx: 'typescript',
+          jsx: 'javascript',
+          py: 'python',
+          md: 'markdown',
+          json: 'json',
+          svg: 'svg',
+          sh: 'bash',
+          yml: 'yaml',
+          yaml: 'yaml',
+        }
+        const renderMap: Record<string, string> = {
+          html: 'html',
+          svg: 'svg',
+          md: 'markdown',
+          markdown: 'markdown',
+        }
+        const language = langMap[ext] || ext || 'text'
+        let content = ''
+        try {
+          const st = nodeFs.statSync(filepath)
+          if (st.isFile() && st.size <= 1_000_000) content = nodeFs.readFileSync(filepath, 'utf8')
+        } catch {
+          // Keep a path-backed artifact so the desktop can attempt a lazy read.
+        }
+        artifacts.push({
+          id: `artifact_tc_${call.toolId}`,
+          type: 'file',
+          renderType: renderMap[language] || 'code',
+          filename,
+          filepath,
+          language,
+          content,
           toolCallId: `tc_${call.toolId}`,
         })
       }
@@ -2372,8 +2426,10 @@ export class Session {
       }
     }
 
+    const resultLooksFailed = output.startsWith('Error:')
+
     // File writes (write tool)
-    if (toolName === 'write' && toolInput.file_path && toolInput.content) {
+    if (toolName === 'write' && !resultLooksFailed && toolInput.file_path && toolInput.content) {
       const filepath = toolInput.file_path as string
       const filename = filepath?.split('/').pop() || 'untitled'
       const language = langFromPath(filepath || '')
@@ -2387,6 +2443,33 @@ export class Session {
         filepath,
         language,
         content: toolInput.content as string,
+      }
+    }
+
+    // File edits (edit tool). The model supplied the path structurally;
+    // read the post-edit file when it is small enough, otherwise emit a
+    // path-backed artifact and let the desktop lazy-read it on demand.
+    if (toolName === 'edit' && !resultLooksFailed && toolInput.file_path) {
+      const filepath = toolInput.file_path as string
+      const filename = filepath?.split('/').pop() || 'untitled'
+      const language = langFromPath(filepath || '')
+      let content = ''
+      try {
+        const st = nodeFs.statSync(filepath)
+        if (st.isFile() && st.size <= 1_000_000) content = nodeFs.readFileSync(filepath, 'utf8')
+      } catch {
+        // Keep a path-backed artifact so the desktop can attempt a lazy read.
+      }
+      return {
+        type: 'artifact',
+        id: `artifact_${toolCallId}_${Date.now()}`,
+        toolCallId,
+        artifactType: 'file',
+        renderType: langToRenderType(language),
+        filename,
+        filepath,
+        language,
+        content,
       }
     }
 
@@ -2981,11 +3064,7 @@ export interface SessionOptions {
   maxDurationMs?: number
 }
 
-export function createSession(
-  id: string,
-  config: AgentConfig,
-  opts?: SessionOptions,
-): Session {
+export function createSession(id: string, config: AgentConfig, opts?: SessionOptions): Session {
   const provider = opts?.provider || config.defaults.provider
   const model = opts?.model || config.defaults.model
 

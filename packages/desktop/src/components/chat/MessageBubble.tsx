@@ -21,9 +21,9 @@ import { useAttachmentBlobUrl } from '../../lib/attachments.js'
 import { connection } from '../../lib/connection.js'
 import type { ChatImageAttachment, CitationSource } from '../../lib/store.js'
 import { type ChatMessage, useStore } from '../../lib/store.js'
-import { artifactStore } from '../../lib/store/artifactStore.js'
 import { projectStore } from '../../lib/store/projectStore.js'
 import { useActiveSessionState } from '../../lib/store/sessionStore.js'
+import { fileBasename, openWorkspaceFileArtifact } from '../../lib/workspaceArtifacts.js'
 import { ImageViewer } from './ImageViewer.js'
 import { MarkdownRenderer } from './MarkdownRenderer.js'
 import { SourceCards } from './SourceCards.js'
@@ -114,12 +114,6 @@ function ImageAttachmentChip({ attachment, sessionId, onOpen }: ImageAttachmentC
 // interleave walker dispatch per-kind in a single pass.
 const MESSAGE_MARKER_RE = /\[(img|file|dir):([^\]]+)\]/g
 
-function fileBasename(p: string): string {
-  const clean = p.replace(/\/+$/, '')
-  const idx = clean.lastIndexOf('/')
-  return idx >= 0 ? clean.slice(idx + 1) : clean
-}
-
 function fileIconFor(name: string) {
   const renderType = classifyUpload(undefined, name)
   if (renderType === 'image') return ImageIcon
@@ -127,35 +121,6 @@ function fileIconFor(name: string) {
   if (renderType === 'pdf' || renderType === 'docx' || renderType === 'markdown') return FileText
   if (renderType === 'code') return FileText
   return FileIcon
-}
-
-function openFileArtifact(relPath: string) {
-  const active = projectStore
-    .getState()
-    .projects.find((p) => p.id === projectStore.getState().activeProjectId)
-  const workspaceRoot = active?.workspacePath
-  if (!workspaceRoot) return
-  const absPath = relPath.startsWith('/')
-    ? relPath
-    : `${workspaceRoot.replace(/\/$/, '')}/${relPath}`
-  const name = fileBasename(relPath) || relPath
-  const renderType = classifyUpload(undefined, relPath) ?? 'code'
-  const id = `upload:${absPath}`
-  artifactStore.getState().addArtifact({
-    id,
-    type: 'file',
-    source: 'upload',
-    renderType,
-    filename: name,
-    filepath: absPath,
-    sourcePath: absPath,
-    language: '',
-    content: '',
-    toolCallId: id,
-    timestamp: Date.now(),
-  })
-  artifactStore.getState().setArtifactPanelOpen(true)
-  artifactStore.getState().setActiveArtifact(id)
 }
 
 function navigateToFolder(relPath: string) {
@@ -259,7 +224,13 @@ function UserMessageContent({
           type="button"
           className="message__file-chip"
           title={value}
-          onClick={() => openFileArtifact(value)}
+          onClick={() =>
+            openWorkspaceFileArtifact(value, {
+              filename: name,
+              allowUnknownExtension: true,
+              source: 'upload',
+            })
+          }
         >
           <Icon size={14} strokeWidth={1.5} className="message__file-chip-icon" />
           <span className="message__file-chip-name">{name}</span>

@@ -25,6 +25,7 @@ import {
   resolveInitialFolder,
   saveRecentUploadFolder,
 } from '../../lib/uploadDefaults.js'
+import { openWorkspaceFileArtifact } from '../../lib/workspaceArtifacts.js'
 import { DestinationPicker, type DestinationPickerResult } from '../files/DestinationPicker.js'
 import { MentionDropdown } from '../mentions/MentionDropdown.js'
 import { AskUserInline } from './AskUserInline.js'
@@ -363,26 +364,11 @@ export function ChatInput({
           : `${workspaceRoot.replace(/\/$/, '')}/${ref.path}`
 
       if (kind === 'file') {
-        // Open in the artifact panel, creating the artifact record if it
-        // doesn't exist yet. addArtifact dedupes by filepath, so repeated
-        // clicks reactivate the existing tab.
-        const renderType = classifyUpload(undefined, ref.path) ?? 'code'
-        const id = `upload:${absPath}`
-        artifactStore.getState().addArtifact({
-          id,
-          type: 'file',
-          source: 'upload',
-          renderType,
+        openWorkspaceFileArtifact(absPath, {
           filename: ref.name,
-          filepath: absPath,
-          sourcePath: absPath,
-          language: '',
-          content: '',
-          toolCallId: id,
-          timestamp: Date.now(),
+          allowUnknownExtension: true,
+          source: 'upload',
         })
-        artifactStore.getState().setArtifactPanelOpen(true)
-        artifactStore.getState().setActiveArtifact(id)
         return
       }
 

@@ -10,6 +10,7 @@ import {
   Globe,
   ImageIcon,
   Link,
+  Loader2,
   Network,
   Settings2,
   SquareCode,
@@ -32,6 +33,7 @@ import { ImageRenderer } from './ImageRenderer.js'
 import { PdfRenderer } from './PdfRenderer.js'
 import { PublishModal } from './PublishModal.js'
 import { XlsxRenderer } from './XlsxRenderer.js'
+import { useWorkspaceText } from './useWorkspaceText.js'
 
 type IconCmp = ComponentType<{ size?: number; strokeWidth?: number; className?: string }>
 
@@ -105,66 +107,114 @@ function ArtifactBody({
   artifact: Artifact
   mode: 'preview' | 'source'
 }) {
-  if (mode === 'source') {
-    const lang =
-      artifact.renderType === 'html'
-        ? 'html'
-        : artifact.renderType === 'svg'
-          ? 'xml'
-          : artifact.renderType === 'mermaid'
-            ? 'text'
-            : artifact.language
+  const shouldLoadText =
+    Boolean(artifact.sourcePath) && !artifact.content && !isBinaryRenderType(artifact.renderType)
+  const workspaceText = useWorkspaceText(shouldLoadText ? artifact.sourcePath || null : null)
+
+  if (shouldLoadText && (workspaceText.loading || workspaceText.content === null)) {
     return (
-      <div className="art-panel__code">
-        <HighlightedBlock code={artifact.content} lang={lang} />
+      <div className="art-panel__loading">
+        <Loader2 size={14} strokeWidth={1.5} className="art-panel__spin" />
+        <span>Loading {artifact.filename || artifact.sourcePath}...</span>
       </div>
     )
   }
-  const title = artifact.title || artifact.filename || 'Artifact'
-  switch (artifact.renderType) {
+
+  if (shouldLoadText && workspaceText.error) {
+    return (
+      <FileReadFailure
+        path={artifact.sourcePath || artifact.filepath}
+        error={workspaceText.error}
+      />
+    )
+  }
+
+  const artifactContent = shouldLoadText ? (workspaceText.content ?? '') : artifact.content
+  const artifactForRender =
+    artifactContent === artifact.content ? artifact : { ...artifact, content: artifactContent }
+
+  if (mode === 'source') {
+    const lang =
+      artifactForRender.renderType === 'html'
+        ? 'html'
+        : artifactForRender.renderType === 'svg'
+          ? 'xml'
+          : artifactForRender.renderType === 'mermaid'
+            ? 'text'
+            : artifactForRender.language
+    return (
+      <div className="art-panel__code">
+        <HighlightedBlock code={artifactForRender.content} lang={lang} />
+      </div>
+    )
+  }
+  const title = artifactForRender.title || artifactForRender.filename || 'Artifact'
+  switch (artifactForRender.renderType) {
     case 'html':
-      return <HtmlIframe content={artifact.content} title={title} />
+      return <HtmlIframe content={artifactForRender.content} title={title} />
     case 'svg':
-      return <SvgFrame content={artifact.content} />
+      return <SvgFrame content={artifactForRender.content} />
     case 'mermaid':
-      return <MermaidIframe content={artifact.content} title={title} />
+      return <MermaidIframe content={artifactForRender.content} title={title} />
     case 'markdown':
       return (
         <div className="art-panel__doc">
-          <MarkdownRenderer content={artifact.content} />
+          <MarkdownRenderer content={artifactForRender.content} />
         </div>
       )
     case 'docx':
-      return artifact.sourcePath ? (
-        <DocxRenderer sourcePath={artifact.sourcePath} filename={artifact.filename} />
+      return artifactForRender.sourcePath ? (
+        <DocxRenderer
+          sourcePath={artifactForRender.sourcePath}
+          filename={artifactForRender.filename}
+        />
       ) : (
         <MissingSourcePath />
       )
     case 'xlsx':
-      return artifact.sourcePath ? (
-        <XlsxRenderer sourcePath={artifact.sourcePath} filename={artifact.filename} />
+      return artifactForRender.sourcePath ? (
+        <XlsxRenderer
+          sourcePath={artifactForRender.sourcePath}
+          filename={artifactForRender.filename}
+        />
       ) : (
         <MissingSourcePath />
       )
     case 'pdf':
-      return artifact.sourcePath ? (
-        <PdfRenderer sourcePath={artifact.sourcePath} filename={artifact.filename} />
+      return artifactForRender.sourcePath ? (
+        <PdfRenderer
+          sourcePath={artifactForRender.sourcePath}
+          filename={artifactForRender.filename}
+        />
       ) : (
         <MissingSourcePath />
       )
     case 'image':
-      return artifact.sourcePath ? (
-        <ImageRenderer sourcePath={artifact.sourcePath} filename={artifact.filename} />
+      return artifactForRender.sourcePath ? (
+        <ImageRenderer
+          sourcePath={artifactForRender.sourcePath}
+          filename={artifactForRender.filename}
+        />
       ) : (
         <MissingSourcePath />
       )
     default:
       return (
         <div className="art-panel__code">
-          <HighlightedBlock code={artifact.content} lang={artifact.language} />
+          <HighlightedBlock code={artifactForRender.content} lang={artifactForRender.language} />
         </div>
       )
   }
+}
+
+function FileReadFailure({ path, error }: { path?: string; error: string }) {
+  return (
+    <div className="art-panel__failure">
+      <div className="art-panel__failure-title">Couldn't read this file.</div>
+      <div className="art-panel__failure-reason">{error}</div>
+      {path && <div className="art-panel__failure-hint">{path}</div>}
+    </div>
+  )
 }
 
 function MissingSourcePath() {
