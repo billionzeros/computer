@@ -1,0 +1,27 @@
+packages/agent-core/src/harness/harness-session.ts
+  9ed1b8a05a616ed3 20,110-117,131,217-220,389,409,413-419,433-436,475
+packages/agent-core/src/harness/codex-harness-session.ts
+  9ed1b8a05a616ed3 32,245-263,280,398-400,593,833,925,950-957,983-990,1149-1165,1249-1266,1350-1351,1353-1375
+packages/agent-core/src/harness/turn-telemetry.ts
+  9ed1b8a05a616ed3 1-153
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.3.4",
+  "base_commit_sha": "fe21f65438dbd24fa1c91770bf03fd287907a1d4",
+  "prompts": {
+    "9ed1b8a05a616ed3": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "c563db1d-cada-4742-93b3-43ca1a85c9c4",
+        "model": "claude-opus-4-7"
+      },
+      "human_author": "Om Gupta",
+      "messages": [],
+      "total_additions": 2258,
+      "total_deletions": 376,
+      "accepted_lines": 285,
+      "overriden_lines": 0
+    }
+  }
+}
