@@ -1,12 +1,12 @@
 {
-  "version": "2.1.4",
-  "gitHash": "0fe0d17",
+  "version": "2.1.5",
+  "gitHash": "",
   "releaseUrl": "https://github.com/billionzeros/computer/releases",
-  "changelog": "Other:\n- chore(tasks): remove \"Start a task\" composer from All tasks view (#24)\n- [codex] clarify web search action labels (#23)",
-  "publishedAt": "2026-05-04T09:33:48.521Z",
-  "cli": "https://github.com/billionzeros/computer/releases/download/v2.1.4/anton-cli.mjs",
+  "changelog": "Other:\n- fix(byok): support user OpenAI/Anthropic API keys + working effort pill (#25)",
+  "publishedAt": "2026-05-04T11:41:41.834Z",
+  "cli": "https://github.com/billionzeros/computer/releases/download/v2.1.5/anton-cli.mjs",
   "sidecar": {
-    "linux-arm64": "https://github.com/billionzeros/computer/releases/download/v2.1.4/anton-sidecar-linux-arm64",
-    "linux-amd64": "https://github.com/billionzeros/computer/releases/download/v2.1.4/anton-sidecar-linux-amd64"
+    "linux-arm64": "https://github.com/billionzeros/computer/releases/download/v2.1.5/anton-sidecar-linux-arm64",
+    "linux-amd64": "https://github.com/billionzeros/computer/releases/download/v2.1.5/anton-sidecar-linux-amd64"
   }
 }
