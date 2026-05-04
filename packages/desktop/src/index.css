@@ -1267,7 +1267,7 @@ button {
 }
 
 .chat-shell__confirm {
-  padding: 0 24px;
+  margin-bottom: 12px;
 }
 
 .chat-shell__sync-loader {

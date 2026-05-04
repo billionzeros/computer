@@ -64,12 +64,17 @@ const MAX_IMAGE_BYTES = 10 * 1024 * 1024
  *  - Claude Code harness: CLI has no thinking/budget flag — always false.
  *  - Codex harness: always true (o-series under the hood, per-turn effort).
  *  - API-key models: regex matches known reasoning-capable families.
+ *
+ * Keep this in sync with `buildDirectApiModel`'s reasoning detection in
+ * packages/agent-core/src/session.ts — both decide the same question.
  */
 function supportsReasoningEffort(provider: string, model: string): boolean {
   if (provider === 'claude') return false
   if (provider === 'codex') return true
   const m = model.toLowerCase()
-  return /opus|sonnet|gemini-2\.5|o1|o3|o4|reason|thinking|deepseek-r/.test(m)
+  return /gpt-5|opus|sonnet|gemini-2\.5|gemini.*pro|o1|o3|o4|r1|reason|thinking|deepseek-r/.test(
+    m,
+  )
 }
 
 /**
