@@ -228,6 +228,100 @@ export interface ToolCallbacks {
   getParentForkContext?: () => ParentForkContext | undefined
 }
 
+/**
+ * Names of every tool registered by `buildTools` itself (i.e. not from
+ * MCP servers or OAuth connector managers). Used by `categorizeTools`
+ * to split a flattened tool list into "system" vs. "MCP/connector" for
+ * the Context gauge popover. Keep this in sync when adding/removing
+ * built-in tools above. New tools added to `buildAntonCoreTools` should
+ * also land here.
+ */
+export const BUILT_IN_TOOL_NAMES = new Set<string>([
+  // Filesystem + shell + git + http
+  'shell',
+  'read',
+  'write',
+  'edit',
+  'glob',
+  'list',
+  'grep',
+  'git',
+  'http_api',
+  // Browser + media
+  'browser',
+  'image',
+  'clipboard',
+  // Web (Anton-native)
+  'web_search',
+  'web_research',
+  // Task / planning
+  'todo',
+  'task_tracker',
+  'plan',
+  'ask_user',
+  'artifact',
+  // Sub-agent / routine
+  'sub_agent',
+  'spawn_sub_agent',
+  'shared_state',
+  'routine',
+  'deliver_result',
+  // Anton platform
+  'memory',
+  'notification',
+  'database',
+  'publish',
+  'skill',
+  'set_session_title',
+  'update_project_context',
+  'activate_workflow',
+  // Pi-SDK low-level (rarely surfaced but possible)
+  'filesystem',
+  'process',
+  'network',
+])
+
+export interface CategorizedToolSizes {
+  /** Built-in tool count. */
+  systemToolCount: number
+  /** MCP-server + direct-OAuth-connector tool count. */
+  mcpToolCount: number
+  /** Sum of `name + description + JSON.stringify(parameters)` lengths for built-ins. */
+  systemToolChars: number
+  /** Same, for MCP/connector tools. */
+  mcpToolChars: number
+}
+
+/**
+ * Split a flattened `AgentTool[]` (as returned by `buildTools`) into
+ * built-in vs. MCP/connector buckets and report char-budget per bucket.
+ * The Context gauge popover divides the chars by 4 to estimate tokens.
+ */
+export function categorizeTools(tools: AgentTool[]): CategorizedToolSizes {
+  let systemToolCount = 0
+  let mcpToolCount = 0
+  let systemToolChars = 0
+  let mcpToolChars = 0
+  for (const tool of tools) {
+    const isBuiltIn = BUILT_IN_TOOL_NAMES.has(tool.name)
+    let chars = tool.name.length + (tool.description?.length ?? 0)
+    try {
+      chars += JSON.stringify(tool.parameters ?? {}).length
+    } catch {
+      // Parameter schemas should always serialize, but be defensive — a
+      // bad schema must not break the gauge.
+    }
+    if (isBuiltIn) {
+      systemToolCount += 1
+      systemToolChars += chars
+    } else {
+      mcpToolCount += 1
+      mcpToolChars += chars
+    }
+  }
+  return { systemToolCount, mcpToolCount, systemToolChars, mcpToolChars }
+}
+
 export function buildTools(
   config: AgentConfig,
   callbacks?: ToolCallbacks,

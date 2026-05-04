@@ -262,17 +262,25 @@ export function resolveModel(provider: string, modelId: string): Model<Api> | un
 
   return undefined
 }
-import { type AskUserHandler, CORE_SYSTEM_PROMPT, type ToolCallbacks, buildTools } from './agent.js'
+import {
+  type AskUserHandler,
+  CORE_SYSTEM_PROMPT,
+  type ToolCallbacks,
+  buildTools,
+  categorizeTools,
+} from './agent.js'
 import {
   type CompactionConfig,
   type CompactionState,
   compactContext,
   createInitialCompactionState,
+  estimateTokens,
   getDefaultCompactionConfig,
 } from './compaction.js'
 import { type ContextInfo, type MemoryData, assembleConversationContext } from './context.js'
 import {
   type LiveConnectorSummary,
+  type SessionPromptLayerSizes,
   buildActiveConnectorsLayer,
   buildActiveSkillsLayer,
   buildAgentContextLayer,
@@ -280,6 +288,7 @@ import {
   buildProjectMemoryInstructionsLayer,
   buildSurfaceLayer,
   buildWorkflowsLayer,
+  emptyPromptLayerSizes,
   systemReminder,
 } from './prompt-layers.js'
 import {
@@ -375,6 +384,7 @@ export type SessionEvent =
   | { type: 'sub_agent_progress'; toolCallId: string; content: string }
   | { type: 'tasks_update'; tasks: import('@anton/protocol').TaskItem[] }
   | { type: 'token_update'; usage: TokenUsage }
+  | { type: 'context_update'; breakdown: import('@anton/protocol').ContextBreakdown }
   | {
       type: 'browser_state'
       url: string
@@ -487,6 +497,20 @@ export class Session {
   private messageSpanIds: Map<string, string> = new Map()
   private static readonly MESSAGE_SPAN_CAP = 200
   private _promptVersion?: string // hash of assembled system prompt
+  // Char-count snapshot of every system-prompt layer from the most recent
+  // getSystemPrompt() call. Powers ContextBreakdown emission without
+  // re-running the layer builders. Empty until the first build.
+  private _lastLayerSizes: SessionPromptLayerSizes = emptyPromptLayerSizes()
+  // Calibration factor applied to estimated breakdowns: actual / estimated
+  // input tokens from the most recent completed turn. Defaults to 1.0
+  // (no calibration) until we have a real sample.
+  private _contextEstimateScale = 1.0
+  // Sum of the (already-scaled) breakdown categories captured at the
+  // most recent `turn_start`. Used to calibrate scale at `turn_end`
+  // against pre-turn state, not post-turn — pi-ai appends the assistant
+  // response to messages before turn_end fires, which would otherwise
+  // bias the calibration low.
+  private _preTurnEstimateSum: number | null = null
 
   // Safety limits
   private maxTokenBudget: number
@@ -541,6 +565,8 @@ export class Session {
     surface?: SurfaceInfo
     /** Override the computed system prompt (used by fork children to inherit parent's prompt). */
     systemPromptOverride?: string
+    /** Persisted Context-gauge calibration factor (resumed sessions only). */
+    contextEstimateScale?: number
   }) {
     this.id = opts.id
     this.log = withContext(baseLog, { sessionId: opts.id })
@@ -591,6 +617,9 @@ export class Session {
         configCompaction?.preserveRecentCount ?? defaultCompaction.preserveRecentCount,
     }
     this.compactionState = opts.compactionState || createInitialCompactionState()
+    if (typeof opts.contextEstimateScale === 'number' && opts.contextEstimateScale > 0) {
+      this._contextEstimateScale = Math.min(2.0, Math.max(0.5, opts.contextEstimateScale))
+    }
 
     // Runtime strings from config — cast to the SDK's nominal types
     const model = resolveModel(opts.provider, opts.model)
@@ -1397,6 +1426,20 @@ export class Session {
   }
 
   /**
+   * Push a fresh ContextBreakdown into the active event stream. No-op
+   * when no `processMessage` is in flight (between turns) — in that
+   * case the server is expected to read `getContextBreakdown()`
+   * directly and emit `context_update` to the client itself, since
+   * tools and prompt-layer changes between turns still need to refresh
+   * the gauge.
+   */
+  private pushContextUpdate(): void {
+    if (!this.pushEvent) return
+    const breakdown = this.getContextBreakdown()
+    if (breakdown) this.pushEvent({ type: 'context_update', breakdown })
+  }
+
+  /**
    * Switch model mid-session. pi SDK handles this gracefully —
    * keeps all messages, next LLM call uses the new model.
    */
@@ -1412,6 +1455,10 @@ export class Session {
     this.provider = provider
     this.model = model
     this.persist()
+    // Context window may have changed (e.g. opus 1M → sonnet 200k).
+    // Refresh the gauge immediately when a turn is active; otherwise
+    // the server emits explicitly at the call site.
+    this.pushContextUpdate()
   }
 
   /** Re-build the tools list and push it to the running agent — call after adding/removing a connector. */
@@ -1425,6 +1472,8 @@ export class Session {
     )
     this.piAgent.setTools(newTools)
     this.log.info({ toolCount: newTools.length }, 'refreshed tools')
+    // Tool schemas changed — gauge bytes shifted between system/MCP buckets.
+    this.pushContextUpdate()
   }
 
   /** Update connector prompt summaries after connector state changes. */
@@ -1913,6 +1962,8 @@ export class Session {
       compactionState: this.compactionState,
       lastTasks: this._lastTasks.length > 0 ? this._lastTasks : undefined,
       usage: this.cumulativeUsage.totalTokens > 0 ? this.getCumulativeUsage() : undefined,
+      contextEstimateScale:
+        this._contextEstimateScale !== 1.0 ? this._contextEstimateScale : undefined,
     }
     const basePath = this.projectId ? getProjectSessionsDir(this.projectId) : undefined
     saveSession(persisted, basePath)
@@ -1933,6 +1984,23 @@ export class Session {
         if (innerEvent.type === 'thinking_delta' && innerEvent.delta) {
           return [{ type: 'thinking', text: innerEvent.delta }]
         }
+        return []
+      }
+
+      case 'turn_start': {
+        // Snapshot the pre-turn breakdown so calibration at turn_end
+        // compares against the prompt that was actually sent to the
+        // model — pi-ai appends the assistant response to messages
+        // BEFORE turn_end fires.
+        const pre = this.getContextBreakdown()
+        this._preTurnEstimateSum = pre
+          ? pre.systemPrompt +
+            pre.systemTools +
+            pre.mcpTools +
+            pre.skills +
+            pre.memoryFiles +
+            pre.messages
+          : null
         return []
       }
 
@@ -2004,6 +2072,12 @@ export class Session {
           this.cumulativeUsage.totalTokens += this.lastTurnUsage.totalTokens
           this.cumulativeUsage.cacheReadTokens += this.lastTurnUsage.cacheReadTokens
           this.cumulativeUsage.cacheWriteTokens += this.lastTurnUsage.cacheWriteTokens
+          // Calibrate the breakdown estimate against the model's reported
+          // input_tokens — drifts toward reality across turns. Cheap math,
+          // bounded scaling factor.
+          if (this.lastTurnUsage.inputTokens > 0) {
+            this.updateContextEstimateScale(this.lastTurnUsage.inputTokens)
+          }
         }
         // Surface LLM errors (e.g. invalid API key, rate limits) that the pi SDK captures
         if (msg?.stopReason === 'error' && msg?.errorMessage) {
@@ -2013,6 +2087,13 @@ export class Session {
         const events: SessionEvent[] = [
           { type: 'token_update' as const, usage: this.getCumulativeUsage() },
         ]
+        // Emit ContextBreakdown right after every turn — the message
+        // history grew, calibration may have shifted, and skills/memory
+        // can change between turns. Server forwards this verbatim.
+        const breakdown = this.getContextBreakdown()
+        if (breakdown) {
+          events.push({ type: 'context_update' as const, breakdown })
+        }
         // If the LLM call failed, emit an error event so the client shows the real reason
         if (msg?.stopReason === 'error') {
           events.push({
@@ -2447,24 +2528,44 @@ export class Session {
   }
 
   private getSystemPrompt(): string {
-    // Fork children inherit the parent's fully-rendered system prompt
-    if (this.systemPromptOverride) return this.systemPromptOverride
+    // Fork children inherit the parent's fully-rendered system prompt.
+    // Snapshot its length under `identity` so getContextBreakdown still
+    // attributes the prompt — otherwise sub-agents report 0 across every
+    // category except messages and tools.
+    if (this.systemPromptOverride) {
+      const sizes = emptyPromptLayerSizes()
+      sizes.identity = this.systemPromptOverride.length
+      this._lastLayerSizes = sizes
+      return this.systemPromptOverride
+    }
+
+    // Reset sizes — every call re-builds from scratch.
+    const sizes = emptyPromptLayerSizes()
 
     // Layer 0: Core system prompt — self-contained behavioral instructions.
     // Identical for all deployments. Works perfectly even if all other layers are empty.
     let prompt = CORE_SYSTEM_PROMPT
+    sizes.identity += CORE_SYSTEM_PROMPT.length
 
-    prompt +=
+    const orientation =
       '\n\nContextual information, rules, and memory are provided in <system-reminder> tags below. These are injected by the system and should be treated as trusted context. Priority order: workspace rules > user rules > memory > other context.'
+    prompt += orientation
+    sizes.identity += orientation.length
 
     // Layer 1: Workspace rules (.anton.md) — highest priority contextual layer
     if (this.workspacePath) {
-      const workspaceRules = loadWorkspaceRules(this.workspacePath)
-      prompt += systemReminder('Workspace Rules', workspaceRules)
+      const workspaceRulesBlock = systemReminder(
+        'Workspace Rules',
+        loadWorkspaceRules(this.workspacePath),
+      )
+      prompt += workspaceRulesBlock
+      sizes.workspaceRules += workspaceRulesBlock.length
     }
 
     // Layer 2: User rules (append.md + rules/*.md from ~/.anton/prompts/)
-    prompt += systemReminder('User Rules', loadUserRules())
+    const userRulesBlock = systemReminder('User Rules', loadUserRules())
+    prompt += userRulesBlock
+    sizes.userRules += userRulesBlock.length
 
     // Layer 3: Current context — workspace, project, date
     const contextLines: string[] = []
@@ -2506,21 +2607,39 @@ export class Session {
       contextLines.push('- Sudo: not available')
     }
 
-    prompt += systemReminder('Current Context', contextLines.join('\n'))
+    const currentContextBlock = systemReminder('Current Context', contextLines.join('\n'))
+    prompt += currentContextBlock
+    sizes.currentContext += currentContextBlock.length
 
     // Shared layers — wording lives in prompt-layers.ts so the harness
     // path sees byte-identical blocks. Do not inline here.
-    prompt += buildSurfaceLayer(this.surface)
-    prompt += buildMemoryLayer(this.memoryData)
-    prompt += buildProjectMemoryInstructionsLayer(this.projectId)
-    prompt += buildAgentContextLayer(this.agentInstructions, this.agentMemory)
-    prompt += buildActiveConnectorsLayer(this.liveConnectors)
+    const surfaceBlock = buildSurfaceLayer(this.surface)
+    prompt += surfaceBlock
+    sizes.surface += surfaceBlock.length
+
+    const memoryBlock = buildMemoryLayer(this.memoryData)
+    prompt += memoryBlock
+    sizes.memory += memoryBlock.length
+
+    const projectMemoryBlock = buildProjectMemoryInstructionsLayer(this.projectId)
+    prompt += projectMemoryBlock
+    sizes.projectMemoryInstructions += projectMemoryBlock.length
+
+    const agentContextBlock = buildAgentContextLayer(this.agentInstructions, this.agentMemory)
+    prompt += agentContextBlock
+    sizes.agentContext += agentContextBlock.length
+
+    const connectorsBlock = buildActiveConnectorsLayer(this.liveConnectors)
+    prompt += connectorsBlock
+    sizes.connectors += connectorsBlock.length
 
     // Layer 7: Project type guidelines (code.md, document.md, etc.)
     if (this.projectType) {
       const typePrompt = loadProjectTypePrompt(this.projectType as ProjectType)
       if (typePrompt) {
-        prompt += systemReminder('Project Type Guidelines', typePrompt)
+        const typeBlock = systemReminder('Project Type Guidelines', typePrompt)
+        prompt += typeBlock
+        sizes.projectTypeGuidelines += typeBlock.length
       }
     }
 
@@ -2530,22 +2649,119 @@ export class Session {
       firstMessage: this.firstMessage,
     })
     if (refs) {
-      prompt += systemReminder('Reference Knowledge', refs)
+      const refsBlock = systemReminder('Reference Knowledge', refs)
+      prompt += refsBlock
+      sizes.referenceKnowledge += refsBlock.length
     }
 
     // Layer 9: Active skills — catalog plus auto-selected SKILL.md bodies.
-    prompt += buildActiveSkillsLayer({
+    const skillsBlock = buildActiveSkillsLayer({
       skills: this.config.skills,
       userMessage: this.latestUserMessage ?? this.firstMessage,
     })
+    prompt += skillsBlock
+    sizes.skills += skillsBlock.length
 
     // Shared layer — wording lives in prompt-layers.ts.
-    prompt += buildWorkflowsLayer(this.availableWorkflows)
+    const workflowsBlock = buildWorkflowsLayer(this.availableWorkflows)
+    prompt += workflowsBlock
+    sizes.workflows += workflowsBlock.length
 
     // Compute prompt version hash for tracing
     this._promptVersion = hashPromptVersion(prompt)
 
+    this._lastLayerSizes = sizes
+
     return prompt
+  }
+
+  /**
+   * Per-category breakdown of this session's current prompt budget.
+   * Powers the in-composer Context gauge + popover. Returns null when the
+   * resolved model has no context window (defensive — pi-ai's catalog
+   * always populates it for our supported models).
+   *
+   * Pi SDK path computes the full split: sums layer sizes from the most
+   * recent `getSystemPrompt()` call into named categories, splits the live
+   * tool list (built-in vs MCP / OAuth-connector), estimates conversation
+   * history via `estimateTokens`, and reserves `(1 − threshold)` of the
+   * window for autocompaction headroom. Char counts get divided by 4 to
+   * match the same heuristic used by compaction.
+   */
+  getContextBreakdown(): import('@anton/protocol').ContextBreakdown | null {
+    const contextWindow =
+      this.resolvedModel?.contextWindow ?? this.compactionConfig.maxContextTokens
+    if (!contextWindow || contextWindow <= 0) return null
+
+    // Make sure we have a layer-size snapshot — the very first read can
+    // happen before any prompt rebuild (e.g. fresh session).
+    if (this._lastLayerSizes === undefined) {
+      this._lastLayerSizes = emptyPromptLayerSizes()
+    }
+    const s = this._lastLayerSizes
+
+    // Group every "system prompt-ish" layer into one bucket. Skills and
+    // memory keep their own rows; everything else (identity, rules,
+    // current context, surface, agent context, connectors, project type,
+    // references, workflows, project memory instructions) lumps in here.
+    const systemPromptChars =
+      s.identity +
+      s.workspaceRules +
+      s.userRules +
+      s.currentContext +
+      s.surface +
+      s.projectMemoryInstructions +
+      s.agentContext +
+      s.connectors +
+      s.projectTypeGuidelines +
+      s.referenceKnowledge +
+      s.workflows
+
+    const toolSizes = categorizeTools(this.piAgent.state.tools)
+
+    const messageTokens = estimateTokens(this.piAgent.state.messages)
+    const autocompactBuffer = Math.floor(
+      contextWindow * Math.max(0, 1 - this.compactionConfig.threshold),
+    )
+
+    const charsToTokens = (chars: number) => Math.ceil(chars / 4)
+    const scale = this._contextEstimateScale > 0 ? this._contextEstimateScale : 1.0
+    const apply = (n: number) => Math.max(0, Math.round(n * scale))
+
+    return {
+      contextWindow,
+      systemPrompt: apply(charsToTokens(systemPromptChars)),
+      systemTools: apply(charsToTokens(toolSizes.systemToolChars)),
+      mcpTools: apply(charsToTokens(toolSizes.mcpToolChars)),
+      skills: apply(charsToTokens(s.skills)),
+      memoryFiles: apply(charsToTokens(s.memory)),
+      messages: apply(messageTokens),
+      autocompactBuffer,
+      source: 'pi-sdk',
+    }
+  }
+
+  /**
+   * Update the calibration factor after a turn finishes. Compares the
+   * model's reported `input_tokens` against the breakdown snapshot
+   * captured at `turn_start` (pre-turn) — calibrating against the
+   * post-turn breakdown would bias scale low because pi-ai appends the
+   * assistant response to messages before turn_end fires.
+   * Bounded to [0.5, 2.0] so a one-off outlier (very large image, weird
+   * cache behaviour) can't blow the estimate up.
+   */
+  updateContextEstimateScale(actualInputTokens: number): void {
+    const preTurnSum = this._preTurnEstimateSum
+    if (preTurnSum === null || preTurnSum <= 0 || actualInputTokens <= 0) return
+    // The pre-turn sum already had the prior scale applied — back it
+    // out so we end up with a multiplicative factor on the raw estimate.
+    const priorScale = this._contextEstimateScale > 0 ? this._contextEstimateScale : 1.0
+    const rawEstimate = preTurnSum / priorScale
+    if (rawEstimate <= 0) return
+    const next = actualInputTokens / rawEstimate
+    this._contextEstimateScale = Math.min(2.0, Math.max(0.5, next))
+    // Consume the snapshot — next turn will capture a fresh one at turn_start.
+    this._preTurnEstimateSum = null
   }
 
   /**
@@ -2558,6 +2774,8 @@ export class Session {
   setSurface(surface: SurfaceInfo | undefined): void {
     this.surface = surface
     this.piAgent.setSystemPrompt(this.getSystemPrompt())
+    // Surface layer changed — refresh the gauge if a turn is active.
+    this.pushContextUpdate()
   }
 
   /**
@@ -2576,6 +2794,8 @@ export class Session {
     this.contextInfo = contextInfo
     // Update system prompt with new context
     this.piAgent.setSystemPrompt(this.getSystemPrompt())
+    // Memory bytes changed — refresh the gauge if a turn is active.
+    this.pushContextUpdate()
     return contextInfo
   }
 }
@@ -2818,6 +3038,7 @@ export function resumeSession(
     title: persisted.title,
     createdAt: persisted.createdAt,
     compactionState: persisted.compactionState || undefined,
+    contextEstimateScale: persisted.contextEstimateScale,
     projectId: opts?.projectId,
     projectContext: opts?.projectContext,
     projectType: opts?.projectType,

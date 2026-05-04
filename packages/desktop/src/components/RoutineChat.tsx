@@ -8,7 +8,6 @@ import { projectStore } from '../lib/store/projectStore.js'
 import { sessionStore, useSessionState } from '../lib/store/sessionStore.js'
 import { ChatInput } from './chat/ChatInput.js'
 import { ConfirmDialog } from './chat/ConfirmDialog.js'
-import { ContextIndicator } from './chat/ContextIndicator.js'
 import { MessageList } from './chat/MessageList.js'
 import { PlanReviewOverlay } from './chat/PlanReviewOverlay.js'
 import { RoutineChatHeader } from './chat/RoutineChatHeader.js'
@@ -241,7 +240,6 @@ export function RoutineChat() {
 
   return (
     <div className="chat-shell">
-      <ContextIndicator contextInfo={activeConv?.contextInfo} sessionId={activeConv?.sessionId} />
       {isSyncing && messages.length === 0 ? (
         /* First load — nothing local to show yet, show a subtle spinner */
         <div className="chat-shell__sync-loader">

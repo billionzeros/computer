@@ -30,6 +30,7 @@ import { MentionDropdown } from '../mentions/MentionDropdown.js'
 import { AskUserInline } from './AskUserInline.js'
 import { ComposerAddMenu } from './ComposerAddMenu.js'
 import { ConnectorBanner } from './ConnectorToolbar.js'
+import { ContextGauge } from './ContextGauge.js'
 import { ModelSelector } from './ModelSelector.js'
 import type { RichInputHandle } from './RichInput.js'
 import { RichInput } from './RichInput.js'
@@ -811,6 +812,7 @@ export function ChatInput({
               )}
             </div>
             <div className="composer__toolbar-right">
+              <ContextGauge />
               <ModelSelector />
               {isCurrentSessionWorking ? (
                 <>

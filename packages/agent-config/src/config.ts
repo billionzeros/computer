@@ -136,6 +136,13 @@ export interface PersistedSession {
     cacheReadTokens: number
     cacheWriteTokens: number
   }
+  /**
+   * Calibration factor for the in-composer Context gauge — actual
+   * `input_tokens` / pre-turn estimate from the most recent completed
+   * turn. Persisted so a resumed session keeps its calibration instead
+   * of starting from 1.0 again.
+   */
+  contextEstimateScale?: number
 }
 
 // ── Main config ─────────────────────────────────────────────────────
