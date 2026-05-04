@@ -28,6 +28,7 @@ import {
   loadSession,
   loadUserRules,
   loadWorkspaceRules,
+  providerHasKey,
   saveSession,
   saveSessionTasks,
 } from '@anton/agent-config'
@@ -223,7 +224,7 @@ const OPENROUTER_BASE_URL = 'https://openrouter.ai/api/v1'
  * OpenRouter uses the OpenAI-compatible completions API for all models.
  * Model IDs are in "provider/model" format (e.g. "anthropic/claude-sonnet-4.6").
  */
-function buildOpenRouterModel(modelId: string) {
+function buildOpenRouterModel(modelId: string, baseUrlOverride?: string) {
   // Detect reasoning models by well-known patterns
   const reasoning = /\b(o[34]|r1|thinking|reason)\b/i.test(modelId) || /gemini.*pro/i.test(modelId)
 
@@ -232,7 +233,7 @@ function buildOpenRouterModel(modelId: string) {
     name: modelId,
     api: 'openai-completions' as const,
     provider: 'openrouter',
-    baseUrl: OPENROUTER_BASE_URL,
+    baseUrl: baseUrlOverride || OPENROUTER_BASE_URL,
     reasoning,
     input: ['text', 'image'],
     cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
@@ -242,25 +243,88 @@ function buildOpenRouterModel(modelId: string) {
 }
 
 /**
- * Resolve a model by provider + ID.
- * Tries pi-ai's built-in registry first, then falls back to the anton catalog
- * or OpenRouter's generic model builder.
+ * Direct-API providers we know how to talk to when the user supplies their own
+ * API key (BYOK). The `api` field selects the streaming protocol pi-ai uses.
  */
-export function resolveModel(provider: string, modelId: string): Model<Api> | undefined {
+const DIRECT_API_PROVIDER_DEFAULTS: Record<string, { api: string; baseUrl: string }> = {
+  openai: { api: 'openai-responses', baseUrl: 'https://api.openai.com/v1' },
+  anthropic: { api: 'anthropic-messages', baseUrl: 'https://api.anthropic.com' },
+  google: {
+    api: 'google-generative-ai',
+    baseUrl: 'https://generativelanguage.googleapis.com/v1beta',
+  },
+  groq: { api: 'openai-completions', baseUrl: 'https://api.groq.com/openai/v1' },
+  mistral: { api: 'mistral-conversations', baseUrl: 'https://api.mistral.ai' },
+}
+
+/**
+ * Build a Model-compatible object for a direct-API provider when the user
+ * supplies their own API key but the model ID isn't in pi-ai's built-in
+ * registry. The actual API call still has to succeed against the upstream
+ * provider, but at least we no longer reject the request locally.
+ */
+function buildDirectApiModel(
+  provider: string,
+  modelId: string,
+  baseUrlOverride?: string,
+): Model<Api> | undefined {
+  const defaults = DIRECT_API_PROVIDER_DEFAULTS[provider]
+  if (!defaults) return undefined
+
+  const reasoning =
+    /\b(o[34]|r1|thinking|reason)\b/i.test(modelId) ||
+    /^gpt-5/i.test(modelId) ||
+    /claude-(opus|sonnet)-4/i.test(modelId) ||
+    /gemini.*pro/i.test(modelId)
+
+  return {
+    id: modelId,
+    name: modelId,
+    api: defaults.api,
+    provider,
+    baseUrl: baseUrlOverride || defaults.baseUrl,
+    reasoning,
+    input: ['text', 'image'],
+    cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+    contextWindow: 128_000,
+    maxTokens: 16_384,
+  } as unknown as Model<Api>
+}
+
+/**
+ * Resolve a model by provider + ID.
+ * Tries pi-ai's built-in registry first, then falls back to the anton catalog,
+ * OpenRouter's generic builder, or a BYOK builder for direct-API providers
+ * (openai, anthropic, google, groq, mistral) when a user supplies their own key.
+ *
+ * `options.baseUrl` lets callers override the upstream URL — used by users
+ * pointing a provider at a self-hosted or proxy endpoint via config.
+ */
+export function resolveModel(
+  provider: string,
+  modelId: string,
+  options?: { baseUrl?: string },
+): Model<Api> | undefined {
   // pi-ai's registry (hardcoded at build time)
   const piModel = (piGetModel as (p: string, m: string) => Model<Api> | undefined)(
     provider,
     modelId,
   )
-  if (piModel) return piModel
+  if (piModel) {
+    return options?.baseUrl ? ({ ...piModel, baseUrl: options.baseUrl } as Model<Api>) : piModel
+  }
 
   // Anton (GRU LiteLLM proxy) — custom runtime registry
   if (provider === 'anton') return getAntonModel(modelId)
 
   // OpenRouter — any model ID is valid (it's a proxy for many providers)
-  if (provider === 'openrouter') return buildOpenRouterModel(modelId) as Model<Api>
+  if (provider === 'openrouter')
+    return buildOpenRouterModel(modelId, options?.baseUrl) as Model<Api>
 
-  return undefined
+  // BYOK: openai/anthropic/google/groq/mistral — accept any model ID when the
+  // user has supplied their own API key. The upstream provider validates the
+  // model name on the actual request.
+  return buildDirectApiModel(provider, modelId, options?.baseUrl)
 }
 import {
   type AskUserHandler,
@@ -622,11 +686,12 @@ export class Session {
     }
 
     // Runtime strings from config — cast to the SDK's nominal types
-    const model = resolveModel(opts.provider, opts.model)
+    const providerBaseUrl = opts.config.providers?.[opts.provider]?.baseUrl
+    const model = resolveModel(opts.provider, opts.model, { baseUrl: providerBaseUrl })
 
     if (!model) {
       throw new Error(
-        `Unknown model "${opts.model}" for provider "${opts.provider}". Model IDs must exactly match pi SDK's registry. For openrouter, use format like "anthropic/claude-sonnet-4.6". For anton, use the model name directly like "gpt-4.1" or "claude-sonnet-4.6".`,
+        `Unknown provider "${opts.provider}" for model "${opts.model}". Supported BYOK providers: openai, anthropic, google, groq, mistral, openrouter, anton. For pi SDK's built-in registry, model IDs must match exactly.`,
       )
     }
 
@@ -1440,24 +1505,57 @@ export class Session {
   }
 
   /**
-   * Switch model mid-session. pi SDK handles this gracefully —
-   * keeps all messages, next LLM call uses the new model.
+   * Switch model mid-session. pi SDK keeps all messages; the new model
+   * applies on the next LLM call.
+   *
+   * `setModel` alone isn't enough — three pieces of session state have to be
+   * reconciled or the next turn misbehaves:
+   *  - API key: fail fast here with a clear error instead of deep inside pi-ai
+   *  - thinking level: clamp on reasoning→non-reasoning transitions
+   *  - compaction.maxContextTokens: refresh when the context window changes
    */
   switchModel(provider: string, model: string): void {
-    const newModel = resolveModel(provider, model)
+    const providerBaseUrl = this.config.providers?.[provider]?.baseUrl
+    const newModel = resolveModel(provider, model, { baseUrl: providerBaseUrl })
     if (!newModel) {
       throw new Error(
-        `Unknown model "${model}" for provider "${provider}". Model IDs must exactly match pi SDK's registry. For openrouter, use format like "anthropic/claude-sonnet-4.6". For anton, use the model name directly like "gpt-4.1" or "claude-sonnet-4.6".`,
+        `Unknown provider "${provider}" for model "${model}". Supported BYOK providers: openai, anthropic, google, groq, mistral, openrouter, anton. For pi SDK's built-in registry, model IDs must match exactly.`,
       )
     }
+
+    if (!providerHasKey(provider, this.config)) {
+      throw new Error(
+        `No API key configured for provider "${provider}". Set one in the desktop app's Provider settings or via the matching environment variable.`,
+      )
+    }
+
+    const previousProvider = this.provider
+    const previousModel = this.model
+    const wasReasoning = this.resolvedModel.reasoning
+
     this.piAgent.setModel(newModel)
     this.resolvedModel = newModel
     this.provider = provider
     this.model = model
+
+    // Reasoning → non-reasoning: drop thinking level so the upstream API
+    // doesn't reject the request. Non-reasoning → reasoning stays opt-in
+    // via setThinkingLevel.
+    if (wasReasoning && !newModel.reasoning) {
+      this.piAgent.setThinkingLevel('off')
+    }
+
+    this.compactionConfig = {
+      ...this.compactionConfig,
+      maxContextTokens: getDefaultCompactionConfig(model).maxContextTokens,
+    }
+
+    this.log.info(
+      { previousProvider, previousModel, provider, model },
+      'switched model mid-session',
+    )
+
     this.persist()
-    // Context window may have changed (e.g. opus 1M → sonnet 200k).
-    // Refresh the gauge immediately when a turn is active; otherwise
-    // the server emits explicitly at the call site.
     this.pushContextUpdate()
   }
 

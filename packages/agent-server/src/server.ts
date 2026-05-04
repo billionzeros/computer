@@ -2832,7 +2832,7 @@ export class AgentServer {
     const provCfg = this.config.providers[chosenProvider] || DEFAULT_PROVIDERS[chosenProvider]
     const modelId = provCfg?.models?.[0]
     if (!modelId) return
-    const fallbackModel = resolveModel(chosenProvider, modelId)
+    const fallbackModel = resolveModel(chosenProvider, modelId, { baseUrl: provCfg?.baseUrl })
     if (!fallbackModel) return
 
     const providerName = chosenProvider
@@ -4201,7 +4201,7 @@ export class AgentServer {
       return { ok: true }
     }
 
-    if (!resolveModel(provider, model)) {
+    if (!resolveModel(provider, model, { baseUrl: providerCfg.baseUrl })) {
       return {
         ok: false,
         error: `Unknown model "${model}" for provider "${provider}" (not in pi SDK registry).`,
