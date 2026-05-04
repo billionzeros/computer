@@ -10,6 +10,13 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versioning: [S
 
 ---
 
+## [2.1.4] - 2026-05-04
+
+### Other
+- chore(tasks): remove "Start a task" composer from All tasks view (#24)
+- [codex] clarify web search action labels (#23)
+---
+
 ## [2.1.3] - 2026-05-03
 
 ### Other
@@ -756,7 +763,8 @@ Maintenance release.
 
 ---
 
-[Unreleased]: https://github.com/billionzeros/computer/compare/v2.1.3...HEAD
+[Unreleased]: https://github.com/billionzeros/computer/compare/v2.1.4...HEAD
+[2.1.4]: https://github.com/billionzeros/computer/compare/v$(changelog.match(/## [(d+.d+.d+)]/g)[1].match(/d+.d+.d+/)[0])...v2.1.4
 [2.1.3]: https://github.com/billionzeros/computer/compare/v$(changelog.match(/## [(d+.d+.d+)]/g)[1].match(/d+.d+.d+/)[0])...v2.1.3
 [2.1.2]: https://github.com/billionzeros/computer/compare/v$(changelog.match(/## [(d+.d+.d+)]/g)[1].match(/d+.d+.d+/)[0])...v2.1.2
 [2.1.1]: https://github.com/billionzeros/computer/compare/v$(changelog.match(/## [(d+.d+.d+)]/g)[1].match(/d+.d+.d+/)[0])...v2.1.1
