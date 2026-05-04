@@ -126,11 +126,8 @@ export function RoutinesView() {
     const ss = sessionStore.getState()
 
     const convId = store.newConversation(undefined, sessionId, projectId)
-    ss.createSession(sessionId, {
-      provider: ss.currentProvider,
-      model: ss.currentModel,
-      projectId,
-    })
+    ss.updateSessionState(sessionId, { pendingCreation: true })
+    ss.setCurrentSession(sessionId, ss.currentProvider, ss.currentModel)
 
     store.setDraftInput(convId, 'I want to create a new routine. It should ', [])
     store.switchConversation(convId)

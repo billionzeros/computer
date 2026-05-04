@@ -103,11 +103,8 @@ export function CommandPalette({ open, onClose, onOpenSettings, onNewProject }: 
     const ps = projectStore.getState()
     const projectId = ps.activeProjectId ?? undefined
     newConversation(undefined, sessionId, projectId)
-    sessionStore.getState().createSession(sessionId, {
-      provider: ss.currentProvider,
-      model: ss.currentModel,
-      projectId,
-    })
+    ss.updateSessionState(sessionId, { pendingCreation: true })
+    ss.setCurrentSession(sessionId, ss.currentProvider, ss.currentModel)
     setActiveView('home')
   }, [newConversation, setActiveView])
 

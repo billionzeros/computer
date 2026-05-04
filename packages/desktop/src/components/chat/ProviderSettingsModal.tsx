@@ -188,7 +188,9 @@ export function ProviderSettingsModal({ provider, onClose }: Props) {
             <div id="pform-models-panel" className="pform__panel">
               <ul className="pform__list">
                 {models.length === 0 && (
-                  <li className="pform__empty">No models yet. Reset to defaults to restore them.</li>
+                  <li className="pform__empty">
+                    No models yet. Reset to defaults to restore them.
+                  </li>
                 )}
                 {models.map((m) => {
                   const tag = classifyModelTag(m)

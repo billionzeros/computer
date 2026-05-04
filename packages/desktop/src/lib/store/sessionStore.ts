@@ -137,6 +137,7 @@ export interface SessionState {
   researchMode: boolean
 
   // Session readiness
+  pendingCreation: boolean
   resolver?: () => void
 }
 
@@ -171,6 +172,7 @@ export function createSessionState(
     isLoadingOlder: false,
     assistantMsgId: null,
     thinkingLevel: null,
+    pendingCreation: false,
     // Rehydrate from the localStorage-backed map so a session that had
     // research mode on before reload comes back with it on. Without this
     // the persisted flag is silently dropped the moment any update path
@@ -460,8 +462,11 @@ export const sessionStore = create<SessionStoreState>((set, get) => {
     },
 
     setSessionThinkingLevel: (sessionId, level) => {
+      const state = get().getSessionState(sessionId)
       get().updateSessionState(sessionId, { thinkingLevel: level })
-      connection.sendSessionSetThinkingLevel(sessionId, level)
+      if (!state.pendingCreation) {
+        connection.sendSessionSetThinkingLevel(sessionId, level)
+      }
     },
 
     toggleResearchMode: (sessionId) => {
@@ -604,7 +609,7 @@ export const sessionStore = create<SessionStoreState>((set, get) => {
       return new Promise<void>((resolve) => {
         const states = new Map(get().sessionStates)
         const current = states.get(id) ?? createSessionState(id)
-        states.set(id, { ...current, resolver: resolve })
+        states.set(id, { ...current, pendingCreation: true, resolver: resolve })
         set({ sessionStates: states })
       })
     },
@@ -613,7 +618,10 @@ export const sessionStore = create<SessionStoreState>((set, get) => {
       const state = get().sessionStates.get(id)
       if (state?.resolver) {
         state.resolver()
-        get().updateSessionState(id, { resolver: undefined })
+      }
+      get().updateSessionState(id, { pendingCreation: false, resolver: undefined })
+      if (state?.thinkingLevel) {
+        connection.sendSessionSetThinkingLevel(id, state.thinkingLevel)
       }
     },
 
@@ -622,7 +630,7 @@ export const sessionStore = create<SessionStoreState>((set, get) => {
     createSession: (sessionId, opts) => {
       const thinkingLevel: ThinkingLevel = opts.thinkingLevel ?? get().effortLevel
       connection.sendSessionCreate(sessionId, { ...opts, thinkingLevel })
-      get().updateSessionState(sessionId, { thinkingLevel })
+      get().updateSessionState(sessionId, { pendingCreation: true, thinkingLevel })
     },
     destroySession: (sessionId) => connection.sendSessionDestroy(sessionId),
     renameSession: (sessionId, title) => connection.sendSessionRename(sessionId, title),

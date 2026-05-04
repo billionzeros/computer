@@ -2,7 +2,7 @@ import { Check, ChevronDown, ChevronRight, Search, Settings } from 'lucide-react
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { isProviderReady } from '../../lib/providers.js'
-import type { ProviderInfo } from '../../lib/store.js'
+import { type ProviderInfo, useStore } from '../../lib/store.js'
 import { sessionStore } from '../../lib/store/sessionStore.js'
 import {
   type ModelTag,
@@ -290,8 +290,19 @@ export function ModelSelector() {
 
   const handleSelect = (provider: string, model: string) => {
     const ss = sessionStore.getState()
-    ss.setCurrentSession(ss.currentSessionId || '', provider, model)
-    ss.sendProviderSetDefault(provider, model)
+    const store = useStore.getState()
+    const activeConv = store.getActiveConversation()
+    const sessionId = activeConv?.sessionId || ss.currentSessionId
+    const pendingTaskShell = !!activeConv?.pendingCreation
+    if (sessionId) {
+      ss.setCurrentSession(sessionId, provider, model)
+      store.setCurrentSession(sessionId, provider, model)
+    } else {
+      sessionStore.setState({ currentProvider: provider, currentModel: model })
+    }
+    if (!pendingTaskShell) {
+      ss.sendProviderSetDefault(provider, model)
+    }
     setOpen(false)
   }
 

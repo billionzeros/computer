@@ -1,5 +1,6 @@
 import { Loader2 } from 'lucide-react'
 import { useCallback, useEffect, useState } from 'react'
+import { ensureSessionReadyForSend } from '../lib/sessionReadiness.js'
 import type { Skill } from '../lib/skills.js'
 import type { ChatImageAttachment } from '../lib/store.js'
 import { useStore } from '../lib/store.js'
@@ -63,13 +64,9 @@ export function RoutineChat() {
       const sessionId = `sess_${Date.now().toString(36)}`
       const projectId = defaultProject?.id ?? ps.activeProjectId ?? undefined
       store.newConversation(undefined, sessionId, projectId)
-      store.registerPendingSession(sessionId)
       const ss = sessionStore.getState()
-      sessionStore.getState().createSession(sessionId, {
-        provider: ss.currentProvider,
-        model: ss.currentModel,
-        projectId,
-      })
+      ss.updateSessionState(sessionId, { pendingCreation: true })
+      ss.setCurrentSession(sessionId, ss.currentProvider, ss.currentModel)
     }
     // Chat view shows whichever conversation the user has selected, regardless
     // of its project. Previously this effect force-swapped project conversations
@@ -80,7 +77,7 @@ export function RoutineChat() {
   const handleSend = useCallback(
     async (text: string, attachments: ChatImageAttachment[] = []) => {
       const store = useStore.getState()
-      const conv = store.getActiveConversation()
+      let conv = store.getActiveConversation()
       let sessionId = conv?.sessionId || sessionStore.getState().currentSessionId
       const outboundAttachments = attachments.flatMap((attachment) =>
         attachment.data
@@ -102,29 +99,26 @@ export function RoutineChat() {
         const ps = projectStore.getState()
         const projectId =
           ps.projects.find((p) => p.isDefault)?.id ?? ps.activeProjectId ?? undefined
-        newConversation(undefined, sessionId, projectId)
-        const waitPromise = store.registerPendingSession(sessionId)
-        const ss3 = sessionStore.getState()
-        sessionStore.getState().createSession(sessionId, {
-          provider: ss3.currentProvider,
-          model: ss3.currentModel,
+        const convId = newConversation(undefined, sessionId, projectId)
+        conv = useStore.getState().conversations.find((c) => c.id === convId) ?? null
+        if (!conv) return false
+        const ss = sessionStore.getState()
+        const ready = await ensureSessionReadyForSend({
+          conv,
+          provider: conv.provider || ss.currentProvider,
+          model: conv.model || ss.currentModel,
           projectId,
         })
-        await waitPromise
-      } else if (sessionId && !sessionStore.getState().currentSessionId) {
-        // Conversation exists but session hasn't been confirmed yet — wait for it
-        const sessionState = sessionStore.getState().getSessionState(sessionId)
-        if (sessionState.resolver) {
-          await new Promise<void>((resolve) => {
-            const existing = sessionState.resolver
-            sessionStore.getState().updateSessionState(sessionId!, {
-              resolver: () => {
-                existing?.()
-                resolve()
-              },
-            })
-          })
-        }
+        if (!ready) return false
+      } else if (sessionId) {
+        const ss = sessionStore.getState()
+        const ready = await ensureSessionReadyForSend({
+          conv,
+          provider: conv.provider || ss.currentProvider,
+          model: conv.model || ss.currentModel,
+          projectId: conv.projectId,
+        })
+        if (!ready) return false
       }
 
       // Re-read sessionId after potential await
@@ -156,6 +150,7 @@ export function RoutineChat() {
         // Absolute fallback — should not normally happen
         sessionStore.getState().sendAiMessage(outboundText, outboundAttachments)
       }
+      return true
     },
     [addMessage, newConversation],
   )

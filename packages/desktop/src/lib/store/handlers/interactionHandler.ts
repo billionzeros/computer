@@ -96,6 +96,10 @@ export function handleInteractionMessage(msg: AiMessage, ctx: MessageContext): b
         ss.updateSessionState(sid, { isSyncing: false, pendingSyncMessages: [] })
       }
 
+      if (sid && ss.getSessionState(sid).pendingCreation) {
+        ss.updateSessionState(sid, { resolver: undefined })
+      }
+
       if (msg.code === 'session_not_found' && sid) {
         // Don't auto-delete — the session may reappear after a server restart/update.
         // Just mark the session as error so the user sees feedback.

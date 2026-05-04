@@ -4,11 +4,7 @@
   "type": "module",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
-  "files": [
-    "dist",
-    "prompts",
-    "builtin-skills"
-  ],
+  "files": ["dist", "prompts", "builtin-skills"],
   "scripts": {
     "dev": "tsc --watch",
     "build": "tsc"

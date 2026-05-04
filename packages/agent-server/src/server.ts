@@ -343,6 +343,7 @@ export class AgentServer {
    */
   private initialMcpProbe: Promise<void> | null = null
   private activeClient: WebSocket | null = null
+  private pendingSessionCreates = new Map<string, Promise<void>>()
   // Track pending interactive prompts so they can be re-sent on client reconnect
   private pendingPrompts: Map<string, { type: string; payload: Record<string, unknown> }> =
     new Map()
@@ -1728,11 +1729,39 @@ export class AgentServer {
 
     switch (msg.type) {
       // ── Session lifecycle ──
-      case 'session_create':
-        this.handleSessionCreate(msg).catch((err) => {
+      case 'session_create': {
+        const existingPendingCreate = this.pendingSessionCreates.get(msg.id)
+        if (existingPendingCreate) {
+          try {
+            await existingPendingCreate
+          } catch (err) {
+            log.error({ err, sessionId: msg.id }, 'pending session_create rejected unexpectedly')
+          }
+          const existing = this.sessions.get(msg.id)
+          if (existing) {
+            this.sendToClient(Channel.AI, {
+              type: 'session_created',
+              id: msg.id,
+              provider: existing.provider,
+              model: existing.model,
+            })
+            break
+          }
+        }
+
+        const pendingCreate = this.handleSessionCreate(msg)
+        this.pendingSessionCreates.set(msg.id, pendingCreate)
+        try {
+          await pendingCreate
+        } catch (err) {
           log.error({ err, sessionId: msg.id }, 'handleSessionCreate rejected unexpectedly')
-        })
+        } finally {
+          if (this.pendingSessionCreates.get(msg.id) === pendingCreate) {
+            this.pendingSessionCreates.delete(msg.id)
+          }
+        }
         break
+      }
 
       case 'sessions_list':
         this.handleSessionsList()
@@ -2171,6 +2200,17 @@ export class AgentServer {
     thinkingLevel?: ThinkingLevel
   }) {
     try {
+      const existing = this.sessions.get(msg.id)
+      if (existing) {
+        this.sendToClient(Channel.AI, {
+          type: 'session_created',
+          id: msg.id,
+          provider: existing.provider,
+          model: existing.model,
+        })
+        return
+      }
+
       // Determine provider type (harness vs API)
       const providerName = msg.provider || this.config.defaults.provider
       const providerConfig = this.config.providers[providerName] || DEFAULT_PROVIDERS[providerName]
@@ -5240,6 +5280,11 @@ export class AgentServer {
 
     // Auto-create default session if it doesn't exist
     let session = this.sessions.get(sessionId)
+    const pendingCreate = this.pendingSessionCreates.get(sessionId)
+    if (!session && pendingCreate) {
+      await pendingCreate
+      session = this.sessions.get(sessionId)
+    }
     if (!session) {
       if (sessionId === DEFAULT_SESSION_ID) {
         session = createSession(
@@ -5674,7 +5719,13 @@ export class AgentServer {
     }
 
     let userText: string | null = null
-    let attachments: { id: string; name: string; mimeType: string; data: string; sizeBytes: number }[] = []
+    let attachments: {
+      id: string
+      name: string
+      mimeType: string
+      data: string
+      sizeBytes: number
+    }[] = []
 
     if (!isHarnessSession(session)) {
       // Pi-SDK path: pop the last user→assistant turn off the agent's

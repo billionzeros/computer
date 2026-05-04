@@ -1,6 +1,7 @@
 import { BookOpen, Code2, Mail, Pencil, Sparkles } from 'lucide-react'
 import { useMemo, useRef, useState } from 'react'
 import { sanitizeTitle } from '../../lib/conversations.js'
+import { ensureSessionReadyForSend } from '../../lib/sessionReadiness.js'
 import type { Skill } from '../../lib/skills.js'
 import type { ChatImageAttachment } from '../../lib/store.js'
 import { useStore } from '../../lib/store.js'
@@ -83,47 +84,71 @@ export function StreamHome({ onSkillSelect }: Props) {
   }
   const suggestions = forYouRef.current
 
-  const startNewTask = (text: string, attachments?: ChatImageAttachment[]) => {
+  const startNewTask = async (
+    text: string,
+    attachments?: ChatImageAttachment[],
+  ): Promise<boolean> => {
     const store = useStore.getState()
     const activeConv = store.getActiveConversation()
     let sessionId = activeConv?.sessionId
     let convId = activeConv?.id
+    let projectId = activeConv?.projectId
 
-    // Reuse active conversation if it's empty; otherwise create a fresh one.
-    // This lets "New task" (Sidebar / CommandPalette) pre-create a session and
-    // have the first message land on it, avoiding leaked empty conversations.
+    // Reuse the active empty task shell; otherwise create a fresh one.
+    // Server session creation is delayed until first send so model changes
+    // made on the new-task page are applied to the actual session.
     if (!activeConv || (activeConv.messages?.length ?? 0) > 0 || !sessionId) {
       sessionId = `sess_${Date.now().toString(36)}`
       const ps = projectStore.getState()
-      const projectId =
+      projectId =
         activeConv?.projectId ??
         ps.projects.find((p) => p.isDefault)?.id ??
         ps.activeProjectId ??
         undefined
       newConversation(undefined, sessionId, projectId)
-      const ss = sessionStore.getState()
-      sessionStore.getState().createSession(sessionId, {
-        provider: ss.currentProvider,
-        model: ss.currentModel,
-        projectId,
-      })
       convId = useStore.getState().findConversationBySession(sessionId)?.id
     }
 
-    if (!convId || !sessionId) return
+    if (!convId || !sessionId) return false
+    const targetConv = useStore.getState().conversations.find((c) => c.id === convId)
+    if (!targetConv) return false
+
     // Sync currentSessionId directly — do NOT call switchConversation here.
     // switchConversation triggers a history fetch on empty conversations once the
     // session_created ack has cleared pendingCreation, and the empty server
     // response races with the addMessage below and wipes the user's message.
     const ss = sessionStore.getState()
-    const targetConv = useStore.getState().conversations.find((c) => c.id === convId)
     if (ss.currentSessionId !== sessionId) {
       ss.setCurrentSession(
         sessionId,
-        targetConv?.provider || ss.currentProvider,
-        targetConv?.model || ss.currentModel,
+        targetConv.provider || ss.currentProvider,
+        targetConv.model || ss.currentModel,
       )
     }
+
+    const ready = await ensureSessionReadyForSend({
+      conv: targetConv,
+      provider: targetConv.provider || ss.currentProvider,
+      model: targetConv.model || ss.currentModel,
+      projectId,
+    })
+    if (!ready) {
+      useStore.setState({ activeConversationId: convId })
+      const latestConv = useStore.getState().findConversationBySession(sessionId)
+      const alreadyHasError = latestConv?.messages.some((m) => m.isError)
+      if (!alreadyHasError) {
+        useStore.getState().addMessage({
+          id: `err_start_${Date.now()}`,
+          role: 'system',
+          content:
+            'Could not start this task because the server did not confirm the session. Try again after the server reconnects.',
+          isError: true,
+          timestamp: Date.now(),
+        })
+      }
+      return false
+    }
+
     useStore.setState({ activeConversationId: convId })
     useStore.getState().addMessage({
       id: `msg_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
@@ -140,6 +165,7 @@ export function StreamHome({ onSkillSelect }: Props) {
     sessionStore.getState().sendAiMessageToSession(text, sessionId, outbound)
     // Navigate to the chat view so the topbar/breadcrumb reflect the conversation.
     setActiveView('chat')
+    return true
   }
 
   return (

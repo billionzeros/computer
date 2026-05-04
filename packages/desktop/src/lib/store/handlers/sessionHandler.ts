@@ -185,13 +185,17 @@ export function handleSessionMessage(msg: AiMessage): boolean {
   switch (msg.type) {
     case 'session_created': {
       const ss = sessionStore.getState()
-      ss.setCurrentSession(msg.id, msg.provider, msg.model)
       ss.resolvePendingSession(msg.id)
-      useStore.getState().setCurrentSession(msg.id, msg.provider, msg.model)
 
       // Clear pendingCreation — server has confirmed this session
       const createdStore = useStore.getState()
       const pendingConv = createdStore.conversations.find((c) => c.sessionId === msg.id)
+      const shouldClaimCurrent =
+        !createdStore.activeConversationId || pendingConv?.id === createdStore.activeConversationId
+      if (shouldClaimCurrent) {
+        ss.setCurrentSession(msg.id, msg.provider, msg.model)
+        createdStore.setCurrentSession(msg.id, msg.provider, msg.model)
+      }
       if (pendingConv?.pendingCreation) {
         console.log(`[SessionSync] Session confirmed by server: ${msg.id}`)
         const updated = createdStore.conversations.map((c) =>

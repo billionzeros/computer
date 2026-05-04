@@ -37,7 +37,7 @@ import { RichInput } from './RichInput.js'
 import { SlashCommandMenu } from './SlashCommandMenu.js'
 
 interface Props {
-  onSend: (text: string, attachments?: ChatImageAttachment[]) => void
+  onSend: (text: string, attachments?: ChatImageAttachment[]) => unknown | Promise<unknown>
   onSteer?: (text: string, attachments?: ChatImageAttachment[]) => void
   onCancelTurn?: () => void
   onSkillSelect: (skill: Skill) => void
@@ -72,9 +72,7 @@ function supportsReasoningEffort(provider: string, model: string): boolean {
   if (provider === 'claude') return false
   if (provider === 'codex') return true
   const m = model.toLowerCase()
-  return /gpt-5|opus|sonnet|gemini-2\.5|gemini.*pro|o1|o3|o4|r1|reason|thinking|deepseek-r/.test(
-    m,
-  )
+  return /gpt-5|opus|sonnet|gemini-2\.5|gemini.*pro|o1|o3|o4|r1|reason|thinking|deepseek-r/.test(m)
 }
 
 /**
@@ -179,6 +177,7 @@ export function ChatInput({
     return state ? state.researchMode : getPersistedResearchMode(sid)
   })
   const richInputRef = useRef<RichInputHandle>(null)
+  const sendInFlightRef = useRef(false)
   const imageInputRef = useRef<HTMLInputElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const plusButtonRef = useRef<HTMLButtonElement>(null)
@@ -543,7 +542,7 @@ export function ChatInput({
     [pendingFiles, workspaceRoot],
   )
 
-  const handleSend = useCallback(() => {
+  const handleSend = useCallback(async () => {
     const handle = richInputRef.current
     if (!handle) return
 
@@ -592,7 +591,20 @@ export function ChatInput({
       return
     }
 
-    onSend(text, attachments.length > 0 ? attachments : undefined)
+    if (sendInFlightRef.current) return
+    sendInFlightRef.current = true
+
+    let sent: unknown
+    try {
+      sent = await onSend(text, attachments.length > 0 ? attachments : undefined)
+    } catch (err) {
+      setAttachmentError(err instanceof Error ? err.message : 'Failed to send message')
+      return
+    } finally {
+      sendInFlightRef.current = false
+    }
+    if (sent === false) return
+
     handle.clear()
     setInput('')
     setImageCount(0)
