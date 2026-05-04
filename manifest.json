@@ -1,6 +1,6 @@
 {
   "version": "2.1.5",
-  "gitHash": "",
+  "gitHash": "7c3d7bd",
   "releaseUrl": "https://github.com/billionzeros/computer/releases",
   "changelog": "Other:\n- fix(byok): support user OpenAI/Anthropic API keys + working effort pill (#25)",
   "publishedAt": "2026-05-04T11:41:41.834Z",
