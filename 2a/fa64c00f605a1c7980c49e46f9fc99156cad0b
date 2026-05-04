@@ -1,0 +1,47 @@
+packages/desktop/src/lib/store/sessionStore.ts
+  594c0d76e132e162 98-103,159
+packages/agent-core/src/harness/codex-harness-session.ts
+  594c0d76e132e162 981,1004-1037
+packages/agent-config/src/config.ts
+  594c0d76e132e162 139-145
+packages/agent-core/src/agent.ts
+  594c0d76e132e162 231-324
+packages/desktop/src/components/chat/ContextPopover.tsx
+  594c0d76e132e162 1-3,6-18,21-51,54-86,89-95,97-101,103-107,109-113,115-119,121-125,127-135,137-225,229-233,235,237-238
+packages/desktop/src/index.css
+  594c0d76e132e162 14291,14294-14323,14326-14338,14340-14370,14372-14390,14392-14421,14423,14425-14426,14429-14451
+specs/features/ui/CONTEXT_GAUGE_BLUNDERS.md
+  594c0d76e132e162 1-25,27-43,45-61,63-79,81-95,97-111,113-131,133-145,147-161,163-174,176-188,190-202
+packages/agent-core/src/session.ts
+  594c0d76e132e162 266-271,277,283,291,387,500-513,568-569,620-622,1428-1441,1458-1461,1475-1476,1965-1966,1990-2006,2075-2080,2090-2096,2531-2543,2548,2550,2552-2553,2557-2562,2566-2568,2610-2612,2616-2634,2640-2642,2652-2654,2658,2662-2663,2666-2668,2673-2674,2678-2766,2777-2778,2797-2798,3041
+specs/features/ui/CONTEXT_GAUGE.md
+  594c0d76e132e162 1-113
+packages/desktop/src/components/chat/ChatInput.tsx
+  594c0d76e132e162 33,815
+packages/desktop/src/components/chat/ContextGauge.tsx
+  594c0d76e132e162 1-120
+packages/agent-server/src/server.ts
+  594c0d76e132e162 114,138,2221-2225,2646-2668,4031-4033,5335-5338,6796,6799-6800,7006-7025
+packages/desktop/src/lib/store/handlers/interactionHandler.ts
+  594c0d76e132e162 192-199
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.3.4",
+  "base_commit_sha": "2afa64c00f605a1c7980c49e46f9fc99156cad0b",
+  "prompts": {
+    "594c0d76e132e162": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "a38ab2af-0021-49ad-b753-dc9e7186936c",
+        "model": "claude-opus-4-7"
+      },
+      "human_author": "Om Gupta",
+      "messages": [],
+      "total_additions": 4412,
+      "total_deletions": 171,
+      "accepted_lines": 31464,
+      "overriden_lines": 28
+    }
+  }
+}
