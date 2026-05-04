@@ -1,0 +1,50 @@
+packages/agent-core/src/index.ts
+  61687383319d8142 104
+packages/desktop/src/components/artifacts/useWorkspaceText.ts
+  87d28a29b665ed06 1-75
+packages/agent-server/src/server.ts
+  87d28a29b665ed06 97,3370-3372,3561,3580,3602,5477-5478,5535,5538-5540,5542-5547,5549
+  61687383319d8142 122,5469-5476,5479-5531,5536-5537,5541,5548,5568-5569,5575,5578-5579,5598-5600,5692-5696,5703,5789,5799
+packages/desktop/src/lib/workspaceArtifacts.ts
+  87d28a29b665ed06 1-131
+packages/desktop/src/lib/store.ts
+  87d28a29b665ed06 122-123,165-169,214-217,231,276,414,478-601,1106,1128
+  61687383319d8142 218-230,232-253,444-446,464,620,679,799,835,872
+packages/desktop/src/lib/artifacts.ts
+  61687383319d8142 266,286-291,301,309-322
+packages/agent-core/src/harness/index.ts
+  61687383319d8142 58
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.3.4",
+  "base_commit_sha": "bf1f5b13f1bfad5c73013a0ea47e532682215b0d",
+  "prompts": {
+    "61687383319d8142": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019df32d-1351-73c2-9f8a-cfc2c13acf6f",
+        "model": "gpt-5.5"
+      },
+      "human_author": "Om Gupta",
+      "messages": [],
+      "total_additions": 954,
+      "total_deletions": 52,
+      "accepted_lines": 951,
+      "overriden_lines": 0
+    },
+    "87d28a29b665ed06": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019df31f-565d-79f0-933f-05b5f90dc596",
+        "model": "gpt-5.5"
+      },
+      "human_author": "Om Gupta",
+      "messages": [],
+      "total_additions": 1196,
+      "total_deletions": 18,
+      "accepted_lines": 1158,
+      "overriden_lines": 1
+    }
+  }
+}
