@@ -1,12 +1,10 @@
 import { Pause, Pencil, Search, Trash2 } from 'lucide-react'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { sanitizeTitle } from '../../lib/conversations.js'
-import type { ChatImageAttachment } from '../../lib/store.js'
 import { useStore } from '../../lib/store.js'
 import { projectStore } from '../../lib/store/projectStore.js'
 import { sessionStore } from '../../lib/store/sessionStore.js'
 import { uiStore } from '../../lib/store/uiStore.js'
-import { ChatInput } from '../chat/ChatInput.js'
 
 function formatRelative(ts: number): string {
   const diff = Date.now() - ts
@@ -30,7 +28,6 @@ export function TasksListView() {
   const setActiveView = uiStore((s) => s.setActiveView)
   const sessionStates = sessionStore((s) => s.sessionStates)
   const sendCancelTurn = sessionStore((s) => s.sendCancelTurn)
-  const newConversation = useStore((s) => s.newConversation)
   const [query, setQuery] = useState('')
   const [showSearch, setShowSearch] = useState(false)
   const [editingId, setEditingId] = useState<string | null>(null)
@@ -111,37 +108,6 @@ export function TasksListView() {
     setEditingValue('')
   }
 
-  const startNewTask = (text: string, attachments?: ChatImageAttachment[]) => {
-    const sessionId = `sess_${Date.now().toString(36)}`
-    const ps = projectStore.getState()
-    const projectId = ps.projects.find((p) => p.isDefault)?.id ?? ps.activeProjectId ?? undefined
-    newConversation(undefined, sessionId, projectId)
-    const ss = sessionStore.getState()
-    sessionStore.getState().createSession(sessionId, {
-      provider: ss.currentProvider,
-      model: ss.currentModel,
-      projectId,
-    })
-    const store = useStore.getState()
-    const conv = store.findConversationBySession(sessionId)
-    if (!conv) return
-    switchConversation(conv.id)
-    store.addMessage({
-      id: `msg_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
-      role: 'user',
-      content: text,
-      attachments: attachments && attachments.length > 0 ? attachments : undefined,
-      timestamp: Date.now(),
-    })
-    const outbound = attachments?.flatMap((a) =>
-      a.data
-        ? [{ id: a.id, name: a.name, mimeType: a.mimeType, data: a.data, sizeBytes: a.sizeBytes }]
-        : [],
-    )
-    sessionStore.getState().sendAiMessageToSession(text, sessionId, outbound)
-    setActiveView('home')
-  }
-
   return (
     <div className="tasks-view">
       <div className="tasks-view__head">
@@ -169,19 +135,9 @@ export function TasksListView() {
         </label>
       )}
 
-      <div className="tasks-composer">
-        <ChatInput
-          onSend={startNewTask}
-          onSkillSelect={() => {}}
-          variant="hero"
-          placeholder="Start a task"
-          ignoreWorkingState
-        />
-      </div>
-
       <div className="tasks-list">
         {rows.length === 0 ? (
-          <div className="tasks-empty">No tasks yet. Start one from the composer above.</div>
+          <div className="tasks-empty">No tasks yet.</div>
         ) : (
           rows.map((r) => {
             const working = r.status === 'working'

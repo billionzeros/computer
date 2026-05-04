@@ -3146,23 +3146,6 @@ button {
   color: var(--text-4);
 }
 
-.tasks-composer {
-  margin-bottom: 16px;
-}
-.tasks-composer .composer--hero .composer__anchor {
-  max-width: none;
-}
-.tasks-composer .composer--hero .composer__box {
-  border-radius: 12px;
-  background: var(--bg-elev-1);
-  border: 1px solid var(--border);
-  padding: 14px 16px 10px;
-}
-.tasks-composer .rich-input__editor {
-  min-height: 56px;
-  font-size: 14.5px;
-}
-
 .tasks-list {
   flex: 1;
   display: flex;
