@@ -1,0 +1,23 @@
+packages/desktop/src/index.css
+  a641c1018b75c1fc 20437-20455
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.3.4",
+  "base_commit_sha": "fc2730e46d9b245e3fee06b40143e2c42e623bd0",
+  "prompts": {
+    "a641c1018b75c1fc": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "75e7f8ee-797a-48cb-8f23-3197cf8292e8",
+        "model": "claude-opus-4-7"
+      },
+      "human_author": "Om Gupta",
+      "messages": [],
+      "total_additions": 19,
+      "total_deletions": 0,
+      "accepted_lines": 19,
+      "overriden_lines": 0
+    }
+  }
+}
