@@ -44,6 +44,7 @@ import {
   getGlobalMemoryDir,
   getProjectSessionsDir,
   getProvidersList,
+  getPublicHost,
   getPublished,
   getPublishedDir,
   getSyncVersion,
@@ -92,11 +93,13 @@ import {
   ClaudeAdapter,
   CodexAdapter,
   CodexHarnessSession,
+  type HarnessSessionContext,
   HarnessSession,
   type LiveConnectorSummary,
   McpManager,
   type McpServerConfig,
   type Session,
+  type SessionOptions,
   SessionRegistry,
   type ShimProbeResult,
   type SubAgentEventHandler,
@@ -872,7 +875,7 @@ export class AgentServer {
                 version: VERSION,
                 gitHash: GIT_HASH,
                 protocolVersion: PROTOCOL_VERSION,
-                domain: process.env.ANTON_HOST || undefined,
+                domain: getPublicHost(),
               }
 
               // Include update info if available
@@ -2056,7 +2059,7 @@ export class AgentServer {
           language: msg.language,
           slug: msg.slug,
         },
-        process.env.ANTON_HOST,
+        getPublicHost(),
       )
 
       // Extract slug and URL from the result string
@@ -2137,7 +2140,7 @@ export class AgentServer {
   private handlePublishedList() {
     this.sendToClient(Channel.AI, {
       type: 'published_list_response',
-      host: process.env.ANTON_HOST || undefined,
+      host: getPublicHost(),
       pages: listPublished(),
     })
   }
@@ -2201,7 +2204,6 @@ export class AgentServer {
             provider: msg.provider,
             model: msg.model,
             apiKey: msg.apiKey,
-            domain: process.env.ANTON_HOST,
             thinkingLevel: msg.thinkingLevel,
           }),
         )
@@ -2368,53 +2370,14 @@ export class AgentServer {
     // Register the tool-registry session context so project-scoped
     // tools (activate_workflow, update_project_context) and surface-
     // filtered connector tools resolve correctly for this session.
-    this.harnessSessionContexts.set(id, {
-      projectId: harnessProjectId,
-      workspacePath: cwd,
-      surface: surfaceLabel,
-      resolveProviderToken: this.resolveProviderToken,
-      onActivateWorkflow: harnessProjectId ? this.buildActivateWorkflowHandler() : undefined,
-      // Background runs (routines) must not interrupt the desktop user
-      // with an ask_user prompt. Return empty answers immediately so the
-      // CLI stops blocking and makes autonomous choices.
-      onAskUser: background ? async () => ({}) : this.buildHarnessAskUserHandler(id),
-      // Routine management (`routine` MCP tool). Same handler Pi SDK
-      // uses inline via agent.ts; only meaningful when the session is
-      // attached to a project.
-      onJobAction: harnessProjectId ? this.buildAgentActionHandler(id) : undefined,
-      // Browser-state callbacks for the `browser` MCP tool. Late-binds
-      // through `this.sessions.get(id)` because the session itself is
-      // created a few lines below — callbacks fire only after the
-      // session exists.
-      browserCallbacks: this.buildHarnessBrowserCallbacks(id),
-      // `set_session_title` MCP tool handler. Late-binds through
-      // `this.sessions.get(id)` because the session is constructed a
-      // few lines below. Both HarnessSession and CodexHarnessSession
-      // expose `setTitle(title: string)` which emits `title_update`.
-      onSetTitle: (title: string) => {
-        const s = this.sessions.get(id) as
-          | { setTitle?: (t: string) => void; getTitle?: () => string }
-          | undefined
-        if (!s || typeof s.setTitle !== 'function') return
-        s.setTitle(title)
-        // Persist to meta.json so the title survives a client reload —
-        // the `title_update` event only updates connected clients, and
-        // on reconnect the server reads titles from disk (buildSessionList
-        // + listProjectSessions). We read back via getTitle() so disk and
-        // memory stay in lockstep even if setTitle ever changes its
-        // normalization rules.
-        const normalized = typeof s.getTitle === 'function' ? s.getTitle() : title
-        try {
-          writeHarnessSessionTitle({
-            sessionId: id,
-            projectId: harnessProjectId,
-            title: normalized,
-          })
-        } catch (err) {
-          log.warn({ err, sessionId: id }, 'failed to persist harness session title')
-        }
-      },
-    })
+    // Built via `buildHarnessSessionContext` so the shared wiring
+    // (domain, resolveProviderToken, project handlers, …) comes from
+    // the SAME `buildSessionOptions` factory desktop and webhook
+    // sessions use — adding a new shared field there flows here too.
+    this.harnessSessionContexts.set(
+      id,
+      this.buildHarnessSessionContext(id, harnessProjectId, surfaceLabel, background, cwd),
+    )
 
     // Per-turn system-prompt builder — mirrors Pi SDK's layer assembly
     // so harness turns see the same Anton-owned state. Memory loads on
@@ -2463,6 +2426,7 @@ export class AgentServer {
         projectContext: projectContextBlock,
         projectId: harnessProjectId,
         workspacePath: cwd,
+        publicHost: getPublicHost(),
         memoryData: cachedMemoryData,
         agentInstructions,
         agentMemory,
@@ -4703,8 +4667,16 @@ export class AgentServer {
     return undefined
   }
 
-  /** Build the full options object for createSession / resumeSession.
-   *  Centralises callback wiring so new options only need to be added here. */
+  /**
+   * Build the full options object for createSession / resumeSession.
+   *
+   * Single source of truth for desktop AND webhook (Telegram/Slack)
+   * sessions — the webhook runner's closure delegates here so anything
+   * added to this method is picked up everywhere automatically. The
+   * return type is `SessionOptions` (exported from agent-core) so any
+   * key that doesn't exist in `createSession`/`resumeSession`'s opts is
+   * a TypeScript error rather than a silent drop.
+   */
   private buildSessionOptions(
     sessionId: string,
     projectId?: string,
@@ -4717,7 +4689,7 @@ export class AgentServer {
       agentMemory?: string
       thinkingLevel?: ThinkingLevel
     },
-  ) {
+  ): SessionOptions {
     const project = projectId ? loadProject(projectId) : undefined
     const isAgent = sessionId.startsWith('agent--')
     this.getActiveSkillsForPrompt()
@@ -4756,7 +4728,10 @@ export class AgentServer {
       provider: extra?.provider,
       model: extra?.model,
       apiKey: extra?.apiKey,
-      domain: extra?.domain,
+      // Default to the deployment's ANTON_HOST so every caller gets the
+      // canonical publish-tool domain without having to remember to pass
+      // it. Callers can still override (e.g. tests / sub-agent forks).
+      domain: extra?.domain ?? getPublicHost(),
       onSubAgentEvent: this.makeSubAgentEventHandler(sessionId),
       mcpManager: this.mcpManager,
       connectorManager: this.connectorManager,
@@ -4788,6 +4763,83 @@ export class AgentServer {
               promptVersion: hashPromptVersion(agentInstructions),
             }
           : undefined,
+    }
+  }
+
+  /**
+   * Build the per-session context the harness tool-registry uses to
+   * resolve project-scoped tools, the publish domain, and the proxy
+   * provider resolver.
+   *
+   * Single source of truth for harness sessions — derives shared wiring
+   * from `buildSessionOptions` (the same factory desktop and webhook
+   * sessions use), then layers harness-only handlers on top
+   * (`onAskUser`, `browserCallbacks`, `onSetTitle`). When you add a new
+   * field to `buildSessionOptions` that the harness path also needs,
+   * one line here picks it up — no separate harness wiring drift.
+   *
+   * Behavior alignment: gating on project handlers (onActivateWorkflow,
+   * onJobAction, onDeliverResult) now follows the same rules Pi SDK
+   * uses, including `!isAgent` for activate_workflow on scheduled-agent
+   * sessions. This is intentional — the docstring on
+   * `AntonCoreToolContext.onActivateWorkflow` calls out that scheduled
+   * agents must NOT be able to activate workflows recursively, which
+   * the harness path previously didn't enforce.
+   */
+  private buildHarnessSessionContext(
+    id: string,
+    projectId: string | undefined,
+    surfaceLabel: string,
+    background: boolean,
+    workspacePath: string | undefined,
+  ): HarnessSessionContext {
+    const shared = this.buildSessionOptions(id, projectId)
+    return {
+      // ── Shared with Pi SDK / webhook sessions ─────────────────────
+      projectId: shared.projectId,
+      workspacePath: workspacePath ?? shared.projectWorkspacePath,
+      domain: shared.domain,
+      onActivateWorkflow: shared.onActivateWorkflow,
+      onJobAction: shared.onJobAction,
+      onDeliverResult: shared.onDeliverResult,
+      resolveProviderToken: shared.resolveProviderToken,
+
+      // ── Harness-only wiring (no Pi SDK equivalent) ────────────────
+      surface: surfaceLabel,
+      // Background runs (routines) must not interrupt the desktop user
+      // with an ask_user prompt. Return empty answers immediately so
+      // the CLI stops blocking and makes autonomous choices.
+      onAskUser: background ? async () => ({}) : this.buildHarnessAskUserHandler(id),
+      // Browser-state callbacks for the `browser` MCP tool. Late-binds
+      // through `this.sessions.get(id)` because the session itself is
+      // created after this context — callbacks fire only after that.
+      browserCallbacks: this.buildHarnessBrowserCallbacks(id),
+      // `set_session_title` MCP tool handler. Late-binds through
+      // `this.sessions.get(id)` for the same reason; both HarnessSession
+      // and CodexHarnessSession expose `setTitle()` which emits
+      // `title_update`.
+      onSetTitle: (title: string) => {
+        const s = this.sessions.get(id) as
+          | { setTitle?: (t: string) => void; getTitle?: () => string }
+          | undefined
+        if (!s || typeof s.setTitle !== 'function') return
+        s.setTitle(title)
+        // Persist to meta.json so the title survives a client reload —
+        // the `title_update` event only updates connected clients, and
+        // on reconnect the server reads titles from disk. Read back via
+        // `getTitle()` so disk and memory stay in lockstep even if
+        // setTitle ever changes its normalization rules.
+        const normalized = typeof s.getTitle === 'function' ? s.getTitle() : title
+        try {
+          writeHarnessSessionTitle({
+            sessionId: id,
+            projectId,
+            title: normalized,
+          })
+        } catch (err) {
+          log.warn({ err, sessionId: id }, 'failed to persist harness session title')
+        }
+      },
     }
   }
 
@@ -5245,9 +5297,7 @@ export class AgentServer {
         session = createSession(
           DEFAULT_SESSION_ID,
           this.config,
-          this.buildSessionOptions(DEFAULT_SESSION_ID, undefined, {
-            domain: process.env.ANTON_HOST,
-          }),
+          this.buildSessionOptions(DEFAULT_SESSION_ID),
         )
         this.wireSessionConfirmHandler(session)
         this.wirePlanConfirmHandler(session)
@@ -6086,8 +6136,8 @@ export class AgentServer {
         this.mcpManager,
         this.connectorManager,
         (sessionId) => {
-          // Resolve project binding for this webhook session so that
-          // project-scoped tools (agent, workflow, etc.) are available.
+          // Resolve project binding for this webhook session so the
+          // session knows which project it belongs to.
           const bindingKey = extractBindingKey(sessionId)
           const binding = getBinding(bindingKey)
           let projectId = binding?.projectId
@@ -6098,17 +6148,27 @@ export class AgentServer {
             if (defaultProject) projectId = defaultProject.id
           }
 
-          if (!projectId) return undefined
-          const project = loadProject(projectId)
-          if (!project) return undefined
-          return {
-            projectId,
-            projectContext: buildProjectContext(project, projectId),
-            projectWorkspacePath: project.workspacePath,
-            projectType: project.type,
-            onJobAction: this.buildAgentActionHandler(sessionId),
-            availableWorkflows: this.getAvailableWorkflowsForPrompt(),
-          }
+          // Single source of truth: webhook sessions get the exact same
+          // SessionOptions shape desktop sessions get. Anything new added
+          // to `buildSessionOptions` lights up automatically on Telegram /
+          // Slack — no second wiring site to remember. Returning the
+          // desktop wiring even when no project is bound matters because
+          // host-level handlers (resolveProviderToken, domain, …) are
+          // valuable on a project-less session too. `domain` defaults to
+          // `getPublicHost()` inside `buildSessionOptions`, so callers
+          // don't need to pass it explicitly.
+          const opts = this.buildSessionOptions(sessionId, projectId)
+          // Override the desktop-only sub-agent event handler. The
+          // default `makeSubAgentEventHandler` forwards rich events to
+          // `Channel.AI` for the desktop side-panel UI; on a webhook
+          // session there is no desktop panel, and routing them risks
+          // leaking events into a desktop client that happens to share
+          // the same sessionId. Webhook sessions surface sub-agent
+          // activity through the SessionEvent stream that `runOne`
+          // already consumes (sub_agent_start / sub_agent_end), which is
+          // delivered to the user via `provider.sendMessage(...)`.
+          opts.onSubAgentEvent = undefined
+          return opts
         },
         // Harness session factory — lets the runner build Codex /
         // Claude Code sessions for Slack/Telegram with the same wiring
@@ -6209,7 +6269,8 @@ export class AgentServer {
 
   /** Resolve the publicly reachable origin used for webhook registration. */
   private getPublicUrl(): string | null {
-    if (process.env.ANTON_HOST) return `https://${process.env.ANTON_HOST}`
+    const host = getPublicHost()
+    if (host) return `https://${host}`
     if (process.env.OAUTH_CALLBACK_BASE_URL) {
       try {
         return new URL(process.env.OAUTH_CALLBACK_BASE_URL).origin
@@ -6648,7 +6709,7 @@ export class AgentServer {
     // Build provider-specific extra params
     let extraParams: Record<string, string> | undefined
     if (entry?.oauthProvider === 'websearch' || entry?.oauthProvider === 'webresearch') {
-      let domain = process.env.ANTON_HOST
+      let domain = getPublicHost()
       if (!domain && process.env.OAUTH_CALLBACK_BASE_URL) {
         try {
           domain = new URL(process.env.OAUTH_CALLBACK_BASE_URL).hostname

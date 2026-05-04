@@ -41,6 +41,7 @@ export {
   type ConfirmHandler,
   type SessionEvent,
   type SessionInfo,
+  type SessionOptions,
   type SubAgentEventHandler,
   type SurfaceInfo,
 } from './session.js'
