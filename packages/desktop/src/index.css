@@ -20434,6 +20434,25 @@ button {
   margin: 0 auto;
   padding: 24px 40px 80px;
 }
+.conv-back {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 8px 4px 4px;
+  margin: 0 0 16px -4px;
+  background: none;
+  border: none;
+  color: var(--text-subtle);
+  font-size: 13px;
+  font-family: var(--font-sans);
+  cursor: pointer;
+  border-radius: 6px;
+  transition: color 0.15s ease, background 0.12s ease;
+}
+.conv-back:hover {
+  color: var(--text);
+  background: rgba(var(--overlay), 0.05);
+}
 .rt-head {
   display: flex;
   align-items: flex-start;
