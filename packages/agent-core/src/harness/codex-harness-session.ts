@@ -29,6 +29,7 @@ import type { ReasoningEffort } from './codex-proto/ReasoningEffort.js'
 import { CodexRpcClient, CodexRpcError } from './codex-rpc.js'
 import { PINNED_CLI_VERSION, detectCodexCli } from './codex-version.js'
 import type { McpSpawnConfig } from './mcp-spawn-config.js'
+import { TurnTelemetry } from './turn-telemetry.js'
 
 /**
  * Map Anton's UI-facing ThinkingLevel onto the Codex protocol's
@@ -242,6 +243,25 @@ export class CodexHarnessSession {
   private readonly openItemStartedAt = new Map<string, number>()
 
   /**
+   * Provider-agnostic per-turn observability — counters, idle watchdog,
+   * `turn started/completed` log lines. Driven by SessionEvent, so the
+   * same instance shape works for any harness. Provider-specific item
+   * lifecycle (reasoning items, fileChange paths) stays inline below.
+   */
+  private readonly telemetry: TurnTelemetry
+
+  /**
+   * Codex-specific item counters that aren't derivable from SessionEvents.
+   * `agentMessage` and `reasoning` items have explicit lifecycle in the
+   * codex protocol but only emit deltas (no per-item events) to the UI,
+   * so we count them from `item/started` / `item/completed`.
+   */
+  private currentTurnReasoningItems = 0
+  private currentTurnMessageItems = 0
+  /** Per-reasoning-item char accumulator, drained on `item/completed`. */
+  private readonly openReasoningChars = new Map<string, number>()
+
+  /**
    * Reasoning effort for subsequent `turn/start` calls. Mutable — the
    * composer's Effort pill forwards changes here via
    * `Session.setThinkingLevel()` and they take effect on the next turn.
@@ -257,6 +277,7 @@ export class CodexHarnessSession {
     this.lastActiveAt = Date.now()
     this.sandboxMode = resolveSandboxMode()
     this.effort = thinkingLevelToCodexEffort(opts.thinkingLevel ?? 'medium')
+    this.telemetry = new TurnTelemetry({ logger: log, sessionId: this.id })
   }
 
   /** Apply a new reasoning effort level to subsequent turns. */
@@ -374,6 +395,9 @@ export class CodexHarnessSession {
     this.currentTurnUsage = null
     this.openToolCalls.clear()
     this.messagePhases.clear()
+    this.currentTurnReasoningItems = 0
+    this.currentTurnMessageItems = 0
+    this.openReasoningChars.clear()
     // Per-turn dedup state — fresh so the first update of this turn
     // always propagates even if it happens to hash-match the previous
     // turn's last snapshot.
@@ -566,6 +590,7 @@ export class CodexHarnessSession {
     if (!this.proc || this.proc.killed) return
     log.info({ sessionId: this.id }, 'shutting down codex app-server')
 
+    this.telemetry.dispose()
     this.rpc?.close('shutdown')
     try {
       this.proc.stdin?.end()
@@ -805,6 +830,7 @@ export class CodexHarnessSession {
   private emit(...events: SessionEvent[]) {
     const turn = this.currentTurn
     if (!turn) return // out-of-turn events are dropped
+    for (const ev of events) this.telemetry.recordEvent(ev)
     turn.events.push(...events)
     turn.resolve?.()
     turn.resolve = null
@@ -896,8 +922,7 @@ export class CodexHarnessSession {
     if (!id) return
     this.currentTurnId = id
     this.currentTurnStartedAt = Date.now()
-
-    log.info({ sessionId: this.id, turnId: id, turnIndex: this.turnIndex }, 'codex turn started')
+    this.telemetry.startTurn(id, this.turnIndex)
 
     // Drain race-window buffers in priority order. A buffered cancel
     // tears the turn down — no point also steering. A buffered steer
@@ -922,18 +947,14 @@ export class CodexHarnessSession {
     // status tells us whether it ended cleanly; usage is reported
     // separately via `thread/tokenUsage/updated`.
     const p = params as { turn?: { status?: string; error?: { message?: string } } } | undefined
-    const status = p?.turn?.status
-    const durationMs = this.currentTurnStartedAt ? Date.now() - this.currentTurnStartedAt : null
-    log.info(
-      {
-        sessionId: this.id,
-        turnId: this.currentTurnId,
-        status: status ?? 'unknown',
-        durationMs,
-        openItems: this.openToolCalls.size,
-      },
-      'codex turn completed',
-    )
+    const status = p?.turn?.status ?? 'unknown'
+    // Pass codex-specific extras (item counts, openItems) through to the
+    // generic `turn completed` log so we keep them in the same record.
+    this.telemetry.completeTurn(status, {
+      reasoningItems: this.currentTurnReasoningItems,
+      messageItems: this.currentTurnMessageItems,
+      openItems: this.openToolCalls.size,
+    })
     this.currentTurnStartedAt = null
     if (status === 'failed' || status === 'interrupted') {
       const message = p?.turn?.error?.message ?? `turn ${status}`
@@ -959,7 +980,14 @@ export class CodexHarnessSession {
     const p = params as { delta?: string; itemId?: string } | undefined
     const delta = p?.delta
     if (typeof delta !== 'string' || delta.length === 0) return
-    this.emit({ type: 'thinking', text: delta, blockId: p?.itemId, kind: 'summary' })
+    // Per-item char accumulation feeds the codex-specific `reasoning
+    // completed` log line below; turn-level char counting happens in
+    // TurnTelemetry via the `thinking` SessionEvent.
+    const itemId = p?.itemId
+    if (itemId) {
+      this.openReasoningChars.set(itemId, (this.openReasoningChars.get(itemId) ?? 0) + delta.length)
+    }
+    this.emit({ type: 'thinking', text: delta, blockId: itemId, kind: 'summary' })
   }
 
   private onTokenUsageUpdated(params: unknown) {
@@ -1118,6 +1146,23 @@ export class CodexHarnessSession {
         if (phaseRaw === 'commentary' || phaseRaw === 'final_answer') {
           this.messagePhases.set(item.id, phaseRaw)
         }
+        this.currentTurnMessageItems += 1
+        return
+      }
+
+      case 'reasoning': {
+        // Reasoning items don't fan out to the UI as tool cards, but
+        // they're the dominant occupier of "silent" wall-clock during
+        // long turns. Logging start + completion (with chars +
+        // durationMs) lets a single log timeline distinguish "model is
+        // reasoning" from "model is hung".
+        this.currentTurnReasoningItems += 1
+        this.openItemStartedAt.set(item.id, Date.now())
+        this.openReasoningChars.set(item.id, 0)
+        log.info(
+          { sessionId: this.id, turnId: this.currentTurnId, itemId: item.id },
+          'codex reasoning started',
+        )
         return
       }
 
@@ -1198,6 +1243,24 @@ export class CodexHarnessSession {
       case 'agentMessage': {
         // Phase lookup is no longer needed; free the entry.
         this.messagePhases.delete(item.id)
+        return
+      }
+
+      case 'reasoning': {
+        const startedAt = this.openItemStartedAt.get(item.id)
+        const chars = this.openReasoningChars.get(item.id) ?? 0
+        this.openItemStartedAt.delete(item.id)
+        this.openReasoningChars.delete(item.id)
+        log.info(
+          {
+            sessionId: this.id,
+            turnId: this.currentTurnId,
+            itemId: item.id,
+            chars,
+            durationMs: startedAt ? Date.now() - startedAt : null,
+          },
+          'codex reasoning completed',
+        )
         return
       }
 
@@ -1284,8 +1347,32 @@ export class CodexHarnessSession {
       case 'fileChange': {
         // v2 replacement for v1 `codex/event/patch_apply_end`.
         // Item shape: { id, changes: [{path, kind, diff}], status }.
-        const changes = (item as { changes?: Array<{ path?: string }> }).changes
+        const changes = (item as { changes?: Array<{ path?: string; kind?: string }> }).changes
+        const status = (item as { status?: string }).status
         if (!Array.isArray(changes)) return
+        // Log the lifecycle here. Without this, `apply_patch` runs were
+        // invisible in the log: tool_call events covered shell/MCP/
+        // webSearch, fileChange artifacts only showed up via the UI
+        // artifact stream. Now a single line names the paths + kinds
+        // the model wrote, with item-level durationMs. The per-turn
+        // file-change counter lives in TurnTelemetry and is incremented
+        // automatically when each `artifact` SessionEvent is emitted
+        // below.
+        const startedAt = this.openItemStartedAt.get(item.id)
+        this.openItemStartedAt.delete(item.id)
+        log.info(
+          {
+            sessionId: this.id,
+            turnId: this.currentTurnId,
+            itemId: item.id,
+            status: status ?? 'unknown',
+            count: changes.length,
+            paths: changes.map((c) => c?.path).filter((p): p is string => typeof p === 'string'),
+            kinds: changes.map((c) => c?.kind).filter((k): k is string => typeof k === 'string'),
+            durationMs: startedAt ? Date.now() - startedAt : null,
+          },
+          'codex file_change',
+        )
         for (const c of changes) {
           const fp = c?.path
           if (typeof fp !== 'string' || !existsSync(fp)) continue

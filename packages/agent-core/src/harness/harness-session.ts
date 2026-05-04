@@ -17,6 +17,7 @@ import type { ChatImageAttachmentInput } from '@anton/protocol'
 import type { SessionEvent } from '../session.js'
 import type { HarnessAdapter } from './adapter.js'
 import type { McpSpawnConfig } from './mcp-spawn-config.js'
+import { TurnTelemetry } from './turn-telemetry.js'
 
 /**
  * MCP bridge config for HarnessSession. Mirrors CodexHarnessMcpOpts; we
@@ -106,6 +107,14 @@ export class HarnessSession {
   /** Sentinel — set to true so server.ts can distinguish from Session */
   readonly isHarness = true as const
 
+  /**
+   * Provider-agnostic per-turn observability. Driven entirely by the
+   * SessionEvents this session yields, so it captures the same
+   * counters + idle watchdog + `turn started/completed` summary as the
+   * codex harness does, with no claude-specific wiring.
+   */
+  private readonly telemetry: TurnTelemetry
+
   constructor(opts: HarnessSessionOpts) {
     this.id = opts.id
     this.provider = opts.provider
@@ -119,6 +128,7 @@ export class HarnessSession {
     this.maxBudgetUsd = opts.maxBudgetUsd
     this.createdAt = Date.now()
     this.lastActiveAt = Date.now()
+    this.telemetry = new TurnTelemetry({ logger: log, sessionId: this.id })
   }
 
   getTitle(): string {
@@ -203,6 +213,10 @@ export class HarnessSession {
     }
 
     this.turnIndex += 1
+
+    // The claude-code CLI doesn't expose a turn id, so we synthesize
+    // one for telemetry log correlation.
+    this.telemetry.startTurn(`turn_${randomUUID().slice(0, 8)}`, this.turnIndex)
 
     try {
       const args = this.adapter.buildSpawnArgs({
@@ -372,6 +386,7 @@ export class HarnessSession {
           receivedFirstEvent = true
           const ev = eventQueue.shift()!
           turnEvents.push(ev)
+          this.telemetry.recordEvent(ev)
           yield ev
         } else if (!done) {
           await new Promise<void>((resolve) => {
@@ -391,8 +406,16 @@ export class HarnessSession {
           code: classifyStartupError(stderrChunks),
         }
         turnEvents.push(errorEvent)
+        this.telemetry.recordEvent(errorEvent)
         yield errorEvent
       }
+
+      // Close the telemetry turn before the mirror callback / `done`
+      // event. Status maps cleanly from exitCode: 0 → completed,
+      // non-zero → failed, null → process never spawned (also failed).
+      this.telemetry.completeTurn(exitCode === 0 ? 'completed' : 'failed', {
+        exitCode: exitCode ?? null,
+      })
 
       // Mirror hook: fire before the terminal `done` so consumers see
       // the persisted turn before the stream closes.
@@ -407,6 +430,10 @@ export class HarnessSession {
       // Ensure a done event is always emitted
       yield { type: 'done' }
     } finally {
+      // Safety net for early generator teardown (consumer threw or broke
+      // out of for-await). Idempotent — no-op if the success path already
+      // closed the turn.
+      this.telemetry.completeTurn('cancelled')
       // Clean up temp MCP config
       this.cleanupFile(mcpConfigPath)
       this.proc = null
@@ -445,6 +472,7 @@ export class HarnessSession {
 
   /** Graceful shutdown: end stdin → SIGTERM → SIGKILL */
   async shutdown() {
+    this.telemetry.dispose()
     if (!this.proc || this.proc.killed) return
 
     log.info({ sessionId: this.id }, 'Shutting down harness CLI')
