@@ -12,15 +12,15 @@
  *   - progress updates for long-running tasks
  */
 
-import { type AgentConfig, DEFAULT_PROVIDERS } from '@anton/agent-config'
+import { type AgentConfig, DEFAULT_PROVIDERS, getPublicHost } from '@anton/agent-config'
 import type {
   CodexHarnessSession,
   CommandContext,
   CommandResult,
   HarnessSession,
-  JobActionHandler,
   McpManager,
   Session,
+  SessionOptions,
   SurfaceInfo,
 } from '@anton/agent-core'
 import { createSession, executeCommand, isHarnessSession, resumeSession } from '@anton/agent-core'
@@ -39,18 +39,13 @@ import type {
 } from './provider.js'
 
 /**
- * Extra session options resolved per-session by the host (e.g. project-scoped
- * callbacks like onJobAction). The server builds this from webhook bindings
- * so that Telegram/Slack sessions get the same tools as desktop sessions.
+ * Per-session options resolved by the host. Aliases the unified
+ * `SessionOptions` shape exported from agent-core, so webhook sessions
+ * see the exact same wiring desktop sessions do — adding a field to
+ * `AgentServer.buildSessionOptions(...)` automatically lights up on
+ * Telegram and Slack with no second site to update.
  */
-export interface WebhookSessionOptions {
-  projectId?: string
-  projectContext?: string
-  projectWorkspacePath?: string
-  projectType?: string
-  onJobAction?: JobActionHandler
-  availableWorkflows?: { name: string; description: string; whenToUse: string }[]
-}
+export type WebhookSessionOptions = SessionOptions
 
 /**
  * Callback the server provides to resolve project-scoped session options
@@ -1026,16 +1021,24 @@ export class WebhookAgentRunner {
     }
 
     // ── Pi SDK API providers (anton, openrouter, anthropic, …) ────────
-    const baseOpts = {
-      mcpManager: this.mcpManager,
-      connectorManager: this.connectorManager,
-      surface,
-      // Forward the resolved override so createSession picks it up
-      // instead of defaulting to config.defaults.{provider,model}.
+    // `extra` is the full SessionOptions object the server hands out via
+    // its single `buildSessionOptions(...)` factory (host wiring,
+    // mcpManager, connectorManager, domain, project context, all
+    // handlers — same shape desktop sessions get). We layer webhook-
+    // specific per-session overrides on top: provider/model resolved
+    // from the per-binding `/model` override, and the per-event surface.
+    const baseOpts: SessionOptions = {
+      ...extra,
       provider: providerName,
       model,
-      ...extra,
+      surface,
     }
+    // Defensive fallbacks for callers that wired the runner without a
+    // session-options builder (rare — embedded harness tests). Without
+    // these the model/connector path goes silent.
+    if (!baseOpts.mcpManager) baseOpts.mcpManager = this.mcpManager
+    if (!baseOpts.connectorManager) baseOpts.connectorManager = this.connectorManager
+    if (!baseOpts.domain) baseOpts.domain = getPublicHost()
 
     // resumeSession is a "try to rehydrate" helper — it can throw on
     // corrupted state, version skew, or filesystem errors. Historically we
@@ -1050,12 +1053,41 @@ export class WebhookAgentRunner {
       session = undefined
     }
 
-    // If the resumed session's provider no longer has a key, switch to the current default
+    // Reconcile resumed sessions with the current binding override.
+    //
+    // resumeSession reads `provider` and `model` from the persisted
+    // record on disk and ignores `baseOpts.provider`/`baseOpts.model` —
+    // that's correct for the common case (continuing a conversation on
+    // the same model) but wrong here. The user may have run `/model X`
+    // *before* this server process started; the override is saved in
+    // the binding store, but the persisted session's provider/model is
+    // older. `/model` evicts the in-memory session so the next message
+    // creates fresh, but a server restart loses that — the binding
+    // override would silently never apply until the user re-runs
+    // `/model`.
+    //
+    // Two reconciliations, in priority order:
+    //   1. Persisted provider has no API key → switch to current default
+    //      (preserves the old "drop dead provider" safety net).
+    //   2. Resolved binding override differs from persisted → switch to
+    //      the override (makes /model survive cold starts).
     if (session && !this.hasApiKey(session.provider)) {
       try {
         session.switchModel(this.config.defaults.provider, this.config.defaults.model)
       } catch {
         // fall through — createSession will handle it
+      }
+    } else if (
+      session &&
+      (session.provider !== providerName || session.model !== model)
+    ) {
+      try {
+        session.switchModel(providerName, model)
+      } catch (err) {
+        log.warn(
+          { sessionId, providerName, model, err },
+          'failed to apply binding override on resume; session keeps persisted provider/model',
+        )
       }
     }
 

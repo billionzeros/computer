@@ -23,6 +23,7 @@ import {
   ensureConversationDirs,
   getConversationWorkspace,
   getProjectSessionsDir,
+  getPublicHost,
   loadProjectTypePrompt,
   loadReferences,
   loadSession,
@@ -348,6 +349,7 @@ import {
   buildActiveConnectorsLayer,
   buildActiveSkillsLayer,
   buildAgentContextLayer,
+  buildCurrentContextLayer,
   buildMemoryLayer,
   buildProjectMemoryInstructionsLayer,
   buildSurfaceLayer,
@@ -2665,47 +2667,33 @@ export class Session {
     prompt += userRulesBlock
     sizes.userRules += userRulesBlock.length
 
-    // Layer 3: Current context — workspace, project, date
-    const contextLines: string[] = []
-    if (this.projectContext) {
-      contextLines.push(this.projectContext)
-    }
-    if (this.workspacePath) {
-      if (this.projectContext) {
-        // Project exists — workspace is scratch space only
-        contextLines.push(`- Scratch space: ${this.workspacePath}/`)
-        contextLines.push(
-          '  Use ONLY for transient files: temp scripts, intermediate outputs, debug logs.',
-        )
-        contextLines.push(
-          '  Files here are not visible to the user. Use the project workspace for anything the user should see.',
-        )
-      } else {
-        // No project — workspace is the only workspace
-        contextLines.push(`- Workspace: ${this.workspacePath}/`)
-        contextLines.push(
-          'Use this directory for any files you need to create or store during this conversation.',
-        )
-      }
-    }
-    contextLines.push(`- Date: ${new Date().toISOString().split('T')[0]}`)
-
-    // Environment awareness — tell the model what machine it's running on
-    contextLines.push(`- Platform: ${platform()} ${arch()}`)
-    contextLines.push(`- OS: ${osType()} ${release()}`)
-    contextLines.push(`- User: ${userInfo().username}`)
-    contextLines.push(`- Shell: ${process.env.SHELL || '/bin/bash'}`)
-    // Detect sudo capability (passwordless)
+    // Layer 3: Current context — single source of truth in
+    // prompt-layers.ts so wording stays in lockstep across the Pi SDK
+    // (this) and harness (`buildHarnessContextPrompt`) paths. Pi-SDK-
+    // only env lines (Platform/OS/User/Shell/Sudo) are passed in via
+    // `environmentLines`; the harness CLI emits its own.
+    const environmentLines: string[] = [
+      `- Platform: ${platform()} ${arch()}`,
+      `- OS: ${osType()} ${release()}`,
+      `- User: ${userInfo().username}`,
+      `- Shell: ${process.env.SHELL || '/bin/bash'}`,
+    ]
     try {
       execSync('sudo -n true 2>/dev/null', { timeout: 3000, stdio: 'pipe' })
-      contextLines.push(
+      environmentLines.push(
         '- Sudo: available (passwordless). Use `sudo` for privileged operations like installing packages, managing services, and system configuration.',
       )
     } catch {
-      contextLines.push('- Sudo: not available')
+      environmentLines.push('- Sudo: not available')
     }
 
-    const currentContextBlock = systemReminder('Current Context', contextLines.join('\n'))
+    const currentContextBlock = buildCurrentContextLayer({
+      projectContext: this.projectContext,
+      workspacePath: this.workspacePath,
+      publicHost: getPublicHost(),
+      framingAsScratchSpace: true,
+      environmentLines,
+    })
     prompt += currentContextBlock
     sizes.currentContext += currentContextBlock.length
 
@@ -2906,49 +2894,97 @@ export class Session {
 /** Sub-agent event callback — events from child agents, tagged with parent tool call ID. */
 export type SubAgentEventHandler = (event: SessionEvent & { parentToolCallId: string }) => void
 
+/**
+ * Unified options bag for `createSession` and `resumeSession`.
+ *
+ * Every field that the host (server, scheduler, webhook runner) might
+ * want to thread into a session lives here. Both functions accept this
+ * exact shape — same set of fields, same wiring — so adding a new
+ * option lights up automatically across desktop, Telegram, Slack, and
+ * every scheduled run with no second site to remember.
+ *
+ * A few fields are only meaningful at create time (`apiKey`,
+ * `ephemeral`); the resume path silently ignores them since the
+ * persisted session reuses what was on disk.
+ */
+export interface SessionOptions {
+  // ── Provider config ──────────────────────────────────────────────
+  /** Override the default provider for this session (createSession only). */
+  provider?: string
+  /** Override the default model for this session (createSession only). */
+  model?: string
+  /** Client-provided API key (createSession only; resume reads from disk). */
+  apiKey?: string
+  /** Sub-agent / fork sessions: skip persistence + title gen + compaction. */
+  ephemeral?: boolean
+
+  // ── Project / workspace context ─────────────────────────────────
+  projectId?: string
+  projectContext?: string
+  projectWorkspacePath?: string
+  projectType?: string
+
+  // ── Manager wiring ──────────────────────────────────────────────
+  mcpManager?: import('./mcp/mcp-manager.js').McpManager
+  connectorManager?: {
+    getAllTools(surface?: string): import('@mariozechner/pi-agent-core').AgentTool[]
+    getToolPermission?(toolName: string): 'auto' | 'ask' | 'never'
+  }
+
+  // ── Tool-callback handlers ──────────────────────────────────────
+  /** Sub-agent event stream — server forwards to desktop AI channel. */
+  onSubAgentEvent?: SubAgentEventHandler
+  /** `routine` tool action handler. */
+  onJobAction?: import('./tools/job.js').JobActionHandler
+  /** `activate_workflow` tool handler. Hidden when undefined. */
+  onActivateWorkflow?: import('./tools/activate-workflow.js').ActivateWorkflowHandler
+  /** Workflow shared-state DB handler (workflow agents only). */
+  onSharedState?: import('./tools/shared-state.js').SharedStateHandler
+  /** `deliver_result` tool handler (sub-agents / scheduled agents only). */
+  onDeliverResult?: import('./tools/deliver-result.js').DeliverResultHandler
+  /**
+   * Resolves `{ baseUrl, token }` for proxy-style connectors. Threaded
+   * into Pi SDK's tool callbacks so anton-core canonical wrappers
+   * (`web_search`, `web_research`) can reach the credential store +
+   * connector-class proxy URLs without learning about either layer.
+   */
+  resolveProviderToken?: import('./tools/factories.js').ProviderTokenResolver
+
+  // ── Anton context ───────────────────────────────────────────────
+  /** Public hostname used by the publish tool (`https://<domain>/a/<slug>`). */
+  domain?: string
+  /** Reasoning effort for thinking-capable models. */
+  thinkingLevel?: ThinkingLevel
+  /** Where the session is talking — Slack/Telegram/desktop. Omit for desktop. */
+  surface?: SurfaceInfo
+
+  // ── Workflow / agent context ────────────────────────────────────
+  /** The workflow ID this agent belongs to (for shared-state context). */
+  workflowId?: string
+  /** The agent key within the workflow (for transition enforcement). */
+  workflowAgentKey?: string
+  /** Workflow metadata for Braintrust tracing. */
+  workflowMetadata?: { workflowId: string; agentKey: string; promptVersion: string }
+  /** Standing instructions for scheduled agents (injected into system prompt). */
+  agentInstructions?: string
+  /** Persistent memory from previous agent runs. */
+  agentMemory?: string
+
+  // ── Prompt-aware context ────────────────────────────────────────
+  /** Available workflow catalog for auto-suggestion in system prompt. */
+  availableWorkflows?: { name: string; description: string; whenToUse: string }[]
+  /** Active connector capability summaries for prompt guidance. */
+  liveConnectors?: LiveConnectorSummary[]
+
+  // ── Safety limits ───────────────────────────────────────────────
+  /** Max wall-clock time for `processMessage` (0/undefined = unlimited). */
+  maxDurationMs?: number
+}
+
 export function createSession(
   id: string,
   config: AgentConfig,
-  opts?: {
-    provider?: string
-    model?: string
-    apiKey?: string
-    onSubAgentEvent?: SubAgentEventHandler
-    ephemeral?: boolean
-    projectId?: string
-    projectContext?: string
-    projectWorkspacePath?: string
-    projectType?: string
-    mcpManager?: import('./mcp/mcp-manager.js').McpManager
-    connectorManager?: {
-      getAllTools(surface?: string): import('@mariozechner/pi-agent-core').AgentTool[]
-      getToolPermission?(toolName: string): 'auto' | 'ask' | 'never'
-    }
-    onJobAction?: import('./tools/job.js').JobActionHandler
-    onDeliverResult?: import('./tools/deliver-result.js').DeliverResultHandler
-    maxDurationMs?: number
-    /** Domain for the agent (e.g. "slug.antoncomputer.in"). Passed to publish tool. */
-    domain?: string
-    /** Standing instructions for scheduled agents (injected into system prompt) */
-    agentInstructions?: string
-    /** Persistent memory from previous agent runs */
-    agentMemory?: string
-    /** Available workflow catalog for auto-suggestion in system prompt */
-    availableWorkflows?: { name: string; description: string; whenToUse: string }[]
-    /** Active connector capability summaries for prompt guidance */
-    liveConnectors?: LiveConnectorSummary[]
-    /** Workflow metadata for Braintrust tracing (workflow ID, agent key, prompt version) */
-    workflowMetadata?: { workflowId: string; agentKey: string; promptVersion: string }
-    /** Where the session is talking — Slack/Telegram/desktop. Omit for desktop. */
-    surface?: SurfaceInfo
-    /**
-     * Resolves `{ baseUrl, token }` for proxy-style connectors. Threaded
-     * into Pi SDK's tool callbacks so anton-core canonical wrappers
-     * (`web_search`, `web_research`) can reach the credential store +
-     * connector-class proxy URLs without learning about either layer.
-     */
-    resolveProviderToken?: import('./tools/factories.js').ProviderTokenResolver
-  },
+  opts?: SessionOptions,
 ): Session {
   const provider = opts?.provider || config.defaults.provider
   const model = opts?.model || config.defaults.model
@@ -2981,6 +3017,10 @@ export function createSession(
     defaultWorkingDirectory: opts?.projectWorkspacePath,
     projectId: opts?.projectId,
     onJobAction: opts?.onJobAction,
+    onActivateWorkflow: opts?.onActivateWorkflow,
+    onSharedState: opts?.onSharedState,
+    workflowId: opts?.workflowId,
+    workflowAgentKey: opts?.workflowAgentKey,
     onDeliverResult: opts?.onDeliverResult,
     domain: opts?.domain,
     resolveProviderToken: opts?.resolveProviderToken,
@@ -3020,6 +3060,7 @@ export function createSession(
     availableWorkflows: opts?.availableWorkflows,
     liveConnectors: opts?.liveConnectors,
     maxDurationMs: opts?.maxDurationMs,
+    thinkingLevel: opts?.thinkingLevel,
     workflowMetadata: opts?.workflowMetadata,
     surface: opts?.surface,
   })
@@ -3045,33 +3086,16 @@ export function createSession(
 /**
  * Resume a persisted session from disk.
  * Returns null if session doesn't exist.
+ *
+ * Accepts the same `SessionOptions` shape as `createSession`. Fields
+ * that only make sense at create time (`provider`, `model`, `apiKey`,
+ * `ephemeral`) are silently ignored — the persisted record reuses what
+ * was on disk.
  */
 export function resumeSession(
   id: string,
   config: AgentConfig,
-  opts?: {
-    onSubAgentEvent?: SubAgentEventHandler
-    projectId?: string
-    projectContext?: string
-    projectWorkspacePath?: string
-    projectType?: string
-    mcpManager?: import('./mcp/mcp-manager.js').McpManager
-    connectorManager?: {
-      getAllTools(surface?: string): import('@mariozechner/pi-agent-core').AgentTool[]
-      getToolPermission?(toolName: string): 'auto' | 'ask' | 'never'
-    }
-    onJobAction?: import('./tools/job.js').JobActionHandler
-    onDeliverResult?: import('./tools/deliver-result.js').DeliverResultHandler
-    maxDurationMs?: number
-    agentInstructions?: string
-    agentMemory?: string
-    /** Active connector capability summaries for prompt guidance */
-    liveConnectors?: LiveConnectorSummary[]
-    /** Where the session is talking — Slack/Telegram/desktop. Omit for desktop. */
-    surface?: SurfaceInfo
-    /** See createSession opts — same field, plumbed for resumed sessions. */
-    resolveProviderToken?: import('./tools/factories.js').ProviderTokenResolver
-  },
+  opts?: SessionOptions,
 ): Session | null {
   const basePath = opts?.projectId ? getProjectSessionsDir(opts.projectId) : undefined
   const persisted = loadSession(id, basePath)
@@ -3103,7 +3127,12 @@ export function resumeSession(
     defaultWorkingDirectory: opts?.projectWorkspacePath,
     projectId: opts?.projectId,
     onJobAction: opts?.onJobAction,
+    onActivateWorkflow: opts?.onActivateWorkflow,
+    onSharedState: opts?.onSharedState,
+    workflowId: opts?.workflowId,
+    workflowAgentKey: opts?.workflowAgentKey,
     onDeliverResult: opts?.onDeliverResult,
+    domain: opts?.domain,
     resolveProviderToken: opts?.resolveProviderToken,
     getParentForkContext: () => {
       const s = sessionRef.session
@@ -3142,9 +3171,12 @@ export function resumeSession(
     projectType: opts?.projectType,
     agentInstructions: opts?.agentInstructions,
     agentMemory: opts?.agentMemory,
+    availableWorkflows: opts?.availableWorkflows,
     liveConnectors: opts?.liveConnectors,
     lastTasks: persisted.lastTasks,
     maxDurationMs: opts?.maxDurationMs,
+    thinkingLevel: opts?.thinkingLevel,
+    workflowMetadata: opts?.workflowMetadata,
     surface: opts?.surface,
   })
   sessionRef.session = session

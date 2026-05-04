@@ -44,20 +44,64 @@ export interface CurrentContextLayerOpts {
   workspacePath?: string
   /** ISO-date stamp for "Today's date". Defaults to now. */
   date?: string
+  /** Public hostname this Anton instance serves on (ANTON_HOST). */
+  publicHost?: string
+  /**
+   * When true and a `projectContext` is present, frame the workspace as
+   * "scratch space" instead of the canonical workspace — Pi-SDK behavior
+   * where attached projects are the user-visible workspace and `cwd` is
+   * for transient files. Harness path leaves this false (the CLI already
+   * has its own working-dir conventions).
+   */
+  framingAsScratchSpace?: boolean
+  /**
+   * Pi-SDK-only extras (platform / OS / user / shell / sudo). The harness
+   * CLI emits its own environment context, so leave empty there to avoid
+   * drift. Pass an already-formatted list of `- key: value` lines.
+   */
+  environmentLines?: string[]
 }
 
 /**
- * Layer 3 — current conversation context (project, workspace, date).
+ * Layer 3 — current conversation context (project, workspace, date,
+ * public host, optional environment).
  *
- * The Pi SDK version also emits platform / OS / user / shell / sudo, but
- * the harness CLI has its own environment context already and re-emitting
- * creates drift. Keep this layer minimal.
+ * Single source of truth for both Pi SDK (`Session.getSystemPrompt()`)
+ * and harness (`buildHarnessContextPrompt`). When you change wording or
+ * add a field here, both surfaces — desktop, Telegram, Slack, scheduled
+ * agents, every harness CLI — pick it up automatically.
  */
 export function buildCurrentContextLayer(opts: CurrentContextLayerOpts): string {
   const lines: string[] = []
   if (opts.projectContext) lines.push(opts.projectContext)
-  if (opts.workspacePath) lines.push(`- Workspace: ${opts.workspacePath}/`)
+  if (opts.workspacePath) {
+    if (opts.framingAsScratchSpace && opts.projectContext) {
+      lines.push(`- Scratch space: ${opts.workspacePath}/`)
+      lines.push(
+        '  Use ONLY for transient files: temp scripts, intermediate outputs, debug logs.',
+      )
+      lines.push(
+        '  Files here are not visible to the user. Use the project workspace for anything the user should see.',
+      )
+    } else {
+      lines.push(`- Workspace: ${opts.workspacePath}/`)
+      if (opts.framingAsScratchSpace) {
+        lines.push(
+          'Use this directory for any files you need to create or store during this conversation.',
+        )
+      }
+    }
+  }
   lines.push(`- Date: ${opts.date ?? new Date().toISOString().split('T')[0]}`)
+  if (opts.publicHost) {
+    lines.push(`- Public hostname: ${opts.publicHost}`)
+    lines.push(
+      `  Published artifacts (from the \`publish\` tool, stored under ~/.anton/published/<slug>/) are served at https://${opts.publicHost}/a/<slug>. Use this exact host when referring to a previously-published URL — do NOT invent a different domain.`,
+    )
+  }
+  if (opts.environmentLines && opts.environmentLines.length > 0) {
+    for (const line of opts.environmentLines) lines.push(line)
+  }
   return systemReminder('Current Context', lines.join('\n'))
 }
 
@@ -762,6 +806,8 @@ export interface HarnessContextPromptOpts {
   projectContext?: string
   projectId?: string
   workspacePath?: string
+  /** Public hostname this Anton instance serves on (ANTON_HOST). */
+  publicHost?: string
   surface?: SurfaceInfo
   memoryData?: MemoryData
   agentInstructions?: string
@@ -791,6 +837,7 @@ export function buildHarnessContextPrompt(opts: HarnessContextPromptOpts): strin
     buildCurrentContextLayer({
       projectContext: opts.projectContext,
       workspacePath: opts.workspacePath,
+      publicHost: opts.publicHost,
     }),
     buildSurfaceLayer(opts.surface),
     buildMemoryLayer(opts.memoryData),

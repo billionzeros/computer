@@ -1615,6 +1615,29 @@ export function getPublishedDir(): string {
   return PUBLISHED_DIR
 }
 
+/**
+ * The publicly reachable hostname this Anton instance serves on, or
+ * `undefined` when not deployed (local/dev).
+ *
+ * Reads `ANTON_HOST` (the env var cloud-init writes to ~/.anton/agent.env).
+ * Empty strings are treated as unset so deployments with `ANTON_HOST=`
+ * behave the same as deployments with no value at all.
+ *
+ * Used by:
+ *   - the `publish` tool to build canonical https://<host>/a/<slug> URLs
+ *   - the system prompt's "Public hostname" line so the model never
+ *     hallucinates a domain when it references already-published artifacts
+ *   - `auth_ok` payload so the desktop client knows where it's connected
+ *   - webhook URL builders (Telegram / Slack registration)
+ *
+ * Centralised here so adding a new consumer is grep-able and a future
+ * rename / multi-host story has exactly one place to change.
+ */
+export function getPublicHost(): string | undefined {
+  const value = process.env.ANTON_HOST?.trim()
+  return value || undefined
+}
+
 export function getProjectPublicDir(projectName: string): string {
   const dir = join(DEFAULT_WORKSPACE_ROOT, projectName, 'public')
   mkdirSync(dir, { recursive: true })
