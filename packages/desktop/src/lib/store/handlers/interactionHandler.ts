@@ -189,6 +189,14 @@ export function handleInteractionMessage(msg: AiMessage, ctx: MessageContext): b
       return true
     }
 
+    case 'context_update': {
+      const sid = ctx.msgSessionId
+      if (sid && msg.breakdown) {
+        sessionStore.getState().updateSessionState(sid, { contextBreakdown: msg.breakdown })
+      }
+      return true
+    }
+
     case 'done': {
       const ss = sessionStore.getState()
       const store = useStore.getState()

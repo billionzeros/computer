@@ -713,6 +713,49 @@ Your native tools (filesystem, shell, code editing, git, web search, etc.) remai
   )
 }
 
+// ── Per-layer size accounting (for the Context gauge popover) ──────
+
+/**
+ * Char-budget breakdown of every layer that contributes to a Pi-SDK
+ * session's prompt. Returned alongside the assembled string so the
+ * server can populate `ContextBreakdown` without re-running the layer
+ * builders. Char counts get divided by 4 at the call site to estimate
+ * tokens — same heuristic as `estimateMessageTokens` in compaction.ts.
+ */
+export interface SessionPromptLayerSizes {
+  identity: number
+  workspaceRules: number
+  userRules: number
+  currentContext: number
+  surface: number
+  memory: number
+  projectMemoryInstructions: number
+  agentContext: number
+  connectors: number
+  projectTypeGuidelines: number
+  referenceKnowledge: number
+  skills: number
+  workflows: number
+}
+
+export function emptyPromptLayerSizes(): SessionPromptLayerSizes {
+  return {
+    identity: 0,
+    workspaceRules: 0,
+    userRules: 0,
+    currentContext: 0,
+    surface: 0,
+    memory: 0,
+    projectMemoryInstructions: 0,
+    agentContext: 0,
+    connectors: 0,
+    projectTypeGuidelines: 0,
+    referenceKnowledge: 0,
+    skills: 0,
+    workflows: 0,
+  }
+}
+
 // ── High-level entry point ──────────────────────────────────────────
 
 export interface HarnessContextPromptOpts {

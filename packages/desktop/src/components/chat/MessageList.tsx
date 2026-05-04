@@ -162,6 +162,7 @@ export function MessageList({ messages }: Props) {
   const prevScrollHeightRef = useRef(0)
 
   const prevMsgCountRef = useRef(0)
+  const stickToBottomRef = useRef(true)
 
   const scrollToBottom = useCallback((instant?: boolean) => {
     bottomRef.current?.scrollIntoView({ behavior: instant ? 'instant' : 'smooth' })
@@ -200,10 +201,8 @@ export function MessageList({ messages }: Props) {
       return
     }
 
-    const isNearBottom = container.scrollHeight - container.scrollTop - container.clientHeight < 100
-
-    if (isNearBottom) {
-      scrollToBottom()
+    if (stickToBottomRef.current) {
+      scrollToBottom(typeof document !== 'undefined' && document.hidden)
     }
   }, [messages, scrollToBottom])
 
@@ -215,6 +214,7 @@ export function MessageList({ messages }: Props) {
     const checkScroll = () => {
       const distFromBottom = container.scrollHeight - container.scrollTop - container.clientHeight
       setShowScrollBtn(distFromBottom > 200)
+      stickToBottomRef.current = distFromBottom < 100
 
       // Trigger loading older messages when scrolled near the top
       if (container.scrollTop < 80 && hasMore && !isLoadingOlder && activeSessionId) {
@@ -231,11 +231,21 @@ export function MessageList({ messages }: Props) {
       observer.observe(child)
     }
 
+    const onVisible = () => {
+      if (!document.hidden && stickToBottomRef.current) {
+        scrollToBottom(true)
+      }
+    }
+    document.addEventListener('visibilitychange', onVisible)
+    window.addEventListener('focus', onVisible)
+
     return () => {
       container.removeEventListener('scroll', checkScroll)
       observer.disconnect()
+      document.removeEventListener('visibilitychange', onVisible)
+      window.removeEventListener('focus', onVisible)
     }
-  }, [hasMore, isLoadingOlder, activeSessionId])
+  }, [hasMore, isLoadingOlder, activeSessionId, scrollToBottom])
 
   // Maintain scroll position when older messages are prepended
   // biome-ignore lint/correctness/useExhaustiveDependencies: messages.length triggers scroll position restore

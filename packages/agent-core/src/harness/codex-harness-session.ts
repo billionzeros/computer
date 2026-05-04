@@ -978,6 +978,7 @@ export class CodexHarnessSession {
               totalTokens?: number
             }
             last?: { inputTokens?: number; outputTokens?: number; cachedInputTokens?: number }
+            modelContextWindow?: number
           }
         }
       | undefined
@@ -1000,6 +1001,40 @@ export class CodexHarnessSession {
         cacheWriteTokens: 0,
       },
     })
+
+    // Drive the in-composer Context gauge for harness sessions. The
+    // harness CLI doesn't expose how its own prompt is split, so the
+    // popover renders a 2-row breakdown (Messages + Free space).
+    //
+    // Prefer `last.inputTokens` (per-turn input that just hit the model)
+    // over `total.inputTokens` for the gauge, because `total` is the
+    // SUM of input across every turn this thread (including cached
+    // tokens) — on long conversations it routinely exceeds the actual
+    // prompt size and would drive the gauge past 100%. Fall back to
+    // `total` only when `last` isn't reported.
+    const contextWindow = p?.tokenUsage?.modelContextWindow ?? 0
+    if (contextWindow > 0) {
+      const lastInput = p?.tokenUsage?.last?.inputTokens
+      const totalInput = p?.tokenUsage?.total?.inputTokens ?? 0
+      const messages = Math.min(
+        contextWindow,
+        typeof lastInput === 'number' && lastInput > 0 ? lastInput : totalInput,
+      )
+      this.emit({
+        type: 'context_update',
+        breakdown: {
+          contextWindow,
+          systemPrompt: 0,
+          systemTools: 0,
+          mcpTools: 0,
+          skills: 0,
+          memoryFiles: 0,
+          messages,
+          autocompactBuffer: 0,
+          source: 'harness',
+        },
+      })
+    }
   }
 
   private onCompacted() {

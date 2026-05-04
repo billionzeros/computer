@@ -111,6 +111,7 @@ import {
   ensureHarnessSessionInit,
   executePublish,
   extractHarnessMemoriesFromMirror,
+  getModelContextSize,
   hashPromptVersion,
   isHarnessSession,
   matchesSurface,
@@ -134,6 +135,7 @@ import {
 import type {
   AiMessage,
   ChannelId,
+  ContextBreakdown,
   ControlMessage,
   TerminalMessage,
   ThinkingLevel,
@@ -2216,6 +2218,11 @@ export class AgentServer {
           model: session.model,
         })
 
+        // Initial Context-gauge breakdown so the popover has data the
+        // moment the user opens it — no "Loading details…" state on
+        // Pi-SDK sessions.
+        this.emitContextUpdateIfPiSdk(msg.id, session)
+
         // Send context info if available
         if (session.contextInfo) {
           this.sendToClient(Channel.AI, {
@@ -2636,6 +2643,29 @@ export class AgentServer {
         provider: providerName,
         model,
       })
+      // Initial Context-gauge breakdown for harness sessions. We don't
+      // know per-section sizes (the CLI's prompt is opaque), but we can
+      // at least seed `contextWindow` so the popover renders an empty
+      // gauge instead of nothing until the first `tokenUsageUpdated`
+      // event arrives.
+      const contextWindow = getModelContextSize(model)
+      if (contextWindow > 0) {
+        this.sendToClient(Channel.AI, {
+          type: 'context_update',
+          sessionId: id,
+          breakdown: {
+            contextWindow,
+            systemPrompt: 0,
+            systemTools: 0,
+            mcpTools: 0,
+            skills: 0,
+            memoryFiles: 0,
+            messages: 0,
+            autocompactBuffer: 0,
+            source: 'harness',
+          },
+        })
+      }
     }
 
     log.info(
@@ -3998,6 +4028,9 @@ export class AgentServer {
         }
         try {
           session.switchModel(msg.provider, msg.model)
+          // Context window may have changed — refresh the gauge before
+          // the user's next turn (otherwise stale until turn_end).
+          this.emitContextUpdateIfPiSdk(id, session)
           log.info(
             { sessionId: id, provider: msg.provider, model: msg.model },
             'Switched API session to new default model',
@@ -5299,6 +5332,10 @@ export class AgentServer {
     // Skip for harness sessions — they manage their own context
     if (!isHarnessSession(session) && !session.contextInfo) {
       const contextInfo = session.loadConversationContext(msg.content)
+      // Memory layer just changed — refresh the gauge so the popover
+      // attributes the new memory bytes correctly before the next turn
+      // ends.
+      this.emitContextUpdateIfPiSdk(sessionId, session)
       if (contextInfo) {
         this.sendToClient(Channel.AI, {
           type: 'context_info',
@@ -6756,9 +6793,11 @@ export class AgentServer {
 
   /** Refresh connector tools on all active sessions so new connectors are available immediately. */
   private refreshAllSessionTools(): void {
-    for (const session of this.sessions.values()) {
+    for (const [sessionId, session] of this.sessions) {
       if (!isHarnessSession(session)) {
         session.refreshConnectorTools()
+        // Tool list (and thus its byte budget) just changed.
+        this.emitContextUpdateIfPiSdk(sessionId, session)
       }
     }
     this.webhookRunner?.refreshAllSessionTools()
@@ -6962,6 +7001,26 @@ export class AgentServer {
     if (this.activeClient && this.activeClient.readyState === WebSocket.OPEN) {
       this.activeClient.send(encodeFrame(channel, message))
     }
+  }
+
+  /**
+   * Pull a fresh ContextBreakdown from a Pi-SDK Session and forward it
+   * to the desktop client. Used after explicit mutations (model switch,
+   * connector refresh, conversation context load) where the breakdown
+   * changes between turns and would otherwise stay stale until the
+   * next turn ends. No-op for harness sessions — the codex harness
+   * emits its own breakdowns via `tokenUsageUpdated`.
+   */
+  private emitContextUpdateIfPiSdk(sessionId: string, session: unknown): void {
+    if (isHarnessSession(session)) return
+    const piSession = session as { getContextBreakdown?: () => ContextBreakdown | null }
+    const breakdown = piSession.getContextBreakdown?.()
+    if (!breakdown) return
+    this.sendToClient(Channel.AI, {
+      type: 'context_update',
+      sessionId,
+      breakdown,
+    })
   }
 
   /**

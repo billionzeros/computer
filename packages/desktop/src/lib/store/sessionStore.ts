@@ -95,6 +95,12 @@ export interface SessionState {
   lastResponseProvider: string | null
   lastResponseModel: string | null
 
+  // Per-category context window breakdown (drives the composer Context
+  // gauge + popover). Null until the agent-server emits the first
+  // `context_update` event for this session. Pi-SDK sessions carry the
+  // full split; harness sessions only populate `messages` + `contextWindow`.
+  contextBreakdown: import('@anton/protocol').ContextBreakdown | null
+
   // Pending interactions
   pendingConfirm: PendingConfirm | null
   pendingPlan: PendingPlan | null
@@ -150,6 +156,7 @@ export function createSessionState(
     sessionUsage: null,
     lastResponseProvider: null,
     lastResponseModel: null,
+    contextBreakdown: null,
     pendingConfirm: null,
     pendingPlan: null,
     pendingAskUser: null,

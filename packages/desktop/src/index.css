@@ -14288,38 +14288,167 @@ button {
 }
 
 /* ═══════════════════════════════════════════════════════════════════
-   CONTEXT INDICATOR
+   CONTEXT GAUGE + POPOVER (composer toolbar)
    ═══════════════════════════════════════════════════════════════════ */
 
-/* ── Context indicator badge ── */
-.context-indicator {
-  position: relative;
-  display: flex;
-  justify-content: flex-end;
-  padding: 4px 16px 0;
-}
-
-.context-indicator__badge {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  padding: 2px 8px;
-  border: none;
+.context-gauge {
+  display: inline-grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  border: 0;
   background: transparent;
-  color: var(--text-tertiary, #666);
-  font-size: 11px;
+  border-radius: 999px;
+  color: var(--text-3);
   cursor: pointer;
-  border-radius: 4px;
-  transition: background 0.15s, color 0.15s;
+  transition: background 0.12s ease, color 0.12s ease;
+}
+.context-gauge:hover,
+.context-gauge--open {
+  background: var(--bg-elev-2);
+  color: var(--text);
+}
+.context-gauge__track {
+  stroke: color-mix(in oklch, var(--border-strong) 100%, transparent);
+}
+.context-gauge__fill {
+  stroke: var(--text-3);
+  transition: stroke-dashoffset 0.18s ease, stroke 0.12s ease;
+}
+.context-gauge--warning .context-gauge__fill {
+  stroke: var(--warning);
+}
+.context-gauge--critical .context-gauge__fill {
+  stroke: var(--accent);
 }
 
-.context-indicator__badge:hover {
-  background: var(--bg-hover, rgba(var(--overlay), 0.06));
-  color: var(--text-secondary, #999);
+/* ── Popover ── */
+.context-popover {
+  width: 280px;
+  padding: 12px 14px 10px;
+  background: var(--bg-elev-2);
+  border: 1px solid var(--border-strong);
+  border-radius: 12px;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.32), 0 2px 8px rgba(0, 0, 0, 0.18);
+  color: var(--text);
+  font-size: 12.5px;
+  line-height: 1.4;
 }
-
-.context-indicator__count {
+.context-popover__head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  margin-bottom: 10px;
+}
+.context-popover__title {
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: -0.005em;
+}
+.context-popover__counter {
+  color: var(--text-3);
   font-variant-numeric: tabular-nums;
+}
+.context-popover__bar {
+  display: flex;
+  width: 100%;
+  height: 6px;
+  border-radius: 999px;
+  overflow: hidden;
+  background: color-mix(in oklch, var(--border) 100%, transparent);
+  margin-bottom: 10px;
+}
+.context-popover__seg {
+  height: 100%;
+}
+.context-popover__rows {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.context-popover__row {
+  display: grid;
+  grid-template-columns: 8px 1fr auto;
+  align-items: center;
+  gap: 8px;
+  padding: 2px 0;
+  color: var(--text-2, var(--text));
+}
+.context-popover__row--free .context-popover__label {
+  color: var(--text-3);
+}
+.context-popover__dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  display: inline-block;
+}
+.context-popover__dot--free {
+  background: transparent;
+  box-shadow: inset 0 0 0 1px var(--border-strong);
+}
+.context-popover__label {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.context-popover__value {
+  color: var(--text-3);
+  font-variant-numeric: tabular-nums;
+  font-size: 12px;
+}
+.context-popover__footnote {
+  margin-top: 10px;
+  padding-top: 8px;
+  border-top: 1px solid var(--border);
+  font-size: 11.5px;
+  color: var(--text-3);
+}
+.context-popover__details-link {
+  display: block;
+  width: 100%;
+  margin-top: 10px;
+  padding: 6px 0 0;
+  border: 0;
+  border-top: 1px solid var(--border);
+  background: transparent;
+  color: var(--text-3);
+  font-size: 12px;
+  text-align: left;
+  cursor: pointer;
+  transition: color 0.12s ease;
+}
+.context-popover__details-link:hover {
+  color: var(--accent);
+}
+
+/* Stacked-bar segment hues — kept distinct so the bar reads
+   instantly without needing a legend. Tones drawn from existing
+   accent-derived oklch values to match the rest of the UI. */
+.context-popover__seg--messages {
+  background: var(--accent);
+}
+.context-popover__seg--system-prompt {
+  background: oklch(0.7 0.07 250);
+}
+.context-popover__seg--system-tools {
+  background: oklch(0.7 0.1 160);
+}
+.context-popover__seg--mcp-tools {
+  background: oklch(0.7 0.1 220);
+}
+.context-popover__seg--skills {
+  background: oklch(0.72 0.13 300);
+}
+.context-popover__seg--memory {
+  background: oklch(0.74 0.13 35);
+}
+.context-popover__seg--reserved {
+  background: color-mix(in oklch, var(--text-3) 60%, transparent);
 }
 
 /* ── Context panel (inside SidePanel) ── */

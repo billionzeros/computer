@@ -1,30 +1,45 @@
 import { AnimatePresence, motion } from 'framer-motion'
 import { Brain, ChevronRight, Code, PanelRight, Workflow } from 'lucide-react'
 import type { ReactNode } from 'react'
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { artifactStore } from '../../lib/store/artifactStore.js'
 import { parseCitationSources } from '../../lib/store/handlers/citationParser.js'
 import { ArtifactCard } from './ArtifactCard.js'
 import { SourceCards } from './SourceCards.js'
 import type { ToolAction } from './groupMessages.js'
 
-const SEARCH_TOOLS = new Set(['web_search', 'exa_search', 'exa_find_similar', 'web_research'])
+const SEARCH_TOOLS = new Set([
+  'web_search',
+  'exa_search',
+  'exa_answer',
+  'exa_find_similar',
+  'web_research',
+  'parallel_research',
+])
 
 // ── Tool type labels & helpers ─────────────────────────────────────
 
 /** Get a favicon URL for tools that interact with external URLs (free, no API key) */
 function getToolFavicon(toolName: string, toolInput?: Record<string, unknown>): string | null {
-  if (toolName === 'exa_search' || toolName === 'exa_find_similar') {
+  const normalizedToolName = normalizeToolName(toolName)
+  if (
+    normalizedToolName === 'exa_search' ||
+    normalizedToolName === 'exa_find_similar' ||
+    normalizedToolName === 'exa_answer'
+  ) {
     return 'https://www.google.com/s2/favicons?domain=exa.ai&sz=16'
   }
-  if (toolName === 'web_search') {
+  if (normalizedToolName === 'web_search') {
     return 'https://www.google.com/s2/favicons?domain=google.com&sz=16'
+  }
+  if (normalizedToolName === 'web_research' || normalizedToolName === 'parallel_research') {
+    return 'https://www.google.com/s2/favicons?domain=parallel.ai&sz=16'
   }
   if (!toolInput) return null
   let url: string | null = null
-  if (toolName === 'browser') url = toolInput.url as string
-  else if (toolName === 'network') url = (toolInput.url || toolInput.host) as string
-  else if (toolName === 'http_api') url = toolInput.url as string
+  if (normalizedToolName === 'browser') url = toolInput.url as string
+  else if (normalizedToolName === 'network') url = (toolInput.url || toolInput.host) as string
+  else if (normalizedToolName === 'http_api') url = toolInput.url as string
   if (!url) return null
   try {
     const hostname = new URL(url.startsWith('http') ? url : `https://${url}`).hostname
@@ -36,7 +51,8 @@ function getToolFavicon(toolName: string, toolInput?: Record<string, unknown>): 
 
 /** Get a short, bold tool type label (like Claude Code's "Read", "Edit", "Shell") */
 function getToolTypeLabel(toolName: string, toolInput?: Record<string, unknown>): string {
-  switch (toolName) {
+  const normalizedToolName = normalizeToolName(toolName)
+  switch (normalizedToolName) {
     case 'shell':
       return 'Shell'
     case 'filesystem': {
@@ -78,11 +94,15 @@ function getToolTypeLabel(toolName: string, toolInput?: Record<string, unknown>)
     case 'sub_agent':
       return 'Agent'
     case 'web_search':
-      return 'Search'
+      return 'Web Search'
     case 'exa_search':
-      return 'Search'
+      return 'Web Search'
+    case 'exa_answer':
+      return 'Web Answer'
     case 'web_research':
-      return 'Research'
+      return 'Web Research'
+    case 'parallel_research':
+      return 'Web Research'
     case 'exa_find_similar':
       return 'Similar'
     default:
@@ -104,10 +124,62 @@ function formatMcpToolName(toolName: string): string {
     .join(' ')
 }
 
+function normalizeToolName(toolName: string): string {
+  const colonIdx = toolName.indexOf(':')
+  return colonIdx >= 0 ? toolName.slice(colonIdx + 1) : toolName
+}
+
+function getFirstString(...values: unknown[]): string | null {
+  for (const value of values) {
+    if (typeof value === 'string' && value.trim()) return value.trim()
+  }
+  return null
+}
+
+function getSearchQuery(toolInput?: Record<string, unknown>): string | null {
+  if (!toolInput) return null
+
+  const directQuery = getFirstString(
+    toolInput.query,
+    toolInput.q,
+    toolInput.question,
+    toolInput.objective,
+    toolInput.prompt,
+  )
+  if (directQuery) return directQuery
+
+  const searchQueries = toolInput.search_query ?? toolInput.searchQuery ?? toolInput.queries
+  if (Array.isArray(searchQueries)) {
+    const queries = searchQueries
+      .map((entry) => {
+        if (typeof entry === 'string') return entry.trim()
+        if (entry && typeof entry === 'object') {
+          return getFirstString(
+            (entry as Record<string, unknown>).q,
+            (entry as Record<string, unknown>).query,
+          )
+        }
+        return null
+      })
+      .filter((query): query is string => Boolean(query))
+
+    if (queries.length > 0) return queries.join(' | ')
+  }
+
+  return null
+}
+
+function formatQuotedTarget(value: string, maxLength = 60): string {
+  const trimmed = value.replace(/\s+/g, ' ').trim()
+  const short = trimmed.length > maxLength ? `${trimmed.slice(0, maxLength - 3)}...` : trimmed
+  return `"${short}"`
+}
+
 /** Get the target/description shown after the type label (in code-styled pill) */
 function getToolTarget(toolName: string, toolInput?: Record<string, unknown>): string | null {
   if (!toolInput) return null
-  switch (toolName) {
+  const normalizedToolName = normalizeToolName(toolName)
+  switch (normalizedToolName) {
     case 'shell': {
       const cmd = (toolInput.command as string) || ''
       return cmd.length > 80 ? `${cmd.slice(0, 77)}...` : cmd
@@ -147,7 +219,7 @@ function getToolTarget(toolName: string, toolInput?: Record<string, unknown>): s
     }
     case 'code_search': {
       const query = (toolInput.query as string) || ''
-      return query ? `"${query.slice(0, 50)}"` : null
+      return query ? formatQuotedTarget(query, 50) : null
     }
     case 'http_api': {
       const method = (toolInput.method as string) || 'GET'
@@ -175,11 +247,12 @@ function getToolTarget(toolName: string, toolInput?: Record<string, unknown>): s
       return (toolInput.task as string) || null
     case 'web_search':
     case 'exa_search':
+    case 'exa_answer':
+    case 'parallel_research':
     case 'web_research': {
-      const query = (toolInput.query as string) || ''
+      const query = getSearchQuery(toolInput) || ''
       if (!query) return null
-      const trimmed = query.length > 60 ? `${query.slice(0, 57)}...` : query
-      return `"${trimmed}"`
+      return formatQuotedTarget(query)
     }
     case 'exa_find_similar': {
       const url = (toolInput.url as string) || ''
@@ -208,7 +281,8 @@ function getToolMeta(
   }
   if (!resultContent) return null
 
-  switch (toolName) {
+  const normalizedToolName = normalizeToolName(toolName)
+  switch (normalizedToolName) {
     case 'filesystem': {
       const op = toolInput?.operation as string
       if (op === 'read') {
@@ -238,8 +312,10 @@ function getToolMeta(
     }
     case 'web_search':
     case 'exa_search':
+    case 'exa_answer':
     case 'exa_find_similar':
-    case 'web_research': {
+    case 'web_research':
+    case 'parallel_research': {
       const resultMatches = resultContent.match(/\burl\b/gi)
       if (resultMatches && resultMatches.length > 0) {
         const count = resultMatches.length
@@ -309,7 +385,7 @@ function ActionChip({ action }: ActionChipProps) {
   const [showFullResult, setShowFullResult] = useState(false)
   const displayedResult = showFullResult ? resultContent : resultLines.slice(0, 6).join('\n')
 
-  const isSearchTool = SEARCH_TOOLS.has(toolName)
+  const isSearchTool = SEARCH_TOOLS.has(normalizeToolName(toolName))
   const searchSources = useMemo(
     () => (isSearchTool && resultContent && !isError ? parseCitationSources(resultContent) : []),
     [isSearchTool, resultContent, isError],
@@ -426,12 +502,20 @@ function GroupChip({
   errorCount = 0,
 }: GroupChipProps) {
   const [open, setOpen] = useState(defaultOpen)
+  const userToggledRef = useRef(false)
   useEffect(() => {
-    if (defaultOpen) setOpen(true)
+    if (!userToggledRef.current) setOpen(defaultOpen)
   }, [defaultOpen])
   return (
     <div className={`conv-chip has-children${open ? ' open' : ''}`}>
-      <button type="button" className="conv-chip__row" onClick={() => setOpen((o) => !o)}>
+      <button
+        type="button"
+        className="conv-chip__row"
+        onClick={() => {
+          userToggledRef.current = true
+          setOpen((o) => !o)
+        }}
+      >
         <IconComp size={13} strokeWidth={1.5} className="conv-chip__icon" />
         <span className="conv-chip__label">{label}</span>
         {errorCount > 0 && <span className="conv-chip__error-badge">{errorCount} failed</span>}
