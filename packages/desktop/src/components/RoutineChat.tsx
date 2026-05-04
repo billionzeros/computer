@@ -255,22 +255,21 @@ export function RoutineChat() {
         </>
       )}
 
-      {pendingConfirm && (
-        <div className="chat-shell__confirm">
-          <ConfirmDialog
-            command={pendingConfirm.command}
-            reason={pendingConfirm.reason}
-            onApprove={() => handleConfirm(true)}
-            onDeny={() => handleConfirm(false)}
-          />
-        </div>
-      )}
-
       <PlanReviewOverlay />
 
       {(messages.length > 0 || agentSession) && (
         <div className="conv-dock">
           <div className="conv-dock__inner">
+            {pendingConfirm && (
+              <div className="chat-shell__confirm">
+                <ConfirmDialog
+                  command={pendingConfirm.command}
+                  reason={pendingConfirm.reason}
+                  onApprove={() => handleConfirm(true)}
+                  onDeny={() => handleConfirm(false)}
+                />
+              </div>
+            )}
             <ChatInput
               onSend={handleSend}
               onSteer={handleSteer}
