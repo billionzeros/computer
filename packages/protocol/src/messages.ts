@@ -545,7 +545,31 @@ export interface AiTextMessage {
   type: 'text'
   content: string
   sessionId?: string
+  /** Stable id for the assistant message this text belongs to, when known.
+   *  New clients should prefer assistant_start/assistant_delta/assistant_done
+   *  and treat id-bearing text as a legacy compatibility event. */
+  messageId?: string
   parentToolCallId?: string // set when this event is from a sub-agent
+}
+
+export interface AiAssistantStartMessage {
+  type: 'assistant_start'
+  sessionId: string
+  messageId: string
+}
+
+export interface AiAssistantDeltaMessage {
+  type: 'assistant_delta'
+  sessionId: string
+  messageId: string
+  delta: string
+}
+
+export interface AiAssistantDoneMessage {
+  type: 'assistant_done'
+  sessionId: string
+  messageId: string
+  content?: string
 }
 
 export interface AiToolCallMessage {
@@ -1539,6 +1563,9 @@ export type AiMessage =
   | AiRegenerateMessage
   | AiThinkingMessage
   | AiTextMessage
+  | AiAssistantStartMessage
+  | AiAssistantDeltaMessage
+  | AiAssistantDoneMessage
   | AiToolCallMessage
   | AiToolResultMessage
   | AiConfirmMessage

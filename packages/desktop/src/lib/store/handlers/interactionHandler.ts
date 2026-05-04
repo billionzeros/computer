@@ -100,6 +100,10 @@ export function handleInteractionMessage(msg: AiMessage, ctx: MessageContext): b
         ss.updateSessionState(sid, { resolver: undefined })
       }
 
+      if (sid) {
+        useStore.getState().clearAssistantStream(sid)
+      }
+
       if (msg.code === 'session_not_found' && sid) {
         // Don't auto-delete — the session may reappear after a server restart/update.
         // Just mark the session as error so the user sees feedback.
@@ -277,6 +281,7 @@ export function handleInteractionMessage(msg: AiMessage, ctx: MessageContext): b
         if (typeof msg.messageId === 'string' && msg.messageId.length > 0) {
           store.adoptAssistantMessageId(doneSessionId, msg.messageId)
         }
+        store.clearAssistantStream(doneSessionId, msg.messageId)
 
         // Clear per-session message tracking in app store
         store._sessionAssistantMsgIds.delete(doneSessionId)

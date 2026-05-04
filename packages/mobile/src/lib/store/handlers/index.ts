@@ -28,7 +28,7 @@ export function handleWsMessage(channel: number, msg: IncomingMessage): void {
   const msgType = (msg as { type?: string }).type ?? 'unknown'
   console.log(
     `[WS ← ${channelName}] ${msgType}`,
-    'sessionId' in msg ? (msg as Record<string, unknown>).sessionId : '',
+    'sessionId' in msg ? (msg as unknown as Record<string, unknown>).sessionId : '',
   )
 
   if (channel === Channel.CONTROL) {

@@ -903,6 +903,40 @@ const mirrorCases: MirrorCase[] = [
       3: [{ type: 'text', text: 'All done.' }],
     },
   },
+  {
+    name: 'artifact events persist as structured blocks',
+    userMessage: 'make page',
+    events: [
+      { type: 'tool_result', id: 'w1', output: 'ok' },
+      {
+        type: 'artifact',
+        id: 'artifact_1',
+        toolCallId: 'w1',
+        artifactType: 'file',
+        renderType: 'html',
+        filename: 'index.html',
+        filepath: '/tmp/index.html',
+        language: 'html',
+        content: '<h1>Hello</h1>',
+      },
+    ],
+    expectedRoles: ['user', 'tool', 'assistant'],
+    expectedContent: {
+      2: [
+        {
+          type: 'artifact',
+          id: 'artifact_1',
+          toolCallId: 'w1',
+          artifactType: 'file',
+          renderType: 'html',
+          filename: 'index.html',
+          filepath: '/tmp/index.html',
+          language: 'html',
+          content: '<h1>Hello</h1>',
+        },
+      ],
+    },
+  },
 ]
 
 let mirrorFailed = 0
@@ -955,7 +989,10 @@ console.log(`All ${mirrorCases.length} mirror checks passed`)
 import { mkdirSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join as pathJoin } from 'node:path'
-import { readHarnessHistory as _readHarnessHistory } from '../mirror.js'
+import {
+  readHarnessArtifacts as _readHarnessArtifacts,
+  readHarnessHistory as _readHarnessHistory,
+} from '../mirror.js'
 import { buildReplaySeed as _buildReplaySeed } from '../replay.js'
 
 function writeMessagesJsonl(dir: string, msgs: SessionEvent[], userMsg: string): void {
@@ -1072,6 +1109,50 @@ if (rtFailed > 0) {
 }
 
 console.log(`All ${roundTripCases.length} round-trip checks passed`)
+
+try {
+  withTempSession((sessionId, dir) => {
+    const events: SessionEvent[] = [
+      {
+        type: 'artifact',
+        id: 'artifact_page',
+        toolCallId: 'write_page',
+        artifactType: 'file',
+        renderType: 'html',
+        filename: 'page.html',
+        filepath: '/tmp/page.html',
+        language: 'html',
+        content: '<main>Page</main>',
+      },
+      { type: 'text', content: 'Created page.html' },
+    ]
+    writeMessagesJsonl(dir, events, 'create a page')
+    const entries = _readHarnessHistory(sessionId)
+    const artifacts = _readHarnessArtifacts(sessionId)
+    const leakedArtifactEntry = entries.some((e) => e.role === 'assistant' && e.content === '')
+    const artifact = artifacts[0]
+    if (leakedArtifactEntry) {
+      rtFailed++
+      console.error('✗ artifact-roundtrip: artifact block leaked into chat history')
+    } else if (
+      artifacts.length !== 1 ||
+      artifact.id !== 'artifact_page' ||
+      artifact.filepath !== '/tmp/page.html' ||
+      artifact.renderType !== 'html' ||
+      artifact.content !== '<main>Page</main>'
+    ) {
+      rtFailed++
+      console.error('✗ artifact-roundtrip: artifact metadata did not survive mirror reload')
+    } else {
+      console.log('✓ artifact-roundtrip: structured artifact survives mirror reload')
+    }
+  })
+} catch (err) {
+  rtFailed++
+  console.error('✗ artifact-roundtrip (threw)', err)
+}
+
+if (rtFailed > 0) process.exit(1)
 
 // Legacy mirror files written before per-delta coalescing landed can
 // contain a single assistant message whose content is a run of

@@ -27,7 +27,7 @@ import {
   getProjectSessionsDir,
 } from '@anton/agent-config'
 import { createLogger } from '@anton/logger'
-import type { SessionHistoryEntry } from '@anton/protocol'
+import type { SessionHistoryArtifact, SessionHistoryEntry } from '@anton/protocol'
 import type { SessionEvent } from '../session.js'
 
 const log = createLogger('harness-mirror')
@@ -56,8 +56,20 @@ interface ToolResultBlock {
   content: string
   is_error?: boolean
 }
+interface ArtifactBlock {
+  type: 'artifact'
+  id: string
+  toolCallId: string
+  artifactType: 'file' | 'output' | 'artifact'
+  renderType: string
+  title?: string
+  filename?: string
+  filepath?: string
+  language: string
+  content: string
+}
 
-type AssistantBlock = TextBlock | ThinkingBlock | ToolUseBlock
+type AssistantBlock = TextBlock | ThinkingBlock | ToolUseBlock | ArtifactBlock
 
 // ── Pure synthesizer ───────────────────────────────────────────────
 
@@ -168,6 +180,23 @@ export function synthesizeHarnessTurn(
           tool_use_id: ev.id,
           content: ev.output,
           ...(ev.isError ? { is_error: true } : {}),
+        })
+        break
+      }
+      case 'artifact': {
+        if (pendingToolResults) flushTool()
+        if (!pendingAssistant) pendingAssistant = []
+        pendingAssistant.push({
+          type: 'artifact',
+          id: ev.id,
+          toolCallId: ev.toolCallId,
+          artifactType: ev.artifactType,
+          renderType: ev.renderType,
+          title: ev.title,
+          filename: ev.filename,
+          filepath: ev.filepath,
+          language: ev.language,
+          content: ev.content,
         })
         break
       }
@@ -449,6 +478,67 @@ export function readHarnessHistory(sessionId: string, projectId?: string): Sessi
   }
 
   return entries
+}
+
+export function readHarnessArtifacts(
+  sessionId: string,
+  projectId?: string,
+): SessionHistoryArtifact[] {
+  const dir = resolveSessionDir(sessionId, projectId)
+  const msgsPath = join(dir, 'messages.jsonl')
+  if (!existsSync(msgsPath)) return []
+
+  let raw: string
+  try {
+    raw = readFileSync(msgsPath, 'utf-8')
+  } catch (err) {
+    log.warn({ err, sessionId }, 'failed to read messages.jsonl for artifacts')
+    return []
+  }
+
+  const artifacts: SessionHistoryArtifact[] = []
+  for (const line of raw.split('\n')) {
+    const trimmed = line.trim()
+    if (!trimmed) continue
+    let msg: { content?: unknown }
+    try {
+      msg = JSON.parse(trimmed)
+    } catch {
+      continue
+    }
+    if (!Array.isArray(msg.content)) continue
+    for (const block of msg.content) {
+      if (!block || typeof block !== 'object') continue
+      const b = block as Record<string, unknown>
+      if (b.type !== 'artifact') continue
+      const id = typeof b.id === 'string' ? b.id : ''
+      const toolCallId = typeof b.toolCallId === 'string' ? b.toolCallId : ''
+      const renderType = typeof b.renderType === 'string' ? b.renderType : 'code'
+      const language = typeof b.language === 'string' ? b.language : 'text'
+      const content = typeof b.content === 'string' ? b.content : ''
+      if (!id || !toolCallId) continue
+      artifacts.push({
+        id,
+        type:
+          b.artifactType === 'file' || b.artifactType === 'output' || b.artifactType === 'artifact'
+            ? b.artifactType
+            : 'artifact',
+        renderType,
+        title: typeof b.title === 'string' ? b.title : undefined,
+        filename: typeof b.filename === 'string' ? b.filename : undefined,
+        filepath: typeof b.filepath === 'string' ? b.filepath : undefined,
+        language,
+        content,
+        toolCallId,
+      })
+    }
+  }
+
+  const seen = new Map<string, number>()
+  for (let i = 0; i < artifacts.length; i++) {
+    if (artifacts[i].filepath) seen.set(artifacts[i].filepath!, i)
+  }
+  return artifacts.filter((a, i) => !a.filepath || seen.get(a.filepath) === i)
 }
 
 // ── Regenerate helpers ─────────────────────────────────────────────

@@ -119,6 +119,8 @@ interface AppState {
   _sessionAssistantMsgIds: Map<string, string>
   // Per-session thinking message tracking (keyed by sessionId for isolation)
   _sessionThinkingMsgIds: Map<string, string>
+  // Per-session transient assistant stream, committed to messages on assistant_done
+  _streamingAssistantMessages: Map<string, ChatMessage>
   // Sub-agent progress message tracking (keyed by toolCallId for accumulation)
   _subAgentProgressMsgIds: Map<string, string>
 
@@ -160,6 +162,11 @@ interface AppState {
   deleteConversation: (id: string) => void
   addMessage: (msg: ChatMessage) => void
   addMessageToSession: (sessionId: string, msg: ChatMessage) => void
+  startAssistantStream: (sessionId: string, messageId: string) => void
+  appendAssistantStreamDelta: (sessionId: string, messageId: string, delta: string) => void
+  completeAssistantStream: (sessionId: string, messageId: string, content?: string) => void
+  clearAssistantStream: (sessionId: string, messageId?: string) => void
+  getStreamingAssistantMessage: (sessionId: string) => ChatMessage | null
   appendAssistantText: (content: string) => void
   appendAssistantTextToSession: (sessionId: string, content: string) => void
   appendThinkingText: (content: string) => void
@@ -204,6 +211,46 @@ interface AppState {
   resetForMachineSwitch: () => void
 }
 
+type StreamingMessageTracking = Pick<
+  AppState,
+  '_sessionAssistantMsgIds' | '_sessionThinkingMsgIds' | '_streamingAssistantMessages'
+>
+
+function isTurnBoundaryUserMessage(msg: ChatMessage): boolean {
+  return msg.role === 'user' && !msg.isSteering
+}
+
+function clearStreamingMessageTrackingForTurnBoundary(
+  state: StreamingMessageTracking,
+  sessionId: string | undefined,
+  msg: ChatMessage,
+): void {
+  if (!sessionId || !isTurnBoundaryUserMessage(msg)) return
+  state._sessionAssistantMsgIds.delete(sessionId)
+  state._sessionThinkingMsgIds.delete(sessionId)
+  state._streamingAssistantMessages.delete(sessionId)
+}
+
+function findAppendableAssistantIndex(
+  messages: ChatMessage[],
+  targetId: string | null,
+  expectedThinking: boolean,
+): number {
+  if (!targetId) return -1
+
+  const idx = messages.findIndex((m) => m.id === targetId)
+  if (idx < 0) return -1
+
+  const target = messages[idx]
+  if (target.role !== 'assistant' || Boolean(target.isThinking) !== expectedThinking) return -1
+
+  for (let i = idx + 1; i < messages.length; i++) {
+    if (isTurnBoundaryUserMessage(messages[i])) return -1
+  }
+
+  return idx
+}
+
 export const useStore = create<AppState>((set, get) => {
   // Migrate from old conversation format if needed (conv_xxx IDs + messages → sessionId + metadata only)
   migrateFromLegacyConversations()
@@ -226,6 +273,7 @@ export const useStore = create<AppState>((set, get) => {
     draftInputs: new Map(),
     _sessionAssistantMsgIds: new Map(),
     _sessionThinkingMsgIds: new Map(),
+    _streamingAssistantMessages: new Map(),
     _subAgentProgressMsgIds: new Map(),
     citations: new Map(),
 
@@ -363,6 +411,7 @@ export const useStore = create<AppState>((set, get) => {
         // Also clean up message tracking maps
         get()._sessionAssistantMsgIds.delete(conv.sessionId)
         get()._sessionThinkingMsgIds.delete(conv.sessionId)
+        get()._streamingAssistantMessages.delete(conv.sessionId)
       }
       get().clearDraftInput(id)
 
@@ -392,6 +441,9 @@ export const useStore = create<AppState>((set, get) => {
         const activeId = state.activeConversationId
         if (!activeId) return state
 
+        const activeConv = state.conversations.find((c) => c.id === activeId)
+        clearStreamingMessageTrackingForTurnBoundary(state, activeConv?.sessionId, msg)
+
         const conversations = state.conversations.map((c) => {
           if (c.id !== activeId) return c
           const messages = [...c.messages, msg]
@@ -409,6 +461,8 @@ export const useStore = create<AppState>((set, get) => {
         const conv = state.conversations.find((c) => c.sessionId === sessionId)
         if (!conv) return state
 
+        clearStreamingMessageTrackingForTurnBoundary(state, sessionId, msg)
+
         const conversations = state.conversations.map((c) => {
           if (c.sessionId !== sessionId) return c
           const messages = [...c.messages, msg]
@@ -419,6 +473,130 @@ export const useStore = create<AppState>((set, get) => {
 
         return { conversations }
       })
+    },
+
+    startAssistantStream: (sessionId, messageId) => {
+      if (!sessionId || !messageId) return
+      set((state) => {
+        const current = state._streamingAssistantMessages.get(sessionId)
+        if (current?.id === messageId) return state
+
+        const streaming = new Map(state._streamingAssistantMessages)
+        streaming.set(sessionId, {
+          id: messageId,
+          role: 'assistant',
+          content: '',
+          timestamp: Date.now(),
+        })
+
+        const assistantIds = new Map(state._sessionAssistantMsgIds)
+        assistantIds.delete(sessionId)
+        return {
+          _streamingAssistantMessages: streaming,
+          _sessionAssistantMsgIds: assistantIds,
+        }
+      })
+    },
+
+    appendAssistantStreamDelta: (sessionId, messageId, delta) => {
+      if (!sessionId || !messageId || !delta) return
+      set((state) => {
+        const current = state._streamingAssistantMessages.get(sessionId)
+        const nextMessage =
+          current?.id === messageId
+            ? { ...current, content: current.content + delta }
+            : {
+                id: messageId,
+                role: 'assistant' as const,
+                content: delta,
+                timestamp: Date.now(),
+              }
+
+        const streaming = new Map(state._streamingAssistantMessages)
+        streaming.set(sessionId, nextMessage)
+
+        const thinkingIds = new Map(state._sessionThinkingMsgIds)
+        thinkingIds.delete(sessionId)
+        return {
+          _streamingAssistantMessages: streaming,
+          _sessionThinkingMsgIds: thinkingIds,
+        }
+      })
+    },
+
+    completeAssistantStream: (sessionId, messageId, content) => {
+      if (!sessionId || !messageId) return
+      set((state) => {
+        const streamingMessage = state._streamingAssistantMessages.get(sessionId)
+        const finalContent = content ?? streamingMessage?.content ?? ''
+
+        const streaming = new Map(state._streamingAssistantMessages)
+        streaming.delete(sessionId)
+        const assistantIds = new Map(state._sessionAssistantMsgIds)
+        assistantIds.delete(sessionId)
+        const thinkingIds = new Map(state._sessionThinkingMsgIds)
+        thinkingIds.delete(sessionId)
+
+        const baseUpdates = {
+          _streamingAssistantMessages: streaming,
+          _sessionAssistantMsgIds: assistantIds,
+          _sessionThinkingMsgIds: thinkingIds,
+        }
+
+        if (!finalContent) return baseUpdates
+
+        const conv = state.conversations.find((c) => c.sessionId === sessionId)
+        if (!conv) return baseUpdates
+        if (conv.messages.some((m) => m.id === messageId)) return baseUpdates
+
+        const assistantMessage: ChatMessage = {
+          id: messageId,
+          role: 'assistant',
+          content: finalContent,
+          timestamp: streamingMessage?.timestamp ?? Date.now(),
+        }
+
+        const conversations = state.conversations.map((c) => {
+          if (c.sessionId !== sessionId) return c
+          return {
+            ...c,
+            messages: [...c.messages, assistantMessage],
+            updatedAt: Date.now(),
+          }
+        })
+
+        const citationUpdate: { citations?: Map<string, CitationSource[]> } = {}
+        const ss = sessionStore.getState().getSessionState(sessionId)
+        if (ss.pendingCitationSources.length > 0) {
+          const citations = new Map(state.citations)
+          citations.set(messageId, ss.pendingCitationSources)
+          citationUpdate.citations = citations
+          sessionStore.getState().updateSessionState(sessionId, { pendingCitationSources: [] })
+        }
+
+        return {
+          conversations,
+          ...baseUpdates,
+          ...citationUpdate,
+        }
+      })
+    },
+
+    clearAssistantStream: (sessionId, messageId) => {
+      if (!sessionId) return
+      set((state) => {
+        const current = state._streamingAssistantMessages.get(sessionId)
+        if (!current) return state
+        if (messageId && current.id !== messageId) return state
+
+        const streaming = new Map(state._streamingAssistantMessages)
+        streaming.delete(sessionId)
+        return { _streamingAssistantMessages: streaming }
+      })
+    },
+
+    getStreamingAssistantMessage: (sessionId) => {
+      return get()._streamingAssistantMessages.get(sessionId) ?? null
     },
 
     appendAssistantText: (content) => {
@@ -439,7 +617,7 @@ export const useStore = create<AppState>((set, get) => {
 
           // Use per-session tracking to find the target message
           const targetId = sessionId ? (state._sessionAssistantMsgIds.get(sessionId) ?? null) : null
-          const idx = targetId ? messages.findIndex((m) => m.id === targetId) : -1
+          const idx = findAppendableAssistantIndex(messages, targetId, false)
 
           if (idx >= 0) {
             // Append to tracked message
@@ -498,7 +676,7 @@ export const useStore = create<AppState>((set, get) => {
           const messages = [...c.messages]
 
           const targetId = state._sessionAssistantMsgIds.get(sessionId) ?? null
-          const idx = targetId ? messages.findIndex((m) => m.id === targetId) : -1
+          const idx = findAppendableAssistantIndex(messages, targetId, false)
 
           if (idx >= 0) {
             const target = messages[idx]
@@ -618,7 +796,7 @@ export const useStore = create<AppState>((set, get) => {
           if (c.id !== activeId) return c
           const messages = [...c.messages]
           const targetId = sessionId ? (state._sessionThinkingMsgIds.get(sessionId) ?? null) : null
-          const idx = targetId ? messages.findIndex((m) => m.id === targetId) : -1
+          const idx = findAppendableAssistantIndex(messages, targetId, true)
 
           if (idx >= 0) {
             const target = messages[idx]
@@ -654,7 +832,7 @@ export const useStore = create<AppState>((set, get) => {
           if (c.sessionId !== sessionId) return c
           const messages = [...c.messages]
           const targetId = state._sessionThinkingMsgIds.get(sessionId) ?? null
-          const idx = targetId ? messages.findIndex((m) => m.id === targetId) : -1
+          const idx = findAppendableAssistantIndex(messages, targetId, true)
 
           if (idx >= 0) {
             const target = messages[idx]
@@ -691,6 +869,7 @@ export const useStore = create<AppState>((set, get) => {
           ? state._sessionAssistantMsgIds.get(resolvedSessionId)
           : undefined
         if (!targetId) return state
+        if (findAppendableAssistantIndex(conv.messages, targetId, false) < 0) return state
 
         const conversations = state.conversations.map((c) => {
           if (c.id !== conv.id) return c
@@ -924,6 +1103,7 @@ export const useStore = create<AppState>((set, get) => {
         // Clear conversation-level transient state
         _sessionAssistantMsgIds: new Map(),
         _sessionThinkingMsgIds: new Map(),
+        _streamingAssistantMessages: new Map(),
         _subAgentProgressMsgIds: new Map(),
         citations: new Map(),
       })
@@ -945,6 +1125,7 @@ export const useStore = create<AppState>((set, get) => {
         draftInputs: new Map(),
         _sessionAssistantMsgIds: new Map(),
         _sessionThinkingMsgIds: new Map(),
+        _streamingAssistantMessages: new Map(),
         _subAgentProgressMsgIds: new Map(),
         citations: new Map(),
       })

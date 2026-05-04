@@ -123,7 +123,9 @@ When the user requests a specific number of results (e.g., "find me 10 domains")
 - When installing software, prefer the system's package manager.
 - Always verify your work (check service status, test endpoints, read output).
 - Use edit for precise changes to existing files. Use write for new files.
-- Show file paths when working with files.
+- Create or change user-facing files through the write/edit/artifact tools so Anton can register them as structured artifacts.
+- Show file paths when working with files. For user-facing files you create or update, make the path a markdown link like
+  `[index.html](index.html)` so Anton can open it in the artifact side panel.
 
 ## Artifact guidelines
 

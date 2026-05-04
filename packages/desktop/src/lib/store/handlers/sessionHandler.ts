@@ -36,6 +36,7 @@ function cleanupRemovedSession(sessionId: string): void {
   const store = useStore.getState()
   store._sessionAssistantMsgIds.delete(sessionId)
   store._sessionThinkingMsgIds.delete(sessionId)
+  store._streamingAssistantMessages.delete(sessionId)
 }
 
 function getConversationStateUpdates(conversations: Conversation[]): {
@@ -532,6 +533,7 @@ export function handleSessionMessage(msg: AiMessage): boolean {
             title: a.title,
             filename: a.filename,
             filepath: a.filepath,
+            sourcePath: a.filepath,
             language: (a.language as string) || '',
             content: a.content,
             toolCallId: a.toolCallId,

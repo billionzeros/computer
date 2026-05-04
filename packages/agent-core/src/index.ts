@@ -101,6 +101,7 @@ export {
   ensureHarnessSessionInit,
   appendHarnessTurn,
   popLastTurnFromHarness,
+  readHarnessArtifacts,
   readHarnessHistory,
   readLastUserFromHarness,
   writeHarnessSessionTitle,

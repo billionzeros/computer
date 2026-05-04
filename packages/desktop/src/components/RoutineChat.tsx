@@ -228,6 +228,13 @@ export function RoutineChat() {
   )
 
   const messages = activeConv?.messages || []
+  const streamingAssistant = useStore((s) =>
+    activeSessionId ? s.getStreamingAssistantMessage(activeSessionId) : null,
+  )
+  const visibleMessages =
+    streamingAssistant?.content && !messages.some((m) => m.id === streamingAssistant.id)
+      ? [...messages, streamingAssistant]
+      : messages
   const isSyncing = sessionStore((s) => {
     const sid = activeConv?.sessionId
     return sid ? s.getSessionState(sid).isSyncing : false
@@ -235,24 +242,24 @@ export function RoutineChat() {
 
   return (
     <div className="chat-shell">
-      {isSyncing && messages.length === 0 ? (
+      {isSyncing && visibleMessages.length === 0 ? (
         /* First load — nothing local to show yet, show a subtle spinner */
         <div className="chat-shell__sync-loader">
           <Loader2 size={20} strokeWidth={1.5} className="chat-shell__sync-spinner" />
         </div>
-      ) : messages.length === 0 && agentSession ? (
+      ) : visibleMessages.length === 0 && agentSession ? (
         <RoutineEmptyState agent={agentSession} />
       ) : (
         /* Show existing messages while syncing in background — replaced seamlessly when server responds */
         <>
           {agentSession && <RoutineChatHeader agent={agentSession} />}
-          <MessageList messages={messages} />
+          <MessageList messages={visibleMessages} />
         </>
       )}
 
       <PlanReviewOverlay />
 
-      {(messages.length > 0 || agentSession) && (
+      {(visibleMessages.length > 0 || agentSession) && (
         <div className="conv-dock">
           <div className="conv-dock__inner">
             {pendingConfirm && (
