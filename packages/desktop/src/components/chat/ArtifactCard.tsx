@@ -3,7 +3,11 @@ import {
   Braces,
   ChevronDown,
   ChevronUp,
+  File,
   FileCode,
+  FileText,
+  FileVideo,
+  ImageIcon,
   Network,
   Sparkles,
   SquareCode,
@@ -24,6 +28,12 @@ const typeIcons: Record<string, React.ElementType> = {
   markdown: FileCode,
   svg: SquareCode,
   mermaid: Network,
+  docx: FileText,
+  xlsx: FileText,
+  pdf: FileText,
+  image: ImageIcon,
+  video: FileVideo,
+  file: File,
 }
 
 const typeLabels: Record<string, string> = {
@@ -32,6 +42,12 @@ const typeLabels: Record<string, string> = {
   markdown: 'Markdown',
   svg: 'SVG',
   mermaid: 'Diagram',
+  docx: 'Document',
+  xlsx: 'Spreadsheet',
+  pdf: 'PDF',
+  image: 'Image',
+  video: 'Video',
+  file: 'File',
 }
 
 export function ArtifactCard({ artifact }: Props) {

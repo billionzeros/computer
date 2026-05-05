@@ -19,9 +19,11 @@ export { artifactStore } from './artifactStore.js'
 export { projectStore } from './projectStore.js'
 export { sessionStore } from './sessionStore.js'
 export { connectionStore } from './connectionStore.js'
+export { uploadStore } from './uploadStore.js'
 
 // Re-export shared types so components can import from here
 export type { InitPhase, SyncProgress } from './connectionStore.js'
+export type { UploadItem, UploadStatus } from './uploadStore.js'
 
 export type {
   ChatMessage,

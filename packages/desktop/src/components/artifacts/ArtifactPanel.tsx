@@ -5,8 +5,10 @@ import {
   Copy,
   Download,
   Eye,
+  File,
   FileSpreadsheet,
   FileText,
+  FileVideo,
   Globe,
   ImageIcon,
   Link,
@@ -32,6 +34,7 @@ import { DocxRenderer } from './DocxRenderer.js'
 import { ImageRenderer } from './ImageRenderer.js'
 import { PdfRenderer } from './PdfRenderer.js'
 import { PublishModal } from './PublishModal.js'
+import { VideoRenderer } from './VideoRenderer.js'
 import { XlsxRenderer } from './XlsxRenderer.js'
 import { useWorkspaceText } from './useWorkspaceText.js'
 
@@ -47,6 +50,8 @@ const TYPE_ICONS: Record<ArtifactRenderType, IconCmp> = {
   xlsx: FileSpreadsheet,
   pdf: FileText,
   image: ImageIcon,
+  video: FileVideo,
+  file: File,
 }
 
 function iconFor(type: ArtifactRenderType): IconCmp {
@@ -198,6 +203,17 @@ function ArtifactBody({
       ) : (
         <MissingSourcePath />
       )
+    case 'video':
+      return artifactForRender.sourcePath ? (
+        <VideoRenderer
+          sourcePath={artifactForRender.sourcePath}
+          filename={artifactForRender.filename}
+        />
+      ) : (
+        <MissingSourcePath />
+      )
+    case 'file':
+      return <GenericFilePreview artifact={artifactForRender} />
     default:
       return (
         <div className="art-panel__code">
@@ -224,6 +240,19 @@ function MissingSourcePath() {
       <div className="art-panel__failure-hint">
         Binary artifacts require a workspace path to fetch bytes.
       </div>
+    </div>
+  )
+}
+
+function GenericFilePreview({ artifact }: { artifact: Artifact }) {
+  return (
+    <div className="art-panel__file">
+      <File size={34} strokeWidth={1.2} className="art-panel__file-icon" />
+      <div className="art-panel__file-name">
+        {artifact.filename || artifact.sourcePath?.split('/').pop() || 'File'}
+      </div>
+      <div className="art-panel__file-meta">{artifact.mimeType || 'application/octet-stream'}</div>
+      {artifact.sourcePath && <div className="art-panel__file-path">{artifact.sourcePath}</div>}
     </div>
   )
 }

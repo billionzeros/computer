@@ -7,6 +7,7 @@ import {
   FileImage,
   FileSpreadsheet,
   FileText,
+  FileVideo,
   Folder,
   Image as ImageIcon,
   ImageOff,
@@ -117,6 +118,7 @@ const MESSAGE_MARKER_RE = /\[(img|file|dir):([^\]]+)\]/g
 function fileIconFor(name: string) {
   const renderType = classifyUpload(undefined, name)
   if (renderType === 'image') return ImageIcon
+  if (renderType === 'video') return FileVideo
   if (renderType === 'xlsx') return FileSpreadsheet
   if (renderType === 'pdf' || renderType === 'docx' || renderType === 'markdown') return FileText
   if (renderType === 'code') return FileText

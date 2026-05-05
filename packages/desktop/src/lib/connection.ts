@@ -576,6 +576,34 @@ export class Connection {
     this.send(Channel.FILESYNC, { type: 'fs_write', path, content, encoding })
   }
 
+  sendFilesystemWriteStart(id: string, path: string, sizeBytes: number) {
+    this.send(Channel.FILESYNC, { type: 'fs_write_start', id, path, sizeBytes })
+  }
+
+  sendFilesystemWriteChunk(args: {
+    id: string
+    path: string
+    content: string
+    offset: number
+    sizeBytes: number
+    done: boolean
+  }) {
+    this.send(Channel.FILESYNC, {
+      type: 'fs_write_chunk',
+      id: args.id,
+      path: args.path,
+      content: args.content,
+      encoding: 'base64',
+      offset: args.offset,
+      sizeBytes: args.sizeBytes,
+      done: args.done,
+    })
+  }
+
+  sendFilesystemWriteAbort(id: string, path: string) {
+    this.send(Channel.FILESYNC, { type: 'fs_write_abort', id, path })
+  }
+
   onFilesystemResponse(
     handler: (
       entries: { name: string; type: 'file' | 'dir' | 'link'; size: string }[],
@@ -667,10 +695,37 @@ export class Connection {
     })
   }
 
-  onFilesystemWriteResponse(handler: (path: string, success: boolean, error?: string) => void) {
+  onFilesystemWriteProgress(
+    handler: (payload: {
+      id: string
+      path: string
+      receivedBytes: number
+      sizeBytes: number
+    }) => void,
+  ) {
+    return this.onRawMessage((channel, payload) => {
+      if (channel === Channel.FILESYNC && payload.type === 'fs_write_progress') {
+        handler({
+          id: payload.id as string,
+          path: payload.path as string,
+          receivedBytes: Number(payload.receivedBytes ?? 0),
+          sizeBytes: Number(payload.sizeBytes ?? 0),
+        })
+      }
+    })
+  }
+
+  onFilesystemWriteResponse(
+    handler: (path: string, success: boolean, error?: string, id?: string) => void,
+  ) {
     return this.onRawMessage((channel, payload) => {
       if (channel === Channel.FILESYNC && payload.type === 'fs_write_response') {
-        handler(payload.path as string, !!payload.success, payload.error as string | undefined)
+        handler(
+          payload.path as string,
+          !!payload.success,
+          payload.error as string | undefined,
+          payload.id as string | undefined,
+        )
       }
     })
   }

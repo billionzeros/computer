@@ -12,6 +12,8 @@ export type ArtifactRenderType =
   | 'xlsx'
   | 'pdf'
   | 'image'
+  | 'video'
+  | 'file'
 
 /** Render types whose content is binary and must be fetched via sourcePath. */
 export const BINARY_RENDER_TYPES: ReadonlySet<ArtifactRenderType> = new Set([
@@ -19,6 +21,8 @@ export const BINARY_RENDER_TYPES: ReadonlySet<ArtifactRenderType> = new Set([
   'xlsx',
   'pdf',
   'image',
+  'video',
+  'file',
 ])
 
 export function isBinaryRenderType(t: ArtifactRenderType): boolean {
@@ -63,6 +67,8 @@ const TYPE_LABELS: Record<ArtifactRenderType, string> = {
   xlsx: 'Spreadsheet',
   pdf: 'PDF',
   image: 'Image',
+  video: 'Video',
+  file: 'File',
 }
 
 const TYPE_EXTENSIONS: Record<ArtifactRenderType, string> = {
@@ -75,6 +81,8 @@ const TYPE_EXTENSIONS: Record<ArtifactRenderType, string> = {
   xlsx: 'xlsx',
   pdf: 'pdf',
   image: 'png',
+  video: 'mov',
+  file: 'bin',
 }
 
 export function getArtifactTypeLabel(renderType: ArtifactRenderType): string {
@@ -192,6 +200,8 @@ export function classifyMime(mime: string | undefined): ArtifactRenderType | nul
     return 'image'
   }
 
+  if (m.startsWith('video/') || m === 'application/quicktime') return 'video'
+
   if (m === 'text/markdown' || m === 'text/x-markdown') return 'markdown'
   if (m === 'text/html') return 'html'
   if (m === 'text/csv' || m === 'text/tab-separated-values') return 'code'
@@ -227,6 +237,14 @@ export function classifyPathExtension(path: string): ArtifactRenderType | null {
     case 'heic':
     case 'heif':
       return 'image'
+    case 'mov':
+    case 'qt':
+    case 'mp4':
+    case 'm4v':
+    case 'webm':
+    case 'avi':
+    case 'mkv':
+      return 'video'
     case 'md':
     case 'mdx':
       return 'markdown'

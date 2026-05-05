@@ -13,7 +13,7 @@
  * memory works if the user renames / moves the project.
  */
 
-export type MimeFamily = 'data' | 'document' | 'pdf' | 'image' | 'text' | 'other'
+export type MimeFamily = 'data' | 'document' | 'pdf' | 'image' | 'video' | 'text' | 'other'
 
 const DATA_EXTS = new Set(['xlsx', 'xls', 'csv', 'tsv', 'json', 'yaml', 'yml', 'toml'])
 const DOCUMENT_EXTS = new Set(['docx', 'doc', 'rtf', 'odt'])
@@ -30,6 +30,7 @@ const IMAGE_EXTS = new Set([
   'heic',
   'heif',
 ])
+const VIDEO_EXTS = new Set(['mov', 'qt', 'mp4', 'm4v', 'webm', 'avi', 'mkv'])
 const TEXT_EXTS = new Set(['txt', 'md', 'mdx', 'log'])
 
 function extFromFilename(filename: string): string {
@@ -42,6 +43,7 @@ export function classifyMimeFamily(mime: string | undefined, filename: string): 
     const m = mime.toLowerCase()
     if (m === 'application/pdf') return 'pdf'
     if (m.startsWith('image/')) return 'image'
+    if (m.startsWith('video/') || m === 'application/quicktime') return 'video'
     if (
       m === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' ||
       m === 'application/msword' ||
@@ -62,6 +64,7 @@ export function classifyMimeFamily(mime: string | undefined, filename: string): 
   const ext = extFromFilename(filename)
   if (PDF_EXTS.has(ext)) return 'pdf'
   if (IMAGE_EXTS.has(ext)) return 'image'
+  if (VIDEO_EXTS.has(ext)) return 'video'
   if (DOCUMENT_EXTS.has(ext)) return 'document'
   if (DATA_EXTS.has(ext)) return 'data'
   if (TEXT_EXTS.has(ext)) return 'text'
@@ -79,6 +82,8 @@ export function mimeFamilyDefaultFolder(family: MimeFamily): string {
       return 'references'
     case 'image':
       return 'images'
+    case 'video':
+      return 'media'
     case 'text':
       return 'notes'
     default:
