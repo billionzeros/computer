@@ -5120,29 +5120,68 @@ button {
 
 .markdown-body__tableWrap {
   margin-top: 14px;
+  border: 1px solid var(--border-strong);
+  border-radius: 8px;
   overflow-x: auto;
+  background: rgba(var(--overlay), 0.025);
 }
 
 .markdown-body__table {
   width: 100%;
-  border-collapse: collapse;
-  font-size: 13px;
+  min-width: 560px;
+  border-collapse: separate;
+  border-spacing: 0;
+  font-family: var(--font-sans);
+  font-size: 14px;
+  line-height: 1.55;
+  letter-spacing: 0;
+  font-variant-numeric: tabular-nums;
 }
 
 .markdown-body__th,
 .markdown-body__td {
-  border: 1px solid var(--border);
-  padding: 10px 12px;
+  border-right: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
+  padding: 12px 14px;
   text-align: left;
+  vertical-align: top;
+}
+
+.markdown-body__th:last-child,
+.markdown-body__td:last-child {
+  border-right: 0;
+}
+
+.markdown-body__table tr:last-child .markdown-body__td {
+  border-bottom: 0;
 }
 
 .markdown-body__th {
   color: var(--text);
-  background: rgba(var(--overlay), 0.04);
+  background: rgba(var(--overlay), 0.055);
+  font-size: 13px;
+  font-weight: 650;
+  line-height: 1.35;
 }
 
 .markdown-body__td {
+  color: color-mix(in oklch, var(--text) 78%, var(--text-2));
+  font-weight: 450;
+}
+
+.markdown-body__table tbody tr:nth-child(even) .markdown-body__td {
+  background: rgba(var(--overlay), 0.018);
+}
+
+.markdown-body__td:first-child {
   color: var(--text);
+  font-weight: 650;
+  white-space: nowrap;
+}
+
+.markdown-body__table strong {
+  color: var(--text);
+  font-weight: 650;
 }
 
 .markdown-body__rule {
