@@ -3,7 +3,7 @@ import { Plus, Send, Square } from 'lucide-react'
 import type React from 'react'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { classifyUpload } from '../../lib/artifacts.js'
-import { uploadFileToWorkspace } from '../../lib/fileUploads.js'
+import { isUploadCanceledError, uploadFileToWorkspace } from '../../lib/fileUploads.js'
 // Side-effect import — registers mention providers (files, future: agents, web, …).
 import '../../lib/mentions/register.js'
 import { mentionRegistry } from '../../lib/mentions/registry.js'
@@ -449,9 +449,12 @@ export function ChatInput({
             source: 'composer',
             sizeBytes: file.size,
           })
+          const controller = new AbortController()
+          uploadStore.getState().registerUploadCancel(uploadId, () => controller.abort())
           try {
             await uploadFileToWorkspace(file, targetPath, {
               id: uploadId,
+              signal: controller.signal,
               onProgress: (progress) => {
                 uploadStore.getState().updateUpload(uploadId, {
                   status: progress.stage,
@@ -462,6 +465,10 @@ export function ChatInput({
             })
             uploadStore.getState().finishUpload(uploadId)
           } catch (err) {
+            if (isUploadCanceledError(err)) {
+              uploadStore.getState().cancelUpload(uploadId)
+              continue
+            }
             const message = err instanceof Error ? err.message : 'Upload failed'
             uploadStore.getState().failUpload(uploadId, message)
             throw err

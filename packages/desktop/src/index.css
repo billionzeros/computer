@@ -21802,9 +21802,26 @@ button {
   background: var(--bg-elev-2);
   color: var(--text);
 }
+.fl-preview__icn:disabled {
+  cursor: default;
+  opacity: 0.7;
+}
+.fl-preview__icn:disabled:hover {
+  background: transparent;
+  color: var(--text-3);
+}
 .fl-preview__icn--danger:hover {
   background: color-mix(in oklch, var(--danger) 14%, transparent);
   color: var(--danger);
+}
+.fl-preview__download-error {
+  max-width: 120px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--danger);
+  font-size: 11px;
+  margin-right: 6px;
 }
 
 /* Body — full-bleed canvas for the preview content */
@@ -21820,7 +21837,8 @@ button {
   background: var(--bg-elev-1);
 }
 .fl-preview__body--doc .art-panel__iframe,
-.fl-preview__body--doc .art-panel__image-wrap {
+.fl-preview__body--doc .art-panel__image-wrap,
+.fl-preview__body--doc .art-panel__video-wrap {
   height: 100%;
   width: 100%;
 }
@@ -24154,6 +24172,7 @@ button {
   display: inline-flex;
   align-items: center;
   gap: 8px;
+  max-width: min(420px, calc(100vw - 40px));
   padding: 8px 12px;
   background: color-mix(in oklch, var(--bg-elev-2) 94%, #000);
   border: 1px solid var(--border-strong);
@@ -24167,9 +24186,23 @@ button {
 .act-pill:hover {
   color: var(--text);
 }
+.act-pill--active {
+  color: var(--text);
+  border-color: color-mix(in oklch, var(--accent) 28%, var(--border-strong));
+}
 .act-pill__glyph {
   color: var(--accent);
   font-size: 13px;
+  flex: 0 0 auto;
+}
+.act-pill--active .act-pill__glyph {
+  animation: act-pulse 1.4s ease-in-out infinite;
+}
+.act-pill__label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .act-pill__kbd {
   font-family: var(--font-mono);
@@ -24179,6 +24212,20 @@ button {
   background: color-mix(in oklch, var(--bg) 80%, #fff);
   border-radius: 3px;
   margin-left: 4px;
+}
+.act-pill__status {
+  flex: 0 0 auto;
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  color: var(--accent);
+  padding: 2px 7px;
+  background: color-mix(in oklch, var(--accent) 16%, transparent);
+  border-radius: 999px;
+}
+.act-pill__chev {
+  flex: 0 0 auto;
+  color: var(--text-3);
+  transform: rotate(180deg);
 }
 .act-card {
   width: 340px;
@@ -24334,6 +24381,36 @@ button {
 .act-upload:hover {
   background: color-mix(in oklch, var(--bg) 40%, transparent);
 }
+.act-upload__main {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  flex: 1;
+  min-width: 0;
+  padding: 0;
+  background: none;
+  border: 0;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.act-upload__cancel {
+  display: inline-grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  flex: 0 0 auto;
+  margin: -2px -2px 0 2px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-3);
+  cursor: pointer;
+}
+.act-upload__cancel:hover {
+  background: color-mix(in oklch, var(--danger) 14%, transparent);
+  color: var(--danger);
+}
 .act-upload__icon {
   width: 18px;
   height: 18px;
@@ -24352,6 +24429,10 @@ button {
 .act-upload--error .act-upload__icon {
   color: var(--danger);
   background: color-mix(in oklch, var(--danger) 18%, transparent);
+}
+.act-upload--canceled .act-upload__icon {
+  color: var(--text-3);
+  background: color-mix(in oklch, var(--text-3) 16%, transparent);
 }
 .act-upload__body {
   flex: 1;
@@ -27164,6 +27245,30 @@ button {
   max-width: 100%;
   max-height: 100%;
   object-fit: contain;
+}
+.art-panel__docx-shell {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  background: #1f1f1f;
+}
+.art-panel__docx-frame {
+  width: 100%;
+  height: 100%;
+  border: 0;
+  background: #1f1f1f;
+}
+.art-panel__docx-overlay {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  gap: 8px;
+  background: rgba(31, 31, 31, 0.72);
+  color: rgba(255, 255, 255, 0.72);
+  font-size: 12px;
+  pointer-events: none;
 }
 .art-panel__video-wrap {
   display: flex;

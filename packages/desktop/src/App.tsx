@@ -465,8 +465,11 @@ export function App() {
             handleNewProject()
           }}
         />
-        {activeView !== 'home' && activeView !== 'chat' && (
-          <ActivityDock onCompose={() => setActiveView('home')} />
+        {activeView !== 'chat' && !(activeView === 'home' && hasMessages) && (
+          <ActivityDock
+            onCompose={() => setActiveView('home')}
+            autoOpenActive={!(activeView === 'home' && !hasMessages)}
+          />
         )}
       </div>
     </ForceUpdateGate>

@@ -1,5 +1,6 @@
 import {
   ChevronRight,
+  Download,
   Eye,
   File,
   FileCode,
@@ -23,7 +24,7 @@ import {
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { classifyUpload } from '../../lib/artifacts.js'
 import { connection } from '../../lib/connection.js'
-import { uploadFileToWorkspace } from '../../lib/fileUploads.js'
+import { isUploadCanceledError, uploadFileToWorkspace } from '../../lib/fileUploads.js'
 import { useStore } from '../../lib/store.js'
 import { artifactStore } from '../../lib/store/artifactStore.js'
 import { connectionStore } from '../../lib/store/connectionStore.js'
@@ -32,6 +33,7 @@ import { uiStore } from '../../lib/store/uiStore.js'
 import { uploadStore } from '../../lib/store/uploadStore.js'
 import { DocxRenderer } from '../artifacts/DocxRenderer.js'
 import { PdfRenderer } from '../artifacts/PdfRenderer.js'
+import { VideoRenderer } from '../artifacts/VideoRenderer.js'
 import { XlsxRenderer } from '../artifacts/XlsxRenderer.js'
 
 interface FileEntry {
@@ -65,7 +67,7 @@ const CODE_EXTS = new Set([
 ])
 const DATA_EXTS = new Set(['json', 'yaml', 'yml', 'csv', 'xml', 'toml', 'sql'])
 const TEXT_EXTS = new Set(['md', 'txt', 'log'])
-// Rich documents are previewed via dedicated renderers (mammoth/sheetjs/pdfjs),
+// Rich documents are previewed via dedicated renderers (docx-preview/sheetjs/pdf),
 // not as raw UTF-8 — otherwise their binary container shows up as gibberish.
 const DOC_EXTS = new Set(['docx', 'doc', 'xlsx', 'xls', 'pdf'])
 const IMAGE_EXTS = new Set([
@@ -96,11 +98,15 @@ function getCategory(name: string): 'code' | 'data' | 'text' | 'image' | 'video'
 
 function isPreviewable(name: string): boolean {
   const cat = getCategory(name)
-  return cat !== 'other' && cat !== 'video'
+  return cat !== 'other'
 }
 
 function isImageFile(name: string): boolean {
   return getCategory(name) === 'image'
+}
+
+function isVideoFile(name: string): boolean {
+  return getCategory(name) === 'video'
 }
 
 type DocRenderType = 'docx' | 'xlsx' | 'pdf'
@@ -199,6 +205,8 @@ export function ProjectFilesView() {
   const [previewLoading, setPreviewLoading] = useState(false)
   const [previewError, setPreviewError] = useState<string | null>(null)
   const [previewIsImage, setPreviewIsImage] = useState(false)
+  const [downloadingPath, setDownloadingPath] = useState<string | null>(null)
+  const [downloadError, setDownloadError] = useState<string | null>(null)
 
   const fileInputRef = useRef<HTMLInputElement>(null)
   const newFolderInputRef = useRef<HTMLInputElement>(null)
@@ -426,10 +434,11 @@ export function ProjectFilesView() {
       return
     }
     setSelected(entry)
+    setDownloadError(null)
     // Rich doc renderers (DocxRenderer/XlsxRenderer/PdfRenderer) fetch their
     // own bytes via useWorkspaceBytes — skip the text/base64 read path so the
     // binary container doesn't get streamed back as a corrupted UTF-8 string.
-    if (getDocRenderType(entry.name)) {
+    if (getDocRenderType(entry.name) || isVideoFile(entry.name)) {
       setPreview(null)
       setPreviewLoading(false)
       setPreviewError(null)
@@ -500,11 +509,61 @@ export function ProjectFilesView() {
     setDeleteTarget({ name: selected.name, path: resolvePath(selected.name) })
   }
 
+  const handleDownload = useCallback(() => {
+    if (!selected) return
+    const path = resolvePath(selected.name)
+    const filename = selected.name
+    const sub: { off?: () => void } = {}
+    let timeout = 0
+
+    const finish = (errorMessage?: string) => {
+      if (timeout) window.clearTimeout(timeout)
+      sub.off?.()
+      setDownloadingPath((current) => (current === path ? null : current))
+      setDownloadError(errorMessage ?? null)
+    }
+
+    setDownloadError(null)
+    setDownloadingPath(path)
+    timeout = window.setTimeout(() => {
+      finish('Download timed out while reading the file.')
+    }, 30_000)
+
+    sub.off = connection.onFilesystemReadBytesResponse((payload) => {
+      if (payload.path !== path) return
+      if (payload.error || !payload.content) {
+        finish(payload.error || 'Download failed: no file content returned.')
+        return
+      }
+
+      try {
+        const binary = atob(payload.content)
+        const bytes = new Uint8Array(binary.length)
+        for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i)
+        const blob = new Blob([bytes.buffer], {
+          type: payload.mimeType || getMimeType(filename),
+        })
+        const url = URL.createObjectURL(blob)
+        const a = document.createElement('a')
+        a.href = url
+        a.download = filename
+        a.click()
+        URL.revokeObjectURL(url)
+        finish()
+      } catch (err) {
+        finish(err instanceof Error ? err.message : 'Download failed.')
+      }
+    })
+
+    connection.sendFilesystemReadBytes(path)
+  }, [resolvePath, selected])
+
   const confirmDelete = () => {
     if (!deleteTarget) return
     connection.sendFilesystemDelete(deleteTarget.path)
     setSelected(null)
     setPreview(null)
+    setDownloadError(null)
   }
 
   const handleUpload = useCallback(
@@ -521,10 +580,13 @@ export function ProjectFilesView() {
           source: 'files',
           sizeBytes: file.size,
         })
+        const controller = new AbortController()
+        uploadStore.getState().registerUploadCancel(progressId, () => controller.abort())
 
         try {
           await uploadFileToWorkspace(file, targetPath, {
             id: progressId,
+            signal: controller.signal,
             onProgress: (progress) => {
               uploadStore.getState().updateUpload(progressId, {
                 status: progress.stage,
@@ -556,6 +618,10 @@ export function ProjectFilesView() {
             conversationId: convId,
           })
         } catch (err) {
+          if (isUploadCanceledError(err)) {
+            uploadStore.getState().cancelUpload(progressId)
+            continue
+          }
           const message = err instanceof Error ? err.message : 'Upload failed'
           uploadStore.getState().failUpload(progressId, message)
           setError(message)
@@ -885,8 +951,10 @@ export function ProjectFilesView() {
           (() => {
             const docType = getDocRenderType(selected.name)
             const docPath = resolvePath(selected.name)
+            const isVideo = isVideoFile(selected.name)
             const ext = selected.name.split('.').pop()?.toLowerCase() || ''
             const previewable = isPreviewable(selected.name)
+            const downloading = downloadingPath === docPath
             return (
               <aside className="fl-preview">
                 {/* Premium header bar — matches the artifact panel style */}
@@ -899,6 +967,25 @@ export function ProjectFilesView() {
                     {ext && <span className="fl-preview__bar-type">.{ext.toUpperCase()}</span>}
                   </div>
                   <div className="fl-preview__bar-right">
+                    {downloadError && (
+                      <span className="fl-preview__download-error" title={downloadError}>
+                        Download failed
+                      </span>
+                    )}
+                    <button
+                      type="button"
+                      className="fl-preview__icn"
+                      onClick={handleDownload}
+                      title={downloading ? 'Downloading…' : 'Download'}
+                      aria-label={`Download ${selected.name}`}
+                      disabled={downloading}
+                    >
+                      {downloading ? (
+                        <Loader2 size={14} strokeWidth={1.5} className="spin" />
+                      ) : (
+                        <Download size={14} strokeWidth={1.5} />
+                      )}
+                    </button>
                     {previewable && (
                       <button
                         type="button"
@@ -934,7 +1021,7 @@ export function ProjectFilesView() {
 
                 {/* Body — the actual preview content fills the panel */}
                 <div
-                  className={`fl-preview__body${docType ? ' fl-preview__body--doc' : ''}${previewIsImage ? ' fl-preview__body--image' : ''}`}
+                  className={`fl-preview__body${docType || isVideo ? ' fl-preview__body--doc' : ''}${previewIsImage ? ' fl-preview__body--image' : ''}`}
                 >
                   {docType ? (
                     docType === 'docx' ? (
@@ -944,6 +1031,8 @@ export function ProjectFilesView() {
                     ) : (
                       <PdfRenderer sourcePath={docPath} filename={selected.name} />
                     )
+                  ) : isVideo ? (
+                    <VideoRenderer sourcePath={docPath} filename={selected.name} />
                   ) : previewLoading ? (
                     <div className="fl-preview__center">
                       <Loader2 size={20} strokeWidth={1.5} className="spin" />

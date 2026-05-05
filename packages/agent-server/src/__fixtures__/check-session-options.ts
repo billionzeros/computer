@@ -105,12 +105,7 @@ void _exhaustive
 //     (Pi-SDK-only fields like agentInstructions/Memory and Braintrust
 //     metadata flow via `buildHarnessContextPrompt` instead).
 
-const RESUME_SESSION_IGNORED = new Set<string>([
-  'provider',
-  'model',
-  'apiKey',
-  'ephemeral',
-])
+const RESUME_SESSION_IGNORED = new Set<string>(['provider', 'model', 'apiKey', 'ephemeral'])
 
 const BUILD_SESSION_OPTIONS_IGNORED = new Set<string>([
   'ephemeral', // sub-agent flag; not set by the desktop factory
@@ -150,10 +145,7 @@ const BUILD_HARNESS_CONTEXT_IGNORED = new Set<string>([
 
 // ── Source readers ───────────────────────────────────────────────────
 
-const sessionTs = readFileSync(
-  join(__dirname, '../../../agent-core/src/session.ts'),
-  'utf-8',
-)
+const sessionTs = readFileSync(join(__dirname, '../../../agent-core/src/session.ts'), 'utf-8')
 const serverTs = readFileSync(join(__dirname, '../server.ts'), 'utf-8')
 
 /**
@@ -205,7 +197,7 @@ const resumeSessionBody = sliceBetween(
 const buildSessionOptionsBody = sliceBetween(
   serverTs,
   'private buildSessionOptions(',
-  "  /**\n   * Build the per-session context the harness tool-registry uses",
+  '  /**\n   * Build the per-session context the harness tool-registry uses',
 )
 const buildHarnessSessionContextBody = sliceBetween(
   serverTs,
@@ -254,9 +246,7 @@ const usage: FieldUsage[] = SESSION_OPTIONS_KEYS.map((key) => ({
 const failures: string[] = []
 for (const u of usage) {
   if (!u.inCreateSession) {
-    failures.push(
-      `createSession does not reference \`opts.${u.key}\` — field is silently dropped.`,
-    )
+    failures.push(`createSession does not reference \`opts.${u.key}\` — field is silently dropped.`)
   }
   if (!u.inResumeSession && !RESUME_SESSION_IGNORED.has(u.key)) {
     failures.push(

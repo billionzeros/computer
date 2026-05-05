@@ -1,4 +1,4 @@
-import { AlertCircle, Check, ChevronDown, ChevronRight, FileUp, Plus } from 'lucide-react'
+import { AlertCircle, Check, ChevronDown, ChevronRight, FileUp, Plus, X } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { sanitizeTitle } from '../lib/conversations.js'
 import { useStore } from '../lib/store.js'
@@ -49,23 +49,27 @@ function uploadStatusLabel(upload: UploadItem): string {
       return 'Uploaded'
     case 'error':
       return upload.error || 'Failed'
+    case 'canceled':
+      return 'Canceled'
   }
 }
 
 interface Props {
   onCompose: () => void
+  autoOpenActive?: boolean
 }
 
-export function ActivityDock({ onCompose }: Props) {
+export function ActivityDock({ onCompose, autoOpenActive = true }: Props) {
   const conversations = useStore((s) => s.conversations)
   const switchConversation = useStore((s) => s.switchConversation)
   const activeProjectId = projectStore((s) => s.activeProjectId)
   const sessionStates = sessionStore((s) => s.sessionStates)
   const uploads = uploadStore((s) => s.uploads)
   const setActiveView = uiStore((s) => s.setActiveView)
+  const cancelUpload = uploadStore((s) => s.cancelUpload)
 
   const [expanded, setExpanded] = useState(false)
-  const [hovered, setHovered] = useState(false)
+  const [activeDockDismissed, setActiveDockDismissed] = useState(false)
 
   useEffect(() => {
     uploadStore.getState().clearFinished()
@@ -105,11 +109,11 @@ export function ActivityDock({ onCompose }: Props) {
 
   const { activeUploads, recentUploads } = useMemo(() => {
     const active = uploads
-      .filter((u) => u.status !== 'complete' && u.status !== 'error')
+      .filter((u) => u.status !== 'complete' && u.status !== 'error' && u.status !== 'canceled')
       .slice(-4)
       .reverse()
     const recentDone = uploads
-      .filter((u) => u.status === 'complete' || u.status === 'error')
+      .filter((u) => u.status === 'complete' || u.status === 'error' || u.status === 'canceled')
       .sort((a, b) => b.updatedAt - a.updatedAt)
       .slice(0, 3)
     return { activeUploads: active, recentUploads: recentDone }
@@ -135,30 +139,70 @@ export function ActivityDock({ onCompose }: Props) {
     [setActiveView],
   )
 
+  const handleUploadCancel = useCallback(
+    (upload: UploadItem) => {
+      cancelUpload(upload.id)
+    },
+    [cancelUpload],
+  )
+
   const activeCount = working.length + activeUploads.length
-  const open = expanded || hovered || working.length > 0 || activeUploads.length > 0
+  const open = expanded || (autoOpenActive && activeCount > 0 && !activeDockDismissed)
+  const primaryUpload = activeUploads[0]
+  const pillLabel =
+    activeUploads.length > 0
+      ? activeUploads.length === 1
+        ? `Uploading ${primaryUpload?.name ?? 'file'}`
+        : `Uploading ${activeUploads.length} files`
+      : working.length > 0
+        ? working.length === 1
+          ? `Running ${working[0]?.title ?? 'task'}`
+          : `Running ${working.length} tasks`
+        : recent.length > 0 || recentUploads.length > 0
+          ? 'Activity'
+          : 'Anton is idle'
+  const pillStatus =
+    activeUploads.length === 1 && primaryUpload
+      ? `${primaryUpload.percent}%`
+      : activeCount > 0
+        ? `${activeCount} active`
+        : null
+
+  useEffect(() => {
+    if (activeCount === 0) setActiveDockDismissed(false)
+  }, [activeCount])
+
+  const collapseDock = useCallback(() => {
+    setExpanded(false)
+    if (activeCount > 0) setActiveDockDismissed(true)
+  }, [activeCount])
+
+  const expandDock = useCallback(() => {
+    setActiveDockDismissed(false)
+    setExpanded(true)
+  }, [])
 
   return (
     <div
       className={`act-dock${open ? ' act-dock--open' : ''}${
-        working.length > 0 ? ' act-dock--live' : ''
+        activeCount > 0 ? ' act-dock--live' : ''
       }`}
-      onMouseEnter={() => setHovered(true)}
-      onMouseLeave={() => setHovered(false)}
     >
       {!open && (
-        <button type="button" className="act-pill" onClick={() => setExpanded(true)}>
+        <button
+          type="button"
+          className={`act-pill${activeCount > 0 ? ' act-pill--active' : ''}`}
+          onClick={expandDock}
+          aria-label="Open activity"
+        >
           <span className="act-pill__glyph">✻</span>
-          <span className="act-pill__label">
-            {activeUploads.length > 0
-              ? activeUploads.length === 1
-                ? `Uploading ${activeUploads[0]?.name ?? 'file'}`
-                : `Uploading ${activeUploads.length} files`
-              : recent.length > 0 || recentUploads.length > 0
-                ? 'Activity'
-                : 'Anton is idle'}
-          </span>
-          <span className="act-pill__kbd">⌘K</span>
+          <span className="act-pill__label">{pillLabel}</span>
+          {pillStatus ? (
+            <span className="act-pill__status">{pillStatus}</span>
+          ) : (
+            <span className="act-pill__kbd">⌘K</span>
+          )}
+          <ChevronDown size={12} strokeWidth={1.5} className="act-pill__chev" />
         </button>
       )}
 
@@ -178,11 +222,9 @@ export function ActivityDock({ onCompose }: Props) {
             <button
               type="button"
               className="act-card__close"
-              onClick={() => {
-                setExpanded(false)
-                setHovered(false)
-              }}
+              onClick={collapseDock}
               aria-label="Collapse"
+              title="Collapse activity"
             >
               <ChevronDown size={12} strokeWidth={1.5} />
             </button>
@@ -192,29 +234,46 @@ export function ActivityDock({ onCompose }: Props) {
             <div className="act-card__section">
               <div className="act-card__slabel">Uploads</div>
               {activeUploads.map((upload) => (
-                <button
+                <div
                   key={upload.id}
-                  type="button"
-                  className="act-upload"
-                  onClick={() => handleUploadOpen(upload)}
+                  className={`act-upload ${
+                    upload.status === 'finishing' ? '' : 'act-upload--cancelable'
+                  }`}
                 >
-                  <span className="act-upload__icon">
-                    <FileUp size={13} strokeWidth={1.6} />
-                  </span>
-                  <span className="act-upload__body">
-                    <span className="act-upload__top">
-                      <span className="act-upload__name">{upload.name}</span>
-                      <span className="act-upload__percent">{upload.percent}%</span>
+                  <button
+                    type="button"
+                    className="act-upload__main"
+                    onClick={() => handleUploadOpen(upload)}
+                  >
+                    <span className="act-upload__icon">
+                      <FileUp size={13} strokeWidth={1.6} />
                     </span>
-                    <span className="act-upload__meta">
-                      {uploadStatusLabel(upload)} · {fmtBytes(upload.uploadedBytes)} /{' '}
-                      {fmtBytes(upload.sizeBytes)}
+                    <span className="act-upload__body">
+                      <span className="act-upload__top">
+                        <span className="act-upload__name">{upload.name}</span>
+                        <span className="act-upload__percent">{upload.percent}%</span>
+                      </span>
+                      <span className="act-upload__meta">
+                        {uploadStatusLabel(upload)} · {fmtBytes(upload.uploadedBytes)} /{' '}
+                        {fmtBytes(upload.sizeBytes)}
+                      </span>
+                      <span className="act-upload__bar" aria-hidden="true">
+                        <span style={{ width: `${upload.percent}%` }} />
+                      </span>
                     </span>
-                    <span className="act-upload__bar" aria-hidden="true">
-                      <span style={{ width: `${upload.percent}%` }} />
-                    </span>
-                  </span>
-                </button>
+                  </button>
+                  {upload.status !== 'finishing' && (
+                    <button
+                      type="button"
+                      className="act-upload__cancel"
+                      onClick={() => handleUploadCancel(upload)}
+                      aria-label={`Cancel upload ${upload.name}`}
+                      title="Cancel upload"
+                    >
+                      <X size={12} strokeWidth={1.7} />
+                    </button>
+                  )}
+                </div>
               ))}
             </div>
           )}
@@ -253,6 +312,8 @@ export function ActivityDock({ onCompose }: Props) {
                   <span className="act-upload__icon">
                     {upload.status === 'error' ? (
                       <AlertCircle size={13} strokeWidth={1.7} />
+                    ) : upload.status === 'canceled' ? (
+                      <X size={12} strokeWidth={1.7} />
                     ) : (
                       <Check size={12} strokeWidth={2} />
                     )}
@@ -261,7 +322,11 @@ export function ActivityDock({ onCompose }: Props) {
                     <span className="act-upload__top">
                       <span className="act-upload__name">{upload.name}</span>
                       <span className="act-upload__percent">
-                        {upload.status === 'error' ? 'Failed' : 'Done'}
+                        {upload.status === 'error'
+                          ? 'Failed'
+                          : upload.status === 'canceled'
+                            ? 'Canceled'
+                            : 'Done'}
                       </span>
                     </span>
                     <span className="act-upload__meta">

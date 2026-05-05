@@ -1,6 +1,13 @@
 import { create } from 'zustand'
 
-export type UploadStatus = 'queued' | 'preparing' | 'uploading' | 'finishing' | 'complete' | 'error'
+export type UploadStatus =
+  | 'queued'
+  | 'preparing'
+  | 'uploading'
+  | 'finishing'
+  | 'complete'
+  | 'error'
+  | 'canceled'
 
 export interface UploadItem {
   id: string
@@ -31,11 +38,14 @@ interface UploadState {
   ) => void
   finishUpload: (id: string) => void
   failUpload: (id: string, error: string) => void
+  cancelUpload: (id: string) => void
+  registerUploadCancel: (id: string, cancel: () => void) => void
   dismissUpload: (id: string) => void
   clearFinished: (olderThanMs?: number) => void
 }
 
 let seq = 0
+const cancelHandlers = new Map<string, () => void>()
 
 function nextUploadId(): string {
   seq += 1
@@ -91,7 +101,8 @@ export const uploadStore = create<UploadState>((set) => ({
       }),
     })),
 
-  finishUpload: (id) =>
+  finishUpload: (id) => {
+    cancelHandlers.delete(id)
     set((state) => ({
       uploads: state.uploads.map((item) =>
         item.id === id
@@ -105,9 +116,11 @@ export const uploadStore = create<UploadState>((set) => ({
             }
           : item,
       ),
-    })),
+    }))
+  },
 
-  failUpload: (id, error) =>
+  failUpload: (id, error) => {
+    cancelHandlers.delete(id)
     set((state) => ({
       uploads: state.uploads.map((item) =>
         item.id === id
@@ -120,19 +133,46 @@ export const uploadStore = create<UploadState>((set) => ({
             }
           : item,
       ),
-    })),
+    }))
+  },
 
-  dismissUpload: (id) =>
+  cancelUpload: (id) => {
+    cancelHandlers.get(id)?.()
+    cancelHandlers.delete(id)
+    set((state) => ({
+      uploads: state.uploads.map((item) =>
+        item.id === id
+          ? {
+              ...item,
+              status: 'canceled',
+              error: undefined,
+              updatedAt: Date.now(),
+              completedAt: Date.now(),
+            }
+          : item,
+      ),
+    }))
+  },
+
+  registerUploadCancel: (id, cancel) => {
+    cancelHandlers.set(id, cancel)
+  },
+
+  dismissUpload: (id) => {
+    cancelHandlers.delete(id)
     set((state) => ({
       uploads: state.uploads.filter((item) => item.id !== id),
-    })),
+    }))
+  },
 
   clearFinished: (olderThanMs = 5 * 60 * 1000) =>
     set((state) => {
       const now = Date.now()
       return {
         uploads: state.uploads.filter((item) => {
-          if (item.status !== 'complete' && item.status !== 'error') return true
+          if (item.status !== 'complete' && item.status !== 'error' && item.status !== 'canceled') {
+            return true
+          }
           return !item.completedAt || now - item.completedAt < olderThanMs
         }),
       }

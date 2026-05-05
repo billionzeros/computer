@@ -5,6 +5,19 @@ const ACK_TIMEOUT_MS = 60_000
 
 export type FileUploadStage = 'preparing' | 'uploading' | 'finishing'
 
+export class UploadCanceledError extends Error {
+  constructor(filename: string) {
+    super(`Upload canceled for "${filename}".`)
+    this.name = 'UploadCanceledError'
+  }
+}
+
+export function isUploadCanceledError(err: unknown): err is UploadCanceledError {
+  return (
+    err instanceof UploadCanceledError || (err as Error | undefined)?.name === 'UploadCanceledError'
+  )
+}
+
 export interface FileUploadProgress {
   stage: FileUploadStage
   uploadedBytes: number
@@ -35,15 +48,20 @@ export async function uploadFileToWorkspace(
   opts: {
     id: string
     onProgress?: (progress: FileUploadProgress) => void
+    signal?: AbortSignal
   },
 ): Promise<void> {
   if (connection.status !== 'connected') {
     throw new Error('Not connected to the agent.')
   }
+  if (opts.signal?.aborted) {
+    throw new UploadCanceledError(file.name)
+  }
 
   let ackedBytes = 0
   let completed = false
   let failed: Error | null = null
+  let abortSent = false
   const waiters: Array<{
     bytes: number
     resolve: () => void
@@ -84,18 +102,40 @@ export async function uploadFileToWorkspace(
     })
   }
 
+  const sendAbort = () => {
+    if (completed || abortSent || connection.status !== 'connected') return
+    abortSent = true
+    connection.sendFilesystemWriteAbort(opts.id, targetPath)
+  }
+
   let unsubscribeProgress: (() => void) | undefined
   let unsubscribeResponse: (() => void) | undefined
+  let responseReject: ((err: Error) => void) | undefined
+  let abortListener: (() => void) | undefined
   const cleanup = () => {
     unsubscribeProgress?.()
     unsubscribeResponse?.()
     unsubscribeProgress = undefined
     unsubscribeResponse = undefined
+    if (abortListener) opts.signal?.removeEventListener('abort', abortListener)
+    abortListener = undefined
+  }
+
+  const cancelUpload = () => {
+    if (failed || completed) return
+    const err = new UploadCanceledError(file.name)
+    failed = err
+    rejectWaiters(err)
+    sendAbort()
+    cleanup()
+    responseReject?.(err)
   }
 
   const responsePromise = new Promise<void>((resolve, reject) => {
+    responseReject = reject
     unsubscribeProgress = connection.onFilesystemWriteProgress((payload) => {
       if (payload.id !== opts.id) return
+      if (failed) return
       ackedBytes = payload.receivedBytes
       opts.onProgress?.(progressFromBytes('uploading', ackedBytes, payload.sizeBytes))
       resolveWaiters()
@@ -105,6 +145,10 @@ export async function uploadFileToWorkspace(
       (path, success, error, responseId) => {
         if (responseId !== opts.id) return
         cleanup()
+        if (failed) {
+          reject(failed)
+          return
+        }
         completed = success
         if (success) {
           ackedBytes = file.size
@@ -120,8 +164,12 @@ export async function uploadFileToWorkspace(
     )
   })
   responsePromise.catch(() => {})
+  abortListener = cancelUpload
+  opts.signal?.addEventListener('abort', abortListener, { once: true })
+  if (opts.signal?.aborted) cancelUpload()
 
   try {
+    if (failed) throw failed
     opts.onProgress?.(progressFromBytes('preparing', 0, file.size))
     connection.sendFilesystemWriteStart(opts.id, targetPath, file.size)
 
@@ -155,9 +203,7 @@ export async function uploadFileToWorkspace(
     failed = error
     rejectWaiters(error)
     cleanup()
-    if (!completed && connection.status === 'connected') {
-      connection.sendFilesystemWriteAbort(opts.id, targetPath)
-    }
+    if (!completed) sendAbort()
     throw error
   } finally {
     cleanup()

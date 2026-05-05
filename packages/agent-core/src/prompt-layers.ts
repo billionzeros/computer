@@ -77,9 +77,7 @@ export function buildCurrentContextLayer(opts: CurrentContextLayerOpts): string 
   if (opts.workspacePath) {
     if (opts.framingAsScratchSpace && opts.projectContext) {
       lines.push(`- Scratch space: ${opts.workspacePath}/`)
-      lines.push(
-        '  Use ONLY for transient files: temp scripts, intermediate outputs, debug logs.',
-      )
+      lines.push('  Use ONLY for transient files: temp scripts, intermediate outputs, debug logs.')
       lines.push(
         '  Files here are not visible to the user. Use the project workspace for anything the user should see.',
       )

@@ -1077,10 +1077,7 @@ export class WebhookAgentRunner {
       } catch {
         // fall through — createSession will handle it
       }
-    } else if (
-      session &&
-      (session.provider !== providerName || session.model !== model)
-    ) {
+    } else if (session && (session.provider !== providerName || session.model !== model)) {
       try {
         session.switchModel(providerName, model)
       } catch (err) {
