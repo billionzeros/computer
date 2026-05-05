@@ -1,12 +1,12 @@
 {
-  "version": "2.1.5",
-  "gitHash": "7c3d7bd",
+  "version": "2.1.6",
+  "gitHash": "",
   "releaseUrl": "https://github.com/billionzeros/computer/releases",
-  "changelog": "Other:\n- fix(byok): support user OpenAI/Anthropic API keys + working effort pill (#25)",
-  "publishedAt": "2026-05-04T11:41:41.834Z",
-  "cli": "https://github.com/billionzeros/computer/releases/download/v2.1.5/anton-cli.mjs",
+  "changelog": "Fixes:\n- docx rendering and fileupload flow\n- issues\n\nOther:\n- Fix universal upload progress (#31)\n- Polish markdown table typography\n- Structure file artifacts (#29)\n- fix(routines): add missing .conv-back styles so back buttons render inline (#27)\n- fix(webhooks): unify session-options factory across desktop/telegram/slack (#28)\n- observability: add per-turn telemetry to harness sessions (#26)",
+  "publishedAt": "2026-05-05T20:17:36.127Z",
+  "cli": "https://github.com/billionzeros/computer/releases/download/v2.1.6/anton-cli.mjs",
   "sidecar": {
-    "linux-arm64": "https://github.com/billionzeros/computer/releases/download/v2.1.5/anton-sidecar-linux-arm64",
-    "linux-amd64": "https://github.com/billionzeros/computer/releases/download/v2.1.5/anton-sidecar-linux-amd64"
+    "linux-arm64": "https://github.com/billionzeros/computer/releases/download/v2.1.6/anton-sidecar-linux-arm64",
+    "linux-amd64": "https://github.com/billionzeros/computer/releases/download/v2.1.6/anton-sidecar-linux-amd64"
   }
 }

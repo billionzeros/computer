@@ -10,6 +10,21 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versioning: [S
 
 ---
 
+## [2.1.6] - 2026-05-06
+
+### Fixes
+- docx rendering and fileupload flow
+- issues
+
+### Other
+- Fix universal upload progress (#31)
+- Polish markdown table typography
+- Structure file artifacts (#29)
+- fix(routines): add missing .conv-back styles so back buttons render inline (#27)
+- fix(webhooks): unify session-options factory across desktop/telegram/slack (#28)
+- observability: add per-turn telemetry to harness sessions (#26)
+---
+
 ## [2.1.5] - 2026-05-04
 
 ### Other
@@ -769,7 +784,8 @@ Maintenance release.
 
 ---
 
-[Unreleased]: https://github.com/billionzeros/computer/compare/v2.1.5...HEAD
+[Unreleased]: https://github.com/billionzeros/computer/compare/v2.1.6...HEAD
+[2.1.6]: https://github.com/billionzeros/computer/compare/v$(changelog.match(/## [(d+.d+.d+)]/g)[1].match(/d+.d+.d+/)[0])...v2.1.6
 [2.1.5]: https://github.com/billionzeros/computer/compare/v$(changelog.match(/## [(d+.d+.d+)]/g)[1].match(/d+.d+.d+/)[0])...v2.1.5
 [2.1.4]: https://github.com/billionzeros/computer/compare/v$(changelog.match(/## [(d+.d+.d+)]/g)[1].match(/d+.d+.d+/)[0])...v2.1.4
 [2.1.3]: https://github.com/billionzeros/computer/compare/v$(changelog.match(/## [(d+.d+.d+)]/g)[1].match(/d+.d+.d+/)[0])...v2.1.3
