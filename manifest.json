@@ -1,6 +1,6 @@
 {
   "version": "2.1.6",
-  "gitHash": "",
+  "gitHash": "bf02403",
   "releaseUrl": "https://github.com/billionzeros/computer/releases",
   "changelog": "Fixes:\n- docx rendering and fileupload flow\n- issues\n\nOther:\n- Fix universal upload progress (#31)\n- Polish markdown table typography\n- Structure file artifacts (#29)\n- fix(routines): add missing .conv-back styles so back buttons render inline (#27)\n- fix(webhooks): unify session-options factory across desktop/telegram/slack (#28)\n- observability: add per-turn telemetry to harness sessions (#26)",
   "publishedAt": "2026-05-05T20:17:36.127Z",
