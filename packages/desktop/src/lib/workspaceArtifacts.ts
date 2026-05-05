@@ -102,7 +102,7 @@ export function openWorkspaceFileArtifact(
   if (!absPath) return false
 
   const filename = opts.filename || fileBasename(absPath) || absPath
-  const renderType = classifyUpload(undefined, absPath) ?? 'code'
+  const renderType = classifyUpload(undefined, absPath) ?? 'file'
   const id = `workspace-file:${absPath}`
   const store = useStore.getState()
   const activeConversation = store.getActiveConversation()

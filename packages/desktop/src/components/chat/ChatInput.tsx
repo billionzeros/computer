@@ -3,7 +3,7 @@ import { Plus, Send, Square } from 'lucide-react'
 import type React from 'react'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { classifyUpload } from '../../lib/artifacts.js'
-import { connection } from '../../lib/connection.js'
+import { uploadFileToWorkspace } from '../../lib/fileUploads.js'
 // Side-effect import — registers mention providers (files, future: agents, web, …).
 import '../../lib/mentions/register.js'
 import { mentionRegistry } from '../../lib/mentions/registry.js'
@@ -20,6 +20,7 @@ import {
   getPersistedResearchMode,
   sessionStore,
 } from '../../lib/store/sessionStore.js'
+import { uploadStore } from '../../lib/store/uploadStore.js'
 import {
   classifyMimeFamily,
   resolveInitialFolder,
@@ -108,13 +109,8 @@ function EffortBars({ level }: { level: EffortLevel }) {
   )
 }
 
-// File (non-image) attachment limits.
+// Project upload limits.
 const MAX_FILE_BYTES_HARD = 500 * 1024 * 1024 // absolute rejection cap
-
-// Accept list for the "Add Files" picker — documents, spreadsheets, PDFs, text.
-// Images are deliberately excluded here; they go through the "Add Images" path.
-const FILE_ACCEPT =
-  '.pdf,.doc,.docx,.xls,.xlsx,.csv,.tsv,.txt,.md,.mdx,.json,.log,.rtf,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,text/plain,text/markdown,text/csv,application/json'
 
 async function readImageFile(file: File): Promise<ChatImageAttachment> {
   const dataUrl = await new Promise<string>((resolve, reject) => {
@@ -132,18 +128,6 @@ async function readImageFile(file: File): Promise<ChatImageAttachment> {
     sizeBytes: file.size,
     data,
   }
-}
-
-/** Read a binary file as base64 for sending over the filesync channel. */
-async function readFileAsBase64(file: File): Promise<string> {
-  const dataUrl = await new Promise<string>((resolve, reject) => {
-    const reader = new FileReader()
-    reader.onload = () => resolve(String(reader.result))
-    reader.onerror = () => reject(reader.error ?? new Error(`Failed to read "${file.name}"`))
-    reader.readAsDataURL(file)
-  })
-  const [, data = ''] = dataUrl.split(',', 2)
-  return data
 }
 
 export function ChatInput({
@@ -385,7 +369,7 @@ export function ChatInput({
 
       const imageFiles = files.filter((file) => file.type.startsWith('image/'))
       if (imageFiles.length === 0) {
-        setAttachmentError('No images in selection. Use Add Files for documents.')
+        setAttachmentError('No images in selection. Use Add Files for documents, video, or data.')
         return
       }
 
@@ -457,17 +441,38 @@ export function ChatInput({
         }))
 
         for (const { file, filename } of pairs) {
-          const base64 = await readFileAsBase64(file)
           const targetPath =
             result.folderPath === '/' ? `/${filename}` : `${result.folderPath}/${filename}`
-          connection.sendFilesystemWrite(targetPath, base64, 'base64')
+          const uploadId = uploadStore.getState().startUpload({
+            name: filename,
+            path: targetPath,
+            source: 'composer',
+            sizeBytes: file.size,
+          })
+          try {
+            await uploadFileToWorkspace(file, targetPath, {
+              id: uploadId,
+              onProgress: (progress) => {
+                uploadStore.getState().updateUpload(uploadId, {
+                  status: progress.stage,
+                  uploadedBytes: progress.uploadedBytes,
+                  percent: progress.percent,
+                })
+              },
+            })
+            uploadStore.getState().finishUpload(uploadId)
+          } catch (err) {
+            const message = err instanceof Error ? err.message : 'Upload failed'
+            uploadStore.getState().failUpload(uploadId, message)
+            throw err
+          }
 
           // Register as an upload artifact so it appears in the Files bar
           // and is previewable on pill click.
-          const renderType = classifyUpload(file.type || undefined, filename) ?? 'code'
-          const uploadId = `upload:${targetPath}`
+          const renderType = classifyUpload(file.type || undefined, filename) ?? 'file'
+          const artifactId = `upload:${targetPath}`
           artifactStore.getState().addArtifact({
-            id: uploadId,
+            id: artifactId,
             type: 'file',
             source: 'upload',
             renderType,
@@ -477,7 +482,7 @@ export function ChatInput({
             mimeType: file.type || undefined,
             language: '',
             content: '',
-            toolCallId: uploadId,
+            toolCallId: artifactId,
             timestamp: Date.now(),
             conversationId: convId,
           })
@@ -620,16 +625,12 @@ export function ChatInput({
   const handlePaste = useCallback(
     (e: React.ClipboardEvent<HTMLDivElement>) => {
       const allItems = Array.from(e.clipboardData.items)
-      const imageFiles = allItems
-        .filter((item) => item.kind === 'file' && item.type.startsWith('image/'))
+      const pastedFiles = allItems
+        .filter((item) => item.kind === 'file')
         .map((item) => item.getAsFile())
         .filter((f): f is File => f !== null)
-      const otherFiles = allItems
-        .filter(
-          (item) => item.kind === 'file' && item.type !== '' && !item.type.startsWith('image/'),
-        )
-        .map((item) => item.getAsFile())
-        .filter((f): f is File => f !== null)
+      const imageFiles = pastedFiles.filter((file) => file.type.startsWith('image/'))
+      const otherFiles = pastedFiles.filter((file) => !file.type.startsWith('image/'))
 
       if (imageFiles.length === 0 && otherFiles.length === 0) return
       e.preventDefault()
@@ -652,18 +653,15 @@ export function ChatInput({
     e.target.value = ''
   }
 
-  // MIME-aware drop: images go inline, other files go through the picker (batch).
+  // Dropped files are project uploads. Use "Add Images" for inline vision attachments.
   const handleDrop = useCallback(
     (e: React.DragEvent<HTMLDivElement>) => {
       const dropped = Array.from(e.dataTransfer.files ?? [])
       if (dropped.length === 0) return
       e.preventDefault()
-      const images = dropped.filter((f) => f.type.startsWith('image/'))
-      const docs = dropped.filter((f) => !f.type.startsWith('image/'))
-      if (images.length > 0) void addImages(images)
-      if (docs.length > 0) queueFilesForUpload(docs)
+      queueFilesForUpload(dropped)
     },
-    [addImages, queueFilesForUpload],
+    [queueFilesForUpload],
   )
 
   const handleDragOver = useCallback((e: React.DragEvent<HTMLDivElement>) => {
@@ -733,7 +731,6 @@ export function ChatInput({
           <input
             ref={fileInputRef}
             type="file"
-            accept={FILE_ACCEPT}
             multiple
             className="composer__file-input"
             onChange={handleDocumentFileChange}

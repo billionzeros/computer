@@ -1,8 +1,10 @@
 import {
   Braces,
+  File,
   FileCode,
   FileSpreadsheet,
   FileText,
+  FileVideo,
   ImageIcon,
   Network,
   Sparkles,
@@ -23,6 +25,8 @@ const TYPE_ICONS: Record<ArtifactRenderType, typeof Sparkles> = {
   xlsx: FileSpreadsheet,
   pdf: FileText,
   image: ImageIcon,
+  video: FileVideo,
+  file: File,
 }
 
 const TYPE_LABELS: Record<ArtifactRenderType, string> = {
@@ -35,6 +39,8 @@ const TYPE_LABELS: Record<ArtifactRenderType, string> = {
   xlsx: 'Spreadsheet',
   pdf: 'PDF',
   image: 'Image',
+  video: 'Video',
+  file: 'File',
 }
 
 export function ArtifactRail() {

@@ -327,6 +327,15 @@ export class AgentServer {
       },
     })
   private activeTurns: Set<string> = new Set() // sessions currently processing a turn
+  private fileUploadSessions: Map<
+    string,
+    {
+      filePath: string
+      tempPath: string
+      receivedBytes: number
+      expectedBytes: number
+    }
+  > = new Map()
   /**
    * Latest result from `probeMcpShim()`. `null` = not yet probed. Gates
    * the capability block on harness session creation so the model
@@ -994,9 +1003,21 @@ export class AgentServer {
           } catch {}
           this.ptys.delete(id)
         }
+        void this.abortPendingFileUploads()
         log.info('Client disconnected')
       }
     })
+  }
+
+  private async abortPendingFileUploads(): Promise<void> {
+    if (this.fileUploadSessions.size === 0) return
+    const { unlinkSync } = await import('node:fs')
+    for (const upload of this.fileUploadSessions.values()) {
+      try {
+        unlinkSync(upload.tempPath)
+      } catch {}
+    }
+    this.fileUploadSessions.clear()
   }
 
   // ── Message routing ─────────────────────────────────────────────
@@ -1434,6 +1455,13 @@ export class AgentServer {
     xlsx: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
     ppt: 'application/vnd.ms-powerpoint',
     pptx: 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+    mov: 'video/quicktime',
+    qt: 'video/quicktime',
+    mp4: 'video/mp4',
+    m4v: 'video/x-m4v',
+    webm: 'video/webm',
+    avi: 'video/x-msvideo',
+    mkv: 'video/x-matroska',
     zip: 'application/zip',
   }
 
@@ -1458,11 +1486,15 @@ export class AgentServer {
   private async handleFilesync(payload: Uint8Array) {
     const msg = parseJsonPayload<{
       type: string
+      id?: string
       path?: string
       showHidden?: boolean
       content?: string
       encoding?: string
       name?: string
+      sizeBytes?: number
+      offset?: number
+      done?: boolean
     }>(payload)
 
     switch (msg.type) {
@@ -1618,6 +1650,184 @@ export class AgentServer {
             content: '',
             error: (err as Error).message,
           })
+        }
+        break
+      }
+
+      case 'fs_write_start': {
+        const id = msg.id || ''
+        const filePath = msg.path || ''
+        const expectedBytes = Number(msg.sizeBytes ?? 0)
+        if (!id) {
+          this.sendToClient(Channel.FILESYNC, {
+            type: 'fs_write_response',
+            path: filePath,
+            success: false,
+            error: 'Missing upload id',
+          })
+          break
+        }
+        if (!this.isPathWithinWorkspace(filePath)) {
+          this.sendToClient(Channel.FILESYNC, {
+            type: 'fs_write_response',
+            id,
+            path: filePath,
+            success: false,
+            error: 'Write denied: path is outside the project workspace',
+          })
+          break
+        }
+        if (
+          !Number.isSafeInteger(expectedBytes) ||
+          expectedBytes < 0 ||
+          expectedBytes > AgentServer.MAX_BINARY_READ_BYTES
+        ) {
+          this.sendToClient(Channel.FILESYNC, {
+            type: 'fs_write_response',
+            id,
+            path: filePath,
+            success: false,
+            error: `File too large. Maximum is ${Math.round(AgentServer.MAX_BINARY_READ_BYTES / 1024 / 1024)}MB.`,
+          })
+          break
+        }
+        try {
+          const { mkdirSync, renameSync, unlinkSync, writeFileSync } = await import('node:fs')
+          const { basename, dirname, join } = await import('node:path')
+          const previous = this.fileUploadSessions.get(id)
+          if (previous) {
+            try {
+              unlinkSync(previous.tempPath)
+            } catch {}
+            this.fileUploadSessions.delete(id)
+          }
+          const dir = dirname(filePath)
+          const safeId = id.replace(/[^a-zA-Z0-9_-]/g, '_')
+          const tempPath = join(dir, `.${basename(filePath)}.${safeId}.tmp`)
+          mkdirSync(dir, { recursive: true })
+          writeFileSync(tempPath, Buffer.alloc(0))
+          this.fileUploadSessions.set(id, {
+            filePath,
+            tempPath,
+            receivedBytes: 0,
+            expectedBytes,
+          })
+
+          this.sendToClient(Channel.FILESYNC, {
+            type: 'fs_write_progress',
+            id,
+            path: filePath,
+            receivedBytes: 0,
+            sizeBytes: expectedBytes,
+          })
+
+          if (expectedBytes === 0) {
+            renameSync(tempPath, filePath)
+            this.fileUploadSessions.delete(id)
+            this.sendToClient(Channel.FILESYNC, {
+              type: 'fs_write_response',
+              id,
+              path: filePath,
+              success: true,
+            })
+          }
+        } catch (err: unknown) {
+          this.fileUploadSessions.delete(id)
+          this.sendToClient(Channel.FILESYNC, {
+            type: 'fs_write_response',
+            id,
+            path: filePath,
+            success: false,
+            error: (err as Error).message,
+          })
+        }
+        break
+      }
+
+      case 'fs_write_abort': {
+        const id = msg.id || ''
+        const upload = id ? this.fileUploadSessions.get(id) : undefined
+        if (upload) {
+          try {
+            const { unlinkSync } = await import('node:fs')
+            unlinkSync(upload.tempPath)
+          } catch {}
+          this.fileUploadSessions.delete(id)
+        }
+        break
+      }
+
+      case 'fs_write_chunk': {
+        const id = msg.id || ''
+        const upload = id ? this.fileUploadSessions.get(id) : undefined
+        const filePath = msg.path || upload?.filePath || ''
+        const fail = async (error: string) => {
+          if (upload) {
+            try {
+              const { unlinkSync } = await import('node:fs')
+              unlinkSync(upload.tempPath)
+            } catch {}
+          }
+          if (id) this.fileUploadSessions.delete(id)
+          this.sendToClient(Channel.FILESYNC, {
+            type: 'fs_write_response',
+            id,
+            path: filePath,
+            success: false,
+            error,
+          })
+        }
+
+        if (!id || !upload) {
+          await fail('Unknown upload session')
+          break
+        }
+        if (filePath !== upload.filePath) {
+          await fail('Upload path changed mid-stream')
+          break
+        }
+
+        const offset = Number(msg.offset ?? -1)
+        if (!Number.isSafeInteger(offset) || offset !== upload.receivedBytes) {
+          await fail('Upload chunk arrived out of order')
+          break
+        }
+
+        try {
+          const { appendFileSync, renameSync } = await import('node:fs')
+          const chunk = Buffer.from(msg.content || '', 'base64')
+          appendFileSync(upload.tempPath, chunk)
+          upload.receivedBytes += chunk.byteLength
+
+          if (upload.receivedBytes > upload.expectedBytes) {
+            await fail('Upload exceeded expected size')
+            break
+          }
+
+          this.sendToClient(Channel.FILESYNC, {
+            type: 'fs_write_progress',
+            id,
+            path: upload.filePath,
+            receivedBytes: upload.receivedBytes,
+            sizeBytes: upload.expectedBytes,
+          })
+
+          if (msg.done) {
+            if (upload.receivedBytes !== upload.expectedBytes) {
+              await fail('Upload finished before all bytes arrived')
+              break
+            }
+            renameSync(upload.tempPath, upload.filePath)
+            this.fileUploadSessions.delete(id)
+            this.sendToClient(Channel.FILESYNC, {
+              type: 'fs_write_response',
+              id,
+              path: upload.filePath,
+              success: true,
+            })
+          }
+        } catch (err: unknown) {
+          await fail((err as Error).message)
         }
         break
       }

@@ -9,9 +9,11 @@
 import {
   ChevronDown,
   Database,
+  File,
   FileCode,
   FileSpreadsheet,
   FileText,
+  FileVideo,
   FolderOpen,
   Globe,
   Image as ImageIcon,
@@ -31,6 +33,8 @@ function artifactIcon(a: Artifact) {
   if (a.renderType === 'docx') return FileText
   if (a.renderType === 'pdf') return FileText
   if (a.renderType === 'image') return ImageIcon
+  if (a.renderType === 'video') return FileVideo
+  if (a.renderType === 'file') return File
   return FileText
 }
 
@@ -43,6 +47,8 @@ function artifactExtLabel(a: Artifact): string {
   if (a.renderType === 'docx') return 'DOCX'
   if (a.renderType === 'pdf') return 'PDF'
   if (a.renderType === 'image') return 'IMG'
+  if (a.renderType === 'video') return 'VID'
+  if (a.renderType === 'file') return 'FILE'
   const lang = (a.language || '').toLowerCase()
   if (lang === 'typescript' || lang === 'ts') return 'TS'
   if (lang === 'tsx') return 'TSX'
@@ -95,7 +101,9 @@ function SessionFileThumb({ artifact }: { artifact: Artifact }) {
     artifact.renderType === 'docx' ||
     artifact.renderType === 'xlsx' ||
     artifact.renderType === 'pdf' ||
-    artifact.renderType === 'image'
+    artifact.renderType === 'image' ||
+    artifact.renderType === 'video' ||
+    artifact.renderType === 'file'
   ) {
     // Binary preview: we don't have inline bytes here (content is empty).
     // Show a subtle icon-block so the row is still scannable. Live

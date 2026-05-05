@@ -5,6 +5,7 @@ import {
   FileCode,
   FileSpreadsheet,
   FileText,
+  FileVideo,
   Folder,
   FolderOpen,
   FolderPlus,
@@ -22,11 +23,13 @@ import {
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { classifyUpload } from '../../lib/artifacts.js'
 import { connection } from '../../lib/connection.js'
+import { uploadFileToWorkspace } from '../../lib/fileUploads.js'
 import { useStore } from '../../lib/store.js'
 import { artifactStore } from '../../lib/store/artifactStore.js'
 import { connectionStore } from '../../lib/store/connectionStore.js'
 import { projectStore } from '../../lib/store/projectStore.js'
 import { uiStore } from '../../lib/store/uiStore.js'
+import { uploadStore } from '../../lib/store/uploadStore.js'
 import { DocxRenderer } from '../artifacts/DocxRenderer.js'
 import { PdfRenderer } from '../artifacts/PdfRenderer.js'
 import { XlsxRenderer } from '../artifacts/XlsxRenderer.js'
@@ -78,20 +81,22 @@ const IMAGE_EXTS = new Set([
   'heic',
   'heif',
 ])
+const VIDEO_EXTS = new Set(['mov', 'qt', 'mp4', 'm4v', 'webm', 'avi', 'mkv'])
 
-function getCategory(name: string): 'code' | 'data' | 'text' | 'image' | 'doc' | 'other' {
+function getCategory(name: string): 'code' | 'data' | 'text' | 'image' | 'video' | 'doc' | 'other' {
   const ext = name.split('.').pop()?.toLowerCase() || ''
   if (CODE_EXTS.has(ext)) return 'code'
   if (DATA_EXTS.has(ext)) return 'data'
   if (TEXT_EXTS.has(ext)) return 'text'
   if (IMAGE_EXTS.has(ext)) return 'image'
+  if (VIDEO_EXTS.has(ext)) return 'video'
   if (DOC_EXTS.has(ext)) return 'doc'
   return 'other'
 }
 
 function isPreviewable(name: string): boolean {
   const cat = getCategory(name)
-  return cat !== 'other'
+  return cat !== 'other' && cat !== 'video'
 }
 
 function isImageFile(name: string): boolean {
@@ -138,6 +143,8 @@ function iconFor(entry: { name: string; type: 'file' | 'dir' | 'link' }) {
       return <FileText size={15} strokeWidth={1.5} />
     case 'image':
       return <Image size={15} strokeWidth={1.5} />
+    case 'video':
+      return <FileVideo size={15} strokeWidth={1.5} />
     case 'doc':
       return <FileText size={15} strokeWidth={1.5} />
     default:
@@ -501,22 +508,37 @@ export function ProjectFilesView() {
   }
 
   const handleUpload = useCallback(
-    (files: FileList) => {
+    async (files: FileList) => {
       const convId =
         useStore.getState().getActiveConversation()?.sessionId ??
         useStore.getState().activeConversationId ??
         undefined
       for (const file of Array.from(files)) {
-        const reader = new FileReader()
-        reader.onload = () => {
-          const base64 = (reader.result as string).split(',')[1] || ''
-          const targetPath = resolvePath(file.name)
-          connection.sendFilesystemWrite(targetPath, base64, 'base64')
+        const targetPath = resolvePath(file.name)
+        const progressId = uploadStore.getState().startUpload({
+          name: file.name,
+          path: targetPath,
+          source: 'files',
+          sizeBytes: file.size,
+        })
+
+        try {
+          await uploadFileToWorkspace(file, targetPath, {
+            id: progressId,
+            onProgress: (progress) => {
+              uploadStore.getState().updateUpload(progressId, {
+                status: progress.stage,
+                uploadedBytes: progress.uploadedBytes,
+                percent: progress.percent,
+              })
+            },
+          })
+          uploadStore.getState().finishUpload(progressId)
 
           // Mirror the composer upload flow so the file shows in the
           // session's "Uploads" sidebar section and is previewable.
           // addArtifact dedupes by filepath.
-          const renderType = classifyUpload(file.type || undefined, file.name) ?? 'code'
+          const renderType = classifyUpload(file.type || undefined, file.name) ?? 'file'
           const uploadId = `upload:${targetPath}`
           artifactStore.getState().addArtifact({
             id: uploadId,
@@ -533,8 +555,11 @@ export function ProjectFilesView() {
             timestamp: Date.now(),
             conversationId: convId,
           })
+        } catch (err) {
+          const message = err instanceof Error ? err.message : 'Upload failed'
+          uploadStore.getState().failUpload(progressId, message)
+          setError(message)
         }
-        reader.readAsDataURL(file)
       }
     },
     [resolvePath],

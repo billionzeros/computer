@@ -24279,6 +24279,90 @@ button {
 .act-row__chev {
   color: var(--text-3);
 }
+.act-upload {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  width: 100%;
+  padding: 9px 10px;
+  background: none;
+  border: none;
+  border-radius: 6px;
+  color: var(--text);
+  text-align: left;
+  cursor: pointer;
+}
+.act-upload:hover {
+  background: color-mix(in oklch, var(--bg) 40%, transparent);
+}
+.act-upload__icon {
+  width: 18px;
+  height: 18px;
+  border-radius: 5px;
+  display: grid;
+  place-items: center;
+  flex: 0 0 auto;
+  color: var(--accent);
+  background: color-mix(in oklch, var(--accent) 14%, transparent);
+  margin-top: 1px;
+}
+.act-upload--complete .act-upload__icon {
+  color: var(--success);
+  background: color-mix(in oklch, var(--success) 18%, transparent);
+}
+.act-upload--error .act-upload__icon {
+  color: var(--danger);
+  background: color-mix(in oklch, var(--danger) 18%, transparent);
+}
+.act-upload__body {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.act-upload__top {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+.act-upload__name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12.5px;
+  color: var(--text);
+}
+.act-upload__percent {
+  flex: 0 0 auto;
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  color: var(--text-3);
+}
+.act-upload__meta {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 11px;
+  color: var(--text-3);
+}
+.act-upload__bar {
+  height: 3px;
+  border-radius: 99px;
+  background: color-mix(in oklch, var(--bg) 65%, #fff);
+  overflow: hidden;
+}
+.act-upload__bar > span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--accent);
+  transition: width 0.18s ease;
+}
 .act-card__empty {
   padding: 20px 14px;
   text-align: center;
@@ -27041,6 +27125,55 @@ button {
   max-width: 100%;
   max-height: 100%;
   object-fit: contain;
+}
+.art-panel__video-wrap {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+  padding: 24px;
+  background: #0a0a0a;
+}
+.art-panel__video {
+  width: min(100%, 960px);
+  max-height: 100%;
+  background: #000;
+  border-radius: 6px;
+}
+.art-panel__file {
+  height: 100%;
+  min-height: 320px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 32px;
+  color: var(--text-3);
+  text-align: center;
+}
+.art-panel__file-icon {
+  color: var(--text-3);
+  margin-bottom: 4px;
+}
+.art-panel__file-name {
+  max-width: min(520px, 100%);
+  color: var(--text);
+  font-size: 15px;
+  font-weight: 500;
+  overflow-wrap: anywhere;
+}
+.art-panel__file-meta {
+  font-size: 12px;
+  color: var(--text-3);
+}
+.art-panel__file-path {
+  max-width: min(620px, 100%);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--text-4);
+  overflow-wrap: anywhere;
 }
 
 /* ── XLSX renderer ─────────────────────────────────────────────────── */
