@@ -1,6 +1,6 @@
 {
   "version": "2.2.1",
-  "gitHash": "",
+  "gitHash": "00b7f2c",
   "releaseUrl": "https://github.com/billionzeros/computer/releases",
   "changelog": "Other:\n- Fix project session resume\n- Fix publish links and modal\n- Fix Codex mid-turn steering",
   "publishedAt": "2026-05-06T17:36:08.673Z",
