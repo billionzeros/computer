@@ -490,6 +490,7 @@ export interface AiUserMessage {
   type: 'message'
   content: string
   sessionId?: string // target session (defaults to "default")
+  projectId?: string // project-scoped sessions may not encode this in their ID
   attachments?: ChatImageAttachmentInput[]
   /** Composer-mode hint. 'research' biases the model toward web_research. */
   mode?: 'research'

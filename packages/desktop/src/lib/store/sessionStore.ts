@@ -388,6 +388,7 @@ interface SessionStoreState {
     text: string,
     sessionId: string,
     attachments?: ChatImageAttachmentInput[],
+    projectId?: string,
   ) => void
   sendSteerMessage: (
     text: string,
@@ -692,10 +693,13 @@ export const sessionStore = create<SessionStoreState>((set, get) => {
         get().setSessionStatus(sid, 'working')
       }
     },
-    sendAiMessageToSession: (text, sessionId, attachments) => {
+    sendAiMessageToSession: (text, sessionId, attachments, projectId) => {
       consumePendingResearchModeFor(sessionId, get, set)
       const mode = get().getSessionState(sessionId).researchMode ? 'research' : undefined
-      connection.sendAiMessageToSession(text, sessionId, attachments, mode ? { mode } : undefined)
+      connection.sendAiMessageToSession(text, sessionId, attachments, {
+        ...(mode ? { mode } : {}),
+        ...(projectId ? { projectId } : {}),
+      })
       if (get().connectionStatus === 'connected') {
         get().setSessionStatus(sessionId, 'working')
       }
