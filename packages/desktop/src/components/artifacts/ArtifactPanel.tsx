@@ -26,6 +26,7 @@ import {
   isBinaryRenderType,
 } from '../../lib/artifacts.js'
 import { connection } from '../../lib/connection.js'
+import { qualifyPublicUrl } from '../../lib/publicUrl.js'
 import { artifactStore } from '../../lib/store/artifactStore.js'
 import { connectionStore } from '../../lib/store/connectionStore.js'
 import { HighlightedBlock, MarkdownRenderer } from '../chat/MarkdownRenderer.js'
@@ -294,9 +295,7 @@ export function ArtifactPanelContent() {
 
   const fullPublishedUrl = useMemo(() => {
     if (!active?.publishedUrl) return ''
-    if (active.publishedUrl.startsWith('http')) return active.publishedUrl
-    if (domain) return `https://${domain}${active.publishedUrl}`
-    return active.publishedUrl
+    return qualifyPublicUrl(active.publishedUrl, domain)
   }, [active?.publishedUrl, domain])
 
   const isBinary = active ? isBinaryRenderType(active.renderType) : false

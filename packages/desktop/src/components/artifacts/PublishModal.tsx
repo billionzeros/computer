@@ -11,20 +11,26 @@ import {
   Twitter,
 } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import { buildArtifactPublicUrl, qualifyPublicUrl } from '../../lib/publicUrl.js'
 import { artifactStore } from '../../lib/store/artifactStore.js'
 import { connectionStore } from '../../lib/store/connectionStore.js'
 import { Modal } from '../ui/Modal.js'
 
+function cleanSlugInput(text: string): string {
+  return text
+    .toLowerCase()
+    .replace(/[^a-z0-9-]+/g, '-')
+    .replace(/-+/g, '-')
+    .replace(/^-+/g, '')
+    .slice(0, 48)
+}
+
+function finalSlug(text: string): string {
+  return cleanSlugInput(text).replace(/-+$/g, '')
+}
+
 function slugify(text: string): string {
-  return (
-    text
-      .toLowerCase()
-      .replace(/[^a-z0-9\s-]/g, '')
-      .replace(/\s+/g, '-')
-      .replace(/-+/g, '-')
-      .replace(/^-|-$/g, '')
-      .slice(0, 48) || 'untitled'
-  )
+  return finalSlug(text) || 'untitled'
 }
 
 export function PublishModal() {
@@ -52,19 +58,14 @@ export function PublishModal() {
   const showManage = alreadyPublished || justPublished
 
   // Build full URL from domain + slug
-  const buildFullUrl = useCallback(
-    (s: string) => (domain ? `https://${domain}/a/${s}` : `/a/${s}`),
-    [domain],
-  )
+  const buildFullUrl = useCallback((s: string) => buildArtifactPublicUrl(s, domain), [domain])
 
   const publicUrl = useMemo(() => {
     if (artifact?.publishedUrl) {
-      // If server returned a full URL, use it; otherwise construct from domain
-      if (artifact.publishedUrl.startsWith('http')) return artifact.publishedUrl
-      return buildFullUrl(artifact.publishedSlug || slug)
+      return qualifyPublicUrl(artifact.publishedUrl, domain)
     }
-    return buildFullUrl(slug)
-  }, [artifact?.publishedUrl, artifact?.publishedSlug, slug, buildFullUrl])
+    return buildFullUrl(finalSlug(slug))
+  }, [artifact?.publishedUrl, slug, buildFullUrl, domain])
 
   // Reset state when modal opens with a new artifact
   useEffect(() => {
@@ -105,6 +106,9 @@ export function PublishModal() {
 
   const handlePublish = useCallback(() => {
     if (!artifact || publishing) return
+    const normalizedSlug = finalSlug(slug)
+    if (!normalizedSlug) return
+    if (normalizedSlug !== slug) setSlug(normalizedSlug)
     setPublishing(true)
     artifactStore
       .getState()
@@ -114,7 +118,7 @@ export function PublishModal() {
         artifact.renderType,
         name || 'Untitled',
         artifact.projectId,
-        slug,
+        normalizedSlug,
       )
   }, [artifact, publishing, name, slug])
 
@@ -144,6 +148,7 @@ export function PublishModal() {
   if (!artifact) return null
 
   const modalTitle = showManage ? 'Publish' : 'Publish to web'
+  const canPublish = !!finalSlug(slug) && !publishing
 
   return (
     <Modal open={open} onClose={handleClose} title={modalTitle}>
@@ -180,7 +185,7 @@ export function PublishModal() {
                   className="publish-modal__slug-input"
                   value={slug}
                   onChange={(e) => {
-                    setSlug(e.target.value.replace(/[^a-zA-Z0-9_-]/g, ''))
+                    setSlug(cleanSlugInput(e.target.value))
                     setSlugEdited(true)
                     if (publishError) artifactStore.getState().setPublishError(null)
                   }}
@@ -195,7 +200,7 @@ export function PublishModal() {
               type="button"
               className="publish-modal__publish-btn"
               onClick={handlePublish}
-              disabled={publishing || !slug}
+              disabled={!canPublish}
             >
               {publishing ? (
                 <span className="publish-modal__spinner" />
