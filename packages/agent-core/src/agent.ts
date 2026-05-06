@@ -219,6 +219,8 @@ export interface ToolCallbacks {
     screenshot?: string
     lastAction: import('@anton/protocol').BrowserAction
     elementCount?: number
+    stream?: import('@anton/protocol').BrowserStreamState
+    engine?: import('@anton/protocol').BrowserEngine
   }) => void
   /** Callback when the browser is closed. */
   onBrowserClose?: () => void
@@ -468,7 +470,7 @@ export function buildTools(
     defineTool({
       name: BROWSER_TOOL_NAME,
       label: 'Browser',
-      description: `Web browsing and browser automation. Two modes:\n• **fetch/extract** — Fast, lightweight. Use for reading articles, docs, APIs behind the scenes. No JS execution.\n• **open/snapshot/click/fill/scroll/screenshot/get/wait/close** — Full browser with live screenshots shown in the user sidebar. Use \`open\` when the user asks to visit, browse, scrape, or interact with a website. Chromium auto-installs on first use.\nFor local files, use the ${READ_TOOL_NAME} tool.`,
+      description: `Web browsing and browser automation. Two modes:\n• **fetch/extract** — Fast Lightpanda engine for reading and extracting pages behind the scenes.\n• **open/snapshot/click/fill/scroll/screenshot/get/wait/close** — Visible Chromium browser with persistent Anton cookies/profile and live stream in the desktop Browser pane. Use \`open\` when the user asks to visit, browse, preview localhost, scrape an app, or interact with a website.\nFor local files, use the ${READ_TOOL_NAME} tool.`,
       parameters: Type.Object({
         operation: Type.Union(
           [

@@ -13,7 +13,7 @@
 
 const config = {
   agent: {
-    externals: ['node-pty', 'chokidar', 'playwright-core', 'playwright', 'chromium-bidi'],
+    externals: ['node-pty', 'chokidar'],
   },
   cli: {
     externals: ['node-pty'],

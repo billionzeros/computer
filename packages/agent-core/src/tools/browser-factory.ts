@@ -1,18 +1,18 @@
 /**
- * `browser` — fetch / extract / Playwright automation. Lifted out of
+ * `browser` — Lightpanda-backed fetch / extract plus visible Chrome automation.
+ * Lifted out of
  * agent.ts so the harness MCP shim can hand it to Codex / Claude Code.
  *
- * The lightweight `fetch` / `extract` operations don't need any
- * callbacks. The full-browser operations (`open` / `snapshot` /
+ * The lightweight `fetch` / `extract` operations use agent-browser's
+ * Lightpanda engine and don't need callbacks. The full-browser operations (`open` / `snapshot` /
  * `click` / `fill` / `scroll` / `screenshot` / `get` / `wait` /
- * `close`) drive `onBrowserState` to push live screenshots into the
- * desktop sidebar — same callback shape Pi SDK uses.
+ * `close`) use agent-browser's Chrome engine with an Anton-owned persistent
+ * profile and drive `onBrowserState` to push live state into the desktop
+ * browser pane — same callback shape Pi SDK uses.
  *
- * Note on per-session scoping: the underlying Playwright instance in
- * `tools/browser.ts` is process-scoped today, just like in Pi SDK. If
- * we ever run multiple harness sessions concurrently driving a real
- * browser, we'll need to scope it per-session. For now the constraint
- * matches Pi SDK's, so behavior is identical.
+ * Note on per-session scoping: agent-browser sessions are named. The default
+ * visible browser uses `anton-visible`; the background Lightpanda browser uses
+ * `anton-lightpanda`.
  */
 
 import type { AgentTool } from '@mariozechner/pi-agent-core'
@@ -26,8 +26,8 @@ export function buildBrowserTool(callbacks?: BrowserCallbacks): AgentTool {
     label: 'Browser',
     description:
       'Web browsing and browser automation. Two modes:\n' +
-      '• fetch/extract — Fast, lightweight. Use for reading articles, docs, APIs behind the scenes. No JS execution.\n' +
-      '• open/snapshot/click/fill/scroll/screenshot/get/wait/close — Full browser with live screenshots shown in the user sidebar. Use `open` when the user asks to visit, browse, scrape, or interact with a website. Chromium auto-installs on first use.\n' +
+      '• fetch/extract — Fast Lightpanda engine for reading and extracting pages behind the scenes.\n' +
+      '• open/snapshot/click/fill/scroll/screenshot/get/wait/close — Visible Chromium browser with persistent Anton cookies/profile and live stream in the desktop Browser pane. Use `open` when the user asks to visit, browse, preview localhost, scrape an app, or interact with a website.\n' +
       'For local files, use the read tool instead.',
     parameters: Type.Object({
       operation: Type.Union(

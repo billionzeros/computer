@@ -1,13 +1,56 @@
-import { execFile, execSync } from 'node:child_process'
+import { execFile } from 'node:child_process'
+import { createHash } from 'node:crypto'
+import {
+  constants,
+  accessSync,
+  chmodSync,
+  existsSync,
+  mkdirSync,
+  renameSync,
+  rmSync,
+} from 'node:fs'
+import { writeFile } from 'node:fs/promises'
+import { createRequire } from 'node:module'
+import { arch, platform } from 'node:os'
+import { join } from 'node:path'
 import { promisify } from 'node:util'
+import { getAntonDir } from '@anton/agent-config'
 import { createLogger } from '@anton/logger'
+import type {
+  BrowserAction,
+  BrowserEngine,
+  BrowserRuntimeComponent,
+  BrowserRuntimeInstallTarget,
+  BrowserRuntimeStatus,
+  BrowserStreamState,
+} from '@anton/protocol'
 
 const execFileAsync = promisify(execFile)
+const require = createRequire(import.meta.url)
 const log = createLogger('browser')
-import type { BrowserAction } from '@anton/protocol'
-import { Readability } from '@mozilla/readability'
-import { parseHTML } from 'linkedom'
-import TurndownService from 'turndown'
+
+const VISIBLE_SESSION = 'anton-visible'
+const BACKGROUND_SESSION = 'anton-lightpanda'
+const VISIBLE_PROFILE = join(getAntonDir(), 'browser', 'profiles', 'default')
+const DEFAULT_VISIBLE_URL = 'https://antoncomputer.in'
+const DEFAULT_VISIBLE_VIEWPORT_WIDTH = 1440
+const DEFAULT_VISIBLE_VIEWPORT_HEIGHT = 1100
+const VISIBLE_VIEWPORT_SCALE = 1.5
+const MANAGED_LIGHTPANDA_DIR = join(getAntonDir(), 'browser', 'lightpanda')
+const MANAGED_LIGHTPANDA_EXECUTABLE_PATH = join(MANAGED_LIGHTPANDA_DIR, 'lightpanda')
+// Keep Lightpanda upgrades explicit and reviewable instead of tracking nightly.
+const LIGHTPANDA_RELEASE_TAG = '0.2.9'
+const LIGHTPANDA_RELEASE_API_URL = `https://api.github.com/repos/lightpanda-io/browser/releases/tags/${LIGHTPANDA_RELEASE_TAG}`
+const LIGHTPANDA_ASSET_SUFFIXES = {
+  darwin: {
+    arm64: 'aarch64-macos',
+    x64: 'x86_64-macos',
+  },
+  linux: {
+    arm64: 'aarch64-linux',
+    x64: 'x86_64-linux',
+  },
+} as const
 
 export interface BrowserToolInput {
   operation:
@@ -22,6 +65,9 @@ export interface BrowserToolInput {
     | 'get'
     | 'wait'
     | 'close'
+    | 'back'
+    | 'forward'
+    | 'reload'
   url?: string
   ref?: string
   text?: string
@@ -38,294 +84,622 @@ export interface BrowserCallbacks {
     screenshot?: string
     lastAction: BrowserAction
     elementCount?: number
+    stream?: BrowserStreamState
+    engine?: BrowserEngine
   }) => void
   onBrowserClose?: () => void
 }
 
-const turndown = new TurndownService({
-  headingStyle: 'atx',
-  codeBlockStyle: 'fenced',
-  bulletListMarker: '-',
-})
-
-// Remove script/style/nav/footer tags
-turndown.remove(['script', 'style', 'nav', 'footer', 'header', 'noscript', 'iframe'])
-
-// ── Lightweight fetch helpers (no browser needed) ────────────────────
-
-function fetchHtml(url: string, maxBytes = 500_000): string {
-  return execSync(`curl -sL --max-time 15 --max-filesize 5000000 "${url}" | head -c ${maxBytes}`, {
-    encoding: 'utf-8',
-    timeout: 20_000,
-  })
+interface AgentBrowserRunOpts {
+  engine: BrowserEngine
+  session: string
+  profile?: string
+  json?: boolean
+  timeoutMs?: number
 }
-
-function htmlToMarkdown(html: string, _url: string): string {
-  const { document } = parseHTML(html)
-  const reader = new Readability(document, { charThreshold: 100 })
-  const article = reader.parse()
-
-  if (article?.content) {
-    const { document: cleanDoc } = parseHTML(article.content)
-    let md = turndown.turndown(cleanDoc.toString())
-    if (article.title) {
-      md = `# ${article.title}\n\n${md}`
-    }
-    return md.slice(0, 80_000)
-  }
-
-  const body = document.querySelector('body')
-  if (body) {
-    return turndown.turndown(body.innerHTML || body.toString()).slice(0, 80_000)
-  }
-  return html.slice(0, 50_000)
-}
-
-// ── Playwright browser session ───────────────────────────────────────
-
-import type { Browser, BrowserContext, CDPSession, Page } from 'playwright'
-
-interface BrowserSession {
-  browser: Browser
-  context: BrowserContext
-  page: Page
-  cdp: CDPSession
-  /** Cached element refs from last snapshot: @e1 → Locator selector */
-  refs: Map<string, string>
-}
-
-/** Single shared browser session (one at a time per agent-core process). */
-let session: BrowserSession | null = null
-/** Set to true during first launch if chromium needs installing — lets tool result inform the user. */
-let chromiumJustInstalled = false
-
-/** Idle timeout — auto-close browser after 5 minutes of no activity. */
-const BROWSER_IDLE_TIMEOUT_MS = 5 * 60 * 1000
-let idleTimer: ReturnType<typeof setTimeout> | null = null
-
-function resetIdleTimer(): void {
-  if (idleTimer) clearTimeout(idleTimer)
-  idleTimer = setTimeout(() => {
-    if (session) {
-      log.info('auto-closing browser after 5 minutes idle')
-      closeBrowser().catch(() => {})
-    }
-  }, BROWSER_IDLE_TIMEOUT_MS)
-}
-
-async function ensureBrowser(): Promise<BrowserSession> {
-  if (session) {
-    resetIdleTimer()
-    return session
-  }
-
-  // Dynamic import — playwright is heavy, only load when needed
-  const pw = await import('playwright')
-
-  // Auto-install chromium if not found
-  let browser: Browser
-  try {
-    browser = await pw.chromium.launch({
-      headless: true,
-      args: [
-        '--disable-blink-features=AutomationControlled',
-        '--no-first-run',
-        '--no-default-browser-check',
-        '--disable-dev-shm-usage',
-      ],
-    })
-  } catch (launchErr: unknown) {
-    const msg = (launchErr as Error).message || ''
-    if (msg.includes("Executable doesn't exist") || msg.includes('browserType.launch')) {
-      // Chromium not installed — install it async using playwright's own CLI
-      log.info('Chromium not found, installing')
-      chromiumJustInstalled = true
-      // Use playwright's CLI from the installed package (not npx)
-      const playwrightCli = require.resolve('playwright/cli')
-      await execFileAsync(process.execPath, [playwrightCli, 'install', 'chromium'], {
-        timeout: 120_000,
-      })
-      log.info('Chromium installed successfully')
-      // Retry launch after install
-      browser = await pw.chromium.launch({
-        headless: true,
-        args: [
-          '--disable-blink-features=AutomationControlled',
-          '--no-first-run',
-          '--no-default-browser-check',
-          '--disable-dev-shm-usage',
-        ],
-      })
-    } else {
-      throw launchErr
-    }
-  }
-
-  const context = await browser.newContext({
-    viewport: { width: 1280, height: 800 },
-    userAgent:
-      'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
-  })
-  const page = await context.newPage()
-  const cdp = await page.context().newCDPSession(page)
-  await cdp.send('Accessibility.enable')
-  session = { browser, context, page, cdp, refs: new Map() }
-  resetIdleTimer()
-  return session
-}
-
-async function closeBrowser(): Promise<void> {
-  if (idleTimer) {
-    clearTimeout(idleTimer)
-    idleTimer = null
-  }
-  if (!session) return
-  try {
-    await session.browser.close()
-  } catch {
-    // Best-effort
-  }
-  session = null
-}
-
-/**
- * Close the browser if open. Called during server/session shutdown.
- * Safe to call multiple times or when no browser is open.
- */
-export async function closeBrowserSession(): Promise<void> {
-  await closeBrowser()
-}
-
-// ── Accessibility tree → refs ────────────────────────────────────────
-
-/** CDP Accessibility.AXNode shape (subset of fields we use). */
-interface CDPAXNode {
-  nodeId: string
-  role: { value: string }
-  name?: { value: string }
-  value?: { value: string }
-  description?: { value: string }
-  properties?: Array<{ name: string; value: { type: string; value?: unknown } }>
-  childIds?: string[]
-  backendDOMNodeId?: number
-}
-
-const INTERACTIVE_ROLES = new Set([
-  'link',
-  'button',
-  'textbox',
-  'searchbox',
-  'combobox',
-  'checkbox',
-  'radio',
-  'switch',
-  'slider',
-  'spinbutton',
-  'tab',
-  'menuitem',
-  'menuitemcheckbox',
-  'menuitemradio',
-  'option',
-  'treeitem',
-])
-
-/**
- * Get accessibility tree via CDP and extract interactive elements with refs.
- * Returns lines like: `@e1  button "Submit"`
- * Also populates the session ref map for later click/fill.
- */
-async function buildRefSnapshot(s: BrowserSession): Promise<{ text: string; count: number }> {
-  s.refs.clear()
-
-  // Use CDP to get the full accessibility tree
-  const { nodes } = (await s.cdp.send('Accessibility.getFullAXTree')) as {
-    nodes: CDPAXNode[]
-  }
-
-  const lines: string[] = []
-  let counter = 1
-
-  for (const node of nodes) {
-    const role = node.role?.value
-    const name = node.name?.value
-    if (!role || !name || !INTERACTIVE_ROLES.has(role)) continue
-
-    const refId = `@e${counter++}`
-    // Build a Playwright locator using getByRole
-    s.refs.set(refId, `role=${role}[name="${name.replace(/"/g, '\\"')}"]`)
-
-    let line = `${refId}  ${role} "${name}"`
-    if (node.value?.value) line += ` value="${node.value.value}"`
-
-    // Check properties for checked/disabled/expanded
-    if (node.properties) {
-      for (const prop of node.properties) {
-        if (prop.name === 'checked' && prop.value.value !== undefined) {
-          line += ` checked=${prop.value.value}`
-        } else if (prop.name === 'disabled' && prop.value.value) {
-          line += ' disabled'
-        } else if (prop.name === 'expanded' && prop.value.value !== undefined) {
-          line += ` expanded=${prop.value.value}`
-        }
-      }
-    }
-
-    lines.push(line)
-  }
-
-  const text = lines.length > 0 ? lines.join('\n') : '(no interactive elements found)'
-  return { text, count: s.refs.size }
-}
-
-// ── State emission ───────────────────────────────────────────────────
 
 function makeAction(action: string, target?: string, value?: string): BrowserAction {
   return { action, target, value, timestamp: Date.now() }
 }
 
-async function emitState(
+function normalizeUrl(url: string): string {
+  const trimmed = url.trim()
+  if (!trimmed) return DEFAULT_VISIBLE_URL
+  if (/^(https?:|file:|about:)/i.test(trimmed)) return trimmed
+  if (/^(localhost|127\.0\.0\.1|\[::1\])(?::\d+)?(\/|$)/i.test(trimmed)) {
+    return `http://${trimmed}`
+  }
+  return trimmed
+}
+
+function formatAgentBrowserError(err: unknown, engine: BrowserEngine): string {
+  const message = (err as Error).message || String(err)
+  if (engine === 'lightpanda') {
+    return [
+      'agent-browser Lightpanda failed.',
+      'Install or repair the Browser runtime from Customize → Connectors → Browser.',
+      '',
+      message,
+    ].join('\n')
+  }
+  return [
+    'agent-browser Chrome failed.',
+    'Install or repair the Browser runtime from Customize → Connectors → Browser.',
+    '',
+    message,
+  ].join('\n')
+}
+
+function shouldCloseAndRetryChrome(message: string): boolean {
+  return (
+    message.includes('No usable sandbox') ||
+    message.includes('DevToolsActivePort') ||
+    message.includes('Chrome exited early') ||
+    message.includes('error while loading shared libraries')
+  )
+}
+
+function shouldInstallChromeDeps(message: string): boolean {
+  return message.includes('error while loading shared libraries')
+}
+
+function browserChildEnv(): NodeJS.ProcessEnv {
+  const env: NodeJS.ProcessEnv = { ...process.env }
+  // Anton owns browser runtime configuration through code defaults and CLI args.
+  // Inherit normal service env only, so systemd does not need browser-specific vars.
+  for (const key of Object.keys(env)) {
+    if (key.startsWith('AGENT_BROWSER_') || key === 'LIGHTPANDA_EXECUTABLE_PATH') {
+      delete env[key]
+    }
+  }
+  return env
+}
+
+function resolveAgentBrowserBin(): string | null {
+  try {
+    return require.resolve('agent-browser/bin/agent-browser.js')
+  } catch {
+    return null
+  }
+}
+
+function resolveAgentBrowserPackageJson(): string | null {
+  try {
+    return require.resolve('agent-browser/package.json')
+  } catch {
+    return null
+  }
+}
+
+function getAgentBrowserBin(): string {
+  const binPath = resolveAgentBrowserBin()
+  if (binPath) return binPath
+  throw new Error(
+    'agent-browser is not installed in this Anton deployment. Run pnpm install with the current lockfile and redeploy.',
+  )
+}
+
+function lightpandaExecutableReady(): boolean {
+  if (!existsSync(MANAGED_LIGHTPANDA_EXECUTABLE_PATH)) return false
+  try {
+    accessSync(MANAGED_LIGHTPANDA_EXECUTABLE_PATH, constants.X_OK)
+    return true
+  } catch {
+    return false
+  }
+}
+
+function getLightpandaAssetName(): string {
+  const currentPlatform = platform()
+  const currentArch = arch()
+  const suffix =
+    currentPlatform === 'darwin' || currentPlatform === 'linux'
+      ? LIGHTPANDA_ASSET_SUFFIXES[currentPlatform][
+          currentArch as keyof (typeof LIGHTPANDA_ASSET_SUFFIXES)[typeof currentPlatform]
+        ]
+      : undefined
+
+  if (!suffix) {
+    throw new Error(`Lightpanda is not available for ${currentPlatform}/${currentArch}`)
+  }
+  return `lightpanda-${suffix}`
+}
+
+interface LightpandaReleaseAsset {
+  name?: string
+  browser_download_url?: string
+  digest?: string
+}
+
+async function fetchLightpandaReleaseAsset(): Promise<{
+  assetName: string
+  downloadUrl: string
+  expectedDigest: string
+}> {
+  const assetName = getLightpandaAssetName()
+  const response = await fetch(LIGHTPANDA_RELEASE_API_URL, {
+    headers: {
+      Accept: 'application/vnd.github+json',
+      'User-Agent': 'Anton-Browser-Runtime',
+    },
+  })
+  if (!response.ok) {
+    throw new Error(`Failed to read Lightpanda release metadata: HTTP ${response.status}`)
+  }
+
+  const release = (await response.json()) as { assets?: LightpandaReleaseAsset[] }
+  const asset = release.assets?.find((candidate) => candidate.name === assetName)
+  if (!asset?.browser_download_url) {
+    throw new Error(`Lightpanda release ${LIGHTPANDA_RELEASE_TAG} is missing ${assetName}`)
+  }
+  if (!asset.digest?.startsWith('sha256:')) {
+    throw new Error(`Lightpanda release ${assetName} is missing a SHA-256 digest`)
+  }
+  return {
+    assetName,
+    downloadUrl: asset.browser_download_url,
+    expectedDigest: asset.digest,
+  }
+}
+
+async function downloadLightpandaAsset(downloadUrl: string, expectedDigest: string): Promise<void> {
+  const response = await fetch(downloadUrl, {
+    headers: {
+      'User-Agent': 'Anton-Browser-Runtime',
+    },
+  })
+  if (!response.ok) {
+    throw new Error(`Failed to download Lightpanda: HTTP ${response.status}`)
+  }
+
+  const bytes = Buffer.from(await response.arrayBuffer())
+  const actualDigest = `sha256:${createHash('sha256').update(bytes).digest('hex')}`
+  if (actualDigest !== expectedDigest) {
+    throw new Error(`Lightpanda checksum mismatch: expected ${expectedDigest}, got ${actualDigest}`)
+  }
+
+  mkdirSync(MANAGED_LIGHTPANDA_DIR, { recursive: true })
+  const tempPath = join(MANAGED_LIGHTPANDA_DIR, `lightpanda.${process.pid}.${Date.now()}.tmp`)
+  try {
+    await writeFile(tempPath, bytes, { mode: 0o700 })
+    chmodSync(tempPath, 0o700)
+    renameSync(tempPath, MANAGED_LIGHTPANDA_EXECUTABLE_PATH)
+  } catch (err) {
+    rmSync(tempPath, { force: true })
+    throw err
+  }
+}
+
+async function runAgentBrowserCommand(args: string[], opts?: { timeoutMs?: number }) {
+  const { stdout, stderr } = await execFileAsync(
+    process.execPath,
+    [getAgentBrowserBin(), ...args],
+    {
+      encoding: 'utf8',
+      timeout: opts?.timeoutMs ?? 30_000,
+      maxBuffer: 8 * 1024 * 1024,
+      env: browserChildEnv(),
+    },
+  )
+  return (stdout || stderr).trim()
+}
+
+async function missingLinuxSharedLibraries(executablePath?: string): Promise<string[]> {
+  if (!executablePath || platform() !== 'linux') return []
+  try {
+    const { stdout, stderr } = await execFileAsync('ldd', [executablePath], {
+      encoding: 'utf8',
+      timeout: 10_000,
+      maxBuffer: 1024 * 1024,
+    })
+    const output = `${stdout}\n${stderr}`
+    return Array.from(
+      new Set(
+        [...output.matchAll(/^\s*(\S+)\s+=>\s+not found\s*$/gm)]
+          .map((match) => match[1])
+          .filter(Boolean),
+      ),
+    )
+  } catch {
+    return []
+  }
+}
+
+async function runAgentBrowser(args: string[], opts: AgentBrowserRunOpts): Promise<string> {
+  const cliArgs: string[] = ['--engine', opts.engine, '--session', opts.session]
+  if (opts.engine === 'lightpanda' && lightpandaExecutableReady()) {
+    cliArgs.push('--executable-path', MANAGED_LIGHTPANDA_EXECUTABLE_PATH)
+  }
+  if (opts.engine === 'chrome' && platform() === 'linux') {
+    cliArgs.push('--args', '--no-sandbox,--disable-dev-shm-usage')
+  }
+  cliArgs.push('--screenshot-format', 'jpeg', '--screenshot-quality', '88')
+  if (opts.profile) cliArgs.push('--profile', opts.profile)
+  cliArgs.push(...args)
+  if (opts.json) cliArgs.push('--json')
+
+  try {
+    const { stdout, stderr } = await execFileAsync(
+      process.execPath,
+      [getAgentBrowserBin(), ...cliArgs],
+      {
+        encoding: 'utf8',
+        timeout: opts.timeoutMs ?? 30_000,
+        maxBuffer: 8 * 1024 * 1024,
+        env: browserChildEnv(),
+      },
+    )
+    return (stdout || stderr).trim()
+  } catch (err: unknown) {
+    throw new Error(formatAgentBrowserError(err, opts.engine))
+  }
+}
+
+async function runVisible(args: string[], opts?: { json?: boolean; timeoutMs?: number }) {
+  mkdirSync(VISIBLE_PROFILE, { recursive: true })
+  return runAgentBrowser(args, {
+    engine: 'chrome',
+    session: VISIBLE_SESSION,
+    profile: VISIBLE_PROFILE,
+    json: opts?.json,
+    timeoutMs: opts?.timeoutMs,
+  })
+}
+
+async function runBackground(args: string[], opts?: { json?: boolean; timeoutMs?: number }) {
+  return runAgentBrowser(args, {
+    engine: 'lightpanda',
+    session: BACKGROUND_SESSION,
+    json: opts?.json,
+    timeoutMs: opts?.timeoutMs,
+  })
+}
+
+async function getVisibleProperty(property: 'url' | 'title'): Promise<string> {
+  return runVisible(['get', property], { timeoutMs: 10_000 }).catch(() => '')
+}
+
+async function getVisibleStream(): Promise<BrowserStreamState> {
+  const stream: BrowserStreamState = { session: VISIBLE_SESSION, engine: 'chrome' }
+  const parseStatus = (raw: string) => {
+    const parsed = JSON.parse(raw) as {
+      success?: boolean
+      data?: {
+        enabled?: boolean
+        port?: number
+        connected?: boolean
+        screencasting?: boolean
+      }
+      enabled?: boolean
+      port?: number
+      connected?: boolean
+      screencasting?: boolean
+    }
+    return parsed.data ?? parsed
+  }
+  try {
+    let raw = await runVisible(['stream', 'status'], { json: true, timeoutMs: 10_000 })
+    let parsed = parseStatus(raw)
+    if (!parsed.enabled || !parsed.port) {
+      await runVisible(['stream', 'enable'], { timeoutMs: 10_000 }).catch(() => '')
+      raw = await runVisible(['stream', 'status'], { json: true, timeoutMs: 10_000 })
+      parsed = parseStatus(raw)
+    }
+    return { ...stream, ...parsed }
+  } catch {
+    return stream
+  }
+}
+
+async function emitVisibleState(
   action: BrowserAction,
   callbacks?: BrowserCallbacks,
   elementCount?: number,
 ) {
-  if (!callbacks?.onBrowserState || !session) return
+  if (!callbacks?.onBrowserState) return
+  const [url, title, stream] = await Promise.all([
+    getVisibleProperty('url'),
+    getVisibleProperty('title'),
+    getVisibleStream(),
+  ])
+  callbacks.onBrowserState({
+    url,
+    title,
+    lastAction: action,
+    elementCount,
+    stream,
+    engine: 'chrome',
+  })
+}
+
+function clampViewportSize(width: number, height: number): { width: number; height: number } {
+  const safeWidth = Number.isFinite(width) ? Math.round(width) : DEFAULT_VISIBLE_VIEWPORT_WIDTH
+  const safeHeight = Number.isFinite(height) ? Math.round(height) : DEFAULT_VISIBLE_VIEWPORT_HEIGHT
+  return {
+    width: Math.min(1920, Math.max(800, safeWidth)),
+    height: Math.min(1400, Math.max(600, safeHeight)),
+  }
+}
+
+async function setVisibleViewport(width: number, height: number): Promise<void> {
+  const viewport = clampViewportSize(width, height)
+  await runVisible(
+    [
+      'set',
+      'viewport',
+      String(viewport.width),
+      String(viewport.height),
+      String(VISIBLE_VIEWPORT_SCALE),
+    ],
+    {
+      timeoutMs: 10_000,
+    },
+  )
+}
+
+async function openVisible(url: string, callbacks?: BrowserCallbacks): Promise<string> {
+  const target = normalizeUrl(url)
+  let output: string
   try {
-    const url = session.page.url()
-    const title = await session.page.title()
-    // Capture JPEG screenshot, base64 encoded, max 800px wide for efficiency
-    const screenshotBuf = await session.page.screenshot({
-      type: 'jpeg',
-      quality: 60,
-      scale: 'css',
-    })
-    const screenshot = screenshotBuf.toString('base64')
-    callbacks.onBrowserState({ url, title, screenshot, lastAction: action, elementCount })
-  } catch {
-    // Best-effort — don't fail the tool call
-  }
-}
-
-// ── Ref resolution ───────────────────────────────────────────────────
-
-function resolveRef(ref: string): string {
-  if (!session) throw new Error('Browser not open. Use operation: "open" first.')
-  const selector = session.refs.get(ref)
-  if (!selector) {
-    throw new Error(
-      `Unknown ref "${ref}". Run operation: "snapshot" first to see available elements.`,
+    await setVisibleViewport(DEFAULT_VISIBLE_VIEWPORT_WIDTH, DEFAULT_VISIBLE_VIEWPORT_HEIGHT).catch(
+      () => '',
     )
+    output = await runVisible(['open', target], { timeoutMs: 45_000 })
+  } catch (err) {
+    const message = (err as Error).message || String(err)
+    if (!shouldCloseAndRetryChrome(message)) throw err
+
+    await runAgentBrowserCommand(['close', '--all'], { timeoutMs: 30_000 }).catch(() => '')
+    if (shouldInstallChromeDeps(message)) {
+      await installChromeRuntime()
+    }
+    await setVisibleViewport(DEFAULT_VISIBLE_VIEWPORT_WIDTH, DEFAULT_VISIBLE_VIEWPORT_HEIGHT).catch(
+      () => '',
+    )
+    output = await runVisible(['open', target], { timeoutMs: 45_000 })
   }
-  return selector
+  await emitVisibleState(makeAction('open', target), callbacks)
+  return output || `Opened ${target}`
 }
 
-// ── Main tool executor ───────────────────────────────────────────────
+export async function refreshVisibleBrowserState(
+  callbacks?: BrowserCallbacks,
+  action: BrowserAction = makeAction('refresh'),
+): Promise<void> {
+  await emitVisibleState(action, callbacks)
+}
 
-/**
- * Browser tool: fetch web pages (lightweight) or automate real browser (Playwright).
- *
- * fetch/extract: Fast, no JS, uses curl + Readability.
- * open/snapshot/click/fill/screenshot/scroll/get/wait/close: Full browser via Playwright.
- */
+export async function setVisibleBrowserViewport(
+  width: number,
+  height: number,
+  callbacks?: BrowserCallbacks,
+): Promise<void> {
+  const viewport = clampViewportSize(width, height)
+  await setVisibleViewport(viewport.width, viewport.height)
+  await emitVisibleState(
+    makeAction('viewport', `${viewport.width}x${viewport.height}`),
+    callbacks,
+  )
+}
+
+async function ensureLightpandaRuntime(): Promise<void> {
+  if (lightpandaExecutableReady()) return
+  await installLightpandaRuntime()
+}
+
+async function getLightpandaText(url: string, selector?: string): Promise<string> {
+  await ensureLightpandaRuntime()
+  const target = normalizeUrl(url)
+  await runBackground(['open', target], { timeoutMs: 30_000 })
+  const args = ['get', 'text', selector ?? 'body']
+  return runBackground(args, { timeoutMs: 30_000 })
+}
+
+async function getLightpandaHtml(url: string, selector?: string): Promise<string> {
+  await ensureLightpandaRuntime()
+  const target = normalizeUrl(url)
+  await runBackground(['open', target], { timeoutMs: 30_000 })
+  const args = ['get', 'html', selector ?? 'html']
+  return runBackground(args, { timeoutMs: 30_000 })
+}
+
+function browserRuntimeOverall(
+  components: BrowserRuntimeComponent[],
+): BrowserRuntimeStatus['overall'] {
+  if (components.some((c) => c.status === 'installing')) return 'installing'
+  const required = components.filter((c) => c.required)
+  if (required.every((c) => c.status === 'ready')) return 'ready'
+  if (required.some((c) => c.status === 'error')) return 'error'
+  if (required.some((c) => c.status === 'ready')) return 'partial'
+  return 'missing'
+}
+
+function agentBrowserComponent(): BrowserRuntimeComponent {
+  const binPath = resolveAgentBrowserBin()
+  const pkgPath = resolveAgentBrowserPackageJson()
+  if (!binPath || !pkgPath) {
+    return {
+      id: 'agent-browser',
+      label: 'agent-browser',
+      status: 'missing',
+      required: true,
+      installable: false,
+      detail:
+        'agent-browser is missing from this deployment. Run pnpm install with the current lockfile and redeploy.',
+    }
+  }
+
+  try {
+    const pkg = require(pkgPath) as { version?: string }
+    return {
+      id: 'agent-browser',
+      label: 'agent-browser',
+      status: 'ready',
+      required: true,
+      installable: false,
+      path: binPath,
+      version: pkg.version,
+      detail: 'Pinned with Anton',
+    }
+  } catch (err) {
+    return {
+      id: 'agent-browser',
+      label: 'agent-browser',
+      status: 'error',
+      required: true,
+      installable: false,
+      detail: (err as Error).message,
+    }
+  }
+}
+
+async function chromeComponent(): Promise<BrowserRuntimeComponent> {
+  try {
+    const raw = await runAgentBrowserCommand(['doctor', '--offline', '--quick', '--json'], {
+      timeoutMs: 20_000,
+    })
+    const parsed = JSON.parse(raw) as {
+      checks?: Array<{ id?: string; status?: string; message?: string }>
+    }
+    const check = parsed.checks?.find((c) => c.id === 'chrome.installed')
+    if (check?.status === 'pass') {
+      const detail = check.message ?? 'Chrome is available'
+      const chromePath = detail.match(/Chrome at ([^\s]+)(?:\s+\(|$)/)?.[1]
+      const antonManaged =
+        detail.includes('/.agent-browser/browsers/') ||
+        detail.includes('.agent-browser/browsers/') ||
+        detail.includes('Chrome for Testing')
+      if (!antonManaged) {
+        return {
+          id: 'chrome',
+          label: 'Chrome for Anton',
+          status: 'missing',
+          required: true,
+          installable: true,
+          path: chromePath,
+          detail: 'Install Anton-managed Chrome to keep browser sessions isolated.',
+        }
+      }
+      const missingLibraries = await missingLinuxSharedLibraries(chromePath)
+      if (missingLibraries.length > 0) {
+        return {
+          id: 'chrome',
+          label: 'Chrome for Anton',
+          status: 'error',
+          required: true,
+          installable: true,
+          path: chromePath,
+          detail: `Chrome is installed, but Linux system libraries are missing: ${missingLibraries.join(', ')}. Run Repair to install Chrome dependencies.`,
+        }
+      }
+      return {
+        id: 'chrome',
+        label: 'Chrome for Anton',
+        status: 'ready',
+        required: true,
+        installable: true,
+        path: chromePath,
+        detail: 'Managed Chrome is installed',
+      }
+    }
+    return {
+      id: 'chrome',
+      label: 'Chrome for Anton',
+      status: check?.status === 'fail' ? 'missing' : 'unknown',
+      required: true,
+      installable: true,
+      detail: check?.message ?? 'Chrome status is unknown',
+    }
+  } catch (err) {
+    return {
+      id: 'chrome',
+      label: 'Chrome for Anton',
+      status: 'error',
+      required: true,
+      installable: true,
+      detail: (err as Error).message,
+    }
+  }
+}
+
+function lightpandaComponent(): BrowserRuntimeComponent {
+  const executablePath = MANAGED_LIGHTPANDA_EXECUTABLE_PATH
+  const exists = existsSync(executablePath)
+  const installed = lightpandaExecutableReady()
+  return {
+    id: 'lightpanda',
+    label: 'Lightpanda',
+    status: installed ? 'ready' : exists ? 'error' : 'missing',
+    required: true,
+    installable: true,
+    path: installed ? executablePath : undefined,
+    detail: installed
+      ? 'Installed in Anton-managed runtime directory'
+      : exists
+        ? `Lightpanda exists but is not executable at ${executablePath}. Run Repair.`
+        : 'Install Lightpanda for fast background browsing',
+  }
+}
+
+export async function getBrowserRuntimeStatus(): Promise<BrowserRuntimeStatus> {
+  const components = [agentBrowserComponent(), await chromeComponent(), lightpandaComponent()]
+  return {
+    overall: browserRuntimeOverall(components),
+    profileDir: VISIBLE_PROFILE,
+    components,
+    checkedAt: Date.now(),
+  }
+}
+
+async function installChromeRuntime(): Promise<void> {
+  const args = ['install']
+  if (platform() === 'linux') args.push('--with-deps')
+  await runAgentBrowserCommand(args, { timeoutMs: 300_000 })
+}
+
+async function installLightpandaRuntime(): Promise<void> {
+  const asset = await fetchLightpandaReleaseAsset()
+  log.info(
+    { assetName: asset.assetName, path: MANAGED_LIGHTPANDA_EXECUTABLE_PATH },
+    'installing Anton-managed Lightpanda runtime',
+  )
+  await downloadLightpandaAsset(asset.downloadUrl, asset.expectedDigest)
+}
+
+export async function installBrowserRuntime(
+  target: BrowserRuntimeInstallTarget,
+  onProgress?: (stage: 'checking' | 'installing' | 'verifying' | 'done', message: string) => void,
+): Promise<BrowserRuntimeStatus> {
+  onProgress?.('checking', 'Checking browser runtime')
+
+  if (target === 'chrome' || target === 'all' || target === 'repair') {
+    onProgress?.('installing', 'Installing Chrome for Anton')
+    if (target === 'repair') {
+      await runAgentBrowserCommand(['close', '--all'], { timeoutMs: 30_000 }).catch(() => '')
+      await installChromeRuntime()
+      await runAgentBrowserCommand(['doctor', '--fix'], { timeoutMs: 180_000 })
+    } else {
+      await installChromeRuntime()
+    }
+  }
+
+  if (target === 'lightpanda' || target === 'all' || target === 'repair') {
+    onProgress?.('installing', 'Installing Lightpanda for Anton')
+    await installLightpandaRuntime()
+  }
+
+  onProgress?.('verifying', 'Verifying browser runtime')
+  const status = await getBrowserRuntimeStatus()
+  return status
+}
+
+export async function closeBrowserSession(): Promise<void> {
+  await Promise.allSettled([
+    runVisible(['close'], { timeoutMs: 10_000 }),
+    runBackground(['close'], { timeoutMs: 10_000 }),
+  ])
+}
+
 export async function executeBrowser(
   input: BrowserToolInput,
   callbacks?: BrowserCallbacks,
@@ -334,142 +708,86 @@ export async function executeBrowser(
 
   try {
     switch (operation) {
-      // ── Lightweight (no real browser) ──────────────────────────────
-
       case 'fetch': {
         if (!url) return 'Error: url is required for fetch'
-        const html = fetchHtml(url)
-        if (!html) return '(empty response)'
-        return htmlToMarkdown(html, url)
+        return await getLightpandaText(url)
       }
 
       case 'extract': {
         if (!url) return 'Error: url is required for extract'
-        const html = fetchHtml(url, 200_000)
-
-        if (selector) {
-          const { document } = parseHTML(html)
-          const elements = document.querySelectorAll(selector)
-          if (elements.length === 0) {
-            return `No elements found matching selector: ${selector}`
-          }
-
-          const extracted = Array.from(elements)
-            .map((el: Element) => turndown.turndown(el.innerHTML || el.textContent || ''))
-            .join('\n\n---\n\n')
-
-          return `Extracted ${elements.length} element(s) from ${url} (selector: ${selector}):\n\n${extracted.slice(0, 50_000)}`
-        }
-
-        return htmlToMarkdown(html, url)
+        return property === 'html'
+          ? await getLightpandaHtml(url, selector)
+          : await getLightpandaText(url, selector)
       }
 
-      // ── Full browser automation (Playwright) ──────────────────────
-
       case 'open': {
-        if (!url) return 'Error: url is required for open'
-        const s = await ensureBrowser()
-        const wasInstalled = chromiumJustInstalled
-        chromiumJustInstalled = false
-        await s.page.goto(url, { waitUntil: 'domcontentloaded', timeout: 30_000 })
-        // Wait a bit for JS to settle
-        await s.page.waitForLoadState('networkidle').catch(() => {})
-        const action = makeAction('open', url)
-        await emitState(action, callbacks)
-        const prefix = wasInstalled ? '(Chromium was auto-installed on first use.) ' : ''
-        return `${prefix}Opened ${url} — title: "${await s.page.title()}"`
+        return openVisible(url || DEFAULT_VISIBLE_URL, callbacks)
       }
 
       case 'snapshot': {
-        if (!session) return 'Error: Browser not open. Use operation: "open" first.'
-        const { text: snapText, count: snapCount } = await buildRefSnapshot(session)
-        await emitState(makeAction('snapshot'), callbacks, snapCount)
-        return `${snapCount} interactive elements:\n\n${snapText}`
+        const output = await runVisible(['snapshot', '-i'], { timeoutMs: 30_000 })
+        const match = output.match(/\[ref=/g)
+        await emitVisibleState(makeAction('snapshot'), callbacks, match?.length)
+        return output
       }
 
       case 'click': {
         if (!ref) return 'Error: ref is required for click (e.g. @e1)'
-        const sel = resolveRef(ref)
-        await session!.page.locator(sel).first().click({ timeout: 10_000 })
-        // Wait for navigation or network activity to settle
-        await session!.page.waitForLoadState('networkidle').catch(() => {})
-        await emitState(makeAction('click', ref), callbacks)
-        return `Clicked ${ref}`
+        const output = await runVisible(['click', ref], { timeoutMs: 30_000 })
+        await emitVisibleState(makeAction('click', ref), callbacks)
+        return output || `Clicked ${ref}`
       }
 
       case 'fill': {
         if (!ref) return 'Error: ref is required for fill'
         if (text === undefined) return 'Error: text is required for fill'
-        const sel = resolveRef(ref)
-        await session!.page.locator(sel).first().fill(text, { timeout: 10_000 })
-        await emitState(makeAction('fill', ref, text), callbacks)
-        return `Filled ${ref} with "${text}"`
+        const output = await runVisible(['fill', ref, text], { timeoutMs: 30_000 })
+        await emitVisibleState(makeAction('fill', ref, text), callbacks)
+        return output || `Filled ${ref}`
       }
 
       case 'screenshot': {
-        if (!session) return 'Error: Browser not open. Use operation: "open" first.'
-        const buf = await session.page.screenshot({ type: 'jpeg', quality: 70 })
-        const b64 = buf.toString('base64')
-        await emitState(makeAction('screenshot'), callbacks)
-        return `Screenshot captured (${Math.round(b64.length / 1024)}KB base64)`
+        const output = await runVisible(['screenshot'], { timeoutMs: 30_000 })
+        await emitVisibleState(makeAction('screenshot'), callbacks)
+        return output || 'Screenshot captured'
       }
 
       case 'scroll': {
-        if (!session) return 'Error: Browser not open. Use operation: "open" first.'
         const dir = direction || 'down'
-        const px = amount || 500
-        const delta = dir === 'up' ? -px : px
-        await session.page.mouse.wheel(0, delta)
-        // Small delay for content to render
-        await session.page.waitForTimeout(300)
-        await emitState(makeAction('scroll', dir, String(px)), callbacks)
-        return `Scrolled ${dir} ${px}px`
+        const px = String(amount || 500)
+        const output = await runVisible(['scroll', dir, px], { timeoutMs: 30_000 })
+        await emitVisibleState(makeAction('scroll', dir, px), callbacks)
+        return output || `Scrolled ${dir} ${px}px`
       }
 
       case 'get': {
-        if (!session) return 'Error: Browser not open. Use operation: "open" first.'
         const prop = property || 'text'
-        switch (prop) {
-          case 'url':
-            return session.page.url()
-          case 'title':
-            return await session.page.title()
-          case 'html': {
-            if (ref) {
-              const sel = resolveRef(ref)
-              return await session.page.locator(sel).first().innerHTML({ timeout: 5_000 })
-            }
-            const html = await session.page.content()
-            return html.slice(0, 50_000)
-          }
-          default: {
-            if (ref) {
-              const sel = resolveRef(ref)
-              return await session.page.locator(sel).first().innerText({ timeout: 5_000 })
-            }
-            // Full page text
-            const bodyText = await session.page
-              .locator('body')
-              .innerText({ timeout: 5_000 })
-              .catch(() => '(could not read page text)')
-            return bodyText.slice(0, 50_000)
-          }
-        }
+        const defaultSelector = prop === 'html' ? 'html' : prop === 'text' ? 'body' : undefined
+        const args = ref
+          ? ['get', prop, ref]
+          : defaultSelector
+            ? ['get', prop, defaultSelector]
+            : ['get', prop]
+        return await runVisible(args, { timeoutMs: 30_000 })
       }
 
       case 'wait': {
-        if (!session) return 'Error: Browser not open. Use operation: "open" first.'
-        if (ref) {
-          const sel = resolveRef(ref)
-          await session.page.locator(sel).first().waitFor({ state: 'visible', timeout: 30_000 })
-          return `Element ${ref} is visible`
-        }
-        await session.page.waitForLoadState('networkidle', { timeout: 30_000 }).catch(() => {})
-        return 'Page loaded (network idle)'
+        const target = ref || String(amount || 1000)
+        const output = await runVisible(['wait', target], { timeoutMs: 35_000 })
+        await emitVisibleState(makeAction('wait', target), callbacks)
+        return output || `Waited for ${target}`
+      }
+
+      case 'back':
+      case 'forward':
+      case 'reload': {
+        const output = await runVisible([operation], { timeoutMs: 30_000 })
+        await emitVisibleState(makeAction(operation), callbacks)
+        return output || `Browser ${operation}`
       }
 
       case 'close': {
-        await closeBrowser()
+        await closeBrowserSession()
         callbacks?.onBrowserClose?.()
         return 'Browser closed'
       }
@@ -478,11 +796,7 @@ export async function executeBrowser(
         return `Unknown operation: ${operation}`
     }
   } catch (err: unknown) {
-    const msg = (err as Error).message || String(err)
-    // If browser crashed, clean up
-    if (msg.includes('Target closed') || msg.includes('Browser has been closed')) {
-      session = null
-    }
-    return `Error: ${msg}`
+    log.warn({ err, operation }, 'browser operation failed')
+    return `Error: ${(err as Error).message || String(err)}`
   }
 }

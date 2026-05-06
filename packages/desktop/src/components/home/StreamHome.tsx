@@ -1,4 +1,4 @@
-import { BookOpen, Code2, Mail, Pencil, Sparkles } from 'lucide-react'
+import { AppWindow, BookOpen, Code2, Mail, Pencil, Sparkles } from 'lucide-react'
 import { useMemo, useRef, useState } from 'react'
 import { sanitizeTitle } from '../../lib/conversations.js'
 import { ensureSessionReadyForSend } from '../../lib/sessionReadiness.js'
@@ -13,6 +13,7 @@ import { ChatInput } from '../chat/ChatInput.js'
 
 interface Props {
   onSkillSelect: (skill: Skill) => void
+  onOpenBrowser: () => void
 }
 
 const categories = [
@@ -68,7 +69,7 @@ function pickTail(): string {
   return TAIL_PHRASES[Math.floor(Math.random() * TAIL_PHRASES.length)] ?? ''
 }
 
-export function StreamHome({ onSkillSelect }: Props) {
+export function StreamHome({ onSkillSelect, onOpenBrowser }: Props) {
   const [draft, setDraft] = useState('')
   const newConversation = useStore((s) => s.newConversation)
   const activeConversationId = useStore((s) => s.activeConversationId)
@@ -170,6 +171,17 @@ export function StreamHome({ onSkillSelect }: Props) {
 
   return (
     <div className="home-scroll">
+      <div className="home-actions">
+        <button
+          type="button"
+          className="home-browser-btn"
+          onClick={onOpenBrowser}
+          aria-label="Browser"
+        >
+          <AppWindow size={18} strokeWidth={1.5} />
+          <span>Browser</span>
+        </button>
+      </div>
       <div className="home home--centered">
         <div className="home-stack">
           <div className="home-welcome">

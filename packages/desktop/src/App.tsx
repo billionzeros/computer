@@ -1,5 +1,5 @@
 import { AnimatePresence } from 'framer-motion'
-import { Code, Ticket } from 'lucide-react'
+import { AppWindow, Code, Ticket } from 'lucide-react'
 import { useCallback, useEffect, useState } from 'react'
 import { ActivityDock } from './components/ActivityDock.js'
 import { CommandPalette } from './components/CommandPalette.js'
@@ -61,7 +61,7 @@ export function App() {
   const hasMessages = (activeConv?.messages?.length || 0) > 0
   const artifactPanelOpen = artifactStore((s) => s.artifactPanelOpen)
   uiStore((s) => s.sidebarCollapsed)
-  uiStore((s) => s.toggleSidebar)
+  const setSidebarCollapsed = uiStore((s) => s.setSidebarCollapsed)
   const updateStage = updateStore((s) => s.updateStage)
   const sidePanelOpen = artifactPanelOpen
   const projects = projectStore((s) => s.projects)
@@ -72,6 +72,7 @@ export function App() {
   const tourCompleted = uiStore((s) => s.tourCompleted)
   const setArtifactPanelOpen = artifactStore((s) => s.setArtifactPanelOpen)
   const setSidePanelView = uiStore((s) => s.setSidePanelView)
+  const sidePanelView = uiStore((s) => s.sidePanelView)
   const tasksHidden = uiStore((s) => s.tasksHidden)
   const toggleTasksHidden = uiStore((s) => s.toggleTasksHidden)
   const currentTasks = useActiveSessionState((s) => s.tasks)
@@ -246,6 +247,12 @@ export function App() {
     setConnected(false)
   }
 
+  const openBrowserPanel = useCallback(() => {
+    setSidePanelView('browser')
+    setArtifactPanelOpen(true)
+    setSidebarCollapsed(true)
+  }, [setArtifactPanelOpen, setSidePanelView, setSidebarCollapsed])
+
   if (!connected) {
     return <Connect onConnected={() => setConnected(true)} />
   }
@@ -381,6 +388,17 @@ export function App() {
                 )}
                 {activeView === 'chat' && hasMessages && (
                   <>
+                    {!(sidePanelOpen && sidePanelView === 'browser') && (
+                      <button
+                        type="button"
+                        className="workspace-topbar__action-btn workspace-topbar__action-btn--with-label"
+                        onClick={openBrowserPanel}
+                        aria-label="Browser"
+                      >
+                        <AppWindow size={18} strokeWidth={1.5} />
+                        <span>Browser</span>
+                      </button>
+                    )}
                     <SessionFilesBar />
                     {sessionUsage && (
                       <button
@@ -401,7 +419,11 @@ export function App() {
 
           <div className="workspace-body">
             {activeView === 'home' &&
-              (hasMessages ? <RoutineChat /> : <StreamHome onSkillSelect={() => {}} />)}
+              (hasMessages ? (
+                <RoutineChat />
+              ) : (
+                <StreamHome onSkillSelect={() => {}} onOpenBrowser={openBrowserPanel} />
+              ))}
             {activeView === 'tasks' && <TasksListView />}
             {activeView === 'chat' && <RoutineChat />}
             {activeView === 'memory' && <MemoryView />}

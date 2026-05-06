@@ -87,7 +87,7 @@ async function main() {
     scheduler.stop()
     agentManager.shutdown()
     await server.shutdown() // Stop MCP servers, kill PTYs, release resources
-    await closeBrowserSession() // Close Playwright browser if open
+    await closeBrowserSession() // Close agent-browser sessions if open
     await flushTraces()
     process.exit(0)
   }

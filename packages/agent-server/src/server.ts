@@ -112,18 +112,23 @@ import {
   createMcpIpcServer,
   createSession,
   ensureHarnessSessionInit,
+  executeBrowser,
   executePublish,
   extractHarnessMemoriesFromMirror,
+  getBrowserRuntimeStatus,
   getModelContextSize,
   hashPromptVersion,
+  installBrowserRuntime,
   isHarnessSession,
   matchesSurface,
   probeMcpShim,
+  refreshVisibleBrowserState,
   readHarnessArtifacts,
   readHarnessHistory,
   readLastUserFromHarness,
   resolveModel,
   resumeSession,
+  setVisibleBrowserViewport,
   synthesizeHarnessTurn,
   writeHarnessSessionTitle,
 } from '@anton/agent-core'
@@ -138,6 +143,11 @@ import {
 } from '@anton/protocol'
 import type {
   AiMessage,
+  BrowserAction,
+  BrowserEngine,
+  BrowserInputEvent,
+  BrowserRuntimeInstallTarget,
+  BrowserStreamState,
   ChannelId,
   ContextBreakdown,
   ControlMessage,
@@ -172,6 +182,15 @@ import { WorkflowInstaller } from './workflows/workflow-installer.js'
 const log = createLogger('server')
 
 const DEFAULT_SESSION_ID = 'default'
+
+interface VisibleBrowserSessionState {
+  url: string
+  title: string
+  lastAction: BrowserAction
+  stream?: BrowserStreamState
+  engine?: BrowserEngine
+  updatedAt: number
+}
 
 const IMAGE_MIME_BY_EXT: Record<string, string> = {
   jpg: 'image/jpeg',
@@ -356,6 +375,15 @@ export class AgentServer {
    */
   private initialMcpProbe: Promise<void> | null = null
   private activeClient: WebSocket | null = null
+  private browserStreamWs: WebSocket | null = null
+  private browserStreamPort: number | null = null
+  private browserStreamSessionId: string | null = null
+  private browserRuntimeInstallInFlight: Promise<void> | null = null
+  private browserRuntimeInstallInFlightTarget: BrowserRuntimeInstallTarget | null = null
+  private visibleBrowserStates = new Map<string, VisibleBrowserSessionState>()
+  private browserStateRefreshTimers = new Map<string, NodeJS.Timeout>()
+  private browserViewportTimers = new Map<string, NodeJS.Timeout>()
+  private browserViewportBySession = new Map<string, { width: number; height: number }>()
   private pendingSessionCreates = new Map<string, Promise<void>>()
   // Track pending interactive prompts so they can be re-sent on client reconnect
   private pendingPrompts: Map<string, { type: string; payload: Record<string, unknown> }> =
@@ -502,6 +530,7 @@ export class AgentServer {
 
   /** Graceful shutdown: stop MCP servers, close connections, release resources. */
   async shutdown(): Promise<void> {
+    this.closeBrowserStreamProxy()
     try {
       await this.mcpManager.stopAll()
       log.info('MCP servers stopped')
@@ -2159,6 +2188,30 @@ export class AgentServer {
         this.handleConnectorSetToolPermission(msg)
         break
 
+      // ── Browser pane ──
+      case 'browser_open':
+        await this.handleBrowserOpen(msg.sessionId || DEFAULT_SESSION_ID, msg.url)
+        break
+      case 'browser_navigate':
+        await this.handleBrowserOpen(msg.sessionId || DEFAULT_SESSION_ID, msg.url)
+        break
+      case 'browser_command':
+        await this.handleBrowserCommand(msg.sessionId || DEFAULT_SESSION_ID, msg.command)
+        break
+      case 'browser_input':
+        this.forwardBrowserInput(msg.event)
+        this.refreshVisibleBrowserStateSoon(msg.sessionId || DEFAULT_SESSION_ID, msg.event)
+        break
+      case 'browser_viewport':
+        this.handleBrowserViewport(msg.sessionId || DEFAULT_SESSION_ID, msg.width, msg.height)
+        break
+      case 'browser_runtime_status':
+        await this.handleBrowserRuntimeStatus()
+        break
+      case 'browser_runtime_install':
+        this.handleBrowserRuntimeInstall(msg.target)
+        break
+
       // ── Publish artifacts ──
       case 'publish_artifact':
         this.handlePublishArtifact(msg)
@@ -2685,14 +2738,16 @@ export class AgentServer {
         skills: this.getActiveSkillsForPrompt(),
         userMessage,
       })
+      const browserContext = this.visibleBrowserContextForTurn(id)
+      const baseWithBrowserContext = browserContext ? `${base}\n\n${browserContext}` : base
 
       // Inject the replay seed ONCE, on the first turn only. From turn
       // 1 onward the CLI's own --resume tape carries the history.
       if (turnIndex === 0 && replaySeedForFirstTurn && !replaySeedConsumed) {
         replaySeedConsumed = true
-        return `${base}${replaySeedForFirstTurn}`
+        return `${baseWithBrowserContext}${replaySeedForFirstTurn}`
       }
-      return base
+      return baseWithBrowserContext
     }
 
     // Ensure meta.json + empty messages.jsonl exist
@@ -5537,6 +5592,21 @@ export class AgentServer {
         'do not loop quick searches. Cite sources.]'
       chatContent = `${RESEARCH_TURN_HINT}\n\n${msg.content}`
     }
+    const browserRefreshSessionId =
+      this.visibleBrowserStates.has(sessionId)
+        ? sessionId
+        : this.latestVisibleBrowserStateSessionId()
+    if (browserRefreshSessionId) {
+      await this.refreshVisibleBrowserStateForSession(browserRefreshSessionId, {
+        action: 'context',
+        timestamp: Date.now(),
+      }).catch((err) => {
+        log.debug(
+          { err: (err as Error).message, sessionId: browserRefreshSessionId },
+          'browser context refresh failed',
+        )
+      })
+    }
 
     // Auto-create default session if it doesn't exist
     let session = this.sessions.get(sessionId)
@@ -5671,6 +5741,13 @@ export class AgentServer {
         attachments: msg.attachments,
       })
       return 0
+    }
+
+    if (!isHarnessSession(session)) {
+      const browserContext = this.visibleBrowserContextForTurn(sessionId)
+      if (browserContext) {
+        chatContent = `${chatContent}\n\n${browserContext}`
+      }
     }
 
     this.activeTurns.add(sessionId)
@@ -5892,6 +5969,20 @@ export class AgentServer {
               sessionId,
             })
           }
+        } else if (event.type === 'browser_state') {
+          const browserEvent = event as {
+            url: string
+            title: string
+            lastAction: BrowserAction
+            stream?: BrowserStreamState
+            engine?: BrowserEngine
+          }
+          this.rememberVisibleBrowserState(sessionId, browserEvent)
+          if (browserEvent.stream?.port) {
+            this.ensureBrowserStreamProxy(browserEvent.stream.port, sessionId)
+          }
+        } else if (event.type === 'browser_close') {
+          this.closeBrowserStreamProxy()
         }
 
         // Stamp `done` with the per-turn assistantMessageId so the client
@@ -6250,6 +6341,410 @@ export class AgentServer {
     session.setAskUserHandler(this.buildAskUserHandlerForSession(session.id))
   }
 
+  // ── Browser stream proxy ─────────────────────────────────────────
+
+  private rememberVisibleBrowserState(
+    sessionId: string,
+    state: {
+      url: string
+      title: string
+      lastAction: BrowserAction
+      stream?: BrowserStreamState
+      engine?: BrowserEngine
+    },
+  ): void {
+    if (!state.url) return
+    this.visibleBrowserStates.set(sessionId, {
+      url: state.url,
+      title: state.title,
+      lastAction: state.lastAction,
+      stream: state.stream,
+      engine: state.engine,
+      updatedAt: Date.now(),
+    })
+  }
+
+  private visibleBrowserContextForTurn(sessionId: string): string | null {
+    const latestSessionId = this.latestVisibleBrowserStateSessionId()
+    const state =
+      this.visibleBrowserStates.get(sessionId) ??
+      (latestSessionId ? this.visibleBrowserStates.get(latestSessionId) : undefined)
+    if (!state?.url) return null
+    const title = state.title?.trim()
+    const ageSeconds = Math.max(0, Math.round((Date.now() - state.updatedAt) / 1000))
+    return [
+      `[Visible browser: Anton's browser pane is open at ${state.url}`,
+      title ? ` with title "${title}"` : '',
+      `. Last refreshed ${ageSeconds}s ago. If the user refers to this page, this site, or the browser, inspect the current browser session with the browser tool before answering; do not infer page contents from this hint alone.]`,
+    ].join('')
+  }
+
+  private latestVisibleBrowserStateSessionId(): string | null {
+    let latest: { sessionId: string; updatedAt: number } | null = null
+    for (const [stateSessionId, state] of this.visibleBrowserStates.entries()) {
+      if (!latest || state.updatedAt > latest.updatedAt) {
+        latest = { sessionId: stateSessionId, updatedAt: state.updatedAt }
+      }
+    }
+    return latest?.sessionId ?? null
+  }
+
+  private browserCallbacksForSession(
+    sessionId: string,
+  ): import('@anton/agent-core').BrowserCallbacks {
+    return {
+      onBrowserState: (state) => this.emitBrowserStateToClient(sessionId, state),
+      onBrowserClose: () => {
+        this.closeBrowserStreamProxy()
+        this.visibleBrowserStates.delete(sessionId)
+        this.sendToClient(Channel.AI, { type: 'browser_close', sessionId })
+      },
+    }
+  }
+
+  private async refreshVisibleBrowserStateForSession(
+    sessionId: string,
+    action: BrowserAction,
+  ): Promise<void> {
+    await refreshVisibleBrowserState(this.browserCallbacksForSession(sessionId), action)
+  }
+
+  private refreshVisibleBrowserStateSoon(sessionId: string, event: BrowserInputEvent): void {
+    const existing = this.browserStateRefreshTimers.get(sessionId)
+    if (existing) clearTimeout(existing)
+
+    this.browserStateRefreshTimers.set(
+      sessionId,
+      setTimeout(() => {
+        this.browserStateRefreshTimers.delete(sessionId)
+        const action = event.type === 'input_keyboard' ? 'keyboard' : 'mouse'
+        const refresh = (phase: string) =>
+          this.refreshVisibleBrowserStateForSession(sessionId, {
+            action: `${action}_${phase}`,
+            timestamp: Date.now(),
+          }).catch((err) => {
+            log.debug({ err: (err as Error).message, sessionId }, 'browser state refresh failed')
+          })
+        refresh('input')
+        setTimeout(() => refresh('settled'), 1200)
+      }, 350),
+    )
+  }
+
+  private handleBrowserViewport(sessionId: string, width: number, height: number): void {
+    if (!Number.isFinite(width) || !Number.isFinite(height)) return
+    const rounded = {
+      width: Math.round(width),
+      height: Math.round(height),
+    }
+    if (rounded.width < 320 || rounded.height < 240) return
+
+    const previous = this.browserViewportBySession.get(sessionId)
+    if (
+      previous &&
+      Math.abs(previous.width - rounded.width) < 24 &&
+      Math.abs(previous.height - rounded.height) < 24
+    ) {
+      return
+    }
+    this.browserViewportBySession.set(sessionId, rounded)
+
+    const existing = this.browserViewportTimers.get(sessionId)
+    if (existing) clearTimeout(existing)
+    this.browserViewportTimers.set(
+      sessionId,
+      setTimeout(() => {
+        this.browserViewportTimers.delete(sessionId)
+        setVisibleBrowserViewport(
+          rounded.width,
+          rounded.height,
+          this.browserCallbacksForSession(sessionId),
+        ).catch((err) => {
+          log.debug({ err: (err as Error).message, sessionId }, 'browser viewport resize failed')
+        })
+      }, 200),
+    )
+  }
+
+  private emitBrowserStateToClient(
+    sessionId: string,
+    state: {
+      url: string
+      title: string
+      screenshot?: string
+      lastAction: BrowserAction
+      elementCount?: number
+      stream?: BrowserStreamState
+      engine?: BrowserEngine
+    },
+  ): void {
+    this.rememberVisibleBrowserState(sessionId, state)
+    if (state.stream?.port) {
+      this.ensureBrowserStreamProxy(state.stream.port, sessionId)
+    }
+    this.sendToClient(Channel.AI, { type: 'browser_state', ...state, sessionId })
+  }
+
+  private ensureBrowserStreamProxy(port: number, sessionId: string): void {
+    if (
+      this.browserStreamWs &&
+      this.browserStreamPort === port &&
+      this.browserStreamWs.readyState === WebSocket.OPEN
+    ) {
+      this.browserStreamSessionId = sessionId
+      return
+    }
+
+    this.closeBrowserStreamProxy()
+    this.browserStreamPort = port
+    this.browserStreamSessionId = sessionId
+
+    const ws = new WebSocket(`ws://127.0.0.1:${port}`)
+    this.browserStreamWs = ws
+    const streamSessionId = sessionId
+    const targetSessionId = () =>
+      this.browserStreamWs === ws
+        ? (this.browserStreamSessionId ?? streamSessionId)
+        : streamSessionId
+
+    ws.on('open', () => {
+      this.sendToClient(Channel.AI, {
+        type: 'browser_stream_status',
+        sessionId: targetSessionId(),
+        connected: true,
+      })
+    })
+
+    ws.on('message', (data) => {
+      let parsed: unknown
+      try {
+        parsed = JSON.parse(data.toString())
+      } catch {
+        return
+      }
+
+      if (!parsed || typeof parsed !== 'object') return
+      const message = parsed as Record<string, unknown>
+      if (message.type === 'frame' && typeof message.data === 'string') {
+        this.sendToClient(Channel.AI, {
+          type: 'browser_frame',
+          sessionId: targetSessionId(),
+          data: message.data,
+          metadata:
+            message.metadata && typeof message.metadata === 'object' ? message.metadata : undefined,
+        })
+      } else if (message.type === 'status') {
+        this.sendToClient(Channel.AI, {
+          type: 'browser_stream_status',
+          sessionId: targetSessionId(),
+          connected: Boolean(message.connected),
+          screencasting:
+            typeof message.screencasting === 'boolean' ? message.screencasting : undefined,
+          viewportWidth:
+            typeof message.viewportWidth === 'number' ? message.viewportWidth : undefined,
+          viewportHeight:
+            typeof message.viewportHeight === 'number' ? message.viewportHeight : undefined,
+        })
+      }
+    })
+
+    ws.on('close', () => {
+      const wasCurrent = this.browserStreamWs === ws
+      if (!wasCurrent) return
+      const closedSessionId = targetSessionId()
+      this.clearBrowserStreamProxy()
+      this.sendToClient(Channel.AI, {
+        type: 'browser_stream_status',
+        sessionId: closedSessionId,
+        connected: false,
+      })
+    })
+
+    ws.on('error', (err) => {
+      log.warn({ err, port }, 'browser stream proxy failed')
+    })
+  }
+
+  private closeBrowserStreamProxy(): void {
+    if (this.browserStreamWs) {
+      try {
+        this.browserStreamWs.close()
+      } catch {
+        // Best effort.
+      }
+    }
+    this.clearBrowserStreamProxy()
+  }
+
+  private clearBrowserStreamProxy(): void {
+    this.browserStreamWs = null
+    this.browserStreamPort = null
+    this.browserStreamSessionId = null
+  }
+
+  private forwardBrowserInput(event: BrowserInputEvent): void {
+    if (!this.browserStreamWs || this.browserStreamWs.readyState !== WebSocket.OPEN) return
+    this.browserStreamWs.send(JSON.stringify(event))
+  }
+
+  private async handleBrowserRuntimeStatus(): Promise<void> {
+    try {
+      const status = await getBrowserRuntimeStatus()
+      this.sendToClient(Channel.AI, { type: 'browser_runtime_status_response', status })
+    } catch (err) {
+      this.sendToClient(Channel.AI, {
+        type: 'browser_runtime_install_progress',
+        target: 'repair',
+        stage: 'error',
+        message: `Failed to check browser runtime: ${(err as Error).message}`,
+      })
+    }
+  }
+
+  private handleBrowserRuntimeInstall(target: BrowserRuntimeInstallTarget): void {
+    void this.runBrowserRuntimeInstall(target)
+  }
+
+  private browserRuntimeInstallCovers(
+    active: BrowserRuntimeInstallTarget,
+    requested: BrowserRuntimeInstallTarget,
+  ): boolean {
+    if (active === requested) return true
+    if (active === 'all' || active === 'repair') return true
+    return false
+  }
+
+  private runBrowserRuntimeInstall(target: BrowserRuntimeInstallTarget): Promise<void> {
+    if (this.browserRuntimeInstallInFlight) {
+      const activeTarget = this.browserRuntimeInstallInFlightTarget
+      this.sendToClient(Channel.AI, {
+        type: 'browser_runtime_install_progress',
+        target,
+        stage: 'installing',
+        message: activeTarget
+          ? `Waiting for ${activeTarget} browser runtime install`
+          : 'Browser runtime install is already running',
+      })
+      if (activeTarget && this.browserRuntimeInstallCovers(activeTarget, target)) {
+        return this.browserRuntimeInstallInFlight
+      }
+      return this.browserRuntimeInstallInFlight.then(() => this.runBrowserRuntimeInstall(target))
+    }
+
+    this.browserRuntimeInstallInFlightTarget = target
+    this.browserRuntimeInstallInFlight = installBrowserRuntime(target, (stage, message) => {
+      this.sendToClient(Channel.AI, {
+        type: 'browser_runtime_install_progress',
+        target,
+        stage,
+        message,
+      })
+    })
+      .then((status) => {
+        this.sendToClient(Channel.AI, {
+          type: 'browser_runtime_status_response',
+          status,
+        })
+        this.sendToClient(Channel.AI, {
+          type: 'browser_runtime_install_progress',
+          target,
+          stage: 'done',
+          message: 'Browser runtime ready',
+          status,
+        })
+      })
+      .catch((err) => {
+        this.sendToClient(Channel.AI, {
+          type: 'browser_runtime_install_progress',
+          target,
+          stage: 'error',
+          message: `Browser runtime install failed: ${(err as Error).message}`,
+        })
+      })
+      .finally(() => {
+        this.browserRuntimeInstallInFlight = null
+        this.browserRuntimeInstallInFlightTarget = null
+      })
+
+    return this.browserRuntimeInstallInFlight
+  }
+
+  private async ensureVisibleBrowserRuntime(): Promise<boolean> {
+    const status = await getBrowserRuntimeStatus()
+    const chrome = status.components.find((component) => component.id === 'chrome')
+    const agentBrowser = status.components.find((component) => component.id === 'agent-browser')
+    if (chrome?.status === 'ready' && agentBrowser?.status === 'ready') return true
+
+    this.sendToClient(Channel.AI, { type: 'browser_runtime_status_response', status })
+    await this.runBrowserRuntimeInstall('chrome')
+
+    const nextStatus = await getBrowserRuntimeStatus()
+    this.sendToClient(Channel.AI, { type: 'browser_runtime_status_response', status: nextStatus })
+    const nextChrome = nextStatus.components.find((component) => component.id === 'chrome')
+    const nextAgentBrowser = nextStatus.components.find(
+      (component) => component.id === 'agent-browser',
+    )
+    return nextChrome?.status === 'ready' && nextAgentBrowser?.status === 'ready'
+  }
+
+  private browserOpenFailureMessage(output: string): string {
+    if (output.includes('error while loading shared libraries') || output.includes('not found')) {
+      return 'Chrome is missing Linux system dependencies. Run Browser repair to install them.'
+    }
+    if (output.includes('DevToolsActivePort') || output.includes('Chrome exited early')) {
+      return 'Chrome could not start on this server. Run Browser repair.'
+    }
+    return output.replace(/^Error:\s*/, '').split('\n')[0] || 'Browser failed to open.'
+  }
+
+  private async handleBrowserOpen(sessionId: string, url?: string): Promise<void> {
+    const runtimeReady = await this.ensureVisibleBrowserRuntime()
+    if (!runtimeReady) {
+      return
+    }
+
+    const output = await executeBrowser(
+      { operation: 'open', ...(url ? { url } : {}) },
+      this.browserCallbacksForSession(sessionId),
+    )
+    if (output.startsWith('Error:')) {
+      this.sendToClient(Channel.AI, {
+        type: 'browser_runtime_install_progress',
+        target: 'repair',
+        stage: 'error',
+        message: this.browserOpenFailureMessage(output),
+      })
+      await this.handleBrowserRuntimeStatus()
+    }
+  }
+
+  private async handleBrowserCommand(
+    sessionId: string,
+    command: 'back' | 'forward' | 'reload',
+  ): Promise<void> {
+    const runtimeReady = await this.ensureVisibleBrowserRuntime()
+    if (!runtimeReady) {
+      return
+    }
+
+    const output = await executeBrowser(
+      { operation: command },
+      this.browserCallbacksForSession(sessionId),
+    )
+    if (output.startsWith('Error:')) {
+      log.debug({ output, command, sessionId }, 'browser command failed')
+      await this.refreshVisibleBrowserStateForSession(sessionId, {
+        action: `${command}_failed`,
+        timestamp: Date.now(),
+      }).catch((err) => {
+        log.debug(
+          { err: (err as Error).message, command, sessionId },
+          'browser state refresh failed',
+        )
+      })
+    }
+  }
+
   /**
    * Harness-side counterpart to `wireAskUserHandler`. The codex / claude
    * harness can't call `setAskUserHandler` (no Pi SDK Session), so the
@@ -6276,10 +6771,16 @@ export class AgentServer {
   ): import('@anton/agent-core').HarnessSessionContext['browserCallbacks'] {
     return {
       onBrowserState: (state) => {
+        this.rememberVisibleBrowserState(sessionId, state)
+        if (state.stream?.port) {
+          this.ensureBrowserStreamProxy(state.stream.port, sessionId)
+        }
         const session = this.sessions.get(sessionId)
         if (session && isHarnessSession(session)) session.emitBrowserState(state)
       },
       onBrowserClose: () => {
+        this.closeBrowserStreamProxy()
+        this.visibleBrowserStates.delete(sessionId)
         const session = this.sessions.get(sessionId)
         if (session && isHarnessSession(session)) session.emitBrowserClose()
       },

@@ -173,12 +173,43 @@ export function handleInteractionMessage(msg: AiMessage, ctx: MessageContext): b
           screenshot: msg.screenshot,
           lastAction: msg.lastAction,
           elementCount: msg.elementCount,
+          stream: msg.stream,
+          engine: msg.engine,
         })
         if (!wasActive) {
           uiStore.setState({ sidePanelView: 'browser' })
           artifactStore.setState({ artifactPanelOpen: true })
         }
       }
+      return true
+    }
+
+    case 'browser_frame': {
+      if (ctx.isForActiveSession) {
+        artifactStore.getState().setBrowserFrame(msg.data, msg.metadata)
+      }
+      return true
+    }
+
+    case 'browser_stream_status': {
+      if (ctx.isForActiveSession) {
+        artifactStore.getState().setBrowserStreamStatus({
+          connected: msg.connected,
+          screencasting: msg.screencasting,
+          viewportWidth: msg.viewportWidth,
+          viewportHeight: msg.viewportHeight,
+        })
+      }
+      return true
+    }
+
+    case 'browser_runtime_status_response': {
+      artifactStore.getState().setBrowserRuntimeStatus(msg.status)
+      return true
+    }
+
+    case 'browser_runtime_install_progress': {
+      artifactStore.getState().setBrowserRuntimeProgress(msg)
       return true
     }
 

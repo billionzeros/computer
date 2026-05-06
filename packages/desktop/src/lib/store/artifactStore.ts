@@ -2,7 +2,14 @@
  * Artifact domain store — code/file artifacts + browser viewer state.
  */
 
-import { Channel } from '@anton/protocol'
+import {
+  type BrowserFrameMetadata,
+  type BrowserRuntimeInstallProgressMessage,
+  type BrowserRuntimeInstallTarget,
+  type BrowserRuntimeStatus,
+  type BrowserStreamState,
+  Channel,
+} from '@anton/protocol'
 import { create } from 'zustand'
 import type { Artifact, ArtifactRenderType } from '../artifacts.js'
 import { connection } from '../connection.js'
@@ -11,8 +18,14 @@ interface BrowserState {
   url: string
   title: string
   screenshot: string | null
+  frame: string | null
+  frameMetadata?: BrowserFrameMetadata
   actions: Array<{ action: string; target?: string; value?: string; timestamp: number }>
   active: boolean
+  stream?: BrowserStreamState
+  streamConnected?: boolean
+  viewportWidth?: number
+  viewportHeight?: number
 }
 
 interface ArtifactState {
@@ -28,6 +41,9 @@ interface ArtifactState {
 
   // Browser viewer
   browserState: BrowserState | null
+  browserRuntimeStatus: BrowserRuntimeStatus | null
+  browserRuntimeProgress: BrowserRuntimeInstallProgressMessage | null
+  browserRuntimeInstalling: BrowserRuntimeInstallTarget | null
 
   // Artifact actions
   addArtifact: (artifact: Artifact) => void
@@ -47,7 +63,19 @@ interface ArtifactState {
     screenshot?: string
     lastAction: { action: string; target?: string; value?: string; timestamp: number }
     elementCount?: number
+    stream?: BrowserStreamState
+    engine?: string
   }) => void
+  setBrowserFrame: (frame: string, metadata?: BrowserFrameMetadata) => void
+  setBrowserStreamStatus: (status: {
+    connected: boolean
+    screencasting?: boolean
+    viewportWidth?: number
+    viewportHeight?: number
+  }) => void
+  setBrowserRuntimeStatus: (status: BrowserRuntimeStatus) => void
+  setBrowserRuntimeProgress: (progress: BrowserRuntimeInstallProgressMessage) => void
+  setBrowserRuntimeInstalling: (target: BrowserRuntimeInstallTarget | null) => void
   clearBrowserState: () => void
 
   // Publish modal
@@ -81,6 +109,9 @@ export const artifactStore = create<ArtifactState>((set, get) => ({
   artifactViewMode: 'list',
   artifactTabs: [],
   browserState: null,
+  browserRuntimeStatus: null,
+  browserRuntimeProgress: null,
+  browserRuntimeInstalling: null,
   publishModalOpen: false,
   publishModalArtifactId: null,
   publishError: null,
@@ -151,11 +182,75 @@ export const artifactStore = create<ArtifactState>((set, get) => ({
         url: state.url,
         title: state.title,
         screenshot: state.screenshot ?? current?.screenshot ?? null,
+        frame: current?.frame ?? null,
+        frameMetadata: current?.frameMetadata,
         actions: newActions,
         active: true,
+        stream: state.stream ?? current?.stream,
+        streamConnected: state.stream?.connected ?? current?.streamConnected,
+        viewportWidth: current?.viewportWidth,
+        viewportHeight: current?.viewportHeight,
       },
+      browserRuntimeProgress: null,
+      browserRuntimeInstalling: null,
     })
   },
+
+  setBrowserFrame: (frame, metadata) =>
+    set((state) => {
+      if (!state.browserState) return {}
+      return {
+        browserState: {
+          ...state.browserState,
+          frame,
+          frameMetadata: metadata,
+          streamConnected: true,
+          viewportWidth: metadata?.deviceWidth ?? state.browserState.viewportWidth,
+          viewportHeight: metadata?.deviceHeight ?? state.browserState.viewportHeight,
+        },
+      }
+    }),
+
+  setBrowserStreamStatus: (status) =>
+    set((state) => {
+      if (!state.browserState) return {}
+      return {
+        browserState: {
+          ...state.browserState,
+          streamConnected: status.connected,
+          viewportWidth: status.viewportWidth ?? state.browserState.viewportWidth,
+          viewportHeight: status.viewportHeight ?? state.browserState.viewportHeight,
+        },
+      }
+    }),
+
+  setBrowserRuntimeStatus: (status) =>
+    set((state) => {
+      const keepProgress =
+        state.browserRuntimeProgress?.stage === 'error' ||
+        state.browserRuntimeProgress?.message === 'Opening browser'
+      return {
+        browserRuntimeStatus: status,
+        browserRuntimeInstalling:
+          status.overall === 'ready' && !keepProgress ? null : state.browserRuntimeInstalling,
+        browserRuntimeProgress:
+          !keepProgress && (status.overall === 'ready' || !state.browserRuntimeInstalling)
+            ? null
+            : state.browserRuntimeProgress,
+      }
+    }),
+
+  setBrowserRuntimeProgress: (progress) =>
+    set((state) => ({
+      browserRuntimeProgress: progress.stage === 'done' ? null : progress,
+      browserRuntimeInstalling:
+        progress.stage === 'done' || progress.stage === 'error'
+          ? null
+          : (state.browserRuntimeInstalling ?? progress.target),
+      browserRuntimeStatus: progress.status ?? state.browserRuntimeStatus,
+    })),
+
+  setBrowserRuntimeInstalling: (target) => set({ browserRuntimeInstalling: target }),
 
   clearBrowserState: () => set({ browserState: null }),
 
@@ -187,6 +282,9 @@ export const artifactStore = create<ArtifactState>((set, get) => ({
       artifactViewMode: 'list',
       artifactTabs: [],
       browserState: null,
+      browserRuntimeStatus: null,
+      browserRuntimeProgress: null,
+      browserRuntimeInstalling: null,
       publishModalOpen: false,
       publishModalArtifactId: null,
       publishError: null,

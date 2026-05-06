@@ -71,7 +71,15 @@ export {
   type ResolvedProviderToken,
 } from './tools/factories.js'
 export { initTracing, flushTraces, hashPromptVersion, logSpanFeedback } from './tracing.js'
-export { closeBrowserSession } from './tools/browser.js'
+export {
+  closeBrowserSession,
+  executeBrowser,
+  getBrowserRuntimeStatus,
+  installBrowserRuntime,
+  refreshVisibleBrowserState,
+  setVisibleBrowserViewport,
+  type BrowserCallbacks,
+} from './tools/browser.js'
 export {
   type HarnessAdapter,
   ClaudeAdapter,

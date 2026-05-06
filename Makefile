@@ -92,6 +92,8 @@ sync: _check-ansible
 			--rsync-path="sudo -u anton rsync" \
 			-e "ssh $$SSH_OPTS" \
 			"$(REPO_ROOT)/" "$$USER@$$IP:$(REMOTE_REPO)/" 2>&1; \
+		echo "  ○ Installing remote dependencies..."; \
+		ssh $$SSH_OPTS "$$USER@$$IP" "cd $(REMOTE_REPO) && sudo -u anton bash -c 'pnpm --config.confirmModulesPurge=false --filter=\"./packages/*\" --filter=\"!@anton/desktop\" --filter=\"!@anton/mobile\" install --frozen-lockfile'" 2>&1 || exit 1; \
 		echo "  ○ Building on remote..."; \
 		ssh $$SSH_OPTS "$$USER@$$IP" "cd $(REMOTE_REPO) && sudo -u anton bash -c 'pnpm -r --filter=\"./packages/*\" --filter=\"!@anton/desktop\" --filter=\"!@anton/mobile\" build'" 2>&1 | tail -10; \
 		echo "  ○ Rebuilding native modules on remote..."; \
