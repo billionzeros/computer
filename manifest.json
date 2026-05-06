@@ -1,12 +1,12 @@
 {
-  "version": "2.2.0",
-  "gitHash": "334ed64",
+  "version": "2.2.1",
+  "gitHash": "",
   "releaseUrl": "https://github.com/billionzeros/computer/releases",
-  "changelog": "Added:\n- gitignore\n\nOther:\n- Add managed browser pane (#32)",
-  "publishedAt": "2026-05-06T09:40:23.585Z",
-  "cli": "https://github.com/billionzeros/computer/releases/download/v2.2.0/anton-cli.mjs",
+  "changelog": "Other:\n- Fix project session resume\n- Fix publish links and modal\n- Fix Codex mid-turn steering",
+  "publishedAt": "2026-05-06T17:36:08.673Z",
+  "cli": "https://github.com/billionzeros/computer/releases/download/v2.2.1/anton-cli.mjs",
   "sidecar": {
-    "linux-arm64": "https://github.com/billionzeros/computer/releases/download/v2.2.0/anton-sidecar-linux-arm64",
-    "linux-amd64": "https://github.com/billionzeros/computer/releases/download/v2.2.0/anton-sidecar-linux-amd64"
+    "linux-arm64": "https://github.com/billionzeros/computer/releases/download/v2.2.1/anton-sidecar-linux-arm64",
+    "linux-amd64": "https://github.com/billionzeros/computer/releases/download/v2.2.1/anton-sidecar-linux-amd64"
   }
 }

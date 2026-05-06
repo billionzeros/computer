@@ -10,6 +10,14 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versioning: [S
 
 ---
 
+## [2.2.1] - 2026-05-06
+
+### Other
+- Fix project session resume
+- Fix publish links and modal
+- Fix Codex mid-turn steering
+---
+
 ## [2.2.0] - 2026-05-06
 
 ### Added
@@ -793,7 +801,8 @@ Maintenance release.
 
 ---
 
-[Unreleased]: https://github.com/billionzeros/computer/compare/v2.2.0...HEAD
+[Unreleased]: https://github.com/billionzeros/computer/compare/v2.2.1...HEAD
+[2.2.1]: https://github.com/billionzeros/computer/compare/v$(changelog.match(/## [(d+.d+.d+)]/g)[1].match(/d+.d+.d+/)[0])...v2.2.1
 [2.2.0]: https://github.com/billionzeros/computer/compare/v$(changelog.match(/## [(d+.d+.d+)]/g)[1].match(/d+.d+.d+/)[0])...v2.2.0
 [2.1.6]: https://github.com/billionzeros/computer/compare/v$(changelog.match(/## [(d+.d+.d+)]/g)[1].match(/d+.d+.d+/)[0])...v2.1.6
 [2.1.5]: https://github.com/billionzeros/computer/compare/v$(changelog.match(/## [(d+.d+.d+)]/g)[1].match(/d+.d+.d+/)[0])...v2.1.5
