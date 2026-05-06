@@ -175,9 +175,10 @@ export function buildAntonCoreTools(ctx: AntonCoreToolContext = {}): AgentTool[]
     // Read / write the system clipboard. Trivial but lets the model
     // act on "paste what I just copied".
     buildClipboardTool(),
-    // Web browsing + Playwright automation. Same callbacks Pi SDK
-    // uses to drive the desktop browser sidebar — when undefined, the
-    // tool still supports the lightweight fetch/extract operations.
+    // Web browsing through agent-browser: Lightpanda for background
+    // fetch/extract, Chrome for visible automation. Same callbacks Pi
+    // SDK uses to drive the desktop browser pane — when undefined, the
+    // tool still supports the Lightpanda fetch/extract operations.
     buildBrowserTool(ctx.browserCallbacks),
     // Loads full SKILL.md instructions on demand. The prompt layer only
     // carries a compact metadata listing, so this tool is the bridge from

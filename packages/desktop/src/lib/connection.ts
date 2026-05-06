@@ -10,6 +10,8 @@
 
 import {
   type AiMessage,
+  type BrowserInputEvent,
+  type BrowserRuntimeInstallTarget,
   Channel,
   type ChatImageAttachmentInput,
   type ControlMessage,
@@ -271,6 +273,43 @@ export class Connection {
 
   sendCancelTurn(sessionId: string) {
     this.send(Channel.AI, { type: 'cancel_turn', sessionId })
+  }
+
+  sendBrowserOpen(sessionId?: string, url?: string) {
+    this.send(Channel.AI, {
+      type: 'browser_open',
+      ...(sessionId && { sessionId }),
+      ...(url && { url }),
+    })
+  }
+
+  sendBrowserNavigate(url: string, sessionId?: string) {
+    this.send(Channel.AI, { type: 'browser_navigate', url, ...(sessionId && { sessionId }) })
+  }
+
+  sendBrowserCommand(command: 'back' | 'forward' | 'reload', sessionId?: string) {
+    this.send(Channel.AI, { type: 'browser_command', command, ...(sessionId && { sessionId }) })
+  }
+
+  sendBrowserInput(event: BrowserInputEvent, sessionId?: string) {
+    this.send(Channel.AI, { type: 'browser_input', event, ...(sessionId && { sessionId }) })
+  }
+
+  sendBrowserViewport(width: number, height: number, sessionId?: string) {
+    this.send(Channel.AI, {
+      type: 'browser_viewport',
+      width,
+      height,
+      ...(sessionId && { sessionId }),
+    })
+  }
+
+  sendBrowserRuntimeStatus() {
+    this.send(Channel.AI, { type: 'browser_runtime_status' })
+  }
+
+  sendBrowserRuntimeInstall(target: BrowserRuntimeInstallTarget) {
+    this.send(Channel.AI, { type: 'browser_runtime_install', target })
   }
 
   // ── Provider management ─────────────────────────────────────────

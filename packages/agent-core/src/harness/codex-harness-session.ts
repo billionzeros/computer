@@ -879,6 +879,8 @@ export class CodexHarnessSession {
     screenshot?: string
     lastAction: import('@anton/protocol').BrowserAction
     elementCount?: number
+    stream?: import('@anton/protocol').BrowserStreamState
+    engine?: import('@anton/protocol').BrowserEngine
   }) {
     this.emit({ type: 'browser_state', ...state })
   }

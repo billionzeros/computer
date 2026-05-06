@@ -12,16 +12,39 @@
  *   - 'never' → tool is filtered out of getAllTools(), agent never sees it
  */
 
-import { Check, ExternalLink, Loader2, Plug, Plus, Search, Trash2 } from 'lucide-react'
+import type {
+  BrowserRuntimeInstallProgressMessage,
+  BrowserRuntimeInstallTarget,
+  BrowserRuntimeStatus,
+} from '@anton/protocol'
+import {
+  AlertTriangle,
+  AppWindow,
+  Check,
+  CheckCircle2,
+  CircleDashed,
+  Download,
+  ExternalLink,
+  Loader2,
+  Plug,
+  Plus,
+  RefreshCw,
+  Search,
+  Trash2,
+  Wrench,
+  XCircle,
+} from 'lucide-react'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { connection } from '../../lib/connection.js'
 import { useStore } from '../../lib/store.js'
+import { artifactStore } from '../../lib/store/artifactStore.js'
 import { connectorStore } from '../../lib/store/connectorStore.js'
 import type { ConnectorRegistryInfo, ConnectorStatusInfo } from '../../lib/store/types.js'
 import { ConnectorIcon } from './ConnectorIcons.js'
 import { AppSetup } from './ConnectorsPage.js'
 
 type ToolPermission = 'auto' | 'ask' | 'never'
+const BROWSER_RUNTIME_ID = 'browser-runtime'
 
 // Heuristic classification of tool names. The protocol doesn't tell us whether
 // a tool is read-only or write/delete, so we sniff common verbs from the name.
@@ -53,6 +76,10 @@ function getPermission(
   return perms?.[toolName] ?? 'auto'
 }
 
+function isBrowserRuntimeReady(status: BrowserRuntimeStatus | null): boolean {
+  return status?.overall === 'ready'
+}
+
 // ── Sidebar item type ─────────────────────────────────────────────────
 // For multi-account connectors we group all instances under the registry id.
 
@@ -74,6 +101,11 @@ export function ConnectorsView() {
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [search, setSearch] = useState('')
   const [connectPopupId, setConnectPopupId] = useState<string | null>(null)
+  const browserRuntimeStatus = artifactStore((s) => s.browserRuntimeStatus)
+  const browserRuntimeProgress = artifactStore((s) => s.browserRuntimeProgress)
+  const browserRuntimeInstalling = artifactStore((s) => s.browserRuntimeInstalling)
+  const setBrowserRuntimeProgress = artifactStore((s) => s.setBrowserRuntimeProgress)
+  const setBrowserRuntimeInstalling = artifactStore((s) => s.setBrowserRuntimeInstalling)
 
   // Refresh data when connection comes up
   const connectionStatus = useStore((s) => s.connectionStatus)
@@ -81,6 +113,7 @@ export function ConnectorsView() {
     if (connectionStatus === 'connected') {
       connectorStore.getState().listConnectors()
       connectorStore.getState().listConnectorRegistry()
+      connection.sendBrowserRuntimeStatus()
     }
   }, [connectionStatus])
 
@@ -172,12 +205,25 @@ export function ConnectorsView() {
 
     const q = search.trim().toLowerCase()
     const filterFn = (name: string) => !q || name.toLowerCase().includes(q)
+    const browserItem: SidebarItem = {
+      id: BROWSER_RUNTIME_ID,
+      name: 'Browser',
+      instances: [],
+      connected: isBrowserRuntimeReady(browserRuntimeStatus),
+    }
+    const showBrowser = filterFn(browserItem.name)
 
     return {
-      connectedItems: connected.filter((i) => filterFn(i.name)),
-      notConnectedItems: available.filter((i) => filterFn(i.name)),
+      connectedItems:
+        showBrowser && browserItem.connected
+          ? [...connected.filter((i) => filterFn(i.name)), browserItem]
+          : connected.filter((i) => filterFn(i.name)),
+      notConnectedItems:
+        showBrowser && !browserItem.connected
+          ? [browserItem, ...available.filter((i) => filterFn(i.name))]
+          : available.filter((i) => filterFn(i.name)),
     }
-  }, [connectors, registry, search])
+  }, [connectors, registry, search, browserRuntimeStatus])
 
   // Auto-select the first connected connector if nothing is selected
   useEffect(() => {
@@ -254,7 +300,24 @@ export function ConnectorsView() {
 
       {/* ── Right detail pane ────────────────────────────── */}
       <section className="connectors-view__detail">
-        {selected ? (
+        {selected?.id === BROWSER_RUNTIME_ID ? (
+          <BrowserRuntimeDetail
+            status={browserRuntimeStatus}
+            progress={browserRuntimeProgress}
+            installing={browserRuntimeInstalling}
+            onRefresh={() => connection.sendBrowserRuntimeStatus()}
+            onInstall={(target) => {
+              setBrowserRuntimeInstalling(target)
+              setBrowserRuntimeProgress({
+                type: 'browser_runtime_install_progress',
+                target,
+                stage: 'checking',
+                message: 'Checking browser runtime',
+              })
+              connection.sendBrowserRuntimeInstall(target)
+            }}
+          />
+        ) : selected ? (
           <ConnectorDetail
             key={selected.id}
             item={selected}
@@ -312,7 +375,11 @@ function SidebarRow({
       onClick={onClick}
     >
       <span className="connectors-view__row-icon">
-        <ConnectorIcon id={id} size={18} />
+        {id === BROWSER_RUNTIME_ID ? (
+          <AppWindow size={18} strokeWidth={1.5} />
+        ) : (
+          <ConnectorIcon id={id} size={18} />
+        )}
       </span>
       <span className="connectors-view__row-name">{name}</span>
       {accountCount > 1 && (
@@ -649,6 +716,261 @@ function ConnectorDetail({
           )}
         </div>
       )}
+    </div>
+  )
+}
+
+// ── Browser runtime ───────────────────────────────────────────────────
+
+type RuntimeComponent = BrowserRuntimeStatus['components'][number]
+type RuntimeOverall = BrowserRuntimeStatus['overall']
+
+function runtimeHeadline(status: BrowserRuntimeStatus | null): string {
+  switch (status?.overall) {
+    case 'ready':
+      return 'Ready on this server'
+    case 'partial':
+      return 'Setup incomplete'
+    case 'missing':
+      return 'Setup required'
+    case 'installing':
+      return 'Setting up browser'
+    case 'error':
+      return 'Repair required'
+    default:
+      return 'Checking browser runtime'
+  }
+}
+
+function runtimeSubtext(status: BrowserRuntimeStatus | null): string {
+  switch (status?.overall) {
+    case 'ready':
+      return 'Visible Chrome and background browsing are available.'
+    case 'partial':
+      return 'One browser engine still needs setup.'
+    case 'missing':
+      return 'Install the server-side browser runtime.'
+    case 'installing':
+      return 'Installing browser components on the Anton server.'
+    case 'error':
+      return 'One component failed verification.'
+    default:
+      return 'Anton is checking the server runtime.'
+  }
+}
+
+function componentStatusLabel(component: RuntimeComponent): string {
+  switch (component.status) {
+    case 'ready':
+      return 'Ready'
+    case 'missing':
+      return 'Missing'
+    case 'installing':
+      return 'Installing'
+    case 'error':
+      return 'Needs repair'
+    default:
+      return 'Checking'
+  }
+}
+
+function componentDetail(component: RuntimeComponent): string {
+  if (component.status === 'ready') {
+    switch (component.id) {
+      case 'agent-browser':
+        return 'Automation runtime is available.'
+      case 'chrome':
+        return 'Visible browser engine is available.'
+      case 'lightpanda':
+        return 'Background browser engine is available.'
+    }
+  }
+  if (component.detail?.startsWith('Command failed:')) {
+    return 'Verification failed. Run Repair to reinstall this component.'
+  }
+  return component.detail ?? 'Waiting for status.'
+}
+
+function RuntimeStatusIcon({
+  status,
+  size = 16,
+}: {
+  status?: RuntimeOverall | RuntimeComponent['status']
+  size?: number
+}) {
+  if (status === 'ready') return <CheckCircle2 size={size} strokeWidth={1.8} />
+  if (status === 'error') return <XCircle size={size} strokeWidth={1.8} />
+  if (status === 'installing') {
+    return <Loader2 size={size} strokeWidth={1.8} className="animate-spin" />
+  }
+  if (status === 'missing' || status === 'partial') {
+    return <AlertTriangle size={size} strokeWidth={1.8} />
+  }
+  return <CircleDashed size={size} strokeWidth={1.8} />
+}
+
+function BrowserRuntimeDetail({
+  status,
+  progress,
+  installing,
+  onRefresh,
+  onInstall,
+}: {
+  status: BrowserRuntimeStatus | null
+  progress: BrowserRuntimeInstallProgressMessage | null
+  installing: BrowserRuntimeInstallTarget | null
+  onRefresh: () => void
+  onInstall: (target: BrowserRuntimeInstallTarget) => void
+}) {
+  const components =
+    status?.components ??
+    ([
+      {
+        id: 'agent-browser',
+        label: 'agent-browser',
+        status: 'unknown',
+        required: true,
+        installable: false,
+        detail: 'Checking bundled CLI',
+      },
+      {
+        id: 'chrome',
+        label: 'Chrome for Anton',
+        status: 'unknown',
+        required: true,
+        installable: true,
+        detail: 'Checking visible browser runtime',
+      },
+      {
+        id: 'lightpanda',
+        label: 'Lightpanda',
+        status: 'unknown',
+        required: true,
+        installable: true,
+        detail: 'Checking background browser runtime',
+      },
+    ] satisfies BrowserRuntimeStatus['components'])
+
+  const ready = status?.overall === 'ready'
+  const isBusy = installing !== null
+  const visibleProgress = progress && progress.stage !== 'done' ? progress : null
+  const primaryLabel = isBusy ? 'Setting up' : ready ? 'Repair' : 'Finish setup'
+
+  return (
+    <div className="connectors-view__detail-inner browser-runtime">
+      <div className="browser-runtime__topbar">
+        <div className="browser-runtime__heading">
+          <div className="browser-runtime__icon">
+            <AppWindow size={22} strokeWidth={1.65} />
+          </div>
+          <div className="browser-runtime__title-stack">
+            <div className="browser-runtime__eyebrow">Connector</div>
+            <div className="browser-runtime__title">Browser</div>
+          </div>
+        </div>
+        <div className="browser-runtime__header-actions">
+          <button
+            type="button"
+            className="browser-runtime__action browser-runtime__action--secondary"
+            onClick={onRefresh}
+            disabled={isBusy}
+            aria-label="Refresh browser runtime"
+          >
+            <RefreshCw size={13} strokeWidth={1.5} />
+            Refresh
+          </button>
+          <button
+            type="button"
+            className={`browser-runtime__action ${
+              ready ? 'browser-runtime__action--secondary' : 'browser-runtime__action--primary'
+            }`}
+            onClick={() => onInstall(ready ? 'repair' : 'all')}
+            disabled={isBusy}
+          >
+            {isBusy ? (
+              <Loader2 size={14} className="animate-spin" />
+            ) : ready ? (
+              <Wrench size={14} strokeWidth={1.5} />
+            ) : (
+              <Download size={14} strokeWidth={1.5} />
+            )}
+            {primaryLabel}
+          </button>
+        </div>
+      </div>
+
+      <div
+        className={`browser-runtime__overview browser-runtime__overview--${status?.overall ?? 'unknown'}`}
+      >
+        <div className="browser-runtime__overview-main">
+          <div className="browser-runtime__overview-icon">
+            <RuntimeStatusIcon status={status?.overall} size={18} />
+          </div>
+          <div className="browser-runtime__overview-copy">
+            <div className="browser-runtime__overview-title">{runtimeHeadline(status)}</div>
+            <div className="browser-runtime__overview-subtitle">{runtimeSubtext(status)}</div>
+          </div>
+        </div>
+        {status?.profileDir && (
+          <div className="browser-runtime__profile" title={status.profileDir}>
+            Profile <span>{status.profileDir}</span>
+          </div>
+        )}
+      </div>
+
+      {visibleProgress && (
+        <div
+          className={`browser-runtime__progress browser-runtime__progress--${visibleProgress.stage}`}
+        >
+          {visibleProgress.stage !== 'error' && <Loader2 size={13} className="animate-spin" />}
+          <span>{visibleProgress.message}</span>
+        </div>
+      )}
+
+      <div className="browser-runtime__components">
+        {components.map((component) => {
+          const installTarget =
+            component.id === 'chrome' || component.id === 'lightpanda' ? component.id : null
+          return (
+            <div key={component.id} className="browser-runtime__component">
+              <div className="browser-runtime__component-main">
+                <span
+                  className={`browser-runtime__component-icon browser-runtime__component-icon--${component.status}`}
+                >
+                  <RuntimeStatusIcon status={component.status} size={15} />
+                </span>
+                <div className="browser-runtime__component-copy">
+                  <div className="browser-runtime__component-title">
+                    {component.label}
+                    {component.version && (
+                      <span className="browser-runtime__version">{component.version}</span>
+                    )}
+                  </div>
+                  <div className="browser-runtime__component-detail" title={component.detail}>
+                    {componentDetail(component)}
+                  </div>
+                </div>
+              </div>
+              <span
+                className={`browser-runtime__component-status browser-runtime__component-status--${component.status}`}
+              >
+                {componentStatusLabel(component)}
+              </span>
+              {installTarget && component.status !== 'ready' && (
+                <button
+                  type="button"
+                  className="browser-runtime__component-action"
+                  onClick={() => onInstall(installTarget)}
+                  disabled={isBusy}
+                >
+                  <Download size={12} strokeWidth={1.5} />
+                  {component.status === 'error' ? 'Repair' : 'Install'}
+                </button>
+              )}
+            </div>
+          )
+        })}
+      </div>
     </div>
   )
 }

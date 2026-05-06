@@ -690,11 +690,145 @@ export interface AiBrowserStateMessage {
   screenshot?: string // base64 JPEG
   lastAction: BrowserAction
   elementCount?: number
+  stream?: BrowserStreamState
+  engine?: BrowserEngine
 }
 
 export interface AiBrowserCloseMessage {
   type: 'browser_close'
   sessionId?: string
+}
+
+export type BrowserEngine = 'chrome' | 'lightpanda'
+
+export interface BrowserStreamState {
+  session: string
+  engine: BrowserEngine
+  port?: number
+  connected?: boolean
+  screencasting?: boolean
+}
+
+export interface BrowserFrameMetadata {
+  deviceWidth?: number
+  deviceHeight?: number
+  pageScaleFactor?: number
+  offsetTop?: number
+  scrollOffsetX?: number
+  scrollOffsetY?: number
+}
+
+export interface AiBrowserFrameMessage {
+  type: 'browser_frame'
+  sessionId?: string
+  data: string
+  metadata?: BrowserFrameMetadata
+}
+
+export interface AiBrowserStreamStatusMessage {
+  type: 'browser_stream_status'
+  sessionId?: string
+  connected: boolean
+  screencasting?: boolean
+  viewportWidth?: number
+  viewportHeight?: number
+}
+
+export interface BrowserOpenMessage {
+  type: 'browser_open'
+  sessionId?: string
+  url?: string
+  profile?: string
+}
+
+export interface BrowserNavigateMessage {
+  type: 'browser_navigate'
+  sessionId?: string
+  url: string
+}
+
+export interface BrowserCommandMessage {
+  type: 'browser_command'
+  sessionId?: string
+  command: 'back' | 'forward' | 'reload'
+}
+
+export type BrowserInputEvent =
+  | {
+      type: 'input_mouse'
+      eventType: 'mousePressed' | 'mouseReleased' | 'mouseMoved' | 'mouseWheel'
+      x: number
+      y: number
+      button?: 'left' | 'right' | 'middle'
+      clickCount?: number
+      deltaX?: number
+      deltaY?: number
+    }
+  | {
+      type: 'input_keyboard'
+      eventType: 'keyDown' | 'keyUp' | 'char'
+      key?: string
+      code?: string
+      text?: string
+      modifiers?: number
+    }
+
+export interface BrowserInputMessage {
+  type: 'browser_input'
+  sessionId?: string
+  event: BrowserInputEvent
+}
+
+export interface BrowserViewportMessage {
+  type: 'browser_viewport'
+  sessionId?: string
+  width: number
+  height: number
+}
+
+export type BrowserRuntimeComponentId = 'agent-browser' | 'chrome' | 'lightpanda'
+export type BrowserRuntimeComponentStatus = 'ready' | 'missing' | 'installing' | 'error' | 'unknown'
+export type BrowserRuntimeOverallStatus = 'ready' | 'partial' | 'missing' | 'installing' | 'error'
+export type BrowserRuntimeInstallTarget = 'chrome' | 'lightpanda' | 'all' | 'repair'
+
+export interface BrowserRuntimeComponent {
+  id: BrowserRuntimeComponentId
+  label: string
+  status: BrowserRuntimeComponentStatus
+  required: boolean
+  installable: boolean
+  detail?: string
+  path?: string
+  version?: string
+}
+
+export interface BrowserRuntimeStatus {
+  overall: BrowserRuntimeOverallStatus
+  profileDir: string
+  components: BrowserRuntimeComponent[]
+  checkedAt: number
+}
+
+export interface BrowserRuntimeStatusMessage {
+  type: 'browser_runtime_status'
+}
+
+export interface BrowserRuntimeInstallMessage {
+  type: 'browser_runtime_install'
+  target: BrowserRuntimeInstallTarget
+}
+
+export interface BrowserRuntimeStatusResponse {
+  type: 'browser_runtime_status_response'
+  status: BrowserRuntimeStatus
+}
+
+export interface BrowserRuntimeInstallProgressMessage {
+  type: 'browser_runtime_install_progress'
+  target: BrowserRuntimeInstallTarget
+  stage: 'checking' | 'installing' | 'verifying' | 'done' | 'error'
+  message: string
+  status?: BrowserRuntimeStatus
 }
 
 // ── Task tracker (Claude Code–style todo list) ──────────────────────
@@ -1667,8 +1801,19 @@ export type AiMessage =
   | ConnectorOAuthCompleteMessage
   | ConnectorOAuthDisconnectMessage
   // Browser automation
+  | BrowserOpenMessage
+  | BrowserNavigateMessage
+  | BrowserCommandMessage
+  | BrowserInputMessage
+  | BrowserViewportMessage
   | AiBrowserStateMessage
+  | AiBrowserFrameMessage
+  | AiBrowserStreamStatusMessage
   | AiBrowserCloseMessage
+  | BrowserRuntimeStatusMessage
+  | BrowserRuntimeInstallMessage
+  | BrowserRuntimeStatusResponse
+  | BrowserRuntimeInstallProgressMessage
   // Publish
   | PublishArtifactMessage
   | PublishArtifactResponse

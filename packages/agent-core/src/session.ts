@@ -458,6 +458,8 @@ export type SessionEvent =
       screenshot?: string
       lastAction: import('@anton/protocol').BrowserAction
       elementCount?: number
+      stream?: import('@anton/protocol').BrowserStreamState
+      engine?: import('@anton/protocol').BrowserEngine
     }
   | { type: 'browser_close' }
 
@@ -981,6 +983,8 @@ export class Session {
     screenshot?: string
     lastAction: import('@anton/protocol').BrowserAction
     elementCount?: number
+    stream?: import('@anton/protocol').BrowserStreamState
+    engine?: import('@anton/protocol').BrowserEngine
   }) {
     this.pushEvent?.({ type: 'browser_state', ...state })
   }
