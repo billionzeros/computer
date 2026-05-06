@@ -145,7 +145,14 @@ export function RoutineChat() {
       }
 
       if (sessionId) {
-        sessionStore.getState().sendAiMessageToSession(outboundText, sessionId, outboundAttachments)
+        sessionStore
+          .getState()
+          .sendAiMessageToSession(
+            outboundText,
+            sessionId,
+            outboundAttachments,
+            freshConv?.projectId,
+          )
       } else {
         // Absolute fallback — should not normally happen
         sessionStore.getState().sendAiMessage(outboundText, outboundAttachments)

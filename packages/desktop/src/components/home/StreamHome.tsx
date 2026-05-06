@@ -163,7 +163,7 @@ export function StreamHome({ onSkillSelect, onOpenBrowser }: Props) {
         ? [{ id: a.id, name: a.name, mimeType: a.mimeType, data: a.data, sizeBytes: a.sizeBytes }]
         : [],
     )
-    sessionStore.getState().sendAiMessageToSession(text, sessionId, outbound)
+    sessionStore.getState().sendAiMessageToSession(text, sessionId, outbound, targetConv.projectId)
     // Navigate to the chat view so the topbar/breadcrumb reflect the conversation.
     setActiveView('chat')
     return true

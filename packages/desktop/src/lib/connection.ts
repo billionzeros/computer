@@ -256,12 +256,13 @@ export class Connection {
     content: string,
     sessionId: string,
     attachments?: ChatImageAttachmentInput[],
-    opts?: { mode?: 'research' },
+    opts?: { mode?: 'research'; projectId?: string },
   ) {
     this.send(Channel.AI, {
       type: 'message',
       content,
       sessionId,
+      ...(opts?.projectId ? { projectId: opts.projectId } : {}),
       attachments,
       ...(opts?.mode ? { mode: opts.mode } : {}),
     })

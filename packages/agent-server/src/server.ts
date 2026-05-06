@@ -25,7 +25,7 @@ import { readFile } from 'node:fs/promises'
 import { createServer as createHttpServer } from 'node:http'
 import { createServer as createHttpsServer } from 'node:https'
 import { join, resolve } from 'node:path'
-import type { AgentConfig } from '@anton/agent-config'
+import type { AgentConfig, SessionMeta } from '@anton/agent-config'
 import { DEFAULT_PROVIDERS } from '@anton/agent-config'
 import {
   addProjectPreference,
@@ -122,10 +122,10 @@ import {
   isHarnessSession,
   matchesSurface,
   probeMcpShim,
-  refreshVisibleBrowserState,
   readHarnessArtifacts,
   readHarnessHistory,
   readLastUserFromHarness,
+  refreshVisibleBrowserState,
   resolveModel,
   resumeSession,
   setVisibleBrowserViewport,
@@ -4970,6 +4970,37 @@ export class AgentServer {
     return undefined
   }
 
+  private readStoredSessionMeta(
+    sessionId: string,
+    projectIdHint?: string,
+  ): { meta: SessionMeta; projectId?: string } | undefined {
+    const candidates: Array<string | undefined> = []
+    const add = (projectId?: string) => {
+      if (!candidates.includes(projectId)) candidates.push(projectId)
+    }
+
+    add(projectIdHint)
+    add(this.extractProjectId(sessionId))
+    for (const project of loadProjects()) add(project.id)
+    add(undefined)
+
+    for (const projectId of candidates) {
+      const dir = projectId
+        ? join(getProjectSessionsDir(projectId), sessionId)
+        : join(getAntonDir(), 'conversations', sessionId)
+      const metaPath = join(dir, 'meta.json')
+      if (!existsSync(metaPath)) continue
+      try {
+        const meta = JSON.parse(readFileSync(metaPath, 'utf-8')) as SessionMeta
+        return { meta, projectId }
+      } catch (err) {
+        log.warn({ err, sessionId, projectId }, 'failed to read session meta')
+      }
+    }
+
+    return undefined
+  }
+
   /**
    * Build the full options object for createSession / resumeSession.
    *
@@ -5573,10 +5604,12 @@ export class AgentServer {
   private async handleChatMessage(msg: {
     content: string
     sessionId?: string
+    projectId?: string
     attachments?: { id: string; name: string; mimeType: string; data: string; sizeBytes: number }[]
     mode?: 'research'
   }): Promise<number> {
     const sessionId = msg.sessionId || DEFAULT_SESSION_ID
+    const projectIdHint = msg.projectId || this.extractProjectId(sessionId)
 
     // Composer mode toggles. When the user has Research mode on, prepend a
     // turn-level system note before the user's text so the model treats this
@@ -5592,10 +5625,9 @@ export class AgentServer {
         'do not loop quick searches. Cite sources.]'
       chatContent = `${RESEARCH_TURN_HINT}\n\n${msg.content}`
     }
-    const browserRefreshSessionId =
-      this.visibleBrowserStates.has(sessionId)
-        ? sessionId
-        : this.latestVisibleBrowserStateSessionId()
+    const browserRefreshSessionId = this.visibleBrowserStates.has(sessionId)
+      ? sessionId
+      : this.latestVisibleBrowserStateSessionId()
     if (browserRefreshSessionId) {
       await this.refreshVisibleBrowserStateForSession(browserRefreshSessionId, {
         action: 'context',
@@ -5628,7 +5660,8 @@ export class AgentServer {
         this.sessions.put(DEFAULT_SESSION_ID, session, 'conversation')
       } else {
         // Try to resume from disk automatically
-        const projectId = this.extractProjectId(sessionId)
+        const storedSession = this.readStoredSessionMeta(sessionId, projectIdHint)
+        const projectId = storedSession?.projectId || projectIdHint
         const isAgentSession = sessionId.startsWith('agent--')
         const opts = this.buildSessionOptions(sessionId, projectId)
 
@@ -5638,7 +5671,38 @@ export class AgentServer {
           if (proj?.workspacePath) this.activeWorkspacePath = proj.workspacePath
         }
 
-        session = resumeSession(sessionId, this.config, opts) ?? undefined
+        if (storedSession && this.isHarnessProvider(storedSession.meta.provider)) {
+          let replaySeed: string | undefined
+          try {
+            const seed = buildReplaySeed({ sessionId, projectId: storedSession.projectId })
+            if (seed) replaySeed = seed
+          } catch (err) {
+            log.warn(
+              { err, sessionId, projectId: storedSession.projectId },
+              'failed to build harness replay seed during session resume',
+            )
+          }
+
+          await this.ensureMcpHealthFresh()
+          session = this.createHarnessSession({
+            id: sessionId,
+            providerName: storedSession.meta.provider,
+            model: storedSession.meta.model || this.config.defaults.model,
+            projectId: storedSession.projectId,
+            replaySeedForFirstTurn: replaySeed,
+          })
+          log.info(
+            {
+              sessionId,
+              projectId: storedSession.projectId,
+              provider: storedSession.meta.provider,
+              replayed: Boolean(replaySeed),
+            },
+            'Rehydrated harness session from disk',
+          )
+        } else {
+          session = resumeSession(sessionId, this.config, opts) ?? undefined
+        }
 
         // Also try global sessions as fallback
         if (!session && projectId) {
@@ -5653,7 +5717,10 @@ export class AgentServer {
         }
 
         if (session) {
-          if (isAgentSession) {
+          if (isHarnessSession(session)) {
+            // createHarnessSession already registered MCP auth, context,
+            // registry entry, and client lifecycle events.
+          } else if (isAgentSession) {
             // Agent sessions are autonomous — auto-approve confirms, skip ask_user
             this.wireAgentAutoHandlers(session)
           } else {
@@ -5661,10 +5728,12 @@ export class AgentServer {
             this.wirePlanConfirmHandler(session)
             this.wireAskUserHandler(session)
           }
-          // Agent sessions land in `routine` pool — they run on a schedule
-          // and naturally come and go; conversations go to the `conversation`
-          // pool where they compete for chat capacity.
-          this.sessions.put(sessionId, session, isAgentSession ? 'routine' : 'conversation')
+          if (!isHarnessSession(session)) {
+            // Agent sessions land in `routine` pool — they run on a schedule
+            // and naturally come and go; conversations go to the `conversation`
+            // pool where they compete for chat capacity.
+            this.sessions.put(sessionId, session, isAgentSession ? 'routine' : 'conversation')
+          }
           log.info({ sessionId }, 'Auto-resumed session from disk')
         } else {
           this.sendToClient(Channel.AI, {
