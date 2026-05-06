@@ -5729,7 +5729,7 @@ export class AgentServer {
       } else if (session instanceof CodexHarnessSession) {
         // Codex app-server: real interrupt + sendUserMessage. Fire-and-forget;
         // failures are logged inside steer() and don't block the ack.
-        session.steer(msg.content).catch((err) => {
+        session.steer(msg.content, msg.attachments).catch((err) => {
           log.warn({ err: (err as Error).message, sessionId }, 'codex steer failed')
         })
       }

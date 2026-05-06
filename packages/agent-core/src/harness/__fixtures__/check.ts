@@ -21,6 +21,7 @@ import type { SessionEvent } from '../../session.js'
 import type { HarnessAdapter } from '../adapter.js'
 import { ClaudeAdapter } from '../adapters/claude.js'
 import { CodexAdapter } from '../adapters/codex.js'
+import { CodexHarnessSession } from '../codex-harness-session.js'
 import {
   claudeErrorExpected,
   claudeSimpleExpected,
@@ -129,6 +130,95 @@ if (failed > 0) {
 }
 
 console.log(`\nAll ${cases.length} harness fixture checks passed`)
+
+// ── Codex steering lifecycle regression tests ──────────────────────
+// Codex app-server steering is an interrupt + steer pair. The interrupted
+// completion for the original turn is expected and must not surface as a
+// user-visible runtime error.
+
+async function runCodexSteerLifecycleCheck(): Promise<string | null> {
+  const emitted: SessionEvent[] = []
+  const requests: Array<{ method: string; params: Record<string, unknown> }> = []
+  const session = Object.create(CodexHarnessSession.prototype) as CodexHarnessSession & {
+    id: string
+    threadId: string
+    currentTurnId: string
+    currentTurn: {
+      events: SessionEvent[]
+      resolve: null | (() => void)
+      done: boolean
+      error: null | Error
+    }
+    currentTurnReasoningItems: number
+    currentTurnMessageItems: number
+    currentTurnStartedAt: number | null
+    openToolCalls: Map<string, unknown>
+    steerInterruptedTurnIds: Set<string>
+    telemetry: {
+      completeTurn: () => void
+      recordEvent: (event: SessionEvent) => void
+    }
+    rpc: {
+      request: (method: string, params: Record<string, unknown>) => Promise<Record<string, unknown>>
+    }
+    applySteer: (text: string, attachments: [], turnId: string) => Promise<void>
+    onTurnCompleted: (params: unknown) => void
+  }
+
+  session.id = 'sess-steer'
+  session.threadId = 'thread-1'
+  session.currentTurnId = 'turn-1'
+  session.currentTurn = { events: emitted, resolve: null, done: false, error: null }
+  session.currentTurnReasoningItems = 0
+  session.currentTurnMessageItems = 0
+  session.currentTurnStartedAt = Date.now()
+  session.openToolCalls = new Map()
+  session.steerInterruptedTurnIds = new Set()
+  session.telemetry = {
+    completeTurn: () => undefined,
+    recordEvent: (event) => {
+      emitted.push(event)
+    },
+  }
+  session.rpc = {
+    request: async (method, params) => {
+      requests.push({ method, params })
+      if (method === 'turn/steer') return { turnId: 'turn-2' }
+      return {}
+    },
+  }
+
+  await session.applySteer('please adjust', [], 'turn-1')
+  if (requests.map((r) => r.method).join(',') !== 'turn/interrupt,turn/steer') {
+    return `unexpected request sequence: ${requests.map((r) => r.method).join(',')}`
+  }
+  if (session.currentTurnId !== 'turn-2') {
+    return `steered turn id was not adopted: ${session.currentTurnId}`
+  }
+
+  session.onTurnCompleted({ turn: { id: 'turn-1', status: 'interrupted', error: null } })
+  if (emitted.some((e) => e.type === 'error')) {
+    return 'expected steer interruption emitted a runtime error'
+  }
+  if (session.steerInterruptedTurnIds.has('turn-1')) {
+    return 'suppressed steer interruption id was not cleared'
+  }
+
+  session.onTurnCompleted({ turn: { id: 'turn-2', status: 'interrupted', error: null } })
+  const runtimeError = emitted.find((e) => e.type === 'error')
+  if (!runtimeError || runtimeError.message !== 'turn interrupted') {
+    return 'real interrupted turn did not emit runtime error'
+  }
+
+  return null
+}
+
+const steerLifecycleFailure = await runCodexSteerLifecycleCheck()
+if (steerLifecycleFailure) {
+  console.error(`✗ codex-steer-lifecycle: ${steerLifecycleFailure}`)
+  process.exit(1)
+}
+console.log('✓ codex-steer-lifecycle: expected interrupt is hidden, real interrupt is preserved')
 
 // ── Prompt layer smoke tests ────────────────────────────────────────
 // Not a full diff — just assert each layer's heading shows up when its
