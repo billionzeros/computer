@@ -229,6 +229,7 @@ export class CodexHarnessSession {
    */
   private pendingCancel = false
   private pendingSteer: { text: string; attachments: ChatImageAttachmentInput[] } | null = null
+  private readonly steerInterruptedTurnIds = new Set<string>()
 
   /**
    * Sandbox mode resolved once at construction from `ANTON_CODEX_SANDBOX`.
@@ -465,6 +466,7 @@ export class CodexHarnessSession {
       this.currentTurnStartedAt = null
       this.openToolCalls.clear()
       this.openItemStartedAt.clear()
+      this.steerInterruptedTurnIds.clear()
       // Buffered cancel/steer that didn't get a turn id (e.g. turn/start
       // rejected before turn/started fired) would otherwise leak into
       // the next turn. Drop them.
@@ -551,6 +553,7 @@ export class CodexHarnessSession {
     turnId: string,
   ): Promise<void> {
     if (!this.rpc || !this.threadId) return
+    this.steerInterruptedTurnIds.add(turnId)
     try {
       await this.rpc.request('turn/interrupt', { threadId: this.threadId, turnId })
     } catch (err) {
@@ -560,12 +563,14 @@ export class CodexHarnessSession {
       )
     }
     try {
-      await this.rpc.request('turn/steer', {
+      const res = await this.rpc.request<{ turnId?: string }>('turn/steer', {
         threadId: this.threadId,
         input: buildUserInput(text, attachments),
         expectedTurnId: turnId,
       })
+      if (res?.turnId) this.currentTurnId = res.turnId
     } catch (err) {
+      this.steerInterruptedTurnIds.delete(turnId)
       log.warn({ err: (err as Error).message, sessionId: this.id }, 'turn/steer failed')
       throw err
     }
@@ -948,7 +953,10 @@ export class CodexHarnessSession {
     // `turn/completed` carries `{threadId, turn: Turn}`. The Turn's
     // status tells us whether it ended cleanly; usage is reported
     // separately via `thread/tokenUsage/updated`.
-    const p = params as { turn?: { status?: string; error?: { message?: string } } } | undefined
+    const p = params as
+      | { turn?: { id?: string; status?: string; error?: { message?: string } } }
+      | undefined
+    const turnId = p?.turn?.id
     const status = p?.turn?.status ?? 'unknown'
     // Pass codex-specific extras (item counts, openItems) through to the
     // generic `turn completed` log so we keep them in the same record.
@@ -958,6 +966,10 @@ export class CodexHarnessSession {
       openItems: this.openToolCalls.size,
     })
     this.currentTurnStartedAt = null
+    if (status === 'interrupted' && turnId && this.steerInterruptedTurnIds.delete(turnId)) {
+      log.info({ sessionId: this.id, turnId }, 'suppressed expected interrupted turn during steer')
+      return
+    }
     if (status === 'failed' || status === 'interrupted') {
       const message = p?.turn?.error?.message ?? `turn ${status}`
       this.emit({ type: 'error', message, code: 'runtime' })
