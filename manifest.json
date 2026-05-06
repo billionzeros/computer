@@ -1,6 +1,6 @@
 {
   "version": "2.2.0",
-  "gitHash": "",
+  "gitHash": "334ed64",
   "releaseUrl": "https://github.com/billionzeros/computer/releases",
   "changelog": "Added:\n- gitignore\n\nOther:\n- Add managed browser pane (#32)",
   "publishedAt": "2026-05-06T09:40:23.585Z",
