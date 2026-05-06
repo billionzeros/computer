@@ -1619,9 +1619,9 @@ export function getPublishedDir(): string {
  * The publicly reachable hostname this Anton instance serves on, or
  * `undefined` when not deployed (local/dev).
  *
- * Reads `ANTON_HOST` (the env var cloud-init writes to ~/.anton/agent.env).
- * Empty strings are treated as unset so deployments with `ANTON_HOST=`
- * behave the same as deployments with no value at all.
+ * Reads the public-host env vars written by deployment tooling. Empty
+ * strings are treated as unset so deployments with `ANTON_HOST=` behave
+ * the same as deployments with no value at all.
  *
  * Used by:
  *   - the `publish` tool to build canonical https://<host>/a/<slug> URLs
@@ -1633,9 +1633,36 @@ export function getPublishedDir(): string {
  * Centralised here so adding a new consumer is grep-able and a future
  * rename / multi-host story has exactly one place to change.
  */
+const PUBLIC_HOST_ENV_KEYS = [
+  'ANTON_PUBLIC_HOST',
+  'ANTON_PUBLIC_URL',
+  'ANTON_URL',
+  'OAUTH_CALLBACK_BASE_URL',
+  'ANTON_HOST',
+] as const
+
+function normalizePublicHost(value: string | undefined): string | undefined {
+  const trimmed = value?.trim()
+  if (!trimmed) return undefined
+
+  try {
+    const url = new URL(trimmed.includes('://') ? trimmed : `https://${trimmed}`)
+    return url.host || undefined
+  } catch {
+    return trimmed.replace(/^\/+/, '').split('/')[0]?.trim() || undefined
+  }
+}
+
+function isControlPlaneHost(host: string): boolean {
+  return host.toLowerCase() === 'console.antoncomputer.in'
+}
+
 export function getPublicHost(): string | undefined {
-  const value = process.env.ANTON_HOST?.trim()
-  return value || undefined
+  for (const key of PUBLIC_HOST_ENV_KEYS) {
+    const host = normalizePublicHost(process.env[key])
+    if (host && !isControlPlaneHost(host)) return host
+  }
+  return undefined
 }
 
 export function getProjectPublicDir(projectName: string): string {

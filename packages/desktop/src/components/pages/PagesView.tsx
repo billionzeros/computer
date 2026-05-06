@@ -11,6 +11,7 @@ import {
   Trash2,
 } from 'lucide-react'
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { buildArtifactPublicUrl, isControlPlaneHost } from '../../lib/publicUrl.js'
 import { artifactStore } from '../../lib/store/artifactStore.js'
 import { connectionStore } from '../../lib/store/connectionStore.js'
 import { type PublishedPage, pagesStore } from '../../lib/store/pagesStore.js'
@@ -66,7 +67,7 @@ function PageDetail({ page, host }: { page: PublishedPage; host: string | null }
   const [confirmUnpublish, setConfirmUnpublish] = useState(false)
   const menuRef = useRef<HTMLDivElement>(null)
 
-  const fullUrl = host ? `https://${host}/a/${page.slug}` : `/a/${page.slug}`
+  const fullUrl = buildArtifactPublicUrl(page.slug, host)
 
   useEffect(() => {
     if (!menuOpen) return
@@ -226,7 +227,7 @@ export function PagesView() {
   const loaded = pagesStore((s) => s.loaded)
   const serverHost = pagesStore((s) => s.host)
   const domain = connectionStore((s) => s.domain)
-  const host = serverHost || domain || null
+  const host = serverHost && !isControlPlaneHost(serverHost) ? serverHost : domain || null
 
   const [query, setQuery] = useState('')
   const [selectedSlug, setSelectedSlug] = useState<string | null>(null)
