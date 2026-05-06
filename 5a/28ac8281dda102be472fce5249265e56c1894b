@@ -1,0 +1,37 @@
+packages/desktop/src/components/pages/PagesView.tsx
+  d823e607f32da07e 14,70,230
+packages/agent-config/src/config-public-host.test.ts
+  d823e607f32da07e 1-66
+packages/desktop/src/index.css
+  d823e607f32da07e 10610,10612,10618-10619,10625,10627,10633-10634,10678-10681,10683,10688-10689,10697-10699,10706-10707
+packages/desktop/src/components/artifacts/ArtifactPanel.tsx
+  d823e607f32da07e 29,298
+packages/desktop/src/lib/publicUrl.test.ts
+  d823e607f32da07e 1-25
+packages/agent-config/src/config.ts
+  d823e607f32da07e 1622-1624,1636-1659,1661-1665
+packages/desktop/src/lib/publicUrl.ts
+  d823e607f32da07e 1-29
+packages/desktop/src/components/artifacts/PublishModal.tsx
+  d823e607f32da07e 14,19-31,33,61,65,67-68,109-111,121,151,188,203
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.3.4",
+  "base_commit_sha": "5a28ac8281dda102be472fce5249265e56c1894b",
+  "prompts": {
+    "d823e607f32da07e": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019dfcef-9740-7e61-bb1c-41109ac048f5",
+        "model": "gpt-5.5"
+      },
+      "human_author": "Om Gupta",
+      "messages": [],
+      "total_additions": 533,
+      "total_deletions": 62,
+      "accepted_lines": 513,
+      "overriden_lines": 1
+    }
+  }
+}
