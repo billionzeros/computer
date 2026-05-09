@@ -13,6 +13,7 @@ import type {
   TaskItem,
   ThinkingLevel,
   TokenUsage,
+  UserLocationContext,
 } from '@anton/protocol'
 
 /**
@@ -383,12 +384,17 @@ interface SessionStoreState {
     id: string,
     progress: { action: string; step?: string; message?: string; success?: boolean },
   ) => void
-  sendAiMessage: (text: string, attachments?: ChatImageAttachmentInput[]) => void
+  sendAiMessage: (
+    text: string,
+    attachments?: ChatImageAttachmentInput[],
+    location?: UserLocationContext | null,
+  ) => void
   sendAiMessageToSession: (
     text: string,
     sessionId: string,
     attachments?: ChatImageAttachmentInput[],
     projectId?: string,
+    location?: UserLocationContext | null,
   ) => void
   sendSteerMessage: (
     text: string,
@@ -396,6 +402,7 @@ interface SessionStoreState {
     attachments?: ChatImageAttachmentInput[],
     projectId?: string,
     clientMessageId?: string,
+    location?: UserLocationContext | null,
   ) => void
   sendConfigQuery: (
     key: 'providers' | 'defaults' | 'security' | 'system_prompt' | 'memories',
@@ -684,35 +691,40 @@ export const sessionStore = create<SessionStoreState>((set, get) => {
       set((s) => ({ harnessStatuses: { ...s.harnessStatuses, [id]: status } })),
     setHarnessSetupProgress: (id, progress) =>
       set((s) => ({ harnessSetupProgress: { ...s.harnessSetupProgress, [id]: progress } })),
-    sendAiMessage: (text, attachments) => {
+    sendAiMessage: (text, attachments, location) => {
       const sid = get().currentSessionId
       // Migrate any pre-session pending flag onto this session before
       // reading it, so the very first send after toggling Research on
       // the hero composer actually carries `mode: 'research'`.
       if (sid) consumePendingResearchModeFor(sid, get, set)
       const mode = sid && get().getSessionState(sid).researchMode ? 'research' : undefined
-      connection.sendAiMessage(text, attachments, mode ? { mode } : undefined)
+      connection.sendAiMessage(text, attachments, {
+        ...(mode ? { mode } : {}),
+        ...(location ? { location } : {}),
+      })
       // Optimistic: show working state immediately instead of waiting for server event.
       // Centralized here so every call site gets it automatically.
       if (sid && get().connectionStatus === 'connected') {
         get().setSessionStatus(sid, 'working')
       }
     },
-    sendAiMessageToSession: (text, sessionId, attachments, projectId) => {
+    sendAiMessageToSession: (text, sessionId, attachments, projectId, location) => {
       consumePendingResearchModeFor(sessionId, get, set)
       const mode = get().getSessionState(sessionId).researchMode ? 'research' : undefined
       connection.sendAiMessageToSession(text, sessionId, attachments, {
         ...(mode ? { mode } : {}),
         ...(projectId ? { projectId } : {}),
+        ...(location ? { location } : {}),
       })
       if (get().connectionStatus === 'connected') {
         get().setSessionStatus(sessionId, 'working')
       }
     },
-    sendSteerMessage: (text, sessionId, attachments, projectId, clientMessageId) =>
+    sendSteerMessage: (text, sessionId, attachments, projectId, clientMessageId, location) =>
       connection.sendSteerMessage(text, sessionId, attachments, {
         ...(projectId ? { projectId } : {}),
         ...(clientMessageId ? { clientMessageId } : {}),
+        ...(location ? { location } : {}),
       }),
     sendConfigQuery: (key, sessionId, projectId) =>
       connection.sendConfigQuery(key, sessionId, projectId),

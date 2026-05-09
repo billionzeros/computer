@@ -5,6 +5,7 @@ import type { Skill } from '../lib/skills.js'
 import type { ChatImageAttachment } from '../lib/store.js'
 import { useStore } from '../lib/store.js'
 import { connectionStore } from '../lib/store/connectionStore.js'
+import { locationStore } from '../lib/store/locationStore.js'
 import { projectStore } from '../lib/store/projectStore.js'
 import { sessionStore, useSessionState } from '../lib/store/sessionStore.js'
 import { ChatInput } from './chat/ChatInput.js'
@@ -123,6 +124,7 @@ export function RoutineChat() {
 
       // Re-read sessionId after potential await
       sessionId = sessionStore.getState().currentSessionId || sessionId
+      const location = await locationStore.getState().locationForTurn()
 
       addMessage({
         id: `user_${Date.now()}`,
@@ -152,10 +154,11 @@ export function RoutineChat() {
             sessionId,
             outboundAttachments,
             freshConv?.projectId,
+            location,
           )
       } else {
         // Absolute fallback — should not normally happen
-        sessionStore.getState().sendAiMessage(outboundText, outboundAttachments)
+        sessionStore.getState().sendAiMessage(outboundText, outboundAttachments, location)
       }
       return true
     },
@@ -181,9 +184,18 @@ export function RoutineChat() {
             ]
           : [],
       )
+      const locState = locationStore.getState()
+      const location = locState.enabled ? locState.current : null
       sessionStore
         .getState()
-        .sendSteerMessage(text, sessionId, outboundAttachments, conv?.projectId, clientMessageId)
+        .sendSteerMessage(
+          text,
+          sessionId,
+          outboundAttachments,
+          conv?.projectId,
+          clientMessageId,
+          location,
+        )
     },
     [],
   )

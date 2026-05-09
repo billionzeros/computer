@@ -7,8 +7,10 @@ import {
   Globe,
   HelpCircle,
   LogOut,
+  MapPin,
   MoreHorizontal,
   PlayCircle,
+  RefreshCw,
   Search,
   X,
 } from 'lucide-react'
@@ -22,6 +24,7 @@ import {
   avatarInitial,
 } from '../../lib/store/accountStore.js'
 import { sessionStore } from '../../lib/store/sessionStore.js'
+import { locationStore } from '../../lib/store/locationStore.js'
 import { uiStore } from '../../lib/store/uiStore.js'
 import { HarnessSetupModal } from '../chat/HarnessSetupModal.js'
 import { ModelPopover } from '../chat/ModelSelector.js'
@@ -1073,8 +1076,52 @@ function PrivacySection() {
   const [crash, setCrash] = useState(true)
   const [analytics, setAnalytics] = useState(true)
   const [retention, setRetention] = useState<'7d' | '30d' | '90d' | '1y' | 'forever'>('forever')
+  const locationEnabled = locationStore((s) => s.enabled)
+  const locationStatus = locationStore((s) => s.status)
+  const locationError = locationStore((s) => s.error)
+  const locationLabel = locationStore((s) => s.label)
+  const locationChecking = locationStatus === 'checking'
   return (
     <>
+      <Group label="Location">
+        <Row
+          title="Share approximate location"
+          desc="Attach rounded coordinates to chat turns for nearby recommendations."
+          compact
+        >
+          <Toggle
+            on={locationEnabled}
+            onChange={(enabled) => {
+              void locationStore.getState().setEnabled(enabled)
+            }}
+            label="Share approximate location"
+          />
+        </Row>
+        {locationEnabled || locationError ? (
+          <Row
+            title="Current location"
+            desc={locationError ?? (locationEnabled ? locationLabel : 'Not shared')}
+            compact
+          >
+            <button
+              type="button"
+              className="sm-btn sm-btn--quiet"
+              disabled={!locationEnabled || locationChecking}
+              onClick={() => {
+                void locationStore.getState().refresh()
+              }}
+            >
+              {locationChecking ? (
+                <RefreshCw size={13} strokeWidth={1.5} className="sm-btn__spin" />
+              ) : (
+                <MapPin size={13} strokeWidth={1.5} />
+              )}
+              Refresh
+            </button>
+          </Row>
+        ) : null}
+      </Group>
+      <Divider />
       <Group label="Training & telemetry">
         <Row
           title="Improve Anton with my data"

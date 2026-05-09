@@ -5,6 +5,7 @@ import { ensureSessionReadyForSend } from '../../lib/sessionReadiness.js'
 import type { Skill } from '../../lib/skills.js'
 import type { ChatImageAttachment } from '../../lib/store.js'
 import { useStore } from '../../lib/store.js'
+import { locationStore } from '../../lib/store/locationStore.js'
 import { projectStore } from '../../lib/store/projectStore.js'
 import { sessionStore } from '../../lib/store/sessionStore.js'
 import { uiStore } from '../../lib/store/uiStore.js'
@@ -163,7 +164,10 @@ export function StreamHome({ onSkillSelect, onOpenBrowser }: Props) {
         ? [{ id: a.id, name: a.name, mimeType: a.mimeType, data: a.data, sizeBytes: a.sizeBytes }]
         : [],
     )
-    sessionStore.getState().sendAiMessageToSession(text, sessionId, outbound, targetConv.projectId)
+    const location = await locationStore.getState().locationForTurn()
+    sessionStore
+      .getState()
+      .sendAiMessageToSession(text, sessionId, outbound, targetConv.projectId, location)
     // Navigate to the chat view so the topbar/breadcrumb reflect the conversation.
     setActiveView('chat')
     return true

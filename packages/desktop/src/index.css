@@ -26340,6 +26340,18 @@ button {
   background: var(--bg-elev-2);
   border-color: var(--border-focus);
 }
+.sm-btn:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+.sm-btn__spin {
+  animation: sm-spin 0.8s linear infinite;
+}
+@keyframes sm-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
 .sm-btn--quiet {
   background: transparent;
   border-color: var(--border);

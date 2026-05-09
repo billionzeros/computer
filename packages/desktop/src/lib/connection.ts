@@ -18,6 +18,7 @@ import {
   type EventMessage,
   type TerminalMessage,
   type ThinkingLevel,
+  type UserLocationContext,
 } from '@anton/protocol'
 
 /**
@@ -117,6 +118,8 @@ export class Connection {
       'anton.machines',
       'anton.lastMachineId',
       'anton.selectedModel',
+      'anton.location.cached',
+      'anton.location.enabled',
       'anton.sessionCache',
       'anton.activeConversationId',
       'anton.conversations', // keep until migration to sessionCache is complete
@@ -154,12 +157,13 @@ export class Connection {
   sendAiMessage(
     content: string,
     attachments?: ChatImageAttachmentInput[],
-    opts?: { mode?: 'research' },
+    opts?: { mode?: 'research'; location?: UserLocationContext },
   ) {
     this.send(Channel.AI, {
       type: 'message',
       content,
       attachments,
+      ...(opts?.location ? { location: opts.location } : {}),
       ...(opts?.mode ? { mode: opts.mode } : {}),
     })
   }
@@ -256,7 +260,7 @@ export class Connection {
     content: string,
     sessionId: string,
     attachments?: ChatImageAttachmentInput[],
-    opts?: { mode?: 'research'; projectId?: string },
+    opts?: { mode?: 'research'; projectId?: string; location?: UserLocationContext },
   ) {
     this.send(Channel.AI, {
       type: 'message',
@@ -264,6 +268,7 @@ export class Connection {
       sessionId,
       ...(opts?.projectId ? { projectId: opts.projectId } : {}),
       attachments,
+      ...(opts?.location ? { location: opts.location } : {}),
       ...(opts?.mode ? { mode: opts.mode } : {}),
     })
   }
@@ -272,7 +277,7 @@ export class Connection {
     content: string,
     sessionId: string,
     attachments?: ChatImageAttachmentInput[],
-    opts?: { projectId?: string; clientMessageId?: string },
+    opts?: { projectId?: string; clientMessageId?: string; location?: UserLocationContext },
   ) {
     this.send(Channel.AI, {
       type: 'steer',
@@ -281,6 +286,7 @@ export class Connection {
       ...(opts?.projectId ? { projectId: opts.projectId } : {}),
       ...(opts?.clientMessageId ? { clientMessageId: opts.clientMessageId } : {}),
       attachments,
+      ...(opts?.location ? { location: opts.location } : {}),
     })
   }
 

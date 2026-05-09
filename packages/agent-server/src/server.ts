@@ -153,6 +153,7 @@ import type {
   ControlMessage,
   TerminalMessage,
   ThinkingLevel,
+  UserLocationContext,
 } from '@anton/protocol'
 import { WebSocket, WebSocketServer } from 'ws'
 import {
@@ -207,6 +208,41 @@ const IMAGE_MIME_BY_EXT: Record<string, string> = {
 function mimeTypeFromExt(filePath: string): string {
   const ext = filePath.toLowerCase().split('.').pop() || ''
   return IMAGE_MIME_BY_EXT[ext] || 'application/octet-stream'
+}
+
+function normalizeUserLocationContext(input: unknown): UserLocationContext | undefined {
+  if (!input || typeof input !== 'object') return undefined
+  const loc = input as Partial<UserLocationContext>
+  const latitude = Number(loc.latitude)
+  const longitude = Number(loc.longitude)
+  const capturedAt = Number(loc.capturedAt)
+  const maxFutureSkewMs = 60 * 1000
+  if (
+    loc.source !== 'desktop-geolocation' ||
+    loc.precision !== 'coarse' ||
+    !Number.isFinite(latitude) ||
+    !Number.isFinite(longitude) ||
+    latitude < -90 ||
+    latitude > 90 ||
+    longitude < -180 ||
+    longitude > 180 ||
+    !Number.isFinite(capturedAt) ||
+    capturedAt <= 0 ||
+    capturedAt > Date.now() + maxFutureSkewMs
+  ) {
+    return undefined
+  }
+  const accuracyMeters = Number(loc.accuracyMeters)
+  return {
+    source: 'desktop-geolocation',
+    precision: 'coarse',
+    latitude: Number(latitude.toFixed(2)),
+    longitude: Number(longitude.toFixed(2)),
+    capturedAt,
+    ...(Number.isFinite(accuracyMeters) && accuracyMeters > 0
+      ? { accuracyMeters: Math.round(accuracyMeters) }
+      : {}),
+  }
 }
 
 /**
@@ -409,6 +445,7 @@ export class AgentServer {
     string,
     import('@anton/agent-core').HarnessSessionContext
   >()
+  private userLocationContexts = new Map<string, UserLocationContext>()
   /**
    * Per-harness-session cursor into the mirror for memory extraction.
    * Advanced after each successful extraction; the same index is passed
@@ -655,6 +692,7 @@ export class AgentServer {
               this.mcpIpcServer.unregisterSession(runSessionId)
             }
             this.harnessSessionContexts.delete(runSessionId)
+            this.userLocationContexts.delete(runSessionId)
             this.activeTurns.delete(runSessionId)
             // SessionRegistry.delete awaits session.shutdown(), which
             // SIGTERMs the CLI — keeps the ephemeral pool clean.
@@ -1022,6 +1060,7 @@ export class AgentServer {
               sessionId.startsWith('agent--')
             if (!isBackground && disconnectMode !== 'detached') {
               this.activeTurns.delete(sessionId)
+              this.userLocationContexts.delete(sessionId)
             }
           }
         }
@@ -2232,6 +2271,12 @@ export class AgentServer {
       case 'steer': {
         const steerSessionId = msg.sessionId || DEFAULT_SESSION_ID
         const steerSession = this.sessions.get(steerSessionId)
+        const steerLocation = normalizeUserLocationContext(msg.location)
+        if (steerLocation) this.userLocationContexts.set(steerSessionId, steerLocation)
+        else this.userLocationContexts.delete(steerSessionId)
+        if (steerSession && !isHarnessSession(steerSession)) {
+          steerSession.setUserLocationContext(steerLocation)
+        }
         if (
           steerSession &&
           !isHarnessSession(steerSession) &&
@@ -2259,6 +2304,7 @@ export class AgentServer {
             projectId: msg.projectId,
             clientMessageId: msg.clientMessageId,
             attachments: msg.attachments,
+            location: msg.location,
             mode: msg.mode,
           })
         }
@@ -2733,6 +2779,7 @@ export class AgentServer {
         projectContext: projectContextBlock,
         projectId: harnessProjectId,
         workspacePath: cwd,
+        userLocation: this.userLocationContexts.get(id),
         publicHost: getPublicHost(),
         memoryData: cachedMemoryData,
         agentInstructions,
@@ -3010,6 +3057,7 @@ export class AgentServer {
       this.mcpIpcServer.unregisterSession(msg.id)
     }
     this.harnessSessionContexts.delete(msg.id)
+    this.userLocationContexts.delete(msg.id)
     this.activeTurns.delete(msg.id)
     // registry.delete() runs shutdown() — the SIGTERM → SIGKILL ladder
     // inside HarnessSession.shutdown already waits for the CLI to exit.
@@ -3427,6 +3475,7 @@ export class AgentServer {
    */
   private cleanupEvictedSessionState(id: string, wasHarness: boolean): void {
     this.activeTurns.delete(id)
+    this.userLocationContexts.delete(id)
     if (wasHarness && this.mcpIpcServer) {
       this.mcpIpcServer.unregisterSession(id)
     }
@@ -3494,6 +3543,7 @@ export class AgentServer {
         )
       } else {
         this.activeTurns.delete(msg.id)
+        this.userLocationContexts.delete(msg.id)
         deletePersistedSession(msg.id, projectId)
         if (wasHarness && this.mcpIpcServer) {
           this.mcpIpcServer.unregisterSession(msg.id)
@@ -5610,6 +5660,7 @@ export class AgentServer {
     projectId?: string
     clientMessageId?: string
     attachments?: { id: string; name: string; mimeType: string; data: string; sizeBytes: number }[]
+    location?: UserLocationContext
     mode?: 'research'
   }): Promise<number> {
     const sessionId = msg.sessionId || DEFAULT_SESSION_ID
@@ -5792,6 +5843,13 @@ export class AgentServer {
           projectId: contextInfo.projectId,
         })
       }
+    }
+
+    const userLocation = normalizeUserLocationContext(msg.location)
+    if (userLocation) this.userLocationContexts.set(sessionId, userLocation)
+    else this.userLocationContexts.delete(sessionId)
+    if (!isHarnessSession(session)) {
+      session.setUserLocationContext(userLocation)
     }
 
     // Guard: if this session is already processing, steer instead of starting a second turn
@@ -6196,6 +6254,10 @@ export class AgentServer {
       textBuffer.destroy()
       this.activeTurns.delete(sessionId)
       this.sessions.unpin(sessionId)
+      this.userLocationContexts.delete(sessionId)
+      if (!isHarnessSession(session)) {
+        session.setUserLocationContext(undefined)
+      }
       this.clearDetachedTurnBudget(sessionId)
       this.sendToClient(Channel.EVENTS, {
         type: 'routine_status',
@@ -7130,6 +7192,7 @@ export class AgentServer {
             this.mcpIpcServer.unregisterSession(sessionId)
           }
           this.harnessSessionContexts.delete(sessionId)
+          this.userLocationContexts.delete(sessionId)
           this.activeTurns.delete(sessionId)
           await this.sessions.delete(sessionId)
         },
