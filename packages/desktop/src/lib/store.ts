@@ -35,6 +35,7 @@ export interface ChatMessage {
   isThinking?: boolean // thinking/reasoning content from the model
   parentToolCallId?: string // set when this message is from a sub-agent
   isSteering?: boolean // sent while agent was working
+  clientMessageId?: string // client-generated id for deduping echoed sends
   askUserAnswers?: Record<string, string>
 }
 

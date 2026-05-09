@@ -501,6 +501,8 @@ export interface AiSteerMessage {
   type: 'steer'
   content: string
   sessionId?: string
+  projectId?: string
+  clientMessageId?: string
   attachments?: ChatImageAttachmentInput[]
   /** See AiUserMessage.mode — propagated when a steer falls back to a regular message. */
   mode?: 'research'
@@ -533,6 +535,7 @@ export interface AiSteerAckMessage {
   type: 'steer_ack'
   content: string
   sessionId?: string
+  clientMessageId?: string
   attachments?: ChatImageAttachmentInput[]
 }
 

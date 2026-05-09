@@ -15,12 +15,17 @@ const _MAX_ENDED_TRACKING = 100
 export function handleChatMessage(msg: AiMessage, ctx: MessageContext): boolean {
   switch (msg.type) {
     case 'steer_ack': {
+      const messageId = msg.clientMessageId ? `steer_${msg.clientMessageId}` : `steer_${Date.now()}`
+      const activeConv = useStore.getState().getActiveConversation()
+      if (activeConv?.messages.some((m) => m.id === messageId)) return true
+
       ctx.addMsg({
-        id: `steer_${Date.now()}`,
+        id: messageId,
         role: 'user',
         content: msg.content,
         timestamp: Date.now(),
         isSteering: true,
+        ...(msg.clientMessageId ? { clientMessageId: msg.clientMessageId } : {}),
         attachments: msg.attachments?.map(
           (a: {
             id: string

@@ -40,7 +40,7 @@ import { SlashCommandMenu } from './SlashCommandMenu.js'
 
 interface Props {
   onSend: (text: string, attachments?: ChatImageAttachment[]) => unknown | Promise<unknown>
-  onSteer?: (text: string, attachments?: ChatImageAttachment[]) => void
+  onSteer?: (text: string, attachments?: ChatImageAttachment[], clientMessageId?: string) => void
   onCancelTurn?: () => void
   onSkillSelect: (skill: Skill) => void
   /** 'hero' is centered + larger (home/empty state); 'inline' is the docked composer. */
@@ -163,6 +163,7 @@ export function ChatInput({
   })
   const richInputRef = useRef<RichInputHandle>(null)
   const sendInFlightRef = useRef(false)
+  const steerInFlightRef = useRef(false)
   const imageInputRef = useRef<HTMLInputElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const plusButtonRef = useRef<HTMLButtonElement>(null)
@@ -575,16 +576,24 @@ export function ChatInput({
 
     const text = parts.join('').trim()
 
-    // If agent is working and no attachments, steer with text only
-    if (isCurrentSessionWorking && attachments.length === 0) {
+    // If agent is working, steer instead of starting a second normal turn.
+    // This route has its own in-flight guard because it does not await the
+    // server like normal sends do.
+    if (isCurrentSessionWorking && onSteer) {
+      if (steerInFlightRef.current) return
       if (text && onSteer) {
-        onSteer(text)
+        steerInFlightRef.current = true
+        const clientMessageId = `steer_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`
+        onSteer(text, attachments.length > 0 ? attachments : undefined, clientMessageId)
         handle.clear()
         setInput('')
         setImageCount(0)
         setShowSlashMenu(false)
         if (conversationId) clearDraftInput(conversationId)
         handle.focus()
+        window.setTimeout(() => {
+          steerInFlightRef.current = false
+        }, 750)
       }
       return
     }
