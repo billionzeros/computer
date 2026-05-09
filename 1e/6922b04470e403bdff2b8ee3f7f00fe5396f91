@@ -1,0 +1,40 @@
+packages/desktop/src/lib/store.ts
+  bbae2e8910241ee2 38
+packages/desktop/src/components/RoutineChat.tsx
+  bbae2e8910241ee2 165-189
+packages/desktop/src/components/chat/ChatInput.tsx
+  bbae2e8910241ee2 43,166,579-583,585-587,594-596
+packages/desktop/src/lib/connection.ts
+  bbae2e8910241ee2 271-284
+packages/desktop/src/lib/store/handlers/interactionHandler.ts
+  bbae2e8910241ee2 281,285-286,289-290
+packages/desktop/src/lib/store/sessionStore.ts
+  bbae2e8910241ee2 397-398,574,587-588,712-716
+packages/desktop/src/lib/store/handlers/chatHandler.ts
+  bbae2e8910241ee2 18-21,23,28
+packages/agent-server/src/server.ts
+  bbae2e8910241ee2 2245,2259-2260,5611,5800-5823,5825,5831
+packages/protocol/src/messages.ts
+  bbae2e8910241ee2 504-505,538
+packages/desktop/src/lib/store/handlers/eventsHandler.ts
+  bbae2e8910241ee2 53,62
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.4.4",
+  "base_commit_sha": "1e6922b04470e403bdff2b8ee3f7f00fe5396f91",
+  "prompts": {
+    "bbae2e8910241ee2": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019dfd07-d11f-7a63-b608-e3945c787889",
+        "model": "gpt-5.5"
+      },
+      "human_author": "Om Gupta <omgupta0720@gmail.com>",
+      "total_additions": 119,
+      "total_deletions": 56,
+      "accepted_lines": 109,
+      "overriden_lines": 0
+    }
+  }
+}
