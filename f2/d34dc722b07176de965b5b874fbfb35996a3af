@@ -1,0 +1,59 @@
+packages/desktop/src/components/RoutineChat.tsx
+  s_bcfd21ef312454::t_00100561345b69 186-188
+  s_bcfd21ef312454::t_6f56235c0abbb2 8,127,157,161
+packages/desktop/src/lib/store/sessionStore.ts
+  s_bcfd21ef312454::t_c1e0c56fd37706 16,387-391,397,403,689,696-699,706,712,718-721
+packages/desktop/src-tauri/Info.plist
+  s_bcfd21ef312454::t_6d1627e7782eed 1-10
+packages/desktop/src/lib/store/locationStore.ts
+  s_bcfd21ef312454::t_5d870798aadcb3 27-29,35,38
+  s_bcfd21ef312454::t_ed7a666280040c 1-26,30-34,36-37,39-80,82-93,100-112,114-125
+  s_bcfd21ef312454::t_9c6016e8ea9c0d 81,94-99,113
+packages/desktop/src/components/home/StreamHome.tsx
+  s_bcfd21ef312454::t_cb3a192003ec31 8,167-170
+packages/desktop/src/lib/connection.ts
+  s_bcfd21ef312454::t_8b61b0c7154998 21,160,166,263,271,276-288
+  s_bcfd21ef312454::t_93f0c13e5b02a8 121-122
+packages/desktop/src/lib/location.ts
+  s_bcfd21ef312454::t_479f5d42198226 1-81
+packages/agent-core/src/prompt-layers.ts
+  s_bcfd21ef312454::t_4d0da2604c41e7 20,46-47,103-116,824,856
+packages/agent-core/src/session.ts
+  s_bcfd21ef312454::t_d5776e496da94a 43,553,2719-2722,2786
+packages/desktop/src/lib/store/index.ts
+  s_bcfd21ef312454::t_a7fe97b83b90dc 18
+packages/desktop/src/index.css
+  s_bcfd21ef312454::t_41d258fba8a623 26343-26354
+packages/protocol/src/messages.ts
+  s_bcfd21ef312454::t_3b7f5a556058c8 357-365,504,515
+packages/desktop/src/components/settings/SettingsModal.tsx
+  s_bcfd21ef312454::t_bca9623183a9a0 10,13,27
+  s_bcfd21ef312454::t_53d2381ed335c0 1079-1083,1086-1124
+packages/agent-server/src/server.ts
+  s_bcfd21ef312454::t_c9596450864d46 5838-5844
+  s_bcfd21ef312454::t_85063ece77e519 695,1063,7167
+  s_bcfd21ef312454::t_bdbc574e2bfd29 2773
+  s_bcfd21ef312454::t_34a0da95b6a246 3537
+  s_bcfd21ef312454::t_f8d036f80419eb 3469
+  s_bcfd21ef312454::t_1365aaff701631 156,213-218,220-228,232-247,448
+  s_bcfd21ef312454::t_3dbef8dce3a779 219,229-231
+  s_bcfd21ef312454::t_f353865389b6fe 3051
+  s_bcfd21ef312454::t_0aebcbb47cfff6 6229-6232
+  s_bcfd21ef312454::t_74ed5cd24a5ff1 2298,5653
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.4.4",
+  "base_commit_sha": "f2d34dc722b07176de965b5b874fbfb35996a3af",
+  "prompts": {},
+  "sessions": {
+    "s_bcfd21ef312454": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019e0c51-678a-7fd3-b6b3-d32689ebe876",
+        "model": "gpt-5.5"
+      },
+      "human_author": "Om Gupta <omgupta0720@gmail.com>"
+    }
+  }
+}
