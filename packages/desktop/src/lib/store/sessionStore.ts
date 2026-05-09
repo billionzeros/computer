@@ -394,6 +394,8 @@ interface SessionStoreState {
     text: string,
     sessionId: string,
     attachments?: ChatImageAttachmentInput[],
+    projectId?: string,
+    clientMessageId?: string,
   ) => void
   sendConfigQuery: (
     key: 'providers' | 'defaults' | 'security' | 'system_prompt' | 'memories',
@@ -569,6 +571,7 @@ export const sessionStore = create<SessionStoreState>((set, get) => {
             get().updateSessionState(sessionId, {
               status: 'idle',
               statusDetail: null,
+              tasks: [],
               agentSteps: [],
             })
           }
@@ -581,6 +584,8 @@ export const sessionStore = create<SessionStoreState>((set, get) => {
           status,
           statusDetail: statusDetail ?? null,
           lastTurnDurationMs: duration,
+          tasks: [],
+          agentSteps: [],
         })
       } else {
         get().updateSessionState(sessionId, {
@@ -704,8 +709,11 @@ export const sessionStore = create<SessionStoreState>((set, get) => {
         get().setSessionStatus(sessionId, 'working')
       }
     },
-    sendSteerMessage: (text, sessionId, attachments) =>
-      connection.sendSteerMessage(text, sessionId, attachments),
+    sendSteerMessage: (text, sessionId, attachments, projectId, clientMessageId) =>
+      connection.sendSteerMessage(text, sessionId, attachments, {
+        ...(projectId ? { projectId } : {}),
+        ...(clientMessageId ? { clientMessageId } : {}),
+      }),
     sendConfigQuery: (key, sessionId, projectId) =>
       connection.sendConfigQuery(key, sessionId, projectId),
 

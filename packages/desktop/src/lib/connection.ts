@@ -268,8 +268,20 @@ export class Connection {
     })
   }
 
-  sendSteerMessage(content: string, sessionId: string, attachments?: ChatImageAttachmentInput[]) {
-    this.send(Channel.AI, { type: 'steer', content, sessionId, attachments })
+  sendSteerMessage(
+    content: string,
+    sessionId: string,
+    attachments?: ChatImageAttachmentInput[],
+    opts?: { projectId?: string; clientMessageId?: string },
+  ) {
+    this.send(Channel.AI, {
+      type: 'steer',
+      content,
+      sessionId,
+      ...(opts?.projectId ? { projectId: opts.projectId } : {}),
+      ...(opts?.clientMessageId ? { clientMessageId: opts.clientMessageId } : {}),
+      attachments,
+    })
   }
 
   sendCancelTurn(sessionId: string) {

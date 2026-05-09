@@ -50,7 +50,7 @@ export function handleEventsMessage(msg: EventMessage): void {
         const ss = sessionStore.getState()
         ss.setSessionStatus(sid, msg.status, msg.detail || null)
         if (msg.status === 'idle') {
-          ss.updateSessionState(sid, { agentSteps: [] })
+          ss.updateSessionState(sid, { tasks: [], agentSteps: [] })
         }
       } else if (msg.status === 'idle') {
         // Global idle (e.g. on reconnect when no turns are active) —
@@ -59,7 +59,7 @@ export function handleEventsMessage(msg: EventMessage): void {
         for (const [sessionId, state] of ss.sessionStates) {
           if (state.status === 'working') {
             ss.setSessionStatus(sessionId, 'idle')
-            ss.updateSessionState(sessionId, { agentSteps: [] })
+            ss.updateSessionState(sessionId, { tasks: [], agentSteps: [] })
           }
         }
       }

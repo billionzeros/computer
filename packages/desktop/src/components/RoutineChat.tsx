@@ -162,26 +162,31 @@ export function RoutineChat() {
     [addMessage, newConversation],
   )
 
-  const handleSteer = useCallback((text: string, attachments: ChatImageAttachment[] = []) => {
-    const store = useStore.getState()
-    const conv = store.getActiveConversation()
-    const sessionId = conv?.sessionId || sessionStore.getState().currentSessionId
-    if (!sessionId) return
-    const outboundAttachments = attachments.flatMap((attachment) =>
-      attachment.data
-        ? [
-            {
-              id: attachment.id,
-              name: attachment.name,
-              mimeType: attachment.mimeType,
-              data: attachment.data,
-              sizeBytes: attachment.sizeBytes,
-            },
-          ]
-        : [],
-    )
-    sessionStore.getState().sendSteerMessage(text, sessionId, outboundAttachments)
-  }, [])
+  const handleSteer = useCallback(
+    (text: string, attachments: ChatImageAttachment[] = [], clientMessageId?: string) => {
+      const store = useStore.getState()
+      const conv = store.getActiveConversation()
+      const sessionId = conv?.sessionId || sessionStore.getState().currentSessionId
+      if (!sessionId) return
+      const outboundAttachments = attachments.flatMap((attachment) =>
+        attachment.data
+          ? [
+              {
+                id: attachment.id,
+                name: attachment.name,
+                mimeType: attachment.mimeType,
+                data: attachment.data,
+                sizeBytes: attachment.sizeBytes,
+              },
+            ]
+          : [],
+      )
+      sessionStore
+        .getState()
+        .sendSteerMessage(text, sessionId, outboundAttachments, conv?.projectId, clientMessageId)
+    },
+    [],
+  )
 
   const handleCancelTurn = useCallback(() => {
     const store = useStore.getState()

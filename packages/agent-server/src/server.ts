@@ -2242,6 +2242,7 @@ export class AgentServer {
             type: 'steer_ack',
             content: msg.content,
             sessionId: steerSessionId,
+            clientMessageId: msg.clientMessageId,
             attachments: msg.attachments,
           })
           log.info(
@@ -2255,6 +2256,8 @@ export class AgentServer {
           await this.handleChatMessage({
             content: msg.content,
             sessionId: msg.sessionId,
+            projectId: msg.projectId,
+            clientMessageId: msg.clientMessageId,
             attachments: msg.attachments,
             mode: msg.mode,
           })
@@ -5605,6 +5608,7 @@ export class AgentServer {
     content: string
     sessionId?: string
     projectId?: string
+    clientMessageId?: string
     attachments?: { id: string; name: string; mimeType: string; data: string; sizeBytes: number }[]
     mode?: 'research'
   }): Promise<number> {
@@ -5793,20 +5797,38 @@ export class AgentServer {
     // Guard: if this session is already processing, steer instead of starting a second turn
     if (this.activeTurns.has(sessionId)) {
       log.warn({ sessionId }, 'Session already processing — converting message to steer')
-      if (!isHarnessSession(session)) {
-        session.steer(msg.content, msg.attachments)
-      } else if (session instanceof CodexHarnessSession) {
-        // Codex app-server: real interrupt + sendUserMessage. Fire-and-forget;
-        // failures are logged inside steer() and don't block the ack.
-        session.steer(msg.content, msg.attachments).catch((err) => {
-          log.warn({ err: (err as Error).message, sessionId }, 'codex steer failed')
+      try {
+        if (!isHarnessSession(session)) {
+          session.steer(msg.content, msg.attachments)
+        } else if (session instanceof CodexHarnessSession) {
+          // Codex app-server: interrupt the active turn and inject the steer text.
+          // Acknowledge only after the app-server accepts the steer.
+          await session.steer(msg.content, msg.attachments)
+        } else {
+          this.sendToClient(Channel.AI, {
+            type: 'error',
+            code: 'steer_unsupported',
+            message:
+              'This session cannot accept a follow-up while it is working. Stop the turn or wait for it to finish.',
+            sessionId,
+          })
+          return 0
+        }
+      } catch (err) {
+        log.warn({ err: (err as Error).message, sessionId }, 'steer failed')
+        this.sendToClient(Channel.AI, {
+          type: 'error',
+          code: 'steer_failed',
+          message: `Could not send follow-up while the session was working: ${(err as Error).message}`,
+          sessionId,
         })
+        return 0
       }
-      // Claude Code harness (legacy HarnessSession) still has no steer path.
       this.sendToClient(Channel.AI, {
         type: 'steer_ack',
         content: msg.content,
         sessionId,
+        clientMessageId: msg.clientMessageId,
         attachments: msg.attachments,
       })
       return 0
