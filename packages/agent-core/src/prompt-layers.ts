@@ -17,6 +17,7 @@
 
 import { type SkillConfig, loadCoreSystemPrompt } from '@anton/agent-config'
 import { createLogger } from '@anton/logger'
+import type { UserLocationContext } from '@anton/protocol'
 import type { MemoryData } from './context.js'
 import type { SurfaceInfo } from './session.js'
 
@@ -42,6 +43,8 @@ export interface CurrentContextLayerOpts {
   projectContext?: string
   /** Absolute path of the project workspace / conversation cwd. */
   workspacePath?: string
+  /** Approximate user location explicitly shared by the desktop client for this turn. */
+  userLocation?: UserLocationContext
   /** ISO-date stamp for "Today's date". Defaults to now. */
   date?: string
   /** Public hostname this Anton instance serves on (ANTON_HOST). */
@@ -95,6 +98,20 @@ export function buildCurrentContextLayer(opts: CurrentContextLayerOpts): string 
     lines.push(`- Public hostname: ${opts.publicHost}`)
     lines.push(
       `  Published artifacts (from the \`publish\` tool, stored under ~/.anton/published/<slug>/) are served at https://${opts.publicHost}/a/<slug>. Use this exact host when referring to a previously-published URL — do NOT invent a different domain.`,
+    )
+  }
+  if (opts.userLocation) {
+    const loc = opts.userLocation
+    const capturedAt = new Date(loc.capturedAt).toISOString()
+    lines.push(
+      `- User approximate location: ${loc.latitude.toFixed(2)}, ${loc.longitude.toFixed(2)}`,
+    )
+    if (loc.accuracyMeters) {
+      lines.push(`  Approximate accuracy: ${Math.round(loc.accuracyMeters)} meters`)
+    }
+    lines.push(`  Captured at: ${capturedAt}`)
+    lines.push(
+      '  Use this only when the user asks for nearby, local, travel, weather, or place-sensitive help. Prefer city/neighborhood-level answers over exposing coordinates.',
     )
   }
   if (opts.environmentLines && opts.environmentLines.length > 0) {
@@ -804,6 +821,7 @@ export interface HarnessContextPromptOpts {
   projectContext?: string
   projectId?: string
   workspacePath?: string
+  userLocation?: UserLocationContext
   /** Public hostname this Anton instance serves on (ANTON_HOST). */
   publicHost?: string
   surface?: SurfaceInfo
@@ -835,6 +853,7 @@ export function buildHarnessContextPrompt(opts: HarnessContextPromptOpts): strin
     buildCurrentContextLayer({
       projectContext: opts.projectContext,
       workspacePath: opts.workspacePath,
+      userLocation: opts.userLocation,
       publicHost: opts.publicHost,
     }),
     buildSurfaceLayer(opts.surface),

@@ -40,6 +40,7 @@ import type {
   SessionImageAttachment,
   ThinkingLevel,
   TokenUsage,
+  UserLocationContext,
 } from '@anton/protocol'
 
 // ── Inline marker parsing ─────────────────────────────────────────────────────
@@ -549,6 +550,7 @@ export class Session {
   private agentMemory?: string
   private firstMessage?: string
   private latestUserMessage?: string
+  private userLocationContext?: UserLocationContext
   public contextInfo?: ContextInfo
   private surface?: SurfaceInfo
   private systemPromptOverride?: string // fork children: use parent's rendered prompt
@@ -2714,6 +2716,10 @@ export class Session {
     this.piAgent.setThinkingLevel(effective)
   }
 
+  setUserLocationContext(location: UserLocationContext | undefined): void {
+    this.userLocationContext = location
+  }
+
   private getSystemPrompt(): string {
     // Fork children inherit the parent's fully-rendered system prompt.
     // Snapshot its length under `identity` so getContextBreakdown still
@@ -2777,6 +2783,7 @@ export class Session {
     const currentContextBlock = buildCurrentContextLayer({
       projectContext: this.projectContext,
       workspacePath: this.workspacePath,
+      userLocation: this.userLocationContext,
       publicHost: getPublicHost(),
       framingAsScratchSpace: true,
       environmentLines,

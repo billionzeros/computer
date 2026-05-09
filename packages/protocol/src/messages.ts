@@ -354,6 +354,15 @@ export interface ChatImageAttachmentInput {
   sizeBytes: number
 }
 
+export interface UserLocationContext {
+  source: 'desktop-geolocation'
+  precision: 'coarse'
+  latitude: number
+  longitude: number
+  accuracyMeters?: number
+  capturedAt: number
+}
+
 export interface SessionImageAttachment {
   id: string
   name: string
@@ -492,6 +501,7 @@ export interface AiUserMessage {
   sessionId?: string // target session (defaults to "default")
   projectId?: string // project-scoped sessions may not encode this in their ID
   attachments?: ChatImageAttachmentInput[]
+  location?: UserLocationContext
   /** Composer-mode hint. 'research' biases the model toward web_research. */
   mode?: 'research'
 }
@@ -504,6 +514,7 @@ export interface AiSteerMessage {
   projectId?: string
   clientMessageId?: string
   attachments?: ChatImageAttachmentInput[]
+  location?: UserLocationContext
   /** See AiUserMessage.mode — propagated when a steer falls back to a regular message. */
   mode?: 'research'
 }
