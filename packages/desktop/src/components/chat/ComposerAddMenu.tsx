@@ -18,8 +18,8 @@ interface Props {
 function ResearchIcon() {
   return (
     <svg
-      width={16}
-      height={16}
+      width={14}
+      height={14}
       viewBox="0 0 16 16"
       fill="none"
       stroke="currentColor"
@@ -36,7 +36,7 @@ function ResearchIcon() {
   )
 }
 
-const PREVIEW_ICON_COUNT = 5
+const PREVIEW_ICON_COUNT = 3
 
 export function ComposerAddMenu({ open, onClose, onAddImages, onAddFiles, anchorRect }: Props) {
   const menuRef = useRef<HTMLDivElement>(null)
@@ -92,8 +92,8 @@ export function ComposerAddMenu({ open, onClose, onAddImages, onAddFiles, anchor
   // `filter` / `will-change` on a composer ancestor (StreamHome's
   // .home-stack uses translateY(-6%)) can't create a containing block
   // that would break `position: fixed`.
-  const ESTIMATED_MENU_HEIGHT = 240
-  const ESTIMATED_MENU_WIDTH = 360
+  const ESTIMATED_MENU_HEIGHT = 132
+  const ESTIMATED_MENU_WIDTH = 260
   const VIEWPORT_PADDING = 8
   const spaceBelow = window.innerHeight - anchorRect.bottom
   const flipAbove = spaceBelow < ESTIMATED_MENU_HEIGHT + 16
@@ -143,8 +143,8 @@ export function ComposerAddMenu({ open, onClose, onAddImages, onAddFiles, anchor
             onClose()
           }}
         >
-          <ImageIcon size={16} strokeWidth={1.5} />
-          <span>Add Images</span>
+          <ImageIcon size={14} strokeWidth={1.6} />
+          <span className="composer-add-menu__label">Add Images</span>
         </button>
         <button
           type="button"
@@ -155,8 +155,8 @@ export function ComposerAddMenu({ open, onClose, onAddImages, onAddFiles, anchor
             onClose()
           }}
         >
-          <FileText size={16} strokeWidth={1.5} />
-          <span>Add Files</span>
+          <FileText size={14} strokeWidth={1.6} />
+          <span className="composer-add-menu__label">Add Files</span>
         </button>
       </div>
 
@@ -168,13 +168,13 @@ export function ComposerAddMenu({ open, onClose, onAddImages, onAddFiles, anchor
           role="menuitem"
           onClick={openConnectorsSettings}
         >
-          <Grid3x3 size={16} strokeWidth={1.5} />
-          <span>Manage connectors</span>
+          <Grid3x3 size={14} strokeWidth={1.6} />
+          <span className="composer-add-menu__label">Connectors</span>
           {previewIcons.length > 0 && (
             <span className="composer-add-menu__icon-strip" aria-hidden="true">
               {previewIcons.map((c) => (
                 <span key={c.id} className="composer-add-menu__icon-strip-item">
-                  <ConnectorIcon id={c.id} size={16} />
+                  <ConnectorIcon id={c.id} size={14} />
                 </span>
               ))}
             </span>
@@ -194,7 +194,7 @@ export function ComposerAddMenu({ open, onClose, onAddImages, onAddFiles, anchor
           onClick={handleToggleResearch}
         >
           <ResearchIcon />
-          <span>Research</span>
+          <span className="composer-add-menu__label">Research</span>
           {researchMode && (
             <Check
               size={14}
