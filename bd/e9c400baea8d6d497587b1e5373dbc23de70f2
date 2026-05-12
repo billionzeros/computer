@@ -1,0 +1,28 @@
+packages/desktop/src/components/artifacts/PdfRenderer.tsx
+  s_c59b9e41ce66bb::t_f3b3c247caf636 2-6,9-19,22-23,29-43,47-56,69-103,105-153,156-158,160,163-164,166-191,195,200-201,205,209-340,342-397,402-463,465-483
+  s_c59b9e41ce66bb::t_5e651fff016265 159,161,165
+  s_c59b9e41ce66bb::t_5511971fe58508 1,7-8,341,398-401
+  s_c59b9e41ce66bb::t_21d93fce51c560 104
+  s_c59b9e41ce66bb::t_9be5f6bcb72de0 154-155,162
+packages/desktop/package.json
+  s_c59b9e41ce66bb::t_50a40bbfb88f7e 27
+packages/desktop/src/index.css
+  s_c59b9e41ce66bb::t_7fae6a2ec681d0 25278-25466
+  s_c59b9e41ce66bb::t_9cefff91ae2c45 22416,22418-22422,22425-22426,28042-28046
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.4.4",
+  "base_commit_sha": "bde9c400baea8d6d497587b1e5373dbc23de70f2",
+  "prompts": {},
+  "sessions": {
+    "s_c59b9e41ce66bb": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019e197d-2005-7812-a379-c7731ac231e5",
+        "model": "gpt-5.5"
+      },
+      "human_author": "Om Gupta <omgupta0720@gmail.com>"
+    }
+  }
+}
