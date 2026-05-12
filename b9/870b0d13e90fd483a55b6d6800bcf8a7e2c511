@@ -1,0 +1,22 @@
+packages/desktop/src/index.css
+  s_87262491f95fb7::t_cb7d151c114a17 27187,27237,27285,27297,27305
+  s_87262491f95fb7::t_ed16197fa55bbc 27186,27190-27191,27194,27214,27227,27229-27230,27232,27235,27248,27286,27289-27290,27293-27294,27309-27310
+packages/desktop/src/components/chat/ComposerAddMenu.tsx
+  s_87262491f95fb7::t_4bc7112e4b5151 21-22,39,95-96,146-147,158-159,171-172,177,197
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.4.4",
+  "base_commit_sha": "b9870b0d13e90fd483a55b6d6800bcf8a7e2c511",
+  "prompts": {},
+  "sessions": {
+    "s_87262491f95fb7": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019e195a-78c3-7ea1-8f37-287c6be5d795",
+        "model": "gpt-5.5"
+      },
+      "human_author": "Om Gupta <omgupta0720@gmail.com>"
+    }
+  }
+}
