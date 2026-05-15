@@ -1,0 +1,35 @@
+packages/desktop/src/components/browser/BrowserViewerContent.tsx
+  s_9e8a5336352069::t_dee754cb212b4a 71-74
+packages/protocol/src/messages.ts
+  s_9e8a5336352069::t_fa4400d64f5b3b 804-809,1830
+packages/desktop/src/lib/connection.ts
+  s_9e8a5336352069::t_2b597d555861e4 326-329,827
+  s_9e8a5336352069::t_135dae81729491 825-826
+packages/agent-server/src/server.ts
+  s_9e8a5336352069::t_cb0c14182f131b 417
+  s_9e8a5336352069::t_4988a5fe701ac0 6714-6715,6718,6724-6725,6728,6757,6766-6772
+  s_9e8a5336352069::t_716de28ff84da7 6971,6976-6978
+  s_9e8a5336352069::t_c6b8d1e9542441 5687,6524-6525,6527-6529
+  s_9e8a5336352069::t_49e25f2b6e20e2 6694-6695,6698
+  s_9e8a5336352069::t_ac6c7f2a7f3d5f 6546-6548
+  s_9e8a5336352069::t_20543bd30dd874 6633
+  s_9e8a5336352069::t_733167fee0c631 2248-2250
+  s_9e8a5336352069::t_4b015c6e7f90a4 6637-6670
+  s_9e8a5336352069::t_cbdcdae085efc6 6132,6134-6136
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.4.8",
+  "base_commit_sha": "8c27d2c3fcf09061806b01650da43b74d5cbc59f",
+  "prompts": {},
+  "sessions": {
+    "s_9e8a5336352069": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019e198c-f4bd-7e42-9ded-fe9a7f25bf61",
+        "model": "gpt-5.5"
+      },
+      "human_author": "Om Gupta <omgupta0720@gmail.com>"
+    }
+  }
+}
