@@ -323,6 +323,14 @@ export class Connection {
     })
   }
 
+  sendBrowserStreamVisibility(visible: boolean, sessionId?: string) {
+    this.send(Channel.AI, {
+      type: 'browser_stream_visibility',
+      visible,
+      ...(sessionId && { sessionId }),
+    })
+  }
+
   sendBrowserRuntimeStatus() {
     this.send(Channel.AI, { type: 'browser_runtime_status' })
   }
@@ -814,7 +822,9 @@ export class Connection {
     this.ws.onmessage = (event) => {
       try {
         const { channel, payload } = decodeFrame(event.data)
-        console.log(`[WS RAW] channel=${channel} payload.type=${payload.type}`, payload)
+        if (payload.type !== 'browser_frame') {
+          console.log(`[WS RAW] channel=${channel} payload.type=${payload.type}`, payload)
+        }
 
         // Handle auth response
         if (channel === Channel.CONTROL) {

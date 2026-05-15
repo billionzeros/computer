@@ -801,6 +801,12 @@ export interface BrowserViewportMessage {
   height: number
 }
 
+export interface BrowserStreamVisibilityMessage {
+  type: 'browser_stream_visibility'
+  sessionId?: string
+  visible: boolean
+}
+
 export type BrowserRuntimeComponentId = 'agent-browser' | 'chrome' | 'lightpanda'
 export type BrowserRuntimeComponentStatus = 'ready' | 'missing' | 'installing' | 'error' | 'unknown'
 export type BrowserRuntimeOverallStatus = 'ready' | 'partial' | 'missing' | 'installing' | 'error'
@@ -1821,6 +1827,7 @@ export type AiMessage =
   | BrowserCommandMessage
   | BrowserInputMessage
   | BrowserViewportMessage
+  | BrowserStreamVisibilityMessage
   | AiBrowserStateMessage
   | AiBrowserFrameMessage
   | AiBrowserStreamStatusMessage

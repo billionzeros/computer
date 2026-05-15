@@ -414,6 +414,7 @@ export class AgentServer {
   private browserStreamWs: WebSocket | null = null
   private browserStreamPort: number | null = null
   private browserStreamSessionId: string | null = null
+  private browserStreamVisibleSessionId: string | null = null
   private browserRuntimeInstallInFlight: Promise<void> | null = null
   private browserRuntimeInstallInFlightTarget: BrowserRuntimeInstallTarget | null = null
   private visibleBrowserStates = new Map<string, VisibleBrowserSessionState>()
@@ -2243,6 +2244,9 @@ export class AgentServer {
         break
       case 'browser_viewport':
         this.handleBrowserViewport(msg.sessionId || DEFAULT_SESSION_ID, msg.width, msg.height)
+        break
+      case 'browser_stream_visibility':
+        this.handleBrowserStreamVisibility(msg.sessionId || DEFAULT_SESSION_ID, msg.visible)
         break
       case 'browser_runtime_status':
         await this.handleBrowserRuntimeStatus()
@@ -5680,9 +5684,7 @@ export class AgentServer {
         'do not loop quick searches. Cite sources.]'
       chatContent = `${RESEARCH_TURN_HINT}\n\n${msg.content}`
     }
-    const browserRefreshSessionId = this.visibleBrowserStates.has(sessionId)
-      ? sessionId
-      : this.latestVisibleBrowserStateSessionId()
+    const browserRefreshSessionId = this.browserStreamVisibleSessionId
     if (browserRefreshSessionId) {
       await this.refreshVisibleBrowserStateForSession(browserRefreshSessionId, {
         action: 'context',
@@ -6127,10 +6129,11 @@ export class AgentServer {
             engine?: BrowserEngine
           }
           this.rememberVisibleBrowserState(sessionId, browserEvent)
-          if (browserEvent.stream?.port) {
-            this.ensureBrowserStreamProxy(browserEvent.stream.port, sessionId)
-          }
+          this.maybeEnsureBrowserStreamProxy(sessionId, browserEvent.stream)
         } else if (event.type === 'browser_close') {
+          if (this.browserStreamVisibleSessionId === sessionId) {
+            this.browserStreamVisibleSessionId = null
+          }
           this.closeBrowserStreamProxy()
         }
 
@@ -6518,10 +6521,12 @@ export class AgentServer {
   }
 
   private visibleBrowserContextForTurn(sessionId: string): string | null {
-    const latestSessionId = this.latestVisibleBrowserStateSessionId()
+    const visibleSessionId = this.browserStreamVisibleSessionId
+    if (!visibleSessionId) return null
     const state =
-      this.visibleBrowserStates.get(sessionId) ??
-      (latestSessionId ? this.visibleBrowserStates.get(latestSessionId) : undefined)
+      visibleSessionId === sessionId
+        ? this.visibleBrowserStates.get(sessionId)
+        : this.visibleBrowserStates.get(visibleSessionId)
     if (!state?.url) return null
     const title = state.title?.trim()
     const ageSeconds = Math.max(0, Math.round((Date.now() - state.updatedAt) / 1000))
@@ -6532,22 +6537,15 @@ export class AgentServer {
     ].join('')
   }
 
-  private latestVisibleBrowserStateSessionId(): string | null {
-    let latest: { sessionId: string; updatedAt: number } | null = null
-    for (const [stateSessionId, state] of this.visibleBrowserStates.entries()) {
-      if (!latest || state.updatedAt > latest.updatedAt) {
-        latest = { sessionId: stateSessionId, updatedAt: state.updatedAt }
-      }
-    }
-    return latest?.sessionId ?? null
-  }
-
   private browserCallbacksForSession(
     sessionId: string,
   ): import('@anton/agent-core').BrowserCallbacks {
     return {
       onBrowserState: (state) => this.emitBrowserStateToClient(sessionId, state),
       onBrowserClose: () => {
+        if (this.browserStreamVisibleSessionId === sessionId) {
+          this.browserStreamVisibleSessionId = null
+        }
         this.closeBrowserStreamProxy()
         this.visibleBrowserStates.delete(sessionId)
         this.sendToClient(Channel.AI, { type: 'browser_close', sessionId })
@@ -6632,10 +6630,42 @@ export class AgentServer {
     },
   ): void {
     this.rememberVisibleBrowserState(sessionId, state)
-    if (state.stream?.port) {
-      this.ensureBrowserStreamProxy(state.stream.port, sessionId)
-    }
+    this.maybeEnsureBrowserStreamProxy(sessionId, state.stream)
     this.sendToClient(Channel.AI, { type: 'browser_state', ...state, sessionId })
+  }
+
+  private handleBrowserStreamVisibility(sessionId: string, visible: boolean): void {
+    if (!visible) {
+      if (this.browserStreamVisibleSessionId === sessionId) {
+        this.browserStreamVisibleSessionId = null
+      }
+      if (this.browserStreamSessionId === sessionId) {
+        this.closeBrowserStreamProxy(sessionId)
+      }
+      return
+    }
+
+    if (
+      this.browserStreamVisibleSessionId &&
+      this.browserStreamVisibleSessionId !== sessionId &&
+      this.browserStreamSessionId === this.browserStreamVisibleSessionId
+    ) {
+      this.closeBrowserStreamProxy(this.browserStreamVisibleSessionId)
+    }
+
+    this.browserStreamVisibleSessionId = sessionId
+    this.maybeEnsureBrowserStreamProxy(sessionId, this.visibleBrowserStates.get(sessionId)?.stream)
+  }
+
+  private maybeEnsureBrowserStreamProxy(sessionId: string, stream?: BrowserStreamState): void {
+    if (!stream?.port) return
+    if (this.browserStreamVisibleSessionId !== sessionId) {
+      if (this.browserStreamSessionId === sessionId) {
+        this.closeBrowserStreamProxy(sessionId)
+      }
+      return
+    }
+    this.ensureBrowserStreamProxy(stream.port, sessionId)
   }
 
   private ensureBrowserStreamProxy(port: number, sessionId: string): void {
@@ -6661,9 +6691,11 @@ export class AgentServer {
         : streamSessionId
 
     ws.on('open', () => {
+      const sessionId = targetSessionId()
+      if (this.browserStreamVisibleSessionId !== sessionId) return
       this.sendToClient(Channel.AI, {
         type: 'browser_stream_status',
-        sessionId: targetSessionId(),
+        sessionId,
         connected: true,
       })
     })
@@ -6679,17 +6711,21 @@ export class AgentServer {
       if (!parsed || typeof parsed !== 'object') return
       const message = parsed as Record<string, unknown>
       if (message.type === 'frame' && typeof message.data === 'string') {
+        const sessionId = targetSessionId()
+        if (this.browserStreamVisibleSessionId !== sessionId) return
         this.sendToClient(Channel.AI, {
           type: 'browser_frame',
-          sessionId: targetSessionId(),
+          sessionId,
           data: message.data,
           metadata:
             message.metadata && typeof message.metadata === 'object' ? message.metadata : undefined,
         })
       } else if (message.type === 'status') {
+        const sessionId = targetSessionId()
+        if (this.browserStreamVisibleSessionId !== sessionId) return
         this.sendToClient(Channel.AI, {
           type: 'browser_stream_status',
-          sessionId: targetSessionId(),
+          sessionId,
           connected: Boolean(message.connected),
           screencasting:
             typeof message.screencasting === 'boolean' ? message.screencasting : undefined,
@@ -6718,7 +6754,7 @@ export class AgentServer {
     })
   }
 
-  private closeBrowserStreamProxy(): void {
+  private closeBrowserStreamProxy(notifySessionId?: string): void {
     if (this.browserStreamWs) {
       try {
         this.browserStreamWs.close()
@@ -6727,6 +6763,13 @@ export class AgentServer {
       }
     }
     this.clearBrowserStreamProxy()
+    if (notifySessionId) {
+      this.sendToClient(Channel.AI, {
+        type: 'browser_stream_status',
+        sessionId: notifySessionId,
+        connected: false,
+      })
+    }
   }
 
   private clearBrowserStreamProxy(): void {
@@ -6925,13 +6968,14 @@ export class AgentServer {
     return {
       onBrowserState: (state) => {
         this.rememberVisibleBrowserState(sessionId, state)
-        if (state.stream?.port) {
-          this.ensureBrowserStreamProxy(state.stream.port, sessionId)
-        }
+        this.maybeEnsureBrowserStreamProxy(sessionId, state.stream)
         const session = this.sessions.get(sessionId)
         if (session && isHarnessSession(session)) session.emitBrowserState(state)
       },
       onBrowserClose: () => {
+        if (this.browserStreamVisibleSessionId === sessionId) {
+          this.browserStreamVisibleSessionId = null
+        }
         this.closeBrowserStreamProxy()
         this.visibleBrowserStates.delete(sessionId)
         const session = this.sessions.get(sessionId)

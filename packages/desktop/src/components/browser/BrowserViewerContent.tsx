@@ -68,6 +68,11 @@ export function BrowserViewerContent({ showTopBar = true }: { showTopBar?: boole
   }, [])
 
   useEffect(() => {
+    connection.sendBrowserStreamVisibility(true, sessionId)
+    return () => connection.sendBrowserStreamVisibility(false, sessionId)
+  }, [sessionId])
+
+  useEffect(() => {
     setUrlValue(browserState?.url || '')
   }, [browserState?.url])
 
