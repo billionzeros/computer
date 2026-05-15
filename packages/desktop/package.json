@@ -24,6 +24,7 @@
     "docx-preview": "^0.3.7",
     "framer-motion": "^12.38.0",
     "lucide-react": "^0.577.0",
+    "pdfjs-dist": "5.4.296",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
     "react-markdown": "^10.1.0",
